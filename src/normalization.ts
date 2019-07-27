@@ -49,6 +49,8 @@ export const normalize = (t: Term): Term => {
   if (t.tag === 'Abs') {
     const ty = normalize(t.type);
     const b = normalize(t.body);
+    if (b.tag === 'App' && b.right.tag === 'Var' && b.right.id === 0)
+      return b.left; 
     return ty === t.type && b === t.body ? t : Abs(ty, b);
   }
   if (t.tag === 'Pi') {

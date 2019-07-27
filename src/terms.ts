@@ -8,7 +8,7 @@ export type Term
   | Abs
   | Pi
   | App
-  | Sort;
+  | Star;
 
 export interface Var {
   readonly tag: 'Var';
@@ -27,13 +27,10 @@ export interface Hash {
 }
 export const Hash = (hash: string): Hash => ({ tag: 'Hash', hash });
 
-export interface Sort {
-  readonly tag: 'Sort';
-  readonly name: string;
+export interface Star {
+  readonly tag: 'Star';
 }
-export const Sort = (name: string): Sort => ({ tag: 'Sort', name });
-export const Star = Sort('*');
-export const Box = Sort('**');
+export const Star: Star = { tag: 'Star' };
 
 export interface Abs {
   readonly tag: 'Abs';
@@ -91,21 +88,21 @@ export const flattenApp = (t: Term): Term[] => {
 };
 
 export const isAtom = (t: Term): boolean =>
-  t.tag === 'Var' || t.tag === 'Sort' || t.tag === 'Hash';
+  t.tag === 'Var' || t.tag === 'Star' || t.tag === 'Hash';
 
 const showTermP = (b: boolean, t: Term): string =>
   b ? `(${showTerm(t)})` : showTerm(t);
 export const showTerm = (t: Term): string => {
-  if (t.tag === 'Sort') return t.name;
+  if (t.tag === 'Star') return '*';
   if (t.tag === 'Var') return `${t.id}`;
   if (t.tag === 'Hash') return `#${t.hash}`;
   if (t.tag === 'Abs') {
     const [ns, b] = flattenAbs(t);
-    return `\\${ns.map(x => showTermP(!isAtom(x), x)).join(' ')}. ${showTerm(b)}`;
+    return `λ${ns.map(x => showTermP(!isAtom(x), x)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Pi') {
     const [ns, b] = flattenPi(t);
-    return `/${ns.map(x => showTermP(!isAtom(x), x)).join(' ')}. ${showTerm(b)}`;
+    return `π${ns.map(x => showTermP(!isAtom(x), x)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'App')
     return flattenApp(t).map(x => showTermP(!isAtom(x), x)).join(' ');
@@ -114,7 +111,7 @@ export const showTerm = (t: Term): string => {
 
 export const eqTerm = (a: Term, b: Term): boolean => {
   if (a === b) return true;
-  if (a.tag === 'Sort') return b.tag === 'Sort' && a.name === b.name;
+  if (a.tag === 'Star') return b.tag === 'Star';
   if (a.tag === 'Var') return b.tag === 'Var' && a.id === b.id;
   if (a.tag === 'Hash') return b.tag === 'Hash' && a.hash === b.hash;
   if (a.tag === 'Abs')
