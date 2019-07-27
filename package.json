@@ -1,0 +1,24 @@
+{
+  "name": "coc-os",
+  "version": "1.0.0",
+  "description": "",
+  "main": "build/src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atennapel/coc-os.git"
+  },
+  "author": "Albert ten Napel",
+  "email": "aptennap@gmail.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/atennapel/coc-os/issues"
+  },
+  "homepage": "https://github.com/atennapel/coc-os#readme",
+  "devDependencies": {
+    "@types/node": "^12.6.8",
+    "typescript": "^3.5.3"
+  }
+}
