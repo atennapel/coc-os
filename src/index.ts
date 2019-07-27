@@ -1,6 +1,7 @@
 import { Var, abs, Star, showTerm, pi, app, Hash } from './terms';
-import { normalize, whnf } from './normalization';
+import { normalize } from './normalization';
 import { typecheck, HashEnv } from './typecheck';
+import { serialize, showBytes, deserialize } from './serialization';
 
 const v = Var;
 
@@ -22,5 +23,7 @@ const nty = normalize(henv, ty);
 console.log(showTerm(nty));
 const nf = normalize(henv, term);
 console.log(showTerm(nf));
-const wnf = whnf(term);
-console.log(showTerm(wnf));
+const ser = serialize(nf);
+console.log(showBytes(ser));
+const deser = deserialize(ser);
+console.log(showTerm(deser));

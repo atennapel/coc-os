@@ -5,3 +5,7 @@ export const impossible = (msg: string) => {
 export const terr = (msg: string) => {
   throw new TypeError(msg);
 };
+
+export const err = (msg: string) => {
+  throw new Error(msg);
+};
