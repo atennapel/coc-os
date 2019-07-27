@@ -4,7 +4,7 @@ import { terr, impossible } from './util';
 import { normalize, beta, shift } from './normalization';
 
 export type Env = List<Term>;
-export type HashEnv = { [key: string]: Term };
+export type HashEnv = { [key: string]: { term: Term, type: Term } };
 
 const showEnv = (env: Env): string => toString(env, showTerm);
 const shiftEnv = (env: Env): Env => map(env, x => shift(1, 0, x));
@@ -14,8 +14,10 @@ const synth = (henv: HashEnv, env: Env, term: Term): Term => {
   if (term.tag === 'Star') return Star;
   if (term.tag === 'Var')
     return index(env, term.id) || terr(`undefined var ${term.id}`);
-  if (term.tag === 'Hash')
-    return henv[term.hash] || terr(`undefined hash ${term.hash}`);
+  if (term.tag === 'Hash') {
+    const def = henv[term.hash];
+    return def ? def.type : terr(`undefined hash ${term.hash}`);
+  }
   if (term.tag === 'Abs') {
     check(henv, env, term.type, Star);
     const rty = synth(henv, shiftEnv(Cons(term.type, env)), term.body);
@@ -42,11 +44,13 @@ const synth = (henv: HashEnv, env: Env, term: Term): Term => {
 const check = (henv: HashEnv, env: Env, term: Term, type: Term): Term => {
   console.log(`check ${showTerm(term)} : ${showTerm(type)} ${showEnv(env)}`);
   const type2 = synth(henv, env, term);
-  const ntype = normalize(type);
-  if (!eqTerm(normalize(type2), ntype))
+  const ntype = normalize(henv, type);
+  if (!eqTerm(normalize(henv, type2), ntype))
     return terr(`expected ${showTerm(type)} but got ${showTerm(type2)}`);
   return ntype;
 };
 
-export const typecheck = (term: Term, henv: HashEnv = {}, env: Env = Nil): Term =>
-  synth(henv, env, term);
+export const typecheck = (term: Term, henv: HashEnv = {}, env: Env = Nil): Term => {
+  const type = synth(henv, env, term);
+  return normalize(henv, type);
+};
