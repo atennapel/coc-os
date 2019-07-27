@@ -1,5 +1,6 @@
 import { Term, Star, showTerm, Var, Hash, App, Pi, Abs } from './terms';
 import { impossible, err } from './util';
+import { HASH_SIZE } from './hashing';
 
 export enum BYTES {
   Star = 0,
@@ -23,8 +24,15 @@ const serializeTerm = (term: Term, arr: number[]): void => {
     return;
   }
   if (term.tag === 'Hash') {
+    if (term.hash.length !== HASH_SIZE * 2)
+      return err(`invalid hash: ${term.hash}`);
     arr.push(BYTES.Hash);
-    arr.push(0, 0, 0, 0);
+    for (let i = 0, l = HASH_SIZE * 2; i < l; i += 2) {
+      const hex = parseInt(`${term.hash[i]}${term.hash[i + 1]}`, 16);
+      if (isNaN(hex) || hex < 0 || hex > 255)
+        return err(`invalid hash: ${term.hash}`);
+      arr.push(hex);
+    }
     return;
   }
   if (term.tag === 'Abs') {
@@ -48,25 +56,24 @@ const serializeTerm = (term: Term, arr: number[]): void => {
   return impossible('serializeTerm');
 };
 
-export const serialize = (term: Term): Uint8Array => {
+export const serialize = (term: Term): Buffer => {
   const arr: number[] = [];
   serializeTerm(term, arr);
-  return new Uint8Array(arr);
+  return Buffer.from(arr);
 };
 
-const deserializeTerm = (arr: Uint8Array, i: number): [number, Term] => {
+const deserializeTerm = (arr: Buffer, i: number): [number, Term] => {
   const c = arr[i];
   if (c === BYTES.Star) {
     return [i + 1, Star];
   }
   if (c === BYTES.Hash) {
-    if (i + 4 >= arr.length)
+    if (i + HASH_SIZE >= arr.length)
       return err(`not enough bytes for hash`);
-    const h1 = arr[i + 1];
-    const h2 = arr[i + 2];
-    const h3 = arr[i + 3];
-    const h4 = arr[i + 4];
-    return [i + 5, Hash(`${h1}${h2}${h3}${h4}`)];
+    const hash = Array(HASH_SIZE);
+    for (let j = 0; j < HASH_SIZE; j++)
+      hash[j] = `00arr[i + j + 1].toString(16)`.slice(-2);
+    return [i + HASH_SIZE + 1, Hash(hash.join(''))];
   }
   if (c === BYTES.Abs) {
     const [j, l] = deserializeTerm(arr, i + 1);
@@ -89,12 +96,9 @@ const deserializeTerm = (arr: Uint8Array, i: number): [number, Term] => {
   return [i + 1, Var(c - VAR_BYTE)];
 };
 
-export const deserialize = (arr: Uint8Array): Term => {
+export const deserialize = (arr: Buffer): Term => {
   const [i, term] = deserializeTerm(arr, 0);
   if (i < arr.length)
     return err(`deserialization failure (too many bytes): ${showTerm(term)}`);
   return term;
 };
-
-export const showBytes = (arr: Uint8Array): string =>
-  Array.from(arr).map(n => `00${n.toString(16)}`.slice(-2)).join('');

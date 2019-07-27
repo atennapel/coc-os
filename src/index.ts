@@ -1,7 +1,8 @@
 import { Var, abs, Star, showTerm, pi, app, Hash } from './terms';
 import { normalize } from './normalization';
 import { typecheck, HashEnv } from './typecheck';
-import { serialize, showBytes, deserialize } from './serialization';
+import { serialize, deserialize } from './serialization';
+import { hash } from './hashing';
 
 const v = Var;
 
@@ -24,6 +25,8 @@ console.log(showTerm(nty));
 const nf = normalize(henv, term);
 console.log(showTerm(nf));
 const ser = serialize(nf);
-console.log(showBytes(ser));
+console.log(ser.toString('hex'));
 const deser = deserialize(ser);
 console.log(showTerm(deser));
+const hs = hash(nf);
+console.log(hs.toString('hex'));

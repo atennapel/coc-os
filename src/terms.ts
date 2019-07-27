@@ -21,11 +21,12 @@ const varMap: VarMap = {};
 export const Var = (id: Id): Var =>
   varMap[id] || (varMap[id] = VarC(id));
 
+export type HashString = string;
 export interface Hash {
   readonly tag: 'Hash';
-  readonly hash: string;
+  readonly hash: HashString;
 }
-export const Hash = (hash: string): Hash => ({ tag: 'Hash', hash });
+export const Hash = (hash: HashString): Hash => ({ tag: 'Hash', hash });
 
 export interface Star {
   readonly tag: 'Star';
