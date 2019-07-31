@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "runindex": "npm run build && node build/src/index"
+    "runindex": "npm run build && node build/src/index",
+    "main": "npm run build && node build/src/main"
   },
   "repository": {
     "type": "git",

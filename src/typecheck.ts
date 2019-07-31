@@ -6,11 +6,11 @@ import { normalize, beta, shift } from './normalization';
 export type Env = List<Term>;
 export type HashEnv = { [key: string]: { term: Term, type: Term } };
 
-const showEnv = (env: Env): string => toString(env, showTerm);
-const shiftEnv = (env: Env): Env => map(env, x => shift(1, 0, x));
+export const showEnv = (env: Env): string => toString(env, showTerm);
+export const shiftEnv = (env: Env): Env => map(env, x => shift(1, 0, x));
 
 const synth = (henv: HashEnv, env: Env, term: Term): Term => {
-  console.log(`synth ${showTerm(term)} ${showEnv(env)}`);
+  // console.log(`synth ${showTerm(term)} ${showEnv(env)}`);
   if (term.tag === 'Star') return Star;
   if (term.tag === 'Var')
     return index(env, term.id) || terr(`undefined var ${term.id}`);
@@ -42,7 +42,7 @@ const synth = (henv: HashEnv, env: Env, term: Term): Term => {
 };
 
 const check = (henv: HashEnv, env: Env, term: Term, type: Term): Term => {
-  console.log(`check ${showTerm(term)} : ${showTerm(type)} ${showEnv(env)}`);
+  // console.log(`check ${showTerm(term)} : ${showTerm(type)} ${showEnv(env)}`);
   const type2 = synth(henv, env, term);
   const ntype = normalize(henv, type);
   if (!eqTerm(normalize(henv, type2), ntype))
