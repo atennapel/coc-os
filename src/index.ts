@@ -6,6 +6,7 @@ import { erase } from './erasure';
 import { showETerm, normalizeFull } from './eterm';
 import { typecheck, THashEnv, HashEnv } from './typecheck';
 import { hashTerm } from './hashing';
+import { deserializeTerm, serializeTerm } from './serialization';
 
 const v = Var;
 const tv = TVar;
@@ -44,8 +45,16 @@ const term = absT([KType], abs([tv(0)], v(0)));
 console.log(showTerm(term));
 const type = typecheck(term, henv, thenv);
 console.log(showType(type));
-const hash = hashTerm(term);
-console.log(hash.toString('hex'));
+const ser = serializeTerm(term);
+console.log(ser.toString('hex'));
+console.log(hashTerm(term).toString('hex'));
+const des = deserializeTerm(ser);
+console.log(showTerm(des));
 const eterm = erase(henv, term);
 console.log(showETerm(eterm));
 console.log(showETerm(normalizeFull(eterm)));
+
+/**
+ * TODO:
+ * - normalization of typed terms
+ */
