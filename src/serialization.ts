@@ -2,7 +2,7 @@ import { Term, showTerm, Var, Hash, App, Abs, AbsT, AppT, Decon, Con, ReturnIO, 
 import { impossible, err } from './util';
 import { HASH_SIZE } from './hashing';
 import { Kind, KType, KFun, showKind } from './kinds';
-import { Type, showType, TVar, TFunC, TApp, THash, TForall, TIO } from './types';
+import { Type, showType, TVar, TFunC, TApp, THash, TForall, TIO, TDef, showTDef } from './types';
 
 export enum KIND_BYTES {
   KType = 0,
@@ -80,6 +80,16 @@ const serializeTypeR = (term: Type, arr: number[]): void => {
 export const serializeType = (term: Type): Buffer => {
   const arr: number[] = [];
   serializeTypeR(term, arr);
+  return Buffer.from(arr);
+};
+export const serializeTDef = (def: TDef): Buffer => {
+  const arr: number[] = [];
+  const l = def.args.length;
+  if (l > 255)
+    return err(`TDef has too many arguments: ${showTDef(def)}`);
+  arr.push(l);
+  for (let i = 0; i < l; i++) serializeKindR(def.args[i], arr);
+  serializeTypeR(def.type, arr);
   return Buffer.from(arr);
 };
 
@@ -239,6 +249,21 @@ export const deserializeType = (arr: Buffer): Type => {
   if (i < arr.length)
     return err(`deserialization failure (too many bytes): ${showType(term)}`);
   return term;
+};
+export const deserializeTDef = (arr: Buffer): TDef => {
+  const l = arr[0];
+  const ks: Kind[] = Array(l);
+  let i = 0;
+  for (let j = 0; j < l; j++) {
+    const [ni, k] = deserializeKindR(arr, i);
+    ks[j] = k;
+    i = ni;
+  }
+  const [ni, type] = deserializeTypeR(arr, i);
+  const tdef = TDef(ks, type);
+  if (ni < arr.length)
+    return err(`deserialization failure (too many bytes): ${showTDef(tdef)}`);
+  return tdef;
 };
 
 const deserializeTermR = (arr: Buffer, i: number): [number, Term] => {
