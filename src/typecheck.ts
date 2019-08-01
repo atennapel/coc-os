@@ -1,5 +1,5 @@
-import { List, toString, Nil, index, Cons } from './list';
-import { Type, showType, eqType, TFun, isTFun, tfunR, tfunL, openTForall, TForall, TDef, tforall, THash, tapp1, TVar } from './types';
+import { List, toString, Nil, index, Cons, map } from './list';
+import { Type, showType, eqType, TFun, isTFun, tfunR, tfunL, openTForall, TForall, TDef, tforall, THash, tapp1, TVar, shiftType } from './types';
 import { Term, showTerm } from './terms';
 import { terr, impossible } from './util';
 import { Kind, kfun, KType, eqKind, showKind } from './kinds';
@@ -11,6 +11,7 @@ export type THashEnv = { [key: string]: { kind: Kind, def: TDef } };
 
 export const showEnv = (env: Env): string => toString(env, showType);
 export const showTEnv = (env: TEnv): string => toString(env, showKind);
+export const shiftEnv = (env: Env): Env => map(env, x => shiftType(1, 0, x));
 
 export const wfType = (thenv: THashEnv, tenv: TEnv, t: Type): Kind => {
   if (t.tag === 'TFunC') return kfun(KType, KType, KType);
@@ -61,7 +62,7 @@ const synth = (henv: HashEnv, thenv: THashEnv, env: Env, tenv: TEnv, term: Term)
     return tfunR(f);
   }
   if (term.tag === 'AbsT') {
-    const ty = synth(henv, thenv, env, Cons(term.kind, tenv), term.body);
+    const ty = synth(henv, thenv, shiftEnv(env), Cons(term.kind, tenv), term.body);
     return TForall(term.kind, ty);
   }
   if (term.tag === 'AppT') {

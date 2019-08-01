@@ -1,5 +1,5 @@
 import { impossible, HashString, Id } from './util';
-import { Type, showTypeP, isTypeAtom, eqType } from './types';
+import { Type, showTypeP, isTypeAtom, eqType, showType } from './types';
 import { Kind, eqKind, isKindAtom, showKindP } from './kinds';
 
 export type Term
@@ -126,14 +126,14 @@ export const showTerm = (t: Term): string => {
     return `λ${ns.map(x => showTypeP(!isTypeAtom(x), x)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'App')
-    return flattenApp(t).map(x => showTermP(!isTermAtom(x), x)).join(' ');
+    return flattenApp(t).map((x, i) => showTermP(!(isTermAtom(x) || (i === 0 && x.tag === 'AppT')), x)).join(' ');
   if (t.tag === 'AbsT') {
     const [ns, b] = flattenAbsT(t);
     return `Λ${ns.map(x => showKindP(!isKindAtom(x), x)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'AppT') {
     const [f, as] = flattenAppT(t);
-    return `${showTerm(f)} ${as.map(t => `@${showTypeP(!isTypeAtom(t), t)}`).join(' ')}`;
+    return `${showTermP(!(isTermAtom(f) || f.tag === 'App'), f)} ${as.map(t => `[${showType(t)}]`).join(' ')}`;
   }
   if (t.tag === 'Con') return `@${t.con}`;
   if (t.tag === 'Decon') return `~${t.con}`;

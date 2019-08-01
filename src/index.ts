@@ -25,6 +25,10 @@ const henv: HashEnv = {
     term: absT([KType], app(appT(Con('List'), [tv(0)]), absT([KType], abs([tv(0), tfun(tv(1), tv(0), tv(0))], v(1))))),
     type: tforall([KType], tapp(THash('List'), tv(0))),
   },
+  Cons: {
+    term: absT([KType], abs([tv(0), tapp(THash('List'), tv(0))], app(appT(Con('List'), [tv(0)]), absT([KType], abs([tv(0), tfun(tv(1), tv(0), tv(0))], app(v(0), v(3), app(appT(app(appT(Decon('List'), [tv(1)]), v(2)), [tv(0)]), v(1), v(0)))))))),
+    type: tforall([KType], tfun(tv(0), tapp(THash('List'), tv(0)), tapp(THash('List'), tv(0)))),
+  },
   Z: {
     term: app(Con('Nat'), absT([KType], abs([tv(0), tfun(tv(0), tv(0))], v(1)))),
     type: THash('Nat'),
@@ -35,7 +39,7 @@ const henv: HashEnv = {
   },
 };
 
-const term = app(Hash('S'), app(Hash('S'), Hash('Z')));
+const term = app(appT(Hash('Cons'), [THash('Nat')]), Hash('Z'), app(appT(Hash('Cons'), [THash('Nat')]), app(Hash('S'), Hash('Z')), app(appT(Hash('Cons'), [THash('Nat')]), app(Hash('S'), app(Hash('S'), Hash('Z'))), appT(Hash('Nil'), [THash('Nat')]))));
 console.log(showTerm(term));
 const type = typecheck(term, henv, thenv);
 console.log(showType(type));
