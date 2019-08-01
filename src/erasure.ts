@@ -1,16 +1,21 @@
-import { impossible } from './util';
+import { impossible, terr } from './util';
 import { Term } from './terms';
-import { ETerm, EVar, EHash, EAbs, EApp } from './eterm';
+import { ETerm, EVar, EAbs, EApp } from './eterm';
+import { HashEnv } from './typecheck';
 
 const eid = EAbs(EVar(0));
 
-export const erase = (t: Term): ETerm => {
+export const erase = (henv: HashEnv, t: Term): ETerm => {
   if (t.tag === 'Var') return EVar(t.id);
-  if (t.tag === 'Hash') return EHash(t.hash);
-  if (t.tag === 'Abs') return EAbs(erase(t.body));
-  if (t.tag === 'App') return EApp(erase(t.left), erase(t.right));
-  if (t.tag === 'AbsT') return erase(t.body);
-  if (t.tag === 'AppT') return erase(t.left);
+  if (t.tag === 'Hash') {
+    if (!henv[t.hash]) return terr(`undefined hash ${t.hash}`);
+    return erase(henv, henv[t.hash].term);
+  }
+  if (t.tag === 'Abs') return EAbs(erase(henv, t.body));
+  if (t.tag === 'App')
+    return EApp(erase(henv, t.left), erase(henv, t.right));
+  if (t.tag === 'AbsT') return erase(henv, t.body);
+  if (t.tag === 'AppT') return erase(henv, t.left);
   if (t.tag === 'Con') return eid;
   if (t.tag === 'Decon') return eid;
   return impossible('erase');

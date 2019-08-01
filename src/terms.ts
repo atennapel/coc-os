@@ -114,7 +114,7 @@ export interface Decon {
 export const Decon = (con: HashString): Decon => ({ tag: 'Decon', con });
 
 export const isTermAtom = (t: Term): boolean =>
-  t.tag === 'Var' || t.tag === 'Hash';
+  t.tag === 'Var' || t.tag === 'Hash' || t.tag === 'Con' || t.tag === 'Decon';
 
 const showTermP = (b: boolean, t: Term): string =>
   b ? `(${showTerm(t)})` : showTerm(t);
