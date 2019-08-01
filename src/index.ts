@@ -5,6 +5,7 @@ import { TVar, showType, TDef, tforall, tfun, tapp, THash } from './types';
 import { erase } from './erasure';
 import { showETerm, normalizeFull } from './eterm';
 import { typecheck, THashEnv, HashEnv } from './typecheck';
+import { hashTerm } from './hashing';
 
 const v = Var;
 const tv = TVar;
@@ -39,10 +40,12 @@ const henv: HashEnv = {
   },
 };
 
-const term = app(appT(Hash('Cons'), [THash('Nat')]), Hash('Z'), app(appT(Hash('Cons'), [THash('Nat')]), app(Hash('S'), Hash('Z')), app(appT(Hash('Cons'), [THash('Nat')]), app(Hash('S'), app(Hash('S'), Hash('Z'))), appT(Hash('Nil'), [THash('Nat')]))));
+const term = absT([KType], abs([tv(0)], v(0)));
 console.log(showTerm(term));
 const type = typecheck(term, henv, thenv);
 console.log(showType(type));
+const hash = hashTerm(term);
+console.log(hash.toString('hex'));
 const eterm = erase(henv, term);
 console.log(showETerm(eterm));
 console.log(showETerm(normalizeFull(eterm)));
