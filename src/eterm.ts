@@ -111,47 +111,47 @@ export const substETerm = (j: Id, s: ETerm, t: ETerm): ETerm => {
 export const openEAbs = (t: EAbs, s: ETerm): ETerm =>
   substETerm(0, s, t.body);
 
-export const stepFull = (t: ETerm): ETerm | null => {
+export const stepETermFull = (t: ETerm): ETerm | null => {
   if (t.tag === 'EApp') {
-    const f = stepFull(t.left);
+    const f = stepETermFull(t.left);
     if (f) return EApp(f, t.right);
-    const a = stepFull(t.right);
+    const a = stepETermFull(t.right);
     if (a) return EApp(t.left, a);
     return t.left.tag === 'EAbs' ? openEAbs(t.left, t.right) : null;
   }
   if (t.tag === 'EAbs') {
-    const b = stepFull(t.body);
+    const b = stepETermFull(t.body);
     return b ? EAbs(b) : null;
   }
   return null;
 };
 
-export const stepCBV = (t: ETerm): ETerm | null => {
+export const stepETermCBV = (t: ETerm): ETerm | null => {
   if (t.tag === 'EApp') {
-    const f = stepCBV(t.left);
+    const f = stepETermCBV(t.left);
     if (f) return EApp(f, t.right);
-    const a = stepCBV(t.right);
+    const a = stepETermCBV(t.right);
     if (a) return EApp(t.left, a);
     return t.left.tag === 'EAbs' ? openEAbs(t.left, t.right) : null;
   }
   return null;
 };
 
-export const stepCBN = (t: ETerm): ETerm | null => {
+export const stepETermCBN = (t: ETerm): ETerm | null => {
   if (t.tag === 'EApp') {
-    const f = stepCBN(t.left);
+    const f = stepETermCBN(t.left);
     if (f) return EApp(f, t.right);
     if (t.left.tag === 'EAbs') return openEAbs(t.left, t.right);
-    const a = stepCBN(t.right);
+    const a = stepETermCBN(t.right);
     if (a) return EApp(t.left, a);
     return null;
   }
   return null;
 };
 
-export const step = (t: ETerm, st: (t: ETerm) => ETerm | null): ETerm =>
+export const stepETerm = (t: ETerm, st: (t: ETerm) => ETerm | null): ETerm =>
   st(t) || t;
-export const steps = (t: ETerm, step: (t: ETerm) => ETerm | null): ETerm => {
+export const stepsETerm = (t: ETerm, step: (t: ETerm) => ETerm | null): ETerm => {
   let c: ETerm | null = t;
   let p = c;
   while (c) {
@@ -161,6 +161,6 @@ export const steps = (t: ETerm, step: (t: ETerm) => ETerm | null): ETerm => {
   return p;
 };
 
-export const normalizeFull = (t: ETerm) => steps(t, stepFull);
-export const normalizeCBV = (t: ETerm) => steps(t, stepCBV);
-export const normalizeCBN = (t: ETerm) => steps(t, stepCBN);
+export const normalizeETermFull = (t: ETerm) => stepsETerm(t, stepETermFull);
+export const normalizeETermCBV = (t: ETerm) => stepsETerm(t, stepETermCBV);
+export const normalizeETermCBN = (t: ETerm) => stepsETerm(t, stepETermCBN);
