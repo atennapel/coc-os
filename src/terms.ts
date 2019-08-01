@@ -10,7 +10,10 @@ export type Term
   | AbsT
   | AppT
   | Con
-  | Decon;
+  | Decon
+  | ReturnIO
+  | BindIO
+  | BeepIO;
 
 export interface Var {
   readonly tag: 'Var';
@@ -113,8 +116,18 @@ export interface Decon {
 }
 export const Decon = (con: HashString): Decon => ({ tag: 'Decon', con });
 
+export interface ReturnIO { readonly tag: 'ReturnIO' }
+export const ReturnIO: ReturnIO = { tag: 'ReturnIO' };
+
+export interface BindIO { readonly tag: 'BindIO' }
+export const BindIO: BindIO = { tag: 'BindIO' };
+
+export interface BeepIO { readonly tag: 'BeepIO' }
+export const BeepIO: BeepIO = { tag: 'BeepIO' };
+
 export const isTermAtom = (t: Term): boolean =>
-  t.tag === 'Var' || t.tag === 'Hash' || t.tag === 'Con' || t.tag === 'Decon';
+  t.tag === 'Var' || t.tag === 'Hash' || t.tag === 'Con' || t.tag === 'Decon' ||
+    t.tag === 'ReturnIO' || t.tag === 'BeepIO' || t.tag === 'BindIO';
 
 const showTermP = (b: boolean, t: Term): string =>
   b ? `(${showTerm(t)})` : showTerm(t);
@@ -137,6 +150,9 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Con') return `@${t.con}`;
   if (t.tag === 'Decon') return `~${t.con}`;
+  if (t.tag === 'ReturnIO') return `returnIO`;
+  if (t.tag === 'BindIO') return `bindIO`;
+  if (t.tag === 'BeepIO') return `beepIO`;
   return impossible('showTerm');
 };
 
@@ -154,5 +170,8 @@ export const eqTerm = (a: Term, b: Term): boolean => {
     return b.tag === 'AppT' && eqTerm(a.left, b.left) && eqType(a.right, b.right);
   if (a.tag === 'Con') return b.tag === 'Con' && a.con === b.con;
   if (a.tag === 'Decon') return b.tag === 'Decon' && a.con === b.con;
+  if (a.tag === 'ReturnIO') return b.tag === 'ReturnIO';
+  if (a.tag === 'BindIO') return b.tag === 'BindIO';
+  if (a.tag === 'BeepIO') return b.tag === 'BeepIO';
   return false;
 };

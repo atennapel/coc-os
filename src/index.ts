@@ -1,5 +1,5 @@
 // @ts-ignore
-import { showTerm, Con, appT, absT, abs, app, Var, Hash, Decon } from './terms';
+import { showTerm, Con, appT, absT, abs, app, Var, Hash, Decon, ReturnIO, BindIO, BeepIO } from './terms';
 import { KType, kfun } from './kinds';
 import { TVar, showType, TDef, tforall, tfun, tapp, THash } from './types';
 import { erase } from './erasure';
@@ -41,7 +41,9 @@ const henv: HashEnv = {
   },
 };
 
-const term = absT([KType], abs([tv(0)], v(0)));
+const tid = tforall([KType], tfun(tv(0), tv(0)));
+
+const term = app(appT(BindIO, [tid, tid]), abs([tid], app(appT(BindIO, [tid, tid]), abs([tid], app(appT(ReturnIO, [tid]), v(0))), BeepIO)), BeepIO);
 console.log(showTerm(term));
 const type = typecheck(term, henv, thenv);
 console.log(showType(type));

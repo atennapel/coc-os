@@ -4,6 +4,7 @@ import { Kind, isKindAtom, showKindP, eqKind } from './kinds';
 export type Type
   = TVar
   | TFunC
+  | TIO
   | THash
   | TApp
   | TForall;
@@ -19,7 +20,6 @@ const tvarMap: TVarMap = {};
 export const TVar = (id: Id): TVar =>
   tvarMap[id] || (tvarMap[id] = TVarC(id));
 
-
 export interface THash {
   readonly tag: 'THash';
   readonly hash: HashString;
@@ -31,6 +31,11 @@ export interface TFunC {
   readonly tag: 'TFunC';
 }
 export const TFunC: TFunC = { tag: 'TFunC' };
+
+export interface TIO {
+  readonly tag: 'TIO';
+}
+export const TIO: TIO = { tag: 'TIO' };
 
 export interface TFun {
   readonly tag: 'TApp';
@@ -100,12 +105,13 @@ export const flattenTApp = (t: Type): Type[] => {
 };
 
 export const isTypeAtom = (t: Type): boolean =>
-  t.tag === 'TVar' || t.tag === 'TFunC' || t.tag === 'THash';
+  t.tag === 'TVar' || t.tag === 'TFunC' || t.tag === 'TIO' || t.tag === 'THash';
 
 export const showTypeP = (b: boolean, t: Type): string =>
   b ? `(${showType(t)})` : showType(t);
 export const showType = (t: Type): string => {
   if (t.tag === 'TFunC') return '(->)';
+  if (t.tag === 'TIO') return 'IO';
   if (t.tag === 'TVar') return `${t.id}`;
   if (t.tag === 'THash') return `#${t.hash}`;
   if (t.tag === 'TForall') {
@@ -122,6 +128,7 @@ export const showType = (t: Type): string => {
 export const eqType = (a: Type, b: Type): boolean => {
   if (a === b) return true;
   if (a.tag === 'TFunC') return b.tag === 'TFunC';
+  if (a.tag === 'TIO') return b.tag === 'TIO';
   if (a.tag === 'TVar') return b.tag === 'TVar' && a.id === b.id;
   if (a.tag === 'THash') return b.tag === 'THash' && a.hash === b.hash;
   if (a.tag === 'TForall')

@@ -1,5 +1,5 @@
 import { List, toString, Nil, index, Cons, map } from './list';
-import { Type, showType, eqType, TFun, isTFun, tfunR, tfunL, openTForall, TForall, TDef, tforall, THash, tapp1, TVar, shiftType } from './types';
+import { Type, showType, eqType, TFun, isTFun, tfunR, tfunL, openTForall, TForall, TDef, tforall, THash, tapp1, TVar, shiftType, TApp, TIO, tfun } from './types';
 import { Term, showTerm } from './terms';
 import { terr, impossible } from './util';
 import { Kind, kfun, KType, eqKind, showKind } from './kinds';
@@ -15,6 +15,7 @@ export const shiftEnv = (env: Env): Env => map(env, x => shiftType(1, 0, x));
 
 export const wfType = (thenv: THashEnv, tenv: TEnv, t: Type): Kind => {
   if (t.tag === 'TFunC') return kfun(KType, KType, KType);
+  if (t.tag === 'TIO') return kfun(KType, KType);
   if (t.tag === 'TVar')
     return index(tenv, t.id) || terr(`undefined tvar ${t.id}`);
   if (t.tag === 'THash') {
@@ -90,6 +91,13 @@ const synth = (henv: HashEnv, thenv: THashEnv, env: Env, tenv: TEnv, term: Term)
     for (let i = 0, l = def.args.length; i < l; i++) cargs[i] = TVar(i);
     return tforall(def.args, TFun(tapp1(THash(term.con), cargs), def.type));
   }
+  if (term.tag === 'ReturnIO')
+    return tforall([KType], TFun(TVar(0), TApp(TIO, TVar(0))));
+  if (term.tag === 'BindIO')
+    return tforall([KType, KType],
+      tfun(tfun(TVar(1), TApp(TIO, TVar(0))), TApp(TIO, TVar(1)), TApp(TIO, TVar(0))));
+  if (term.tag === 'BeepIO')
+    return TApp(TIO, tforall([KType], tfun(TVar(0), TVar(0))));
   return impossible('synth');
 };
 

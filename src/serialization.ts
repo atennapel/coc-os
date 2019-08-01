@@ -1,8 +1,8 @@
-import { Term, showTerm, Var, Hash, App, Abs, AbsT, AppT, Decon, Con } from './terms';
+import { Term, showTerm, Var, Hash, App, Abs, AbsT, AppT, Decon, Con, ReturnIO, BindIO, BeepIO } from './terms';
 import { impossible, err } from './util';
 import { HASH_SIZE } from './hashing';
 import { Kind, KType, KFun, showKind } from './kinds';
-import { Type, showType, TVar, TFunC, TApp, THash, TForall } from './types';
+import { Type, showType, TVar, TFunC, TApp, THash, TForall, TIO } from './types';
 
 export enum KIND_BYTES {
   KType = 0,
@@ -29,11 +29,12 @@ export const serializeKind = (term: Kind): Buffer => {
 
 export enum TYPE_BYTES {
   TFunC = 0,
+  TIO,
   THash,
   TApp,
   TForall,
 }
-export const TVAR_BYTE = 4;
+export const TVAR_BYTE = 5;
 export const MAX_TVAR_BYTE = Math.pow(2, 8) - TVAR_BYTE - 1;
 const serializeTypeR = (term: Type, arr: number[]): void => {
   if (term.tag === 'TVar') {
@@ -44,6 +45,10 @@ const serializeTypeR = (term: Type, arr: number[]): void => {
   }
   if (term.tag === 'TFunC') {
     arr.push(TYPE_BYTES.TFunC);
+    return;
+  }
+  if (term.tag === 'TIO') {
+    arr.push(TYPE_BYTES.TIO);
     return;
   }
   if (term.tag === 'THash') {
@@ -86,8 +91,11 @@ export enum TERM_BYTES {
   AppT,
   Con,
   Decon,
+  ReturnIO,
+  BindIO,
+  BeepIO,
 }
-export const VAR_BYTE = 7;
+export const VAR_BYTE = 10;
 export const MAX_VAR_BYTE = Math.pow(2, 8) - VAR_BYTE - 1;
 const serializeTermR = (term: Term, arr: number[]): void => {
   if (term.tag === 'Var') {
@@ -156,7 +164,19 @@ const serializeTermR = (term: Term, arr: number[]): void => {
     }
     return;
   }
-  return impossible('serializeTypeR');
+  if (term.tag === 'ReturnIO') {
+    arr.push(TERM_BYTES.ReturnIO);
+    return;
+  }
+  if (term.tag === 'BindIO') {
+    arr.push(TERM_BYTES.BindIO);
+    return;
+  }
+  if (term.tag === 'BeepIO') {
+    arr.push(TERM_BYTES.BeepIO);
+    return;
+  }
+  return impossible('serializeTermR');
 };
 export const serializeTerm = (term: Term): Buffer => {
   const arr: number[] = [];
@@ -188,6 +208,9 @@ const deserializeTypeR = (arr: Buffer, i: number): [number, Type] => {
   const c = arr[i];
   if (c === TYPE_BYTES.TFunC) {
     return [i + 1, TFunC];
+  }
+  if (c === TYPE_BYTES.TIO) {
+    return [i + 1, TIO];
   }
   if (c === TYPE_BYTES.TApp) {
     const [j, l] = deserializeTypeR(arr, i + 1);
@@ -267,6 +290,15 @@ const deserializeTermR = (arr: Buffer, i: number): [number, Term] => {
     for (let j = 0; j < HASH_SIZE; j++)
       hash[j] = `00${arr[i + j + 1].toString(16)}`.slice(-2);
     return [i + HASH_SIZE + 1, Decon(hash.join(''))];
+  }
+  if (c === TERM_BYTES.ReturnIO) {
+    return [i + 1, ReturnIO];
+  }
+  if (c === TERM_BYTES.BindIO) {
+    return [i + 1, BindIO];
+  }
+  if (c === TERM_BYTES.BeepIO) {
+    return [i + 1, BeepIO];
   }
   return [i + 1, Var(c - VAR_BYTE)];
 };

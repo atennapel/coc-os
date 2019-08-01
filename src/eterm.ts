@@ -3,7 +3,10 @@ import { impossible, Id } from './util';
 export type ETerm
   = EVar
   | EAbs
-  | EApp;
+  | EApp
+  | EReturnIO
+  | EBindIO
+  | EBeepIO;
 
 export interface EVar {
   readonly tag: 'EVar';
@@ -42,7 +45,17 @@ export const flattenEApp = (t: ETerm): ETerm[] => {
   return a.reverse();
 };
 
-export const isETermAtom = (t: ETerm): boolean => t.tag === 'EVar';
+export interface EReturnIO { readonly tag: 'EReturnIO' }
+export const EReturnIO: EReturnIO = { tag: 'EReturnIO' };
+
+export interface EBindIO { readonly tag: 'EBindIO' }
+export const EBindIO: EBindIO = { tag: 'EBindIO' };
+
+export interface EBeepIO { readonly tag: 'EBeepIO' }
+export const EBeepIO: EBeepIO = { tag: 'EBeepIO' };
+
+export const isETermAtom = (t: ETerm): boolean =>
+  t.tag === 'EVar' || t.tag === 'EReturnIO' || t.tag === 'EBeepIO' || t.tag === 'EBindIO';
 
 const showETermP = (b: boolean, t: ETerm): string =>
   b ? `(${showETerm(t)})` : showETerm(t);
@@ -52,6 +65,9 @@ export const showETerm = (t: ETerm): string => {
     return `λ${showETermP(t.body.tag === 'EApp', t.body)}`;
   if (t.tag === 'EApp')
     return flattenEApp(t).map(x => showETermP(!isETermAtom(x), x)).join(' ');
+  if (t.tag === 'EReturnIO') return 'returnIO';
+  if (t.tag === 'EBindIO') return 'bindIO';
+  if (t.tag === 'EBeepIO') return 'beepIO';
   return impossible('showETerm');
 };
 
@@ -62,6 +78,9 @@ export const eqETerm = (a: ETerm, b: ETerm): boolean => {
     return b.tag === 'EAbs' && eqETerm(a.body, b.body);
   if (a.tag === 'EApp')
     return b.tag === 'EApp' && eqETerm(a.left, b.left) && eqETerm(a.right, b.right);
+  if (a.tag === 'EReturnIO') return b.tag === 'EReturnIO';
+  if (a.tag === 'EBindIO') return b.tag === 'EBindIO';
+  if (a.tag === 'EBeepIO') return b.tag === 'EBeepIO';
   return false;
 };
 
@@ -76,7 +95,7 @@ export const shiftETerm = (d: Id, c: Id, t: ETerm): ETerm => {
     const r = shiftETerm(d, c, t.right);
     return l === t.left && r === t.right ? t : EApp(l, r);
   }
-  return impossible('shiftETerm');
+  return t;
 };
 
 export const substETerm = (j: Id, s: ETerm, t: ETerm): ETerm => {
@@ -93,7 +112,7 @@ export const substETerm = (j: Id, s: ETerm, t: ETerm): ETerm => {
     const r = substETerm(j, s, t.right);
     return l === t.left && r === t.right ? t : EApp(l, r);
   }
-  return impossible('substETerm');
+  return t;
 };
 
 export const openEAbs = (t: EAbs, s: ETerm): ETerm =>
