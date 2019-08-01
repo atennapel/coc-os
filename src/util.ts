@@ -9,3 +9,6 @@ export const terr = (msg: string) => {
 export const err = (msg: string) => {
   throw new Error(msg);
 };
+
+export type HashString = string;
+export type Id = number;

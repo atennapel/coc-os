@@ -1,32 +1,29 @@
-import { Var, abs, Star, showTerm, pi, app, Hash } from './terms';
-import { normalize } from './normalization';
-import { typecheck, HashEnv } from './typecheck';
-import { serialize, deserialize } from './serialization';
-import { hash } from './hashing';
+import { showTerm, Con, appT, absT, abs, app, Var } from './terms';
+import { KType, kfun } from './kinds';
+import { TVar, showType, TDef, tforall, tfun } from './types';
+import { erase } from './erasure';
+import { showETerm } from './eterm';
+import { typecheck, THashEnv, HashEnv } from './typecheck';
 
 const v = Var;
+const tv = TVar;
 
-// const I = abs([Star, v(0)], v(0));
-// const K = abs([Star, Star], v(1));
-
-// \(t:*).\(x:t).x : /(t:*)./(x:t).t
-// \*.\0.0 : /*./0.1
-
-const henv: HashEnv = {
-  id: { term: abs([Star, v(0)], v(0)), type: pi([Star, v(0)], v(1)) },
+const henv: HashEnv = {};
+const thenv: THashEnv = {
+  Id: { kind: kfun(KType, KType), def: TDef([KType], tv(0)) },
+  Nat: {
+    kind: KType,
+    def: TDef([], tforall([KType], tfun(tv(0), tfun(tv(0), tv(0)), tv(0)))),
+  },
+  List: {
+    kind: kfun(KType, KType),
+    def: TDef([KType], tforall([KType], tfun(tv(0), tfun(tv(1), tv(0), tv(0)), tv(0)))),
+  },
 };
 
-const term = app(Hash('id'), pi([Star, v(0)], v(1)), Hash('id'));
+const term = absT([KType], app(appT(Con('List'), [tv(0)]), absT([KType], abs([tv(0), tfun(tv(1), tv(0), tv(0))], v(1)))));
 console.log(showTerm(term));
-const ty = typecheck(term, henv);
-console.log(showTerm(ty));
-const nty = normalize(henv, ty);
-console.log(showTerm(nty));
-const nf = normalize(henv, term);
-console.log(showTerm(nf));
-const ser = serialize(nf);
-console.log(ser.toString('hex'));
-const deser = deserialize(ser);
-console.log(showTerm(deser));
-const hs = hash(nf);
-console.log(hs.toString('hex'));
+const type = typecheck(term, henv, thenv);
+console.log(showType(type));
+const eterm = erase(term);
+console.log(showETerm(eterm));
