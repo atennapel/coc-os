@@ -1,5 +1,5 @@
 import { Term, showTerm, Var, Hash, App, Abs, AbsT, AppT, Decon, Con, ReturnIO, BindIO, BeepIO } from './terms';
-import { impossible, err } from './util';
+import { impossible, err, terr } from './util';
 import { HASH_SIZE } from './hashing';
 import { Kind, KType, KFun, showKind } from './kinds';
 import { Type, showType, TVar, TFunC, TApp, THash, TForall, TIO, TDef, showTDef } from './types';
@@ -50,7 +50,8 @@ const serializeTypeR = (term: Type, arr: number[]): void => {
   if (term.tag === 'TConst') {
     arr.push(TYPE_BYTES.TConst);
     if (term.name === '(->)') arr.push(TCONST_BYTES.TFunC);
-    if (term.name === 'IO') arr.push(TCONST_BYTES.TIO);
+    else if (term.name === 'IO') arr.push(TCONST_BYTES.TIO);
+    else return terr(`invalid tconst name: ${term.name}`);
     return;
   }
   if (term.tag === 'THash') {
@@ -103,11 +104,14 @@ export enum TERM_BYTES {
   AppT,
   Con,
   Decon,
-  ReturnIO,
+  Const,
+}
+export enum CONST_BYTES {
+  ReturnIO = 0,
   BindIO,
   BeepIO,
 }
-export const VAR_BYTE = 10;
+export const VAR_BYTE = 8;
 export const MAX_VAR_BYTE = Math.pow(2, 8) - VAR_BYTE - 1;
 const serializeTermR = (term: Term, arr: number[]): void => {
   if (term.tag === 'Var') {
@@ -176,16 +180,12 @@ const serializeTermR = (term: Term, arr: number[]): void => {
     }
     return;
   }
-  if (term.tag === 'ReturnIO') {
-    arr.push(TERM_BYTES.ReturnIO);
-    return;
-  }
-  if (term.tag === 'BindIO') {
-    arr.push(TERM_BYTES.BindIO);
-    return;
-  }
-  if (term.tag === 'BeepIO') {
-    arr.push(TERM_BYTES.BeepIO);
+  if (term.tag === 'Const') {
+    arr.push(TERM_BYTES.Const);
+    if (term.name === 'returnIO') arr.push(CONST_BYTES.ReturnIO);
+    else if (term.name === 'bindIO') arr.push(CONST_BYTES.BindIO);
+    else if (term.name === 'beepIO') arr.push(CONST_BYTES.BeepIO);
+    else return terr(`invalid const name: ${term.name}`);
     return;
   }
   return impossible('serializeTermR');
@@ -220,7 +220,9 @@ const deserializeTypeR = (arr: Buffer, i: number): [number, Type] => {
   const c = arr[i];
   if (c === TYPE_BYTES.TConst) {
     const x = arr[i+1];
-    return [i + 2, x === TCONST_BYTES.TFunC ? TFunC : TIO];
+    if (x === TCONST_BYTES.TFunC) return [i + 2, TFunC];
+    if (x === TCONST_BYTES.TIO) return [i + 2, TIO];
+    return terr(`invalid tconst byte: ${x}`);
   }
   if (c === TYPE_BYTES.TApp) {
     const [j, l] = deserializeTypeR(arr, i + 1);
@@ -316,14 +318,12 @@ const deserializeTermR = (arr: Buffer, i: number): [number, Term] => {
       hash[j] = `00${arr[i + j + 1].toString(16)}`.slice(-2);
     return [i + HASH_SIZE + 1, Decon(hash.join(''))];
   }
-  if (c === TERM_BYTES.ReturnIO) {
-    return [i + 1, ReturnIO];
-  }
-  if (c === TERM_BYTES.BindIO) {
-    return [i + 1, BindIO];
-  }
-  if (c === TERM_BYTES.BeepIO) {
-    return [i + 1, BeepIO];
+  if (c === TERM_BYTES.Const) {
+    const x = arr[i+1];
+    if (x === CONST_BYTES.ReturnIO) return [i + 2, ReturnIO];
+    if (x === CONST_BYTES.BindIO) return [i + 2, BindIO];
+    if (x === CONST_BYTES.BeepIO) return [i + 2, BeepIO];
+    return terr(`invalid const byte: ${x}`);
   }
   return [i + 1, Var(c - VAR_BYTE)];
 };

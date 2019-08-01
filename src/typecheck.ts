@@ -94,13 +94,16 @@ const synth = (henv: HashEnv, thenv: THashEnv, env: Env, tenv: TEnv, term: Term)
     for (let i = 0, l = def.args.length; i < l; i++) cargs[i] = TVar(i);
     return tforall(def.args, TFun(tapp1(THash(term.con), cargs), def.type));
   }
-  if (term.tag === 'ReturnIO')
-    return tforall([KType], TFun(TVar(0), TApp(TIO, TVar(0))));
-  if (term.tag === 'BindIO')
-    return tforall([KType, KType],
-      tfun(tfun(TVar(1), TApp(TIO, TVar(0))), TApp(TIO, TVar(1)), TApp(TIO, TVar(0))));
-  if (term.tag === 'BeepIO')
-    return TApp(TIO, tforall([KType], tfun(TVar(0), TVar(0))));
+  if (term.tag === 'Const') {
+    if (term.name === 'returnIO')
+      return tforall([KType], TFun(TVar(0), TApp(TIO, TVar(0))));
+    if (term.name === 'bindIO')
+      return tforall([KType, KType],
+        tfun(tfun(TVar(1), TApp(TIO, TVar(0))), TApp(TIO, TVar(1)), TApp(TIO, TVar(0))));
+    if (term.name === 'beepIO')
+      return TApp(TIO, tforall([KType], tfun(TVar(0), TVar(0))));
+    return terr(`invalid const name: ${term.name}`);
+  }
   return impossible('synth');
 };
 

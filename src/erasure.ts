@@ -1,6 +1,6 @@
 import { impossible, terr } from './util';
 import { Term } from './terms';
-import { ETerm, EVar, EAbs, EApp, EReturnIO, EBindIO, EBeepIO } from './eterm';
+import { ETerm, EVar, EAbs, EApp, EConst } from './eterm';
 import { HashEnv } from './typecheck';
 
 const eid = EAbs(EVar(0));
@@ -18,8 +18,6 @@ export const erase = (henv: HashEnv, t: Term): ETerm => {
   if (t.tag === 'AppT') return erase(henv, t.left);
   if (t.tag === 'Con') return eid;
   if (t.tag === 'Decon') return eid;
-  if (t.tag === 'ReturnIO') return EReturnIO;
-  if (t.tag === 'BindIO') return EBindIO;
-  if (t.tag === 'BeepIO') return EBeepIO;
+  if (t.tag === 'Const') return EConst(t.name);
   return impossible('erase');
 };

@@ -1,12 +1,11 @@
 import { impossible, Id } from './util';
+import { ConstName } from './terms';
 
 export type ETerm
   = EVar
   | EAbs
   | EApp
-  | EReturnIO
-  | EBindIO
-  | EBeepIO;
+  | EConst;
 
 export interface EVar {
   readonly tag: 'EVar';
@@ -45,17 +44,15 @@ export const flattenEApp = (t: ETerm): ETerm[] => {
   return a.reverse();
 };
 
-export interface EReturnIO { readonly tag: 'EReturnIO' }
-export const EReturnIO: EReturnIO = { tag: 'EReturnIO' };
-
-export interface EBindIO { readonly tag: 'EBindIO' }
-export const EBindIO: EBindIO = { tag: 'EBindIO' };
-
-export interface EBeepIO { readonly tag: 'EBeepIO' }
-export const EBeepIO: EBeepIO = { tag: 'EBeepIO' };
+export interface EConst {
+  readonly tag: 'EConst';
+  readonly name: ConstName;
+}
+export const EConst = (name: ConstName): EConst =>
+  ({ tag: 'EConst', name });
 
 export const isETermAtom = (t: ETerm): boolean =>
-  t.tag === 'EVar' || t.tag === 'EReturnIO' || t.tag === 'EBeepIO' || t.tag === 'EBindIO';
+  t.tag === 'EVar' || t.tag === 'EConst';
 
 const showETermP = (b: boolean, t: ETerm): string =>
   b ? `(${showETerm(t)})` : showETerm(t);
@@ -65,9 +62,7 @@ export const showETerm = (t: ETerm): string => {
     return `λ${showETermP(t.body.tag === 'EApp', t.body)}`;
   if (t.tag === 'EApp')
     return flattenEApp(t).map(x => showETermP(!isETermAtom(x), x)).join(' ');
-  if (t.tag === 'EReturnIO') return 'returnIO';
-  if (t.tag === 'EBindIO') return 'bindIO';
-  if (t.tag === 'EBeepIO') return 'beepIO';
+  if (t.tag === 'EConst') return t.name;
   return impossible('showETerm');
 };
 
@@ -78,9 +73,7 @@ export const eqETerm = (a: ETerm, b: ETerm): boolean => {
     return b.tag === 'EAbs' && eqETerm(a.body, b.body);
   if (a.tag === 'EApp')
     return b.tag === 'EApp' && eqETerm(a.left, b.left) && eqETerm(a.right, b.right);
-  if (a.tag === 'EReturnIO') return b.tag === 'EReturnIO';
-  if (a.tag === 'EBindIO') return b.tag === 'EBindIO';
-  if (a.tag === 'EBeepIO') return b.tag === 'EBeepIO';
+  if (a.tag === 'EConst') return b.tag === 'EConst' && a.name === b.name;
   return false;
 };
 

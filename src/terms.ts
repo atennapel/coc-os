@@ -11,9 +11,7 @@ export type Term
   | AppT
   | Con
   | Decon
-  | ReturnIO
-  | BindIO
-  | BeepIO;
+  | Const;
 
 export interface Var {
   readonly tag: 'Var';
@@ -116,18 +114,24 @@ export interface Decon {
 }
 export const Decon = (con: HashString): Decon => ({ tag: 'Decon', con });
 
-export interface ReturnIO { readonly tag: 'ReturnIO' }
-export const ReturnIO: ReturnIO = { tag: 'ReturnIO' };
+export type ConstName
+  = 'returnIO'
+  | 'bindIO'
+  | 'beepIO';
+export interface Const {
+  readonly tag: 'Const';
+  readonly name: ConstName;
+}
+export const Const = (name: ConstName): Const =>
+  ({ tag: 'Const', name });
 
-export interface BindIO { readonly tag: 'BindIO' }
-export const BindIO: BindIO = { tag: 'BindIO' };
-
-export interface BeepIO { readonly tag: 'BeepIO' }
-export const BeepIO: BeepIO = { tag: 'BeepIO' };
+export const ReturnIO = Const('returnIO');
+export const BindIO = Const('bindIO');
+export const BeepIO = Const('beepIO');
 
 export const isTermAtom = (t: Term): boolean =>
   t.tag === 'Var' || t.tag === 'Hash' || t.tag === 'Con' || t.tag === 'Decon' ||
-    t.tag === 'ReturnIO' || t.tag === 'BeepIO' || t.tag === 'BindIO';
+    t.tag === 'Const';
 
 const showTermP = (b: boolean, t: Term): string =>
   b ? `(${showTerm(t)})` : showTerm(t);
@@ -150,9 +154,7 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Con') return `@${t.con}`;
   if (t.tag === 'Decon') return `~${t.con}`;
-  if (t.tag === 'ReturnIO') return `returnIO`;
-  if (t.tag === 'BindIO') return `bindIO`;
-  if (t.tag === 'BeepIO') return `beepIO`;
+  if (t.tag === 'Const') return t.name;
   return impossible('showTerm');
 };
 
@@ -170,8 +172,6 @@ export const eqTerm = (a: Term, b: Term): boolean => {
     return b.tag === 'AppT' && eqTerm(a.left, b.left) && eqType(a.right, b.right);
   if (a.tag === 'Con') return b.tag === 'Con' && a.con === b.con;
   if (a.tag === 'Decon') return b.tag === 'Decon' && a.con === b.con;
-  if (a.tag === 'ReturnIO') return b.tag === 'ReturnIO';
-  if (a.tag === 'BindIO') return b.tag === 'BindIO';
-  if (a.tag === 'BeepIO') return b.tag === 'BeepIO';
+  if (a.tag === 'Const') return b.tag === 'Const' && a.name === b.name;
   return false;
 };
