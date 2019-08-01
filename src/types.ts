@@ -3,11 +3,10 @@ import { Kind, isKindAtom, showKindP, eqKind } from './kinds';
 
 export type Type
   = TVar
-  | TFunC
-  | TIO
   | THash
   | TApp
-  | TForall;
+  | TForall
+  | TConst;
 
 export interface TVar {
   readonly tag: 'TVar';
@@ -27,28 +26,33 @@ export interface THash {
 export const THash = (hash: HashString): THash =>
   ({ tag: 'THash', hash });
 
-export interface TFunC {
-  readonly tag: 'TFunC';
+export type TConstName
+  = '(->)'
+  | 'IO';
+export interface TConst {
+  readonly tag: 'TConst';
+  readonly name: TConstName;
 }
-export const TFunC: TFunC = { tag: 'TFunC' };
-
-export interface TIO {
-  readonly tag: 'TIO';
-}
-export const TIO: TIO = { tag: 'TIO' };
+export const TConst = (name: TConstName): TConst =>
+  ({ tag: 'TConst', name });
+export const TFunC = TConst('(->)');
+export const TIO = TConst('IO');
 
 export interface TFun {
   readonly tag: 'TApp';
   readonly left: {
     readonly tag: 'TApp';
-    readonly left: TFunC;
+    readonly left: {
+      readonly tag: 'TConst';
+      readonly name: '(->)';
+    };
     readonly right: Type;
   }
   readonly right: Type;
 }
 export const isTFun = (t: Type): t is TFun =>
   t.tag === 'TApp' && t.left.tag === 'TApp' &&
-    t.left.left.tag === 'TFunC';
+    t.left.left.tag === 'TConst' && t.left.left.name === '(->)';
 export const tfunL = (t: TFun) => t.left.right;
 export const tfunR = (t: TFun) => t.right;
 export const TFun = (a: Type, b: Type): TFun =>
@@ -105,13 +109,12 @@ export const flattenTApp = (t: Type): Type[] => {
 };
 
 export const isTypeAtom = (t: Type): boolean =>
-  t.tag === 'TVar' || t.tag === 'TFunC' || t.tag === 'TIO' || t.tag === 'THash';
+  t.tag === 'TVar' || t.tag === 'TConst' || t.tag === 'THash';
 
 export const showTypeP = (b: boolean, t: Type): string =>
   b ? `(${showType(t)})` : showType(t);
 export const showType = (t: Type): string => {
-  if (t.tag === 'TFunC') return '(->)';
-  if (t.tag === 'TIO') return 'IO';
+  if (t.tag === 'TConst') return t.name;
   if (t.tag === 'TVar') return `${t.id}`;
   if (t.tag === 'THash') return `#${t.hash}`;
   if (t.tag === 'TForall') {
@@ -127,8 +130,7 @@ export const showType = (t: Type): string => {
 
 export const eqType = (a: Type, b: Type): boolean => {
   if (a === b) return true;
-  if (a.tag === 'TFunC') return b.tag === 'TFunC';
-  if (a.tag === 'TIO') return b.tag === 'TIO';
+  if (a.tag === 'TConst') return b.tag === 'TConst' && a.name === b.name;
   if (a.tag === 'TVar') return b.tag === 'TVar' && a.id === b.id;
   if (a.tag === 'THash') return b.tag === 'THash' && a.hash === b.hash;
   if (a.tag === 'TForall')

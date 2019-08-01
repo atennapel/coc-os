@@ -14,8 +14,11 @@ export const showTEnv = (env: TEnv): string => toString(env, showKind);
 export const shiftEnv = (env: Env): Env => map(env, x => shiftType(1, 0, x));
 
 export const wfType = (thenv: THashEnv, tenv: TEnv, t: Type): Kind => {
-  if (t.tag === 'TFunC') return kfun(KType, KType, KType);
-  if (t.tag === 'TIO') return kfun(KType, KType);
+  if (t.tag === 'TConst') {
+    if (t.name === '(->)') return kfun(KType, KType, KType);
+    if (t.name === 'IO') return kfun(KType, KType);
+    return terr(`invalid tconst ${t.name}`);
+  }
   if (t.tag === 'TVar')
     return index(tenv, t.id) || terr(`undefined tvar ${t.id}`);
   if (t.tag === 'THash') {

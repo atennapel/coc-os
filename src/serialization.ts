@@ -28,11 +28,15 @@ export const serializeKind = (term: Kind): Buffer => {
 };
 
 export enum TYPE_BYTES {
-  TFunC = 0,
+  TConst = 0,
   TIO,
   THash,
   TApp,
   TForall,
+}
+export enum TCONST_BYTES {
+  TFunC = 0,
+  TIO,
 }
 export const TVAR_BYTE = 5;
 export const MAX_TVAR_BYTE = Math.pow(2, 8) - TVAR_BYTE - 1;
@@ -43,12 +47,10 @@ const serializeTypeR = (term: Type, arr: number[]): void => {
     arr.push(term.id + TVAR_BYTE);
     return;
   }
-  if (term.tag === 'TFunC') {
-    arr.push(TYPE_BYTES.TFunC);
-    return;
-  }
-  if (term.tag === 'TIO') {
-    arr.push(TYPE_BYTES.TIO);
+  if (term.tag === 'TConst') {
+    arr.push(TYPE_BYTES.TConst);
+    if (term.name === '(->)') arr.push(TCONST_BYTES.TFunC);
+    if (term.name === 'IO') arr.push(TCONST_BYTES.TIO);
     return;
   }
   if (term.tag === 'THash') {
@@ -216,11 +218,9 @@ export const deserializeKind = (arr: Buffer): Kind => {
 
 const deserializeTypeR = (arr: Buffer, i: number): [number, Type] => {
   const c = arr[i];
-  if (c === TYPE_BYTES.TFunC) {
-    return [i + 1, TFunC];
-  }
-  if (c === TYPE_BYTES.TIO) {
-    return [i + 1, TIO];
+  if (c === TYPE_BYTES.TConst) {
+    const x = arr[i+1];
+    return [i + 2, x === TCONST_BYTES.TFunC ? TFunC : TIO];
   }
   if (c === TYPE_BYTES.TApp) {
     const [j, l] = deserializeTypeR(arr, i + 1);
