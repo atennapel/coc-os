@@ -43,6 +43,10 @@ export const wfType = (thenv: THashEnv, tenv: TEnv, t: Type): Kind => {
   return impossible('wfType');
 };
 
+export const wfTDef = (t: TDef, thenv: THashEnv = {}, tenv: TEnv = Nil): Kind => {
+  return KType;
+};
+
 const synth = (henv: HashEnv, thenv: THashEnv, env: Env, tenv: TEnv, term: Term): Type => {
   console.log(`synth ${showTerm(term)} ${showEnv(env)}`);
   if (term.tag === 'Var')

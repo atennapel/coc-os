@@ -12,3 +12,4 @@ export const err = (msg: string) => {
 
 export type HashString = string;
 export type Id = number;
+export type Name = string;

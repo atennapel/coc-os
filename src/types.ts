@@ -1,5 +1,6 @@
 import { HashString, impossible, Id } from './util';
 import { Kind, isKindAtom, showKindP, eqKind } from './kinds';
+import { HashSet } from './terms';
 
 export type Type
   = TVar
@@ -183,3 +184,12 @@ export const substType = (j: Id, s: Type, t: Type): Type => {
 
 export const openTForall = (t: TForall, s: Type): Type =>
   substType(0, s, t.body);
+
+export const hashesType = (t: Type, set: HashSet = {}): HashSet => {  
+  if (t.tag === 'TConst') return set;
+  if (t.tag === 'TVar') return set;
+  if (t.tag === 'THash') return set[t.hash] = true, set;
+  if (t.tag === 'TForall') return hashesType(t.body, set)
+  if (t.tag === 'TApp') return hashesType(t.right, hashesType(t.left, set));
+  return impossible('hashesType');
+};

@@ -1,5 +1,5 @@
 import { impossible, HashString, Id } from './util';
-import { Type, showTypeP, isTypeAtom, eqType, showType } from './types';
+import { Type, showTypeP, isTypeAtom, eqType, showType, hashesType } from './types';
 import { Kind, eqKind, isKindAtom, showKindP } from './kinds';
 
 export type Term
@@ -174,4 +174,31 @@ export const eqTerm = (a: Term, b: Term): boolean => {
   if (a.tag === 'Decon') return b.tag === 'Decon' && a.con === b.con;
   if (a.tag === 'Const') return b.tag === 'Const' && a.name === b.name;
   return false;
+};
+
+export type HashSet = { [key: string]: true };
+export const hashesTerm = (t: Term, set: HashSet = {}): HashSet => {
+  if (t.tag === 'Var') return set;
+  if (t.tag === 'Hash') return set[t.hash] = true, set;
+  if (t.tag === 'Abs') return hashesTerm(t.body, set);
+  if (t.tag === 'App') return hashesTerm(t.right, hashesTerm(t.left, set));
+  if (t.tag === 'AbsT') return hashesTerm(t.body, set);
+  if (t.tag === 'AppT') return hashesTerm(t.left, set);
+  if (t.tag === 'Con') return set;
+  if (t.tag === 'Decon') return set;
+  if (t.tag === 'Const') return set;
+  return impossible('hashesTerm');
+};
+
+export const hashesTypeInTerm = (t: Term, set: HashSet = {}): HashSet => {
+  if (t.tag === 'Var') return set;
+  if (t.tag === 'Hash') return set;
+  if (t.tag === 'Abs') return hashesType(t.type, set);
+  if (t.tag === 'App') return hashesTypeInTerm(t.right, hashesTypeInTerm(t.left, set));
+  if (t.tag === 'AbsT') return hashesTypeInTerm(t.body, set);
+  if (t.tag === 'AppT') return hashesType(t.right, set);
+  if (t.tag === 'Con') return set[t.con] = true, set;
+  if (t.tag === 'Decon') return set[t.con] = true, set;
+  if (t.tag === 'Const') return set;
+  return impossible('hashesTypeInTerm');
 };

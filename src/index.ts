@@ -8,6 +8,7 @@ import { typecheck, THashEnv, HashEnv } from './typecheck';
 import { hashTerm } from './hashing';
 import { deserializeTerm, serializeTerm } from './serialization';
 import { normalizeFull } from './normalization';
+import { TestRepo, FullRepo } from './repo';
 
 const v = Var;
 const tv = TVar;
@@ -50,10 +51,20 @@ const type = typecheck(term, henv, thenv);
 console.log(showType(type));
 const ser = serializeTerm(term);
 console.log(ser.toString('hex'));
-console.log(hashTerm(term).toString('hex'));
+const hashed = hashTerm(term);
+console.log(hashed.toString('hex'));
 const des = deserializeTerm(ser);
 console.log(showTerm(des));
 console.log(showTerm(normalizeFull(des)));
 const eterm = erase(henv, term);
 console.log(showETerm(eterm));
 console.log(showETerm(normalizeETermFull(eterm)));
+
+const testrepo = new TestRepo();
+testrepo.cache[hashed.toString('hex')] = ser;
+testrepo.namecache['id'] = hashed;
+const repo = FullRepo.from(testrepo);
+repo.getByName('id').then(([t, ty]) => {
+  console.log(showTerm(t));
+  console.log(showType(ty));
+});
