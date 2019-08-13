@@ -1,9 +1,10 @@
 import { Term, hashesTerm, hashesTypeInTerm } from './terms';
 import { TDef, Type, hashesType } from './types';
-import { deserializeTerm, deserializeTDef } from './serialization';
+import { deserializeTerm, deserializeTDef, serializeTerm, serializeTDef } from './serialization';
 import { typecheck, wfTDef, HashEnv, THashEnv } from './typecheck';
 import { Kind } from './kinds';
 import { Name } from './util';
+import { hashBytes } from './hashing';
 
 export interface Repo {
   get(hsh: Buffer): Promise<Buffer>;
@@ -167,6 +168,20 @@ export class TestRepo implements Repo, NameRepo, HashCache {
     const h = hsh.toString('hex');
     this.thcache[h] = [tdef, kind];
     return Promise.resolve();
+  }
+
+  addNamedTerm(name: Name, term: Term): void {
+    const ser = serializeTerm(term);
+    const hsh = hashBytes(ser);
+    this.cache[hsh.toString('hex')] = ser;
+    this.namecache[name] = hsh;
+  }
+
+  addNamedTDef(name: Name, tdef: TDef): void {
+    const ser = serializeTDef(tdef);
+    const hsh = hashBytes(ser);
+    this.tcache[hsh.toString('hex')] = ser;
+    this.tnamecache[name] = hsh;
   }
 
 }
