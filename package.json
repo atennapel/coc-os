@@ -21,7 +21,7 @@
   },
   "homepage": "https://github.com/atennapel/coc-os#readme",
   "devDependencies": {
-    "@types/node": "^12.6.8",
-    "typescript": "^3.5.3"
+    "@types/node": "^12.7.4",
+    "typescript": "^3.6.2"
   }
 }
