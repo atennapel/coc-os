@@ -1,4 +1,4 @@
-import { List } from './list';
+import { List, Nil } from './list';
 import { Term, Type, Var } from './terms';
 
 export type Env = List<Domain>;
@@ -9,7 +9,7 @@ export interface Clos {
 }
 export const Clos = (body: Term, env: Env): Clos => ({ body, env });
 
-export type Domain = Var | DAbs | DApp | DPi | Type;
+export type Domain = DAbs | DNeutral | DPi | Type;
 
 export interface DAbs {
   readonly tag: 'DAbs';
@@ -19,13 +19,14 @@ export interface DAbs {
 export const DAbs = (type: Domain, clos: Clos): DAbs =>
   ({ tag: 'DAbs', type, clos });
 
-export interface DApp {
-  readonly tag: 'DApp';
-  readonly left: Domain;
-  readonly right: Domain;
+export interface DNeutral {
+  readonly tag: 'DNeutral';
+  readonly head: Var;
+  readonly args: List<Domain>; // reverse order
 }
-export const DApp = (left: Domain, right: Domain): DApp =>
-  ({ tag: 'DApp', left, right });
+export const DNeutral = (head: Var, args: List<Domain> = Nil): DNeutral =>
+  ({ tag: 'DNeutral', head, args });
+export const DVar = (index: number): DNeutral => DNeutral(Var(index));
 
 export interface DPi {
   readonly tag: 'DPi';

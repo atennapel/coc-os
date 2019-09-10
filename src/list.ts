@@ -79,3 +79,12 @@ export const lookup = <K, T>(l: List<[K, T]>, name: K, eq: (a: K, b: K) => boole
   }
   return null;
 };
+
+export const foldr = <T, R>(f: (h: T, a: R) => R, i: R, l: List<T>): R =>
+  l.tag === 'Nil' ? i : f(l.head, foldr(f, i, l.tail));
+
+export const zipWith = <A, B, R>(f: (a: A, b: B) => R, la: List<A>, lb: List<B>): List<R> =>
+  la.tag === 'Nil' || lb.tag === 'Nil' ? Nil :
+    Cons(f(la.head, lb.head), zipWith(f, la.tail, lb.tail));
+export const and = (l: List<boolean>): boolean =>
+  l.tag === 'Nil' ? true : l.head && and(l.tail);

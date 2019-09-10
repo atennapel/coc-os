@@ -37,18 +37,20 @@ export const Pi = (type: Term, body: Term): Pi =>
   ({ tag: 'Pi', type, body });
 export const pi = (ts: Term[], body: Term): Term =>
   ts.reduceRight((x, y) => Pi(y, x), body);
+export const funFrom = (ts: Term[]): Term =>
+  ts.reduceRight((x, y) => Pi(y, x));
+export const fun = (...ts: Term[]): Term => funFrom(ts);
 
 export interface Type {
   readonly tag: 'Type';
-  readonly index: number;
 }
-export const Type = (index: number): Type => ({ tag: 'Type', index });
+export const Type: Type = { tag: 'Type' };
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Abs') return `(\\${showTerm(t.type)}.${showTerm(t.body)})`;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${showTerm(t.right)})`;
   if (t.tag === 'Pi') return `(${showTerm(t.type)} -> ${showTerm(t.body)})`;
-  if (t.tag === 'Type') return `*${t.index > 0 ? t.index : ''}`;
+  if (t.tag === 'Type') return '*';
   return impossible('showTerm');
 };
