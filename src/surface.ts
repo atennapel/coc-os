@@ -2,7 +2,7 @@ import { impossible } from './util';
 import { Type, Var } from './terms';
 import { List, Nil, lookup, Cons } from './list';
 
-export type STerm = SVar | Var | SAbs | SApp | SPi | Type | SAnn;
+export type STerm = SVar | Var | SAbs | SApp | SPi | Type | SAnn | SFix;
 
 export interface SVar {
   readonly tag: 'SVar';
@@ -44,6 +44,15 @@ export const sfunFrom = (ts: STerm[]): STerm =>
   ts.reduceRight((x, y) => SPi('_', y, x));
 export const sfun = (...ts: STerm[]): STerm => sfunFrom(ts);
 
+export interface SFix {
+  readonly tag: 'SFix';
+  readonly name: string;
+  readonly type: STerm;
+  readonly body: STerm;
+}
+export const SFix = (name: string, type: STerm, body: STerm): SFix =>
+  ({ tag: 'SFix', name, type, body });
+
 export interface SAnn {
   readonly tag: 'SAnn';
   readonly term: STerm;
@@ -56,6 +65,7 @@ export const showSTerm = (t: STerm): string => {
   if (t.tag === 'SVar') return t.name;
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'SAbs') return `(\\${t.name}.${showSTerm(t.body)})`;
+  if (t.tag === 'SFix') return `(fix(${t.name}:${showSTerm(t.type)}).${showSTerm(t.body)})`;
   if (t.tag === 'SApp') return `(${showSTerm(t.left)} ${showSTerm(t.right)})`;
   if (t.tag === 'SAnn') return `(${showSTerm(t.term)} : ${showSTerm(t.type)})`;
   if (t.tag === 'SPi') return `((${t.name}:${showSTerm(t.type)}) -> ${showSTerm(t.body)})`;
@@ -69,6 +79,7 @@ export const toNameless = (t: STerm, k: number = 0, ns: List<[string, number]> =
     return typeof i === 'number' ? Var(k - i - 1) : impossible(`sterm was not wellscoped: ${t.name}`);
   }
   if (t.tag === 'SAbs') return SAbs(t.name, toNameless(t.body, k + 1, Cons([t.name, k], ns)));
+  if (t.tag === 'SFix') return SFix(t.name, toNameless(t.type, k, ns), toNameless(t.body, k + 1, Cons([t.name, k], ns)));
   if (t.tag === 'SPi') return SPi(t.name, toNameless(t.type, k, ns), toNameless(t.body, k + 1, Cons([t.name, k], ns)));
   if (t.tag === 'SApp') return SApp(toNameless(t.left, k, ns), toNameless(t.right, k, ns));
   if (t.tag === 'SAnn') return SAnn(toNameless(t.term, k, ns), toNameless(t.type, k, ns));

@@ -1,6 +1,6 @@
 import { impossible } from './util';
 
-export type Term = Var | Abs | App | Pi | Type;
+export type Term = Var | Abs | App | Pi | Type | Fix;
 
 export interface Var {
   readonly tag: 'Var';
@@ -41,6 +41,14 @@ export const funFrom = (ts: Term[]): Term =>
   ts.reduceRight((x, y) => Pi(y, x));
 export const fun = (...ts: Term[]): Term => funFrom(ts);
 
+export interface Fix {
+  readonly tag: 'Fix';
+  readonly type: Term;
+  readonly body: Term;
+}
+export const Fix = (type: Term, body: Term): Fix =>
+  ({ tag: 'Fix', type, body });
+
 export interface Type {
   readonly tag: 'Type';
 }
@@ -49,6 +57,7 @@ export const Type: Type = { tag: 'Type' };
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Abs') return `(\\${showTerm(t.type)}.${showTerm(t.body)})`;
+  if (t.tag === 'Fix') return `(fix ${showTerm(t.type)}.${showTerm(t.body)})`;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${showTerm(t.right)})`;
   if (t.tag === 'Pi') return `(${showTerm(t.type)} -> ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';

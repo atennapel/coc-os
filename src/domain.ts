@@ -1,7 +1,11 @@
-import { List, Nil } from './list';
-import { Term, Type, Var } from './terms';
+import { List, Nil, toString } from './list';
+import { Term, Type, Var, showTerm } from './terms';
+import { quote } from './nbe';
 
 export type Env = List<Domain>;
+
+export const showEnv = (e: Env, k: number = 0): string =>
+  toString(e, d => showTerm(quote(d, k)));
 
 export interface Clos {
   readonly body: Term;
@@ -9,7 +13,7 @@ export interface Clos {
 }
 export const Clos = (body: Term, env: Env): Clos => ({ body, env });
 
-export type Domain = DAbs | DNeutral | DPi | Type;
+export type Domain = DAbs | DNeutral | DPi | Type | DFix;
 
 export interface DAbs {
   readonly tag: 'DAbs';
@@ -35,3 +39,11 @@ export interface DPi {
 }
 export const DPi = (type: Domain, clos: Clos): DPi =>
   ({ tag: 'DPi', type, clos });
+
+export interface DFix {
+  readonly tag: 'DFix';
+  readonly type: Domain;
+  readonly clos: Clos;
+}
+export const DFix = (type: Domain, clos: Clos): DFix =>
+  ({ tag: 'DFix', type, clos });
