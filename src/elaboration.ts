@@ -2,12 +2,12 @@ import { STerm, showSTerm } from './surface';
 import { Term, Type, Pi, App, showTerm, Abs, Fix, Const } from './terms';
 import { quote, evaluate, capp } from './nbe';
 import { Nil, index, Cons } from './list';
-import { Env, Domain, DVar, showEnv } from './domain';
+import { Env, Domain, DVar } from './domain';
 import { terr } from './util';
 import { eqtype, ConstEnv } from './typecheck';
 
 export const checkSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t: STerm, ty: Domain): Term => {
-  console.log(`checkSurface ${k} ${showSTerm(t)} : ${showTerm(quote(ty, k))} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
+  //console.log(`checkSurface ${k} ${showSTerm(t)} : ${showTerm(quote(ty, k))} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
   if (t.tag === 'SAbs' && ty.tag === 'DPi') {
     const v = DVar(k);
     const body = checkSurface(cenv, Cons(ty.type, tenv), Cons(v, venv), k + 1, t.body, capp(ty.clos, v));
@@ -22,7 +22,7 @@ export const checkSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t:
 };
 
 export const synthSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t: STerm): [Term, Domain] => {
-  console.log(`synthSurface ${k} ${showSTerm(t)} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
+  //console.log(`synthSurface ${k} ${showSTerm(t)} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
   if (t.tag === 'Type') return [t, t];
   if (t.tag === 'Var') {
     const ty = index(tenv, t.index) || terr(`var out of scope ${t.index}`);
@@ -59,7 +59,7 @@ export const synthSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t:
 };
 
 export const synthappSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t: STerm, ta: Domain, b: STerm): [Term, Domain] => {
-  console.log(`synthappSurface ${k} ${showSTerm(t)} => ${showTerm(quote(ta, k))} @ ${showSTerm(b)} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
+  //console.log(`synthappSurface ${k} ${showSTerm(t)} => ${showTerm(quote(ta, k))} @ ${showSTerm(b)} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
   if (ta.tag === 'DPi') {
     const eb = checkSurface(cenv, tenv, venv, k, b, ta.type);
     return [eb, capp(ta.clos, evaluate(eb, venv))];

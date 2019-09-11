@@ -8,9 +8,10 @@ import { mapobj } from './util';
 import { spi, sfun, SVar, showSTerm, toNameless, SAnn, sabs, sapp, SFix } from './surface';
 // @ts-ignore
 import { Type, showTerm, fun, app, Const, Var, abs } from './terms';
+import { parse } from './parser';
 
 /*
-- add parser
+- add definitions
 */
 
 const v = SVar;
@@ -49,3 +50,5 @@ console.log(showTerm(typecheck(tm, cenv)));
 const normal = nf(tm);
 console.log(showTerm(normal));
 console.log(showETerm(erase(normal)));
+
+console.log(showSTerm(parse('/t * -> t t c')));

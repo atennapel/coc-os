@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "runindex": "npm run build && node build/src/index",
-    "main": "npm run build && node build/src/main"
+    "main": "npm run build && node build/src/main",
+    "cli": "npm run build && node build/src/cli"
   },
   "repository": {
     "type": "git",
