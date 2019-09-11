@@ -1,6 +1,6 @@
 import { impossible } from './util';
 
-export type Term = Var | Abs | App | Pi | Type | Fix;
+export type Term = Var | Abs | App | Pi | Type | Fix | Const;
 
 export interface Var {
   readonly tag: 'Var';
@@ -54,12 +54,20 @@ export interface Type {
 }
 export const Type: Type = { tag: 'Type' };
 
+export interface Const {
+  readonly tag: 'Const';
+  readonly name: string;
+}
+export const Const = (name: string): Const => ({ tag: 'Const', name });
+
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'Const') return t.name;
   if (t.tag === 'Abs') return `(\\${showTerm(t.type)}.${showTerm(t.body)})`;
   if (t.tag === 'Fix') return `(fix ${showTerm(t.type)}.${showTerm(t.body)})`;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${showTerm(t.right)})`;
   if (t.tag === 'Pi') return `(${showTerm(t.type)} -> ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
+  console.log(t);
   return impossible('showTerm');
 };

@@ -76,7 +76,7 @@ export const showSTerm = (t: STerm): string => {
 export const toNameless = (t: STerm, k: number = 0, ns: List<[string, number]> = Nil): STerm => {
   if (t.tag === 'SVar') {
     const i = lookup(ns, t.name);
-    return typeof i === 'number' ? Var(k - i - 1) : impossible(`sterm was not wellscoped: ${t.name}`);
+    return typeof i === 'number' ? Var(k - i - 1) : t;
   }
   if (t.tag === 'SAbs') return SAbs(t.name, toNameless(t.body, k + 1, Cons([t.name, k], ns)));
   if (t.tag === 'SFix') return SFix(t.name, toNameless(t.type, k, ns), toNameless(t.body, k + 1, Cons([t.name, k], ns)));

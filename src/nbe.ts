@@ -16,6 +16,8 @@ export const dapp = (a: Domain, b: Domain): Domain => {
 export const evaluate = (t: Term, env: Env = Nil): Domain => {
   if (t.tag === 'Var')
     return index(env, t.index) || impossible(`out of range var ${t.index} in evaluate`);
+  if (t.tag === 'Const')
+    return DNeutral(t);
   if (t.tag === 'Abs')
     return DAbs(evaluate(t.type, env), Clos(t.body, env));
   if (t.tag === 'Pi')
@@ -37,7 +39,7 @@ export const quote = (d: Domain, k: number = 0): Term => {
   if (d.tag === 'DNeutral')
     return foldr(
       (x, y) => App(y, x),
-      Var(k - (d.head.index + 1)) as Term,
+      (d.head.tag === 'Const' ? d.head : Var(k - (d.head.index + 1))) as Term,
       map(d.args, x => quote(x, k))
     );
   return d;

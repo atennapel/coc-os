@@ -1,7 +1,7 @@
 import { impossible } from './util';
-import { Type, Var, Term } from './terms';
+import { Type, Var, Term, Const } from './terms';
 
-export type ETerm = Var | EAbs | EApp | Type | EPi | EFix;
+export type ETerm = Var | EAbs | EApp | Type | EPi | EFix | Const;
 
 export interface EAbs {
   readonly tag: 'EAbs';
@@ -32,6 +32,7 @@ export const EPi: EPi = { tag: 'EPi' };
 
 export const showETerm = (t: ETerm): string => {
   if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'Const') return t.name;
   if (t.tag === 'EAbs') return `(\\${showETerm(t.body)})`;
   if (t.tag === 'EFix') return `(fix ${showETerm(t.body)})`;
   if (t.tag === 'EApp') return `(${showETerm(t.left)} ${showETerm(t.right)})`;
