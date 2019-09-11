@@ -26,6 +26,8 @@ export const evaluate = (t: Term, env: Env = Nil): Domain => {
     return DFix(evaluate(t.type, env), Clos(t.body, env));
   if (t.tag === 'App')
     return dapp(evaluate(t.left, env), evaluate(t.right, env));
+  if (t.tag === 'Let')
+    return evaluate(t.body, Cons(evaluate(t.value, env), env));
   return t;
 };
 

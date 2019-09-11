@@ -1,7 +1,7 @@
 import { impossible } from './util';
 import { Type, Var, Term, Const } from './terms';
 
-export type ETerm = Var | EAbs | EApp | Type | EPi | EFix | Const;
+export type ETerm = Var | EAbs | EApp | Type | EPi | EFix | Const | ELet;
 
 export interface EAbs {
   readonly tag: 'EAbs';
@@ -30,6 +30,14 @@ export interface EPi {
 }
 export const EPi: EPi = { tag: 'EPi' };
 
+export interface ELet {
+  readonly tag: 'ELet';
+  readonly value: ETerm;
+  readonly body: ETerm;
+}
+export const ELet = (value: ETerm, body: ETerm): ELet =>
+  ({ tag: 'ELet', value, body });
+
 export const showETerm = (t: ETerm): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Const') return t.name;
@@ -38,6 +46,7 @@ export const showETerm = (t: ETerm): string => {
   if (t.tag === 'EApp') return `(${showETerm(t.left)} ${showETerm(t.right)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'EPi') return 'Pi';
+  if (t.tag === 'ELet') return `(let ${showETerm(t.value)} in ${showETerm(t.body)})`;
   return impossible('showETerm');
 };
 
@@ -46,5 +55,6 @@ export const erase = (t: Term): ETerm => {
   if (t.tag === 'App') return EApp(erase(t.left), erase(t.right));
   if (t.tag === 'Fix') return EFix(erase(t.body));
   if (t.tag === 'Pi') return EPi;
+  if (t.tag === 'Let') return ELet(erase(t.value), erase(t.body));
   return t;
 };

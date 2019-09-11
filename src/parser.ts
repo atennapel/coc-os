@@ -1,4 +1,4 @@
-import { STerm, SVar, sappFrom, SAbs, sabs, SAnn, SPi, SFix, sfunFrom } from './surface';
+import { STerm, SVar, sappFrom, SAbs, sabs, SAnn, SPi, SFix, sfunFrom, SLet } from './surface';
 import { Type } from './terms';
 
 const err = (msg: string) => { throw new SyntaxError(msg) };
@@ -15,7 +15,7 @@ const matchingBracket = (c: Bracket): Bracket => {
 }
 
 const SYM1: string[] = ['\\', ':', '/', '*'];
-const SYM2: string[] = ['->'];
+const SYM2: string[] = ['\\:', '->'];
 
 const START = 0;
 const NAME = 1;
@@ -81,6 +81,13 @@ const exprs = (ts: Token[]): STerm => {
       const rest = exprs(ts.slice(3));
       return SPi(arg.name, expr(ts[2]), rest);
     }
+    if (x === '\\:' || x === 'fnt') {
+      if (ts.length < 3) return err(`invalid use of \\: or fnt`);
+      const arg = ts[1];
+      if (arg.tag !== 'Name') return err(`invalid arg for fnt`);
+      const rest = exprs(ts.slice(3));
+      return SAbs(arg.name, rest, expr(ts[2]));
+    }
     if (x === 'fix') {
       if (ts.length < 3) return err(`invalid use of fix`);
       const arg = ts[1];
@@ -94,6 +101,13 @@ const exprs = (ts: Token[]): STerm => {
     }
     if (x === '->') {
       return sfunFrom(ts.slice(1).map(expr));
+    }
+    if (x === 'let') {
+      if (ts.length < 4) return err(`invalid let`);
+      const x = ts[1];
+      if (x.tag !== 'Name') return err(`invalid let name`);
+      const rest = exprs(ts.slice(4));
+      return SLet(x.name, expr(ts[2]), expr(ts[3]), rest);
     }
   }
   return sappFrom(ts.map(expr));

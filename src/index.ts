@@ -11,7 +11,8 @@ import { Type, showTerm, fun, app, Const, Var, abs } from './terms';
 import { parse } from './parser';
 
 /*
-- add definitions
+- add meta variables
+- add opaque types
 */
 
 const v = SVar;

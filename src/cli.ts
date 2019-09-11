@@ -1,17 +1,21 @@
 import { parse } from './parser';
-import { toNameless } from './surface';
+import { toNameless, showSTerm } from './surface';
 import { elaborate } from './elaboration';
 import { cenv, runREPL } from './repl';
 import { showTerm } from './terms';
 import { nf } from './nbe';
 import { showETerm, erase } from './erased';
+import { typecheck } from './typecheck';
 
 if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
   const ds = parse(sc);
+  console.log(showSTerm(ds));
   const nm = toNameless(ds);
+  console.log(showSTerm(nm));
   const [tm, ty] = elaborate(nm, cenv);
   console.log(`${showTerm(tm)} : ${showTerm(ty)}`);
+  console.log(showTerm(typecheck(tm, cenv)));
   const normal = nf(tm);
   console.log(showTerm(normal));
   console.log(showETerm(erase(normal)));

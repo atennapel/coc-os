@@ -45,7 +45,14 @@ export const eqtype = (k: number, a: Domain, b: Domain): boolean => {
   return false;
 };
 
-export const check = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t: Term, ty: Domain): void => {
+export const check = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t: Term, ty: Domain): void => {  
+  if (t.tag === 'Let') {
+    check(cenv, tenv, venv, k, t.type, Type);
+    const vty = evaluate(t.type, venv);
+    check(cenv, tenv, venv, k, t.value, vty);
+    check(cenv, Cons(vty, tenv), Cons(evaluate(t.value, venv), venv), k + 1, t.body, ty);
+    return;
+  }
   const ty2 = synth(cenv, tenv, venv, k, t);
   if (!eqtype(k, ty2, ty))
     return terr(`typecheck failed: (${showTerm(t)} : ${showTerm(quote(ty, k))}), got ${showTerm(quote(ty2, k))}`);
@@ -80,6 +87,12 @@ export const synth = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t: Term):
     const ty = cenv[t.name];
     if (!ty) return terr(`undefined const ${t.name}`);
     return ty;
+  }
+  if (t.tag === 'Let') {
+    check(cenv, tenv, venv, k, t.type, Type);
+    const vty = evaluate(t.type, venv);
+    check(cenv, tenv, venv, k, t.value, vty);
+    return synth(cenv, Cons(vty, tenv), Cons(evaluate(t.value, venv), venv), k + 1, t.body);
   }
   return terr(`cannot synth ${showTerm(t)}`);
 };
