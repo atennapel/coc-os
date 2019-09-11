@@ -1,0 +1,7 @@
+; run with `npm run cli -- lib/nat.coc`
+(: (\(Nat z s)
+  s (s (s z)) ; 3
+) (/ t * -> t (-> t t) t))
+  (/ t * -> t (-> t t) t) ; type of Nat
+  (\(t z s) z) ; zero
+  (\(n t z s) s (n t z s)) ; successor
