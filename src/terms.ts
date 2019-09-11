@@ -1,6 +1,7 @@
 import { impossible } from './util';
+import { Domain } from './domain';
 
-export type Term = Var | Abs | App | Pi | Type | Fix | Const | Let;
+export type Term = Var | Abs | App | Pi | Type | Fix | Const | Let | Meta;
 
 export interface Var {
   readonly tag: 'Var';
@@ -69,9 +70,22 @@ export interface Let {
 export const Let = (type: Term, value: Term, body: Term): Let =>
   ({ tag: 'Let', type, value, body });
 
+export interface Meta {
+  readonly tag: 'Meta';
+  readonly index: number;
+  term: Domain | null;
+}
+export const Meta = (index: number): Meta =>
+  ({ tag: 'Meta', index, term: null });
+
+let metaId = 0;
+export const resetMetaId = () => { metaId = 0 };
+export const freshMeta = (): Meta => Meta(metaId++);
+
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Const') return t.name;
+  if (t.tag === 'Meta') return `?${t.index}${t.term ? '!' : ''}`;
   if (t.tag === 'Abs') return `(\\${showTerm(t.type)}.${showTerm(t.body)})`;
   if (t.tag === 'Fix') return `(fix ${showTerm(t.type)}.${showTerm(t.body)})`;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${showTerm(t.right)})`;

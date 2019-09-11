@@ -13,6 +13,12 @@ export const dapp = (a: Domain, b: Domain): Domain => {
   return impossible('vapp');
 };
 
+export const force = (v: Domain): Domain => {
+  if (v.tag === 'DNeutral' && v.head.tag === 'Meta' && v.head.term)
+    return force(foldr((x, y) => dapp(y, x), v.head.term, v.args));
+  return v;
+};
+
 export const evaluate = (t: Term, env: Env = Nil): Domain => {
   if (t.tag === 'Var')
     return index(env, t.index) || impossible(`out of range var ${t.index} in evaluate`);
@@ -28,6 +34,7 @@ export const evaluate = (t: Term, env: Env = Nil): Domain => {
     return dapp(evaluate(t.left, env), evaluate(t.right, env));
   if (t.tag === 'Let')
     return evaluate(t.body, Cons(evaluate(t.value, env), env));
+  if (t.tag === 'Meta') return t.term || DNeutral(t);
   return t;
 };
 
@@ -41,7 +48,8 @@ export const quote = (d: Domain, k: number = 0): Term => {
   if (d.tag === 'DNeutral')
     return foldr(
       (x, y) => App(y, x),
-      (d.head.tag === 'Const' ? d.head : Var(k - (d.head.index + 1))) as Term,
+      (d.head.tag === 'Const' || d.head.tag === 'Meta' ? d.head :
+        Var(k - (d.head.index + 1))) as Term,
       map(d.args, x => quote(x, k))
     );
   return d;

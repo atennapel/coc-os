@@ -1,4 +1,4 @@
-import { STerm, SVar, sappFrom, SAbs, sabs, SAnn, SPi, SFix, sfunFrom, SLet } from './surface';
+import { STerm, SVar, sappFrom, SAbs, sabs, SAnn, SPi, SFix, sfunFrom, SLet, SHole } from './surface';
 import { Type } from './terms';
 
 const err = (msg: string) => { throw new SyntaxError(msg) };
@@ -116,6 +116,7 @@ const expr = (t: Token): STerm => {
   if (t.tag === 'List') return exprs(t.list);
   const x = t.name;
   if (x === '*') return Type;
+  if (x === '_') return SHole;
   return SVar(x);
 };
 

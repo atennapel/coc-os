@@ -56,5 +56,6 @@ export const erase = (t: Term): ETerm => {
   if (t.tag === 'Fix') return EFix(erase(t.body));
   if (t.tag === 'Pi') return EPi;
   if (t.tag === 'Let') return ELet(erase(t.value), erase(t.body));
+  if (t.tag === 'Meta') return impossible(`erase meta ${t.index}`);
   return t;
 };

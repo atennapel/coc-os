@@ -2,7 +2,7 @@ import { impossible } from './util';
 import { Type, Var } from './terms';
 import { List, Nil, lookup, Cons } from './list';
 
-export type STerm = SVar | Var | SAbs | SApp | SPi | Type | SAnn | SFix | SLet;
+export type STerm = SVar | Var | SAbs | SApp | SPi | Type | SAnn | SFix | SLet | SHole;
 
 export interface SVar {
   readonly tag: 'SVar';
@@ -72,6 +72,9 @@ export interface SLet {
 export const SLet = (name: string, type: STerm, value: STerm, body: STerm): SLet =>
   ({ tag: 'SLet', name, type, value, body });
 
+export interface SHole { readonly tag: 'SHole' }
+export const SHole: SHole = { tag: 'SHole' };
+
 export const showSTerm = (t: STerm): string => {
   if (t.tag === 'SVar') return t.name;
   if (t.tag === 'Var') return `${t.index}`;
@@ -81,6 +84,7 @@ export const showSTerm = (t: STerm): string => {
   if (t.tag === 'SAnn') return `(${showSTerm(t.term)} : ${showSTerm(t.type)})`;
   if (t.tag === 'SPi') return `((${t.name}:${showSTerm(t.type)}) -> ${showSTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
+  if (t.tag === 'SHole') return '_';
   if (t.tag === 'SLet') return `(let ${t.name} : ${showSTerm(t.type)} = ${showSTerm(t.value)} in ${showSTerm(t.body)})`;
   return impossible('showTerm');
 };
@@ -88,7 +92,7 @@ export const showSTerm = (t: STerm): string => {
 export const toNameless = (t: STerm, k: number = 0, ns: List<[string, number]> = Nil): STerm => {
   if (t.tag === 'SVar') {
     const i = lookup(ns, t.name);
-    return typeof i === 'number' ? Var(k - i - 1) : t;
+    return typeof i === 'number' ? Var(k - i - 1) : t.name === '_' ? SHole : t;
   }
   if (t.tag === 'SAbs') return SAbs(t.name, toNameless(t.body, k + 1, Cons([t.name, k], ns)), t.type && toNameless(t.type, k, ns));
   if (t.tag === 'SFix') return SFix(t.name, toNameless(t.type, k, ns), toNameless(t.body, k + 1, Cons([t.name, k], ns)));

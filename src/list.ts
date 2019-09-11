@@ -45,6 +45,9 @@ export const each = <T>(l: List<T>, fn: (val: T) => void): void => {
   }
 };
 
+export const reverse = <T>(l: List<T>): List<T> =>
+  listFrom(toArray(l, x => x).reverse());
+
 export const toArray = <T, R>(l: List<T>, fn: (val: T) => R): R[] => {
   let c = l;
   const r = [];
@@ -82,9 +85,26 @@ export const lookup = <K, T>(l: List<[K, T]>, name: K, eq: (a: K, b: K) => boole
 
 export const foldr = <T, R>(f: (h: T, a: R) => R, i: R, l: List<T>): R =>
   l.tag === 'Nil' ? i : f(l.head, foldr(f, i, l.tail));
+export const foldl = <T, R>(f: (a: R, h: T) => R, i: R, l: List<T>): R =>
+  l.tag === 'Nil' ? i : foldl(f, f(i, l.head), l.tail);
 
 export const zipWith = <A, B, R>(f: (a: A, b: B) => R, la: List<A>, lb: List<B>): List<R> =>
   la.tag === 'Nil' || lb.tag === 'Nil' ? Nil :
     Cons(f(la.head, lb.head), zipWith(f, la.tail, lb.tail));
+export const zipWith_ = <A, B>(f: (a: A, b: B) => void, la: List<A>, lb: List<B>): void => {
+  if (la.tag === 'Cons' && lb.tag === 'Cons') {
+    f(la.head, lb.head);
+    zipWith_(f, la.tail, lb.tail);
+  }
+};
 export const and = (l: List<boolean>): boolean =>
   l.tag === 'Nil' ? true : l.head && and(l.tail);
+
+export const range = (n: number): List<number> =>
+  n <= 0 ? Nil : Cons(n - 1, range(n - 1));
+
+export const contains = <T>(l: List<T>, v: T): boolean =>
+  l.tag === 'Cons' ? (l.head === v || contains(l.tail, v)) : false;
+
+export const max = (l: List<number>): number =>
+  foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTEGER, l);

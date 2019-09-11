@@ -1,5 +1,5 @@
 import { List, Nil, toString } from './list';
-import { Term, Type, Var, showTerm, Const } from './terms';
+import { Term, Type, Var, showTerm, Const, Meta } from './terms';
 import { quote } from './nbe';
 
 export type Env = List<Domain>;
@@ -23,7 +23,7 @@ export interface DAbs {
 export const DAbs = (type: Domain, clos: Clos): DAbs =>
   ({ tag: 'DAbs', type, clos });
 
-export type Head = Var | Const;
+export type Head = Var | Const | Meta;
 export interface DNeutral {
   readonly tag: 'DNeutral';
   readonly head: Head;

@@ -1,10 +1,11 @@
-import { STerm, showSTerm, SLet } from './surface';
-import { Term, Type, Pi, App, showTerm, Abs, Fix, Const, Let } from './terms';
+import { STerm, showSTerm } from './surface';
+import { Term, Type, Pi, App, showTerm, Abs, Fix, Const, Let, resetMetaId } from './terms';
 import { quote, evaluate, capp } from './nbe';
 import { Nil, index, Cons } from './list';
 import { Env, Domain, DVar, DPi, Clos } from './domain';
 import { terr } from './util';
-import { eqtype, ConstEnv } from './typecheck';
+import { ConstEnv } from './typecheck';
+import { unify, newMeta, zonk } from './unify';
 
 export const checkSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t: STerm, ty: Domain): Term => {
   // console.log(`checkSurface ${k} ${showSTerm(t)} : ${showTerm(quote(ty, k))} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
@@ -22,9 +23,10 @@ export const checkSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t:
     const body = checkSurface(cenv, Cons(vty, tenv), Cons(evaluate(val, venv), venv), k + 1, t.body, ty);
     return Let(tya, val, body);
   }
+  if (t.tag === 'SHole')
+    return newMeta(k);
   const [term, ty2] = synthSurface(cenv, tenv, venv, k, t);
-  if (!eqtype(k, ty2, ty))
-    return terr(`checkSurface failed: (${showSTerm(t)} : ${showTerm(quote(ty, k))}), got ${showTerm(quote(ty2, k))}`);
+  unify(k, ty2, ty);
   return term;
 };
 
@@ -41,8 +43,6 @@ export const synthSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t:
     return [Pi(ty, body), Type];
   }
   if (t.tag === 'SApp') {
-    if (t.left.tag === 'SAbs' && t.left.type)
-      return synthSurface(cenv, tenv, venv, k, SLet(t.left.name, t.left.type, t.right, t.left.body));
     const [l, ta] = synthSurface(cenv, tenv, venv, k, t.left);
     const [b, tb] = synthappSurface(cenv, tenv, venv, k, t, ta, t.right);
     return [App(l, b), tb];
@@ -71,12 +71,24 @@ export const synthSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number, t:
     const [body, rty] = synthSurface(cenv, Cons(vty, tenv), Cons(v, venv), k + 1, t.body);
     return [Abs(ty, body), DPi(vty, Clos(quote(rty, k + 1), venv))];
   }
+  if (t.tag === 'SAbs' && !t.type) {
+    const a = newMeta(k);
+    const b = newMeta(k + 1);
+    const ty = evaluate(Pi(a, b), venv);
+    const term = checkSurface(cenv, tenv, venv, k, t, ty);
+    return [term, ty];
+  }
   if (t.tag === 'SLet') {
     const ty = checkSurface(cenv, tenv, venv, k, t.type, Type);
     const vty = evaluate(ty, venv);
     const val = checkSurface(cenv, tenv, venv, k, t.value, vty);
     const [body, rty] = synthSurface(cenv, Cons(vty, tenv), Cons(evaluate(val, venv), venv), k + 1, t.body);
     return [Let(ty, val, body), rty];
+  }
+  if (t.tag === 'SHole') {
+    const t = newMeta(k);
+    const va = evaluate(newMeta(k), venv);
+    return [t, va];
   }
   return terr(`cannot synthSurface ${showSTerm(t)}`);
 };
@@ -93,6 +105,9 @@ export const synthappSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number,
 };
 
 export const elaborate = (t: STerm, cenv: ConstEnv = {}): [Term, Term] => {
+  resetMetaId();
   const [term, ty] = synthSurface(cenv, Nil, Nil, 0, t);
-  return [term, quote(ty)];
+  const zterm = zonk(0, term);
+  const zty = zonk(0, quote(ty));
+  return [zterm, zty];
 };
