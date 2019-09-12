@@ -23,7 +23,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     const ds = parse(_s);
     const nm = toNameless(ds);
     const [tm, ty] = elaborate(nm, cenv);
-    //console.log(`${showTerm(tm)} : ${showTerm(ty)}`);
+    console.log(`${showTerm(tm)}`);
     const normal = nf(tm);
     //console.log(showTerm(normal));
     //console.log(showETerm(erase(normal)));

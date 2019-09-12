@@ -107,7 +107,7 @@ export const synthappSurface = (cenv: ConstEnv, tenv: Env, venv: Env, k: number,
 export const elaborate = (t: STerm, cenv: ConstEnv = {}): [Term, Term] => {
   resetMetaId();
   const [term, ty] = synthSurface(cenv, Nil, Nil, 0, t);
-  const zterm = zonk(0, term);
-  const zty = zonk(0, quote(ty));
+  const zterm = zonk(Nil, 0, term);
+  const zty = zonk(Nil, 0, quote(ty));
   return [zterm, zty];
 };

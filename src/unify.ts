@@ -1,7 +1,7 @@
-import { zipWith_, map, List, toString, range, foldr, reverse, contains, Cons, max, foldl } from './list';
+import { zipWith_, map, List, range, foldr, reverse, contains, Cons, foldl } from './list';
 import { terr, impossible } from './util';
 import { force, quote, capp, dapp, evaluate } from './nbe';
-import { Domain, DVar, Head } from './domain';
+import { Domain, DVar, Head, Env } from './domain';
 import { Meta, Term, showTerm, freshMeta, App, Var, Abs, Type, Let, Pi, Fix } from './terms';
 
 export const headeq = (a: Head, b: Head): boolean =>
@@ -94,26 +94,48 @@ const solve = (k: number, m: Meta, sp_: List<Domain>, t: Domain): void => {
   const sp = checkSpine(sp_);
   const rhs = quote(t, k);
   checkSolution(m, sp, rhs);
-  console.log(showTerm(m), toString(sp), showTerm(rhs));
-  const mx = max(sp);
-  console.log(mx);
+  //console.log(showTerm(m), toString(sp), showTerm(rhs));
+  // const mx = max(sp);
+  //console.log(mx);
   const qterm = foldl((x, y) => Abs(Type, x), rhs, sp);
-  console.log(showTerm(qterm));
+  //console.log(showTerm(qterm));
   m.term = evaluate(qterm);
 };
 
 export const newMeta = (k: number): Term =>
   foldr((x, y) => App(y, x), freshMeta() as Term, reverse(map(range(k), Var)));
 
-export const zonk = (k: number, t: Term): Term => {
+type Either<A, B> = [false, A] | [true, B];
+const L = <A, B>(v: A): Either<A, B> => [false, v];
+const R = <A, B>(v: B): Either<A, B> => [true, v];
+const either = <A, B, R>(e: Either<A, B>, l: (v: A) => R, r: (v: B) => R): R =>
+  e[0] ? r(e[1]) : l(e[1]);
+
+const zonkApp = (venv: Env, k: number, t: Term): Either<Domain, Term> => {
+  if (t.tag === 'Meta') return t.term ? L(t.term) : R(t);
+  if (t.tag === 'App')
+    return either(
+      zonkApp(venv, k, t.left),
+      x => L(dapp(x, evaluate(t.right, venv))),
+      x => R(App(x, zonk(venv, k, t.right))),
+    );
+  return R(zonk(venv, k, t));
+};
+
+export const zonk = (venv: Env, k: number, t: Term): Term => {
   if (t.tag === 'Meta') {
-    if (!t.term) return impossible(`unsolved meta ${showTerm(t)}`);
-    return zonk(k, quote(t.term, k));
+    if (!t.term) return t;
+    return zonk(venv, k, quote(t.term, k));
   }
-  if (t.tag === 'Abs') return Abs(zonk(k, t.type), zonk(k + 1, t.body));
-  if (t.tag === 'Fix') return Fix(zonk(k, t.type), zonk(k + 1, t.body));
-  if (t.tag === 'Pi') return Pi(zonk(k, t.type), zonk(k + 1, t.body));
-  if (t.tag === 'Let') return Let(zonk(k, t.type), zonk(k, t.value), zonk(k + 1, t.body));
-  if (t.tag === 'App') return App(zonk(k, t.left), zonk(k, t.right));
+  if (t.tag === 'Abs') return Abs(zonk(venv, k, t.type), zonk(Cons(DVar(k), venv), k + 1, t.body));
+  if (t.tag === 'Fix') return Fix(zonk(venv, k, t.type), zonk(Cons(DVar(k), venv), k + 1, t.body));
+  if (t.tag === 'Pi') return Pi(zonk(venv, k, t.type), zonk(Cons(DVar(k), venv), k + 1, t.body));
+  if (t.tag === 'Let') return Let(zonk(venv, k, t.type), zonk(venv, k, t.value), zonk(Cons(DVar(k), venv), k + 1, t.body));
+  if (t.tag === 'App')
+    return either(
+      zonkApp(venv, k, t.left),
+      x => quote(dapp(x, evaluate(t.right, venv)), k),
+      x => App(x, zonk(venv, k, t.right)),
+    );
   return t;
 };
