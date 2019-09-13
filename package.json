@@ -8,7 +8,8 @@
     "build": "tsc",
     "runindex": "npm run build && node build/src/index",
     "main": "npm run build && node build/src/main",
-    "cli": "npm run build && node build/src/cli"
+    "cli": "npm run build && node build/src/cli",
+    "bundle": "npm run build && browserify build/src/web.js -o bundle.js"
   },
   "repository": {
     "type": "git",
@@ -23,6 +24,7 @@
   "homepage": "https://github.com/atennapel/coc-os#readme",
   "devDependencies": {
     "@types/node": "^12.7.4",
-    "typescript": "^3.6.2"
+    "typescript": "^3.6.2",
+    "browserify": "^16.2.3"
   }
 }

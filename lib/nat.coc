@@ -1,7 +1,8 @@
 ; run with `npm run cli -- lib/nat.coc`
 
-let Nat * (/ t * -> t (-> t t) t)
-let z Nat (\(t z s) z)
-let s (-> Nat Nat) (\(n t z s) s (n t z s))
-let add (-> Nat Nat Nat) (\(n m) n Nat m s)
-add (s (s (s z))) (s (s z))
+let Nat (/ t * -> t (-> t t) t)
+let z (: (\(t z s) z) Nat )
+let s (: (\(n t z s) s (n t z s)) (-> Nat Nat))
+let add (: (\(n m) n Nat m s) (-> Nat Nat Nat))
+
+let main (add (s z) (s (s z)))

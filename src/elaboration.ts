@@ -1,11 +1,12 @@
-import { STerm, showSTerm } from './surface';
-import { Term, Type, Pi, App, showTerm, Abs, Fix, Const, Let, resetMetaId } from './terms';
+import { STerm, showSTerm, toNameless } from './surface';
+import { Term, Type, Pi, App, showTerm, Abs, Fix, Const, Let, resetMetaId, Var, fun } from './terms';
 import { quote, evaluate, capp } from './nbe';
 import { Nil, index, Cons } from './list';
 import { Env, Domain, DVar, DPi, Clos } from './domain';
-import { terr } from './util';
+import { terr, impossible } from './util';
 import { unify, newMeta, zonk } from './unify';
 import { constenv } from './typecheck';
+import { Def } from './defs';
 
 export const checkSurface = (tenv: Env, venv: Env, k: number, t: STerm, ty: Domain): Term => {
   // console.log(`checkSurface ${k} ${showSTerm(t)} : ${showTerm(quote(ty, k))} | ${showEnv(tenv, k)} | ${showEnv(venv, k)}`);
@@ -110,4 +111,39 @@ export const elaborate = (t: STerm): [Term, Term] => {
   const zterm = zonk(Nil, 0, term);
   const zty = zonk(Nil, 0, quote(ty));
   return [zterm, zty];
+};
+
+export const elaborateDef = (d: Def): [Term, Term] | null => {
+  if (d.tag === 'DLet') {
+    const x = d.name;
+    if (constenv[x]) return terr(`name already taken ${x}`);
+    const t = toNameless(d.term);
+    const [term, type] = elaborate(t);
+    constenv[x] = [evaluate(type), evaluate(term)];
+    return [term, type];
+  }
+  if (d.tag === 'DOpaque') {
+    const x = d.name;
+    if (constenv[x]) return terr(`name already taken ${x}`);
+    const o = d.oname;
+    if (constenv[o]) return terr(`name already taken ${o}`);
+    const t = toNameless(d.term);
+    const [term, type] = elaborate(t);
+    constenv[x] = [evaluate(type), evaluate(Const(x))];
+    // (f : * -> *) -> f (Const x) -> f (term)
+    constenv[o] = [
+      evaluate(Pi(fun(Type, Type), fun(App(Var(0), Const(x)), App(Var(1), term)))),
+      evaluate(Abs(Type, Var(0))),
+    ];
+    return [term, type];
+  }
+  return impossible('elaborateDef');
+};
+export const elaborateDefs = (ds: Def[]): [Term, Term] | null => {
+  let main: [Term, Term] | null = null;
+  ds.forEach(d => {
+    const r = elaborateDef(d);
+    if (d.name === 'main') main = r;
+  });
+  return main;
 };

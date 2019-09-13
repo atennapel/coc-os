@@ -1,5 +1,7 @@
 import { STerm, SVar, sappFrom, SAbs, sabs, SAnn, SPi, SFix, sfunFrom, SLet, SHole } from './surface';
 import { Type } from './terms';
+import { Def, DLet, DOpaque } from './defs';
+import { terr } from './util';
 
 const err = (msg: string) => { throw new SyntaxError(msg) };
 
@@ -120,7 +122,36 @@ const expr = (t: Token): STerm => {
   return SVar(x);
 };
 
+const defs = (t: Token[]): Def[] => {
+  if (t.length === 0) return [];
+  const head = t[0];
+  if (head.tag === 'List') return terr('invalid def');
+  if (head.name === 'let') {
+    const x = t[1];
+    if (!x || x.tag !== 'Name') return terr('invalid let name');
+    const d = t[2];
+    if (!d) return terr('invalid definition');
+    const rest = defs(t.slice(3));
+    return [DLet(x.name, expr(d)) as Def].concat(rest);
+  }
+  if (head.name === 'opaque') {
+    const x = t[1];
+    if (!x || x.tag !== 'Name') return terr('invalid opaque name');
+    const y = t[2];
+    if (!y || y.tag !== 'Name') return terr('invalid opaque proof name');
+    const d = t[3];
+    if (!d) return terr('invalid definition');
+    const rest = defs(t.slice(4));
+    return [DOpaque(x.name, y.name, expr(d)) as Def].concat(rest);
+  }
+  return terr('invalid def');
+};
+
 export const parse = (s: string): STerm => {
   const ts = tokenize(s);
   return exprs(ts);
+};
+export const parseDefs = (s: string): Def[] => {
+  const ts = tokenize(s);
+  return defs(ts);
 };

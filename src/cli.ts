@@ -1,29 +1,30 @@
-import { parse } from './parser';
-import { toNameless, showSTerm } from './surface';
-import { elaborate } from './elaboration';
-import { runREPL } from './repl';
+import { parseDefs } from './parser';
+import { elaborateDefs } from './elaboration';
+import { runREPL, initREPL } from './repl';
+import { showDefs } from './defs';
+import * as readline from 'readline';
 import { showTerm } from './terms';
 import { nf } from './nbe';
 import { showETerm, erase } from './erased';
-import { typecheck } from './typecheck';
 
 if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
-  const ds = parse(sc);
-  console.log(showSTerm(ds));
-  const nm = toNameless(ds);
-  console.log(showSTerm(nm));
-  const [tm, ty] = elaborate(nm);
-  console.log(`${showTerm(tm)} : ${showTerm(ty)}`);
-  console.log(showTerm(typecheck(tm)));
-  const normal = nf(tm);
-  console.log(showTerm(normal));
-  console.log(showETerm(erase(normal)));
+  const ds = parseDefs(sc);
+  console.log(showDefs(ds));
+  const res = elaborateDefs(ds);
+  if (res) {
+    const [tm, ty] = res;
+    console.log(`${showTerm(tm)}`);
+    const normal = nf(tm);
+    //console.log(showTerm(normal));
+    //console.log(showETerm(erase(normal)));
+    console.log(`${showTerm(normal)} : ${showTerm(ty)} ~> ${showETerm(erase(normal))}`);
+  }
   process.exit();
 }
 
-import * as readline from 'readline';
 const _readline = readline.createInterface(process.stdin, process.stdout);
+initREPL();
 console.log('REPL');
 process.stdin.setEncoding('utf8');
 function _input() {
