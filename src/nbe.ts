@@ -2,6 +2,7 @@ import { Clos, Domain, Env, DAbs, DPi, DNeutral, DVar, DFix } from './domain';
 import { Cons, Nil, index, foldr, map } from './list';
 import { Term, Var, Abs, App, Pi, Fix } from './terms';
 import { impossible } from './util';
+import { constenv } from './typecheck';
 
 export const capp = (c: Clos, d: Domain): Domain =>
   evaluate(c.body, Cons(d, c.env));
@@ -22,8 +23,10 @@ export const force = (v: Domain): Domain => {
 export const evaluate = (t: Term, env: Env = Nil): Domain => {
   if (t.tag === 'Var')
     return index(env, t.index) || impossible(`out of range var ${t.index} in evaluate`);
-  if (t.tag === 'Const')
-    return DNeutral(t);
+  if (t.tag === 'Const') {
+    const v = constenv[t.name];
+    return v && v[1] ? v[1] : DNeutral(t);
+  }
   if (t.tag === 'Abs')
     return DAbs(evaluate(t.type, env), Clos(t.body, env));
   if (t.tag === 'Pi')

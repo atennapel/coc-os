@@ -1,7 +1,7 @@
 import { parse } from './parser';
 import { toNameless, showSTerm } from './surface';
 import { elaborate } from './elaboration';
-import { cenv, runREPL } from './repl';
+import { runREPL } from './repl';
 import { showTerm } from './terms';
 import { nf } from './nbe';
 import { showETerm, erase } from './erased';
@@ -13,9 +13,9 @@ if (process.argv[2]) {
   console.log(showSTerm(ds));
   const nm = toNameless(ds);
   console.log(showSTerm(nm));
-  const [tm, ty] = elaborate(nm, cenv);
+  const [tm, ty] = elaborate(nm);
   console.log(`${showTerm(tm)} : ${showTerm(ty)}`);
-  console.log(showTerm(typecheck(tm, cenv)));
+  console.log(showTerm(typecheck(tm)));
   const normal = nf(tm);
   console.log(showTerm(normal));
   console.log(showETerm(erase(normal)));
