@@ -2,7 +2,7 @@ import { Val, VNe, VVar, VAbs, VPi } from './values';
 import { impossible } from './util';
 import { Cons, Nil, foldr } from './list';
 import { EnvV, fresh, DefV, BoundV, lookupV } from './env';
-import { Term, Abs, Pi, App } from './terms';
+import { Term, Abs, Pi, App, Type } from './terms';
 
 export const vapp = (a: Val, b: Val): Val => {
   if (a.tag === 'VAbs') return a.body(b);
@@ -25,8 +25,9 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), evaluate(t.right, vs));
-  if (t.tag === 'Abs' && t.type)
-    return VAbs(t.name, evaluate(t.type, vs),
+  if (t.tag === 'Abs')
+  // TODO: fix when meta solving considers types
+    return VAbs(t.name, t.type ? evaluate(t.type, vs) : Type,
       v => evaluate(t.body, Cons(DefV(t.name, v), vs)));
   if (t.tag === 'Pi')
     return VPi(t.name, evaluate(t.type, vs),

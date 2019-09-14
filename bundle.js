@@ -295,8 +295,9 @@ exports.evaluate = (t, vs = list_1.Nil) => {
     }
     if (t.tag === 'App')
         return exports.vapp(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
-    if (t.tag === 'Abs' && t.type)
-        return values_1.VAbs(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, v), vs)));
+    if (t.tag === 'Abs')
+        // TODO: fix when meta solving considers types
+        return values_1.VAbs(t.name, t.type ? exports.evaluate(t.type, vs) : terms_1.Type, v => exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, v), vs)));
     if (t.tag === 'Pi')
         return values_1.VPi(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, v), vs)));
     if (t.tag === 'Let')
@@ -596,8 +597,13 @@ const checkSolution = (m, sp, t) => {
 const solve = (vs, m, sp_, rhs_) => {
     const sp = checkSpine(sp_);
     const rhs = nbe_1.quote(rhs_, vs);
+    const sparr = list_1.toArray(sp, x => x).reverse();
+    config_1.log(() => `try (${terms_1.showTerm(m)} ${sparr.join(' ')}) := ${terms_1.showTerm(rhs)}`);
     checkSolution(m, sp, rhs);
-    m.term = nbe_1.evaluate(terms_1.abs(list_1.toArray(sp, x => x).reverse(), rhs));
+    // TODO: add types to the parameters of the solution
+    const sol = terms_1.abs(sparr, rhs);
+    config_1.log(() => `${terms_1.showTerm(m)} := ${terms_1.showTerm(terms_1.abs(sparr, rhs))}`);
+    m.term = nbe_1.evaluate(sol);
 };
 const eqHead = (a, b) => {
     if (a === b)

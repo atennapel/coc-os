@@ -45,8 +45,13 @@ const checkSolution = (m: Meta, sp: List<Name>, t: Term): void => {
 const solve = (vs: EnvV, m: Meta, sp_: List<Val>, rhs_: Val): void => {
   const sp = checkSpine(sp_);
   const rhs = quote(rhs_, vs);
+  const sparr = toArray(sp, x => x).reverse();
+  log(() => `try (${showTerm(m)} ${sparr.join(' ')}) := ${showTerm(rhs)}`);
   checkSolution(m, sp, rhs);
-  m.term = evaluate(abs(toArray(sp, x => x).reverse(), rhs));
+  // TODO: add types to the parameters of the solution
+  const sol = abs(sparr, rhs);
+  log(() => `${showTerm(m)} := ${showTerm(abs(sparr, rhs))}`);
+  m.term = evaluate(sol);
 };
 
 const eqHead = (a: Head, b: Head): boolean => {
