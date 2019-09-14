@@ -26,7 +26,7 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return VPi(t.name, evaluate(t.type, vs),
       v => evaluate(t.body, Cons(DefV(t.name, v), vs)));
   if (t.tag === 'Let')
-    return evaluate(t.body, Cons(DefV(t.name, evaluate(t.value ,vs)), vs));
+    return evaluate(t.body, Cons(DefV(t.name, evaluate(t.value, vs)), vs));
   return impossible('evaluate');
 };
 
