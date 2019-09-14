@@ -1,4 +1,4 @@
-import { List, contains } from './list';
+import { List, each } from './list';
 
 export type Name = string;
 
@@ -9,8 +9,10 @@ export const splitName = (x: Name): [Name, number] => {
 
 export const freshName = (l: List<Name>, x: Name): Name => {
   if (x === '_') return x;
+  const map: { [key: string]: true } = {};
+  each(l, x => map[x] = true);
   let y = splitName(x)[0];
-  while (contains(l, y)) {
+  while (map[y]) {
     if (y.indexOf('$') >= 0) {
       const [z, n] = splitName(y);
       y = `${z}\$${n + 1}`;

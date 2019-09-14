@@ -233,8 +233,10 @@ exports.splitName = (x) => {
 exports.freshName = (l, x) => {
     if (x === '_')
         return x;
+    const map = {};
+    list_1.each(l, x => map[x] = true);
     let y = exports.splitName(x)[0];
-    while (list_1.contains(l, y)) {
+    while (map[y]) {
         if (y.indexOf('$') >= 0) {
             const [z, n] = exports.splitName(y);
             y = `${z}\$${n + 1}`;
