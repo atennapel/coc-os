@@ -253,7 +253,7 @@ exports.quote = (v, vs = list_1.Nil) => {
         return list_1.foldr((v, a) => terms_1.App(a, exports.quote(v, vs)), terms_1.Var(v.head), v.args);
     if (v.tag === 'VAbs') {
         const x = env_1.fresh(vs, v.name);
-        return terms_1.Abs(x, exports.quote(v.type, vs), exports.quote(v.body(values_1.VVar(x)), list_1.Cons(env_1.BoundV(x), vs)));
+        return terms_1.Abs(x, exports.quote(v.body(values_1.VVar(x)), list_1.Cons(env_1.BoundV(x), vs)), exports.quote(v.type, vs));
     }
     if (v.tag === 'VPi') {
         const x = env_1.fresh(vs, v.name);
@@ -417,10 +417,11 @@ exports.initREPL = () => { };
 exports.runREPL = (_s, _cb) => {
     try {
         const tm = parser_1.parse(_s);
+        console.log(`inpt: ${terms_1.showTerm(tm)}`);
         const [term, type] = elaborate_1.elaborate(tm);
-        const nf = nbe_1.normalize(term);
         console.log(`term: ${terms_1.showTerm(term)}`);
         console.log(`type: ${terms_1.showTerm(type)}`);
+        const nf = nbe_1.normalize(term);
         console.log(`nmfm: ${terms_1.showTerm(nf)}`);
         return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~> ${terms_1.showTerm(nf)}`);
     }

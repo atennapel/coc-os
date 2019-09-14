@@ -8,6 +8,7 @@ import { parse } from './parser';
 if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
   const tm = parse(sc);
+  console.log(`inpt: ${showTerm(tm)}`);
   const [term, type] = elaborate(tm);
   console.log(`term: ${showTerm(term)}`);
   console.log(`type: ${showTerm(type)}`);

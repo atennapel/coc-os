@@ -36,7 +36,7 @@ export const quote = (v: Val, vs: EnvV = Nil): Term => {
     return foldr((v, a) => App(a, quote(v, vs)), Var(v.head) as Term, v.args);
   if (v.tag === 'VAbs') {
     const x = fresh(vs, v.name);
-    return Abs(x, quote(v.type, vs), quote(v.body(VVar(x)), Cons(BoundV(x), vs)));
+    return Abs(x, quote(v.body(VVar(x)), Cons(BoundV(x), vs)), quote(v.type, vs));
   }
   if (v.tag === 'VPi') {
     const x = fresh(vs, v.name);
