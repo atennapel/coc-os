@@ -4,8 +4,10 @@ import { terr } from './util';
 import { showTerm } from './terms';
 import { quote, vapp } from './nbe';
 import { Cons, zipWith_ } from './list';
+import { log } from './config';
 
 export const unify = (vs: EnvV, a: Val, b: Val): void => {
+  log(() => `unify ${showTerm(quote(a, vs))} ~ ${showTerm(quote(b, vs))}`);
   if (a.tag === 'Type' && b.tag === 'Type') return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const x = fresh(vs, a.name);

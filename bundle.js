@@ -1,6 +1,21 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.config = {
+    debug: false,
+};
+exports.setConfig = (c) => {
+    for (let k in c)
+        exports.config[k] = c[k];
+};
+exports.log = (msg) => {
+    if (exports.config.debug)
+        console.log(msg());
+};
+
+},{}],2:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 const env_1 = require("./env");
 const terms_1 = require("./terms");
 const values_1 = require("./values");
@@ -8,8 +23,10 @@ const util_1 = require("./util");
 const list_1 = require("./list");
 const nbe_1 = require("./nbe");
 const unify_1 = require("./unify");
+const config_1 = require("./config");
 ;
 const check = (env, tm, ty) => {
+    config_1.log(() => `check ${terms_1.showTerm(tm)} : ${terms_1.showTerm(nbe_1.quote(ty, env.vals))} in ${env_1.showEnvT(env.types)}`);
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
         const x = env_1.fresh(env.vals, tm.name);
         const v = values_1.VVar(x);
@@ -31,6 +48,7 @@ const check = (env, tm, ty) => {
     return etm;
 };
 const synth = (env, tm) => {
+    config_1.log(() => `synth ${terms_1.showTerm(tm)} in ${env_1.showEnvT(env.types)}`);
     if (tm.tag === 'Type')
         return [terms_1.Type, terms_1.Type];
     if (tm.tag === 'Var') {
@@ -97,6 +115,7 @@ const synthLetValue = (env, val, ty) => {
     }
 };
 const synthapp = (env, ty, tm) => {
+    config_1.log(() => `synthapp ${terms_1.showTerm(nbe_1.quote(ty, env.vals))} @ ${terms_1.showTerm(tm)} in ${env_1.showEnvT(env.types)}`);
     if (ty.tag === 'VPi') {
         const arg = check(env, tm, ty.type);
         const varg = nbe_1.evaluate(arg, env.vals);
@@ -109,11 +128,13 @@ exports.elaborate = (tm, env = { vals: list_1.Nil, types: list_1.Nil }) => {
     return [etm, nbe_1.quote(ty, env.vals)];
 };
 
-},{"./env":2,"./list":3,"./nbe":5,"./terms":8,"./unify":9,"./util":10,"./values":11}],2:[function(require,module,exports){
+},{"./config":1,"./env":3,"./list":4,"./nbe":6,"./terms":9,"./unify":10,"./util":11,"./values":12}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const names_1 = require("./names");
 const list_1 = require("./list");
+const terms_1 = require("./terms");
+const nbe_1 = require("./nbe");
 exports.BoundV = (name) => ({ tag: 'BoundV', name });
 exports.DefV = (name, value) => ({ tag: 'DefV', name, value });
 exports.BoundT = (name, type) => ({ tag: 'BoundT', name, type });
@@ -121,8 +142,9 @@ exports.DefT = (name, type) => ({ tag: 'DefT', name, type });
 exports.fresh = (e, x) => names_1.freshName(list_1.map(e, y => y.name), x);
 exports.lookupV = (l, x) => list_1.first(l, e => e.name === x);
 exports.lookupT = (l, x) => list_1.first(l, e => e.name === x);
+exports.showEnvT = (l, vs = list_1.Nil) => list_1.toString(l, e => `${e.tag === 'BoundT' ? '' : ':'}${e.name} : ${terms_1.showTerm(nbe_1.quote(e.type, vs))}`);
 
-},{"./list":3,"./names":4}],3:[function(require,module,exports){
+},{"./list":4,"./names":5,"./nbe":6,"./terms":9}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Nil = { tag: 'Nil' };
@@ -200,20 +222,31 @@ exports.range = (n) => n <= 0 ? exports.Nil : exports.Cons(n - 1, exports.range(
 exports.contains = (l, v) => l.tag === 'Cons' ? (l.head === v || exports.contains(l.tail, v)) : false;
 exports.max = (l) => exports.foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTEGER, l);
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("./list");
-// TODO: improve
+exports.splitName = (x) => {
+    const s = x.split('$');
+    return [s[0], +s[1]];
+};
 exports.freshName = (l, x) => {
     if (x === '_')
         return x;
-    while (list_1.contains(l, x))
-        x = `${x}'`;
+    let y = exports.splitName(x)[0];
+    while (list_1.contains(l, y)) {
+        if (y.indexOf('$') >= 0) {
+            const [z, n] = exports.splitName(y);
+            y = `${z}\$${n + 1}`;
+        }
+        else {
+            y = `${y}\$0`;
+        }
+    }
     return x;
 };
 
-},{"./list":3}],5:[function(require,module,exports){
+},{"./list":4}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const values_1 = require("./values");
@@ -263,7 +296,7 @@ exports.quote = (v, vs = list_1.Nil) => {
 };
 exports.normalize = (t, vs = list_1.Nil) => exports.quote(exports.evaluate(t, vs), vs);
 
-},{"./env":2,"./list":3,"./terms":8,"./util":10,"./values":11}],6:[function(require,module,exports){
+},{"./env":3,"./list":4,"./terms":9,"./util":11,"./values":12}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("./terms");
@@ -382,13 +415,22 @@ const exprs = (ts) => {
             return terms_1.funFrom(ts.slice(1).map(expr));
         }
         if (x === 'let') {
-            if (ts.length < 4)
+            if (ts.length < 3)
                 return err(`invalid let`);
             const x = ts[1];
             if (x.tag !== 'Name')
                 return err(`invalid let name`);
+            const rest = exprs(ts.slice(3));
+            return terms_1.Let(x.name, expr(ts[2]), rest);
+        }
+        if (x === 'lett') {
+            if (ts.length < 4)
+                return err(`invalid lett`);
+            const x = ts[1];
+            if (x.tag !== 'Name')
+                return err(`invalid let name`);
             const rest = exprs(ts.slice(4));
-            return terms_1.Let(x.name, expr(ts[2]), expr(ts[3]), rest);
+            return terms_1.Let(x.name, expr(ts[3]), rest, expr(ts[2]));
         }
     }
     return terms_1.appFrom(ts.map(expr));
@@ -406,7 +448,7 @@ exports.parse = (s) => {
     return exprs(ts);
 };
 
-},{"./terms":8}],7:[function(require,module,exports){
+},{"./terms":9}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const nbe_1 = require("./nbe");
@@ -430,7 +472,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./elaborate":1,"./nbe":5,"./parser":6,"./terms":8}],8:[function(require,module,exports){
+},{"./elaborate":2,"./nbe":6,"./parser":7,"./terms":9}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("./util");
@@ -462,7 +504,7 @@ exports.showTerm = (t) => {
     return util_1.impossible('showTerm');
 };
 
-},{"./util":10}],9:[function(require,module,exports){
+},{"./util":11}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const env_1 = require("./env");
@@ -471,7 +513,9 @@ const util_1 = require("./util");
 const terms_1 = require("./terms");
 const nbe_1 = require("./nbe");
 const list_1 = require("./list");
+const config_1 = require("./config");
 exports.unify = (vs, a, b) => {
+    config_1.log(() => `unify ${terms_1.showTerm(nbe_1.quote(a, vs))} ~ ${terms_1.showTerm(nbe_1.quote(b, vs))}`);
     if (a.tag === 'Type' && b.tag === 'Type')
         return;
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
@@ -503,7 +547,7 @@ exports.unify = (vs, a, b) => {
     return util_1.terr(`cannot unify ${terms_1.showTerm(nbe_1.quote(a, vs))} ~ ${terms_1.showTerm(nbe_1.quote(b, vs))}`);
 };
 
-},{"./env":2,"./list":3,"./nbe":5,"./terms":8,"./util":10,"./values":11}],10:[function(require,module,exports){
+},{"./config":1,"./env":3,"./list":4,"./nbe":6,"./terms":9,"./util":11,"./values":12}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -519,7 +563,7 @@ exports.mapobj = (o, f) => {
     return n;
 };
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("./list");
@@ -528,7 +572,7 @@ exports.VVar = (name) => exports.VNe(name, list_1.Nil);
 exports.VAbs = (name, type, body) => ({ tag: 'VAbs', name, type, body });
 exports.VPi = (name, type, body) => ({ tag: 'VPi', name, type, body });
 
-},{"./list":3}],12:[function(require,module,exports){
+},{"./list":4}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -584,4 +628,4 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":7}]},{},[12]);
+},{"./repl":8}]},{},[13]);

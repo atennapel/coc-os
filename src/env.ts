@@ -1,6 +1,8 @@
 import { Name, freshName } from './names';
 import { Val } from './values';
-import { List, map, first } from './list';
+import { List, map, first, toString, Nil } from './list';
+import { showTerm } from './terms';
+import { quote } from './nbe';
 
 export type EntryV = BoundV | DefV;
 export type EnvV = List<EntryV>;
@@ -45,3 +47,6 @@ export const lookupV = (l: EnvV, x: Name): EntryV | null =>
   first(l, e => e.name === x);
 export const lookupT = (l: EnvT, x: Name): EntryT | null =>
   first(l, e => e.name === x);
+
+export const showEnvT = (l: EnvT, vs: EnvV = Nil): string =>
+  toString(l, e => `${e.tag === 'BoundT' ? '' : ':'}${e.name} : ${showTerm(quote(e.type, vs))}`);

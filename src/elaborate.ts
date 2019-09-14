@@ -1,10 +1,11 @@
-import { EnvT, EnvV, fresh, DefV, BoundT, lookupT, BoundV, DefT } from './env';
+import { EnvT, EnvV, fresh, DefV, BoundT, lookupT, BoundV, DefT, showEnvT } from './env';
 import { Term, showTerm, Abs, Type, Pi, App, Let } from './terms';
 import { Val, VVar } from './values';
 import { terr } from './util';
 import { Nil, Cons } from './list';
 import { quote, evaluate } from './nbe';
 import { unify } from './unify';
+import { log } from './config';
 
 export interface Env {
   readonly vals: EnvV;
@@ -12,6 +13,7 @@ export interface Env {
 };
 
 const check = (env: Env, tm: Term, ty: Val): Term => {
+  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, env.vals))} in ${showEnvT(env.types)}`);
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
     const x = fresh(env.vals, tm.name);
     const v = VVar(x);
@@ -34,6 +36,7 @@ const check = (env: Env, tm: Term, ty: Val): Term => {
 };
 
 const synth = (env: Env, tm: Term): [Term, Val] => {
+  log(() => `synth ${showTerm(tm)} in ${showEnvT(env.types)}`);
   if (tm.tag === 'Type') return [Type, Type];
   if (tm.tag === 'Var') {
     if (tm.name === '_') return terr(`_ is not a valid name`);
@@ -98,6 +101,7 @@ const synthLetValue = (env: Env, val: Term, ty?: Term): [Term, Term, Val] => {
 };
 
 const synthapp = (env: Env, ty: Val, tm: Term): [Term, Val] => {
+  log(() => `synthapp ${showTerm(quote(ty, env.vals))} @ ${showTerm(tm)} in ${showEnvT(env.types)}`);
   if (ty.tag === 'VPi') {
     const arg = check(env, tm, ty.type);
     const varg = evaluate(arg, env.vals);

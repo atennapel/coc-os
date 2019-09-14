@@ -95,11 +95,18 @@ const exprs = (ts: Token[]): Term => {
       return funFrom(ts.slice(1).map(expr));
     }
     if (x === 'let') {
-      if (ts.length < 4) return err(`invalid let`);
+      if (ts.length < 3) return err(`invalid let`);
+      const x = ts[1];
+      if (x.tag !== 'Name') return err(`invalid let name`);
+      const rest = exprs(ts.slice(3));
+      return Let(x.name, expr(ts[2]), rest);
+    }
+    if (x === 'lett') {
+      if (ts.length < 4) return err(`invalid lett`);
       const x = ts[1];
       if (x.tag !== 'Name') return err(`invalid let name`);
       const rest = exprs(ts.slice(4));
-      return Let(x.name, expr(ts[2]), expr(ts[3]), rest);
+      return Let(x.name, expr(ts[3]), rest, expr(ts[2]));
     }
   }
   return appFrom(ts.map(expr));
