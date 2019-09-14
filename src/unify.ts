@@ -1,141 +1,37 @@
-import { zipWith_, map, List, range, foldr, reverse, contains, Cons, foldl } from './list';
-import { terr, impossible } from './util';
-import { force, quote, capp, dapp, evaluate } from './nbe';
-import { Domain, DVar, Head, Env } from './domain';
-import { Meta, Term, showTerm, freshMeta, App, Var, Abs, Type, Let, Pi, Fix } from './terms';
+import { EnvV, fresh, BoundV } from './env';
+import { Val, VVar } from './values';
+import { terr } from './util';
+import { showTerm } from './terms';
+import { quote, vapp } from './nbe';
+import { Cons, zipWith_ } from './list';
 
-export const headeq = (a: Head, b: Head): boolean =>
-  a === b || (
-    a.tag === 'Var' ? (b.tag === 'Var' && a.index === b.index) :
-    (a.tag === 'Const' && b.tag === 'Const' && a.name === b.name)
-  );
-
-export const unify = (k: number, a_: Domain, b_: Domain): void => {
-  const a = force(a_);
-  const b = force(b_);
+export const unify = (vs: EnvV, a: Val, b: Val): void => {
   if (a.tag === 'Type' && b.tag === 'Type') return;
-  if (a.tag === 'DAbs' && b.tag === 'DAbs') {
-    unify(k, a.type, b.type);
-    const v = DVar(k);
-    return unify(k + 1, capp(a.clos, v), capp(b.clos, v));
-  }
-  if (a.tag === 'DFix' && b.tag === 'DFix') {
-    unify(k, a.type, b.type);
-    const v = DVar(k);
-    return unify(k + 1, capp(a.clos, v), capp(b.clos, v));
-  }
-  if (a.tag === 'DAbs') {
-    const v = DVar(k);
-    return unify(k + 1, capp(a.clos, v), dapp(b, v));
-  }
-  if (b.tag === 'DAbs') {
-    const v = DVar(k);
-    return unify(k + 1, dapp(a, v), capp(b.clos, v));
-  }
-  if (a.tag === 'DFix')
-    return unify(k, capp(a.clos, a), b);
-  if (b.tag === 'DFix')
-    return unify(k, a, capp(b.clos, b));
-  if (a.tag === 'DPi' && b.tag === 'DPi') {
-    unify(k, a.type, b.type);
-    const v = DVar(k);
-    return unify(k + 1, capp(a.clos, v), capp(b.clos, v));
-  }
-  if (a.tag === 'DNeutral' && b.tag === 'DNeutral' && headeq(a.head, b.head))
-    return zipWith_((x, y) => unify(k, x, y), a.args, b.args);
-  if (a.tag === 'DNeutral' && a.head.tag === 'Meta')
-    return solve(k, a.head, a.args, b);
-  if (b.tag === 'DNeutral' && b.head.tag === 'Meta')
-    return solve(k, b.head, b.args, a);
-  return terr(`typecheck failed: ${showTerm(quote(b, k))} expected, got ${showTerm(quote(a, k))}`);
-};
-
-const checkSpine = (sp: List<Domain>): List<number> =>
-  map(sp, x => {
-    const v = force(x);
-    return v.tag === 'DNeutral' && v.head.tag === 'Var' && v.args.tag === 'Nil' ?
-      v.head.index :
-      terr(`non-variable in meta spine`);
-  });
-
-const checkSolution = (m: Meta, sp: List<number>, t: Term): void => {
-  if (t === m) return terr(`occurs check failed`);
-  if (t.tag === 'Var') {
-    if (!contains(sp, t.index)) return terr(`scope error`);
+  if (a.tag === 'VAbs' && b.tag === 'VAbs') {
+    const x = fresh(vs, a.name);
+    const v = VVar(x);
+    unify(vs, a.type, b.type);
+    unify(Cons(BoundV(x), vs), a.body(v), b.body(v));
     return;
   }
-  if (t.tag === 'Const') return;
-  if (t.tag === 'Meta') return
-  if (t.tag === 'App') {
-    checkSolution(m, sp, t.left);
-    checkSolution(m, sp, t.right);
+  if (a.tag === 'VPi' && b.tag === 'VPi') {
+    const x = fresh(vs, a.name);
+    const v = VVar(x);
+    unify(vs, a.type, b.type);
+    unify(Cons(BoundV(x), vs), a.body(v), b.body(v));
     return;
   }
-  if (t.tag === 'Abs') {
-    checkSolution(m, sp, t.type);
-    checkSolution(m, Cons(0, map(sp, x => x + 1)), t.body);
-    return;
+  if (a.tag === 'VAbs') {
+    const x = fresh(vs, a.name);
+    const v = VVar(x);
+    return unify(Cons(BoundV(x), vs), a.body(v), vapp(b, v));
   }
-  if (t.tag === 'Fix') {
-    checkSolution(m, sp, t.type);
-    checkSolution(m, Cons(0, map(sp, x => x + 1)), t.body);
-    return;
+  if (b.tag === 'VAbs') {
+    const x = fresh(vs, b.name);
+    const v = VVar(x);
+    return unify(Cons(BoundV(x), vs), vapp(a, v), b.body(v));
   }
-  if (t.tag === 'Pi') {
-    checkSolution(m, sp, t.type);
-    checkSolution(m, Cons(0, map(sp, x => x + 1)), t.body);
-    return;
-  }
-  if (t.tag === 'Type') return;
-  return impossible('checkSolution');
-};
-
-const solve = (k: number, m: Meta, sp_: List<Domain>, t: Domain): void => {
-  const sp = checkSpine(sp_);
-  const rhs = quote(t, k);
-  checkSolution(m, sp, rhs);
-  //console.log(showTerm(m), toString(sp), showTerm(rhs));
-  // const mx = max(sp);
-  //console.log(mx);
-  const qterm = foldl((x, y) => Abs(Type, x), rhs, sp);
-  //console.log(showTerm(qterm));
-  m.term = evaluate(qterm);
-};
-
-export const newMeta = (k: number): Term =>
-  foldr((x, y) => App(y, x), freshMeta() as Term, reverse(map(range(k), Var)));
-
-type Either<A, B> = [false, A] | [true, B];
-const L = <A, B>(v: A): Either<A, B> => [false, v];
-const R = <A, B>(v: B): Either<A, B> => [true, v];
-const either = <A, B, R>(e: Either<A, B>, l: (v: A) => R, r: (v: B) => R): R =>
-  e[0] ? r(e[1]) : l(e[1]);
-
-const zonkApp = (venv: Env, k: number, t: Term): Either<Domain, Term> => {
-  if (t.tag === 'Meta') return t.term ? L(t.term) : R(t);
-  if (t.tag === 'App')
-    return either(
-      zonkApp(venv, k, t.left),
-      x => L(dapp(x, evaluate(t.right, venv))),
-      x => R(App(x, zonk(venv, k, t.right))),
-    );
-  return R(zonk(venv, k, t));
-};
-
-export const zonk = (venv: Env, k: number, t: Term): Term => {
-  if (t.tag === 'Meta') {
-    if (!t.term) return t;
-    return zonk(venv, k, quote(t.term, k));
-  }
-  if (t.tag === 'Abs') return Abs(zonk(venv, k, t.type), zonk(Cons(DVar(k), venv), k + 1, t.body));
-  if (t.tag === 'Fix') return Fix(zonk(venv, k, t.type), zonk(Cons(DVar(k), venv), k + 1, t.body));
-  if (t.tag === 'Pi') return Pi(zonk(venv, k, t.type), zonk(Cons(DVar(k), venv), k + 1, t.body));
-  if (t.tag === 'Let') return Let(zonk(venv, k, t.type), zonk(venv, k, t.value), zonk(Cons(DVar(k), venv), k + 1, t.body));
-  if (t.tag === 'App')
-    return either(
-      zonkApp(venv, k, t.left),
-      x => quote(dapp(x, evaluate(t.right, venv)), k),
-      x => App(x, zonk(venv, k, t.right)),
-    );
-  return t;
+  if (a.tag === 'VNe' && b.tag === 'VNe' && a.head === b.head)
+    return zipWith_((x, y) => unify(vs, x, y), a.args, b.args);
+  return terr(`cannot unify ${showTerm(quote(a, vs))} ~ ${showTerm(quote(b, vs))}`);
 };

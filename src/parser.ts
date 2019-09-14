@@ -1,7 +1,4 @@
-import { STerm, SVar, sappFrom, SAbs, sabs, SAnn, SPi, SFix, sfunFrom, SLet, SHole } from './surface';
-import { Type } from './terms';
-import { Def, DLet, DOpaque } from './defs';
-import { terr } from './util';
+import { Type, Var, Abs, Pi, Ann, Let, Term, appFrom, abs, funFrom } from './terms';
 
 const err = (msg: string) => { throw new SyntaxError(msg) };
 
@@ -63,8 +60,8 @@ const tokenize = (sc: string): Token[] => {
   return r;
 };
 
-const exprs = (ts: Token[]): STerm => {
-  if (ts.length === 0) return SVar('Unit');
+const exprs = (ts: Token[]): Term => {
+  if (ts.length === 0) return Var('Unit');
   if (ts.length === 1) return expr(ts[0]);
   const head = ts[0];
   if (head.tag === 'Name') {
@@ -73,85 +70,49 @@ const exprs = (ts: Token[]): STerm => {
       const args = ts[1];
       if (!args) return err(`abs missing args`);
       const rest = exprs(ts.slice(2));
-      if (args.tag === 'Name') return SAbs(args.name, rest);
-      return sabs(args.list.map(a => a.tag === 'Name' ? a.name : err(`nested list in args of abs`)), rest);
+      if (args.tag === 'Name') return Abs(args.name, rest);
+      return abs(args.list.map(a => a.tag === 'Name' ? a.name : err(`nested list in args of abs`)), rest);
     }
     if (x === '/' || x === 'pi') {
       if (ts.length < 3) return err(`invalid use of / or pi`);
       const arg = ts[1];
       if (arg.tag !== 'Name') return err(`invalid arg for pi`);
       const rest = exprs(ts.slice(3));
-      return SPi(arg.name, expr(ts[2]), rest);
+      return Pi(arg.name, expr(ts[2]), rest);
     }
     if (x === '\\:' || x === 'fnt') {
       if (ts.length < 3) return err(`invalid use of \\: or fnt`);
       const arg = ts[1];
       if (arg.tag !== 'Name') return err(`invalid arg for fnt`);
       const rest = exprs(ts.slice(3));
-      return SAbs(arg.name, rest, expr(ts[2]));
-    }
-    if (x === 'fix') {
-      if (ts.length < 3) return err(`invalid use of fix`);
-      const arg = ts[1];
-      if (arg.tag !== 'Name') return err(`invalid arg for fix`);
-      const rest = exprs(ts.slice(3));
-      return SFix(arg.name, expr(ts[2]), rest);
+      return Abs(arg.name, rest, expr(ts[2]));
     }
     if (x === ':') {
       if (ts.length !== 3) return err(`invalid annotation`);
-      return SAnn(expr(ts[1]), expr(ts[2]));
+      return Ann(expr(ts[1]), expr(ts[2]));
     }
     if (x === '->') {
-      return sfunFrom(ts.slice(1).map(expr));
+      return funFrom(ts.slice(1).map(expr));
     }
     if (x === 'let') {
       if (ts.length < 4) return err(`invalid let`);
       const x = ts[1];
       if (x.tag !== 'Name') return err(`invalid let name`);
       const rest = exprs(ts.slice(4));
-      return SLet(x.name, expr(ts[2]), expr(ts[3]), rest);
+      return Let(x.name, expr(ts[2]), expr(ts[3]), rest);
     }
   }
-  return sappFrom(ts.map(expr));
+  return appFrom(ts.map(expr));
 };
-const expr = (t: Token): STerm => {
+
+const expr = (t: Token): Term => {
   if (t.tag === 'List') return exprs(t.list);
   const x = t.name;
   if (x === '*') return Type;
-  if (x === '_') return SHole;
-  return SVar(x);
+  return Var(x);
 };
 
-const defs = (t: Token[]): Def[] => {
-  if (t.length === 0) return [];
-  const head = t[0];
-  if (head.tag === 'List') return terr('invalid def');
-  if (head.name === 'let') {
-    const x = t[1];
-    if (!x || x.tag !== 'Name') return terr('invalid let name');
-    const d = t[2];
-    if (!d) return terr('invalid definition');
-    const rest = defs(t.slice(3));
-    return [DLet(x.name, expr(d)) as Def].concat(rest);
-  }
-  if (head.name === 'opaque') {
-    const x = t[1];
-    if (!x || x.tag !== 'Name') return terr('invalid opaque name');
-    const y = t[2];
-    if (!y || y.tag !== 'Name') return terr('invalid opaque proof name');
-    const d = t[3];
-    if (!d) return terr('invalid definition');
-    const rest = defs(t.slice(4));
-    return [DOpaque(x.name, y.name, expr(d)) as Def].concat(rest);
-  }
-  return terr('invalid def');
-};
-
-export const parse = (s: string): STerm => {
+export const parse = (s: string): Term => {
   const ts = tokenize(s);
   return exprs(ts);
-};
-export const parseDefs = (s: string): Def[] => {
-  const ts = tokenize(s);
-  return defs(ts);
 };

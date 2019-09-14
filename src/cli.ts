@@ -1,25 +1,17 @@
-import { parseDefs } from './parser';
-import { elaborateDefs } from './elaboration';
+import { elaborate } from './elaborate';
 import { runREPL, initREPL } from './repl';
-import { showDefs } from './defs';
 import * as readline from 'readline';
 import { showTerm } from './terms';
-import { nf } from './nbe';
-import { showETerm, erase } from './erased';
+import { normalize } from './nbe';
+import { parse } from './parser';
 
 if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
-  const ds = parseDefs(sc);
-  console.log(showDefs(ds));
-  const res = elaborateDefs(ds);
-  if (res) {
-    const [tm, ty] = res;
-    console.log(`${showTerm(tm)}`);
-    const normal = nf(tm);
-    //console.log(showTerm(normal));
-    //console.log(showETerm(erase(normal)));
-    console.log(`${showTerm(normal)} : ${showTerm(ty)} ~> ${showETerm(erase(normal))}`);
-  }
+  const tm = parse(sc);
+  const [term, type] = elaborate(tm);
+  console.log(`term: ${showTerm(term)}`);
+  console.log(`type: ${showTerm(type)}`);
+  console.log(`nmfm: ${showTerm(normalize(term))}`);
   process.exit();
 }
 

@@ -9,7 +9,6 @@ function onresize() {
 window.addEventListener('resize', onresize);
 onresize();
 addResult("REPL");
-// getOutput(':i', addResult);
 initREPL();
 input.focus();
 input.onkeydown = function(keyEvent: any) {
