@@ -1,4 +1,4 @@
-import { Type, Var, Abs, Pi, Ann, Let, Term, appFrom, abs, funFrom } from './terms';
+import { Type, Var, Abs, Pi, Ann, Let, Term, appFrom, abs, funFrom, Hole } from './terms';
 
 const err = (msg: string) => { throw new SyntaxError(msg) };
 
@@ -116,6 +116,7 @@ const expr = (t: Token): Term => {
   if (t.tag === 'List') return exprs(t.list);
   const x = t.name;
   if (x === '*') return Type;
+  if (x === '_') return Hole;
   return Var(x);
 };
 

@@ -1,19 +1,19 @@
-import { Type } from './terms';
+import { Type, Meta, Var } from './terms';
 import { List, Nil } from './list';
 import { Name } from './names';
 
 export type Val = VNe | VAbs | VPi | Type;
 
-export type Head = Name;
+export type Head = Var | Meta;
 
 export interface VNe {
   readonly tag: 'VNe';
   readonly head: Head;
   readonly args: List<Val>;
 }
-export const VNe = (head: Head, args: List<Val>): VNe =>
+export const VNe = (head: Head, args: List<Val> = Nil): VNe =>
   ({ tag: 'VNe', head, args });
-export const VVar = (name: Name): VNe => VNe(name, Nil);
+export const VVar = (name: Name): VNe => VNe(Var(name), Nil);
 
 export type Clos = (value: Val) => Val;
 

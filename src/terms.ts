@@ -1,7 +1,8 @@
 import { impossible } from './util';
 import { Name } from './names';
+import { Val } from './values';
 
-export type Term = Var | Abs | App | Let | Ann | Pi | Type;
+export type Term = Var | Abs | App | Let | Ann | Pi | Type | Hole | Meta;
 
 export interface Var {
   readonly tag: 'Var';
@@ -29,6 +30,8 @@ export const App = (left: Term, right: Term): App =>
   ({ tag: 'App', left, right });
 export const appFrom = (ts: Term[]): Term =>
   ts.reduce(App);
+export const app1 = (f: Term, as: Term[]): Term =>
+  as.reduce(App, f);
 
 export interface Let {
   readonly tag: 'Let';
@@ -64,6 +67,22 @@ export interface Type {
 }
 export const Type: Type = { tag: 'Type' };
 
+export interface Hole {
+  readonly tag: 'Hole';
+}
+export const Hole: Hole = { tag: 'Hole' };
+
+export type MetaId = number;
+export interface Meta {
+  readonly tag: 'Meta';
+  readonly id: MetaId;
+  term: Val | null;
+}
+let metaId: MetaId = 0;
+export const resetMetaId = () => { metaId = 0 };
+export const freshMeta = (): Meta =>
+  ({ tag: 'Meta', id: metaId++, term: null });
+
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'Abs')
@@ -77,5 +96,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Pi')
     return `(${t.name === '_' ? showTerm(t.type) : `(${t.name} : ${showTerm(t.type)})`} -> ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
+  if (t.tag === 'Hole') return '_';
+  if (t.tag === 'Meta') return `?${t.term ? '!' : ''}${t.id}`;
   return impossible('showTerm');
 };

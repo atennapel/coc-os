@@ -3,8 +3,8 @@ import { Term, showTerm, Abs, Type, Pi, App, Let } from './terms';
 import { Val, VVar } from './values';
 import { terr } from './util';
 import { Nil, Cons } from './list';
-import { quote, evaluate } from './nbe';
-import { unify } from './unify';
+import { quote, evaluate, force } from './nbe';
+import { unify, newMeta, zonk } from './unify';
 import { log } from './config';
 
 export interface Env {
@@ -12,8 +12,9 @@ export interface Env {
   readonly types: EnvT;
 };
 
-const check = (env: Env, tm: Term, ty: Val): Term => {
-  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, env.vals))} in ${showEnvT(env.types)}`);
+const check = (env: Env, tm: Term, ty_: Val): Term => {
+  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty_, env.vals))} in ${showEnvT(env.types)}`);
+  const ty = force(ty_);
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
     const x = fresh(env.vals, tm.name);
     const v = VVar(x);
@@ -30,6 +31,7 @@ const check = (env: Env, tm: Term, ty: Val): Term => {
     }, tm.body, ty);
     return Let(tm.name, val, body, tty);
   }
+  if (tm.tag === 'Hole') return newMeta(env.types);
   const [etm, ity] = synth(env, tm);
   unify(env.vals, ity, ty);
   return etm;
@@ -77,6 +79,14 @@ const synth = (env: Env, tm: Term): [Term, Val] => {
       evaluate(Pi(tm.name, ty, quote(rty, venv)), env.vals),
     ];
   }
+  if (tm.tag === 'Abs' && !tm.type) {
+    const ty = newMeta(env.types);
+    const vty = evaluate(ty, env.vals);
+    const rty = newMeta(Cons(BoundT(tm.name, vty), env.types));
+    const tpi = evaluate(Pi(tm.name, ty, rty), env.vals);
+    const term = check(env, tm, tpi);
+    return [term, tpi];
+  }
   if (tm.tag === 'Let') {
     const [val, ty, vty] = synthLetValue(env, tm.value, tm.type);
     const [body, rty] = synth({
@@ -85,6 +95,8 @@ const synth = (env: Env, tm: Term): [Term, Val] => {
     }, tm.body);
     return [Let(tm.name, val, body, ty), rty];
   }
+  if (tm.tag === 'Hole')
+    return [newMeta(env.types), evaluate(newMeta(env.types), env.vals)];
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 
@@ -100,17 +112,21 @@ const synthLetValue = (env: Env, val: Term, ty?: Term): [Term, Term, Val] => {
   }
 };
 
-const synthapp = (env: Env, ty: Val, tm: Term): [Term, Val] => {
-  log(() => `synthapp ${showTerm(quote(ty, env.vals))} @ ${showTerm(tm)} in ${showEnvT(env.types)}`);
+const synthapp = (env: Env, ty_: Val, tm: Term): [Term, Val] => {
+  log(() => `synthapp ${showTerm(quote(ty_, env.vals))} @ ${showTerm(tm)} in ${showEnvT(env.types)}`);
+  const ty = force(ty_);
   if (ty.tag === 'VPi') {
     const arg = check(env, tm, ty.type);
     const varg = evaluate(arg, env.vals);
     return [arg, ty.body(varg)];
   }
-  return terr(`expected a function type but got ${quote(ty, env.vals)}`);
+  return terr(`expected a function type but got ${showTerm(quote(ty, env.vals))}`);
 };
 
 export const elaborate = (tm: Term, env: Env = { vals: Nil, types: Nil }): [Term, Term] => {
   const [etm, ty] = synth(env, tm);
-  return [etm, quote(ty, env.vals)];
+  return [
+    zonk(etm, env.vals),
+    zonk(quote(force(ty), env.vals), env.vals),
+  ];
 };

@@ -25,8 +25,9 @@ const nbe_1 = require("./nbe");
 const unify_1 = require("./unify");
 const config_1 = require("./config");
 ;
-const check = (env, tm, ty) => {
-    config_1.log(() => `check ${terms_1.showTerm(tm)} : ${terms_1.showTerm(nbe_1.quote(ty, env.vals))} in ${env_1.showEnvT(env.types)}`);
+const check = (env, tm, ty_) => {
+    config_1.log(() => `check ${terms_1.showTerm(tm)} : ${terms_1.showTerm(nbe_1.quote(ty_, env.vals))} in ${env_1.showEnvT(env.types)}`);
+    const ty = nbe_1.force(ty_);
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
         const x = env_1.fresh(env.vals, tm.name);
         const v = values_1.VVar(x);
@@ -43,6 +44,8 @@ const check = (env, tm, ty) => {
         }, tm.body, ty);
         return terms_1.Let(tm.name, val, body, tty);
     }
+    if (tm.tag === 'Hole')
+        return unify_1.newMeta(env.types);
     const [etm, ity] = synth(env, tm);
     unify_1.unify(env.vals, ity, ty);
     return etm;
@@ -92,6 +95,14 @@ const synth = (env, tm) => {
             nbe_1.evaluate(terms_1.Pi(tm.name, ty, nbe_1.quote(rty, venv)), env.vals),
         ];
     }
+    if (tm.tag === 'Abs' && !tm.type) {
+        const ty = unify_1.newMeta(env.types);
+        const vty = nbe_1.evaluate(ty, env.vals);
+        const rty = unify_1.newMeta(list_1.Cons(env_1.BoundT(tm.name, vty), env.types));
+        const tpi = nbe_1.evaluate(terms_1.Pi(tm.name, ty, rty), env.vals);
+        const term = check(env, tm, tpi);
+        return [term, tpi];
+    }
     if (tm.tag === 'Let') {
         const [val, ty, vty] = synthLetValue(env, tm.value, tm.type);
         const [body, rty] = synth({
@@ -100,6 +111,8 @@ const synth = (env, tm) => {
         }, tm.body);
         return [terms_1.Let(tm.name, val, body, ty), rty];
     }
+    if (tm.tag === 'Hole')
+        return [unify_1.newMeta(env.types), nbe_1.evaluate(unify_1.newMeta(env.types), env.vals)];
     return util_1.terr(`cannot synth ${terms_1.showTerm(tm)}`);
 };
 const synthLetValue = (env, val, ty) => {
@@ -114,18 +127,22 @@ const synthLetValue = (env, val, ty) => {
         return [ev, nbe_1.quote(vty, env.vals), vty];
     }
 };
-const synthapp = (env, ty, tm) => {
-    config_1.log(() => `synthapp ${terms_1.showTerm(nbe_1.quote(ty, env.vals))} @ ${terms_1.showTerm(tm)} in ${env_1.showEnvT(env.types)}`);
+const synthapp = (env, ty_, tm) => {
+    config_1.log(() => `synthapp ${terms_1.showTerm(nbe_1.quote(ty_, env.vals))} @ ${terms_1.showTerm(tm)} in ${env_1.showEnvT(env.types)}`);
+    const ty = nbe_1.force(ty_);
     if (ty.tag === 'VPi') {
         const arg = check(env, tm, ty.type);
         const varg = nbe_1.evaluate(arg, env.vals);
         return [arg, ty.body(varg)];
     }
-    return util_1.terr(`expected a function type but got ${nbe_1.quote(ty, env.vals)}`);
+    return util_1.terr(`expected a function type but got ${terms_1.showTerm(nbe_1.quote(ty, env.vals))}`);
 };
 exports.elaborate = (tm, env = { vals: list_1.Nil, types: list_1.Nil }) => {
     const [etm, ty] = synth(env, tm);
-    return [etm, nbe_1.quote(ty, env.vals)];
+    return [
+        unify_1.zonk(etm, env.vals),
+        unify_1.zonk(nbe_1.quote(nbe_1.force(ty), env.vals), env.vals),
+    ];
 };
 
 },{"./config":1,"./env":3,"./list":4,"./nbe":6,"./terms":9,"./unify":10,"./util":11,"./values":12}],3:[function(require,module,exports){
@@ -263,12 +280,17 @@ exports.vapp = (a, b) => {
         return values_1.VNe(a.head, list_1.Cons(b, a.args));
     return util_1.impossible('vapp');
 };
+exports.force = (v) => {
+    if (v.tag === 'VNe' && v.head.tag === 'Meta' && v.head.term)
+        return exports.force(list_1.foldr((x, y) => exports.vapp(y, x), v.head.term, v.args));
+    return v;
+};
 exports.evaluate = (t, vs = list_1.Nil) => {
     if (t.tag === 'Type')
         return t;
     if (t.tag === 'Var') {
         const v = env_1.lookupV(vs, t.name);
-        return v ? (v.tag === 'DefV' ? v.value : values_1.VVar(t.name)) :
+        return v ? (v.tag === 'DefV' ? v.value : values_1.VNe(t)) :
             util_1.impossible('evaluate var');
     }
     if (t.tag === 'App')
@@ -279,13 +301,16 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return values_1.VPi(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, v), vs)));
     if (t.tag === 'Let')
         return exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, exports.evaluate(t.value, vs)), vs));
+    if (t.tag === 'Meta')
+        return t.term || values_1.VNe(t);
     return util_1.impossible('evaluate');
 };
-exports.quote = (v, vs = list_1.Nil) => {
+exports.quote = (v_, vs = list_1.Nil) => {
+    const v = exports.force(v_);
     if (v.tag === 'Type')
         return v;
     if (v.tag === 'VNe')
-        return list_1.foldr((v, a) => terms_1.App(a, exports.quote(v, vs)), terms_1.Var(v.head), v.args);
+        return list_1.foldr((v, a) => terms_1.App(a, exports.quote(v, vs)), v.head, v.args);
     if (v.tag === 'VAbs') {
         const x = env_1.fresh(vs, v.name);
         return terms_1.Abs(x, exports.quote(v.body(values_1.VVar(x)), list_1.Cons(env_1.BoundV(x), vs)), exports.quote(v.type, vs));
@@ -443,6 +468,8 @@ const expr = (t) => {
     const x = t.name;
     if (x === '*')
         return terms_1.Type;
+    if (x === '_')
+        return terms_1.Hole;
     return terms_1.Var(x);
 };
 exports.parse = (s) => {
@@ -457,9 +484,14 @@ const nbe_1 = require("./nbe");
 const elaborate_1 = require("./elaborate");
 const parser_1 = require("./parser");
 const terms_1 = require("./terms");
+const config_1 = require("./config");
 exports.initREPL = () => { };
 exports.runREPL = (_s, _cb) => {
     try {
+        if (_s === ':debug') {
+            config_1.config.debug = !config_1.config.debug;
+            return _cb(`debug is now ${config_1.config.debug}`);
+        }
         const tm = parser_1.parse(_s);
         console.log(`inpt: ${terms_1.showTerm(tm)}`);
         const [term, type] = elaborate_1.elaborate(tm);
@@ -474,7 +506,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./elaborate":2,"./nbe":6,"./parser":7,"./terms":9}],9:[function(require,module,exports){
+},{"./config":1,"./elaborate":2,"./nbe":6,"./parser":7,"./terms":9}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("./util");
@@ -483,11 +515,16 @@ exports.Abs = (name, body, type) => ({ tag: 'Abs', name, body, type });
 exports.abs = (ns, body) => ns.reduceRight((x, y) => exports.Abs(y, x), body);
 exports.App = (left, right) => ({ tag: 'App', left, right });
 exports.appFrom = (ts) => ts.reduce(exports.App);
+exports.app1 = (f, as) => as.reduce(exports.App, f);
 exports.Let = (name, value, body, type) => ({ tag: 'Let', name, value, body, type });
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Pi = (name, type, body) => ({ tag: 'Pi', name, type, body });
 exports.funFrom = (ts) => ts.reduceRight((x, y) => exports.Pi('_', y, x));
 exports.Type = { tag: 'Type' };
+exports.Hole = { tag: 'Hole' };
+let metaId = 0;
+exports.resetMetaId = () => { metaId = 0; };
+exports.freshMeta = () => ({ tag: 'Meta', id: metaId++, term: null });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -503,6 +540,10 @@ exports.showTerm = (t) => {
         return `(${t.name === '_' ? exports.showTerm(t.type) : `(${t.name} : ${exports.showTerm(t.type)})`} -> ${exports.showTerm(t.body)})`;
     if (t.tag === 'Type')
         return '*';
+    if (t.tag === 'Hole')
+        return '_';
+    if (t.tag === 'Meta')
+        return `?${t.term ? '!' : ''}${t.id}`;
     return util_1.impossible('showTerm');
 };
 
@@ -516,8 +557,59 @@ const terms_1 = require("./terms");
 const nbe_1 = require("./nbe");
 const list_1 = require("./list");
 const config_1 = require("./config");
-exports.unify = (vs, a, b) => {
-    config_1.log(() => `unify ${terms_1.showTerm(nbe_1.quote(a, vs))} ~ ${terms_1.showTerm(nbe_1.quote(b, vs))}`);
+const checkSpine = (sp) => list_1.map(sp, x_ => {
+    const x = nbe_1.force(x_);
+    return x.tag === 'VNe' && x.head.tag === 'Var' && x.args.tag === 'Nil' ?
+        x.head.name : util_1.terr(`non-var in meta spine`);
+});
+const checkSolution = (m, sp, t) => {
+    if (t.tag === 'Type')
+        return;
+    if (t.tag === 'Var') {
+        if (!list_1.contains(sp, t.name))
+            return util_1.terr(`scope error: ${t.name}`);
+        return;
+    }
+    if (t.tag === 'App') {
+        checkSolution(m, sp, t.left);
+        checkSolution(m, sp, t.right);
+        return;
+    }
+    if (t.tag === 'Abs') {
+        checkSolution(m, list_1.Cons(t.name, sp), t.body);
+        if (t.type)
+            checkSolution(m, sp, t.type);
+        return;
+    }
+    if (t.tag === 'Pi') {
+        checkSolution(m, list_1.Cons(t.name, sp), t.body);
+        checkSolution(m, sp, t.type);
+        return;
+    }
+    if (t.tag === 'Meta') {
+        if (t === m)
+            return util_1.terr(`occurs failed: ${terms_1.showTerm(m)}`);
+        return;
+    }
+    return util_1.impossible('checkSolution');
+};
+const solve = (vs, m, sp_, rhs_) => {
+    const sp = checkSpine(sp_);
+    const rhs = nbe_1.quote(rhs_, vs);
+    checkSolution(m, sp, rhs);
+    m.term = nbe_1.evaluate(terms_1.abs(list_1.toArray(sp, x => x).reverse(), rhs));
+};
+const eqHead = (a, b) => {
+    if (a === b)
+        return true;
+    if (a.tag === 'Var')
+        return b.tag === 'Var' && a.name === b.name;
+    return false;
+};
+exports.unify = (vs, a_, b_) => {
+    config_1.log(() => `unify ${terms_1.showTerm(nbe_1.quote(a_, vs))} ~ ${terms_1.showTerm(nbe_1.quote(b_, vs))}`);
+    const a = nbe_1.force(a_);
+    const b = nbe_1.force(b_);
     if (a.tag === 'Type' && b.tag === 'Type')
         return;
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
@@ -544,9 +636,42 @@ exports.unify = (vs, a, b) => {
         const v = values_1.VVar(x);
         return exports.unify(list_1.Cons(env_1.BoundV(x), vs), nbe_1.vapp(a, v), b.body(v));
     }
-    if (a.tag === 'VNe' && b.tag === 'VNe' && a.head === b.head)
+    if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
         return list_1.zipWith_((x, y) => exports.unify(vs, x, y), a.args, b.args);
+    if (a.tag === 'VNe' && a.head.tag === 'Meta')
+        return solve(vs, a.head, a.args, b);
+    if (b.tag === 'VNe' && b.head.tag === 'Meta')
+        return solve(vs, b.head, b.args, a);
     return util_1.terr(`cannot unify ${terms_1.showTerm(nbe_1.quote(a, vs))} ~ ${terms_1.showTerm(nbe_1.quote(b, vs))}`);
+};
+exports.newMeta = (ts) => terms_1.app1(terms_1.freshMeta(), list_1.toArray(ts, x => x).reverse().filter(e => e.tag === 'BoundT')
+    .map(e => terms_1.Var(e.name)));
+const L = (v) => [false, v];
+const R = (v) => [true, v];
+const either = (e, l, r) => e[0] ? r(e[1]) : l(e[1]);
+const zonkApp = (vs, t) => {
+    if (t.tag === 'Meta')
+        return t.term ? L(t.term) : R(t);
+    if (t.tag === 'App')
+        return either(zonkApp(vs, t.left), x => L(nbe_1.vapp(x, nbe_1.evaluate(t.right, vs))), x => R(terms_1.App(x, exports.zonk(t.right, vs))));
+    return R(exports.zonk(t, vs));
+};
+exports.zonk = (tm, vs = list_1.Nil) => {
+    if (tm.tag === 'Var')
+        return tm;
+    if (tm.tag === 'Meta')
+        return tm.term ? nbe_1.quote(tm.term, vs) : tm;
+    if (tm.tag === 'Type')
+        return tm;
+    if (tm.tag === 'Abs')
+        return terms_1.Abs(tm.name, exports.zonk(tm.body, list_1.Cons(env_1.BoundV(tm.name), vs)), tm.type && exports.zonk(tm.type, vs));
+    if (tm.tag === 'Pi')
+        return terms_1.Pi(tm.name, exports.zonk(tm.type, vs), exports.zonk(tm.body, list_1.Cons(env_1.BoundV(tm.name), vs)));
+    if (tm.tag === 'Let')
+        return terms_1.Let(tm.name, exports.zonk(tm.value, vs), exports.zonk(tm.body, list_1.Cons(env_1.BoundV(tm.name), vs)), tm.type && exports.zonk(tm.type, vs));
+    if (tm.tag === 'App')
+        return either(zonkApp(vs, tm.left), x => nbe_1.quote(nbe_1.vapp(x, nbe_1.evaluate(tm.right, vs)), vs), x => terms_1.App(x, exports.zonk(tm.right, vs)));
+    return util_1.impossible(`zonk`);
 };
 
 },{"./config":1,"./env":3,"./list":4,"./nbe":6,"./terms":9,"./util":11,"./values":12}],11:[function(require,module,exports){
@@ -568,13 +693,14 @@ exports.mapobj = (o, f) => {
 },{}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const terms_1 = require("./terms");
 const list_1 = require("./list");
-exports.VNe = (head, args) => ({ tag: 'VNe', head, args });
-exports.VVar = (name) => exports.VNe(name, list_1.Nil);
+exports.VNe = (head, args = list_1.Nil) => ({ tag: 'VNe', head, args });
+exports.VVar = (name) => exports.VNe(terms_1.Var(name), list_1.Nil);
 exports.VAbs = (name, type, body) => ({ tag: 'VAbs', name, type, body });
 exports.VPi = (name, type, body) => ({ tag: 'VPi', name, type, body });
 
-},{"./list":4}],13:[function(require,module,exports){
+},{"./list":4,"./terms":9}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");

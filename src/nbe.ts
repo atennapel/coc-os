@@ -2,7 +2,7 @@ import { Val, VNe, VVar, VAbs, VPi } from './values';
 import { impossible } from './util';
 import { Cons, Nil, foldr } from './list';
 import { EnvV, fresh, DefV, BoundV, lookupV } from './env';
-import { Term, Abs, Pi, App, Var } from './terms';
+import { Term, Abs, Pi, App } from './terms';
 
 export const vapp = (a: Val, b: Val): Val => {
   if (a.tag === 'VAbs') return a.body(b);
@@ -10,11 +10,17 @@ export const vapp = (a: Val, b: Val): Val => {
   return impossible('vapp');
 };
 
+export const force = (v: Val): Val => {
+  if (v.tag === 'VNe' && v.head.tag === 'Meta' && v.head.term)
+    return force(foldr((x, y) => vapp(y, x), v.head.term, v.args));
+  return v;
+};
+
 export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return t;
   if (t.tag === 'Var') {
     const v = lookupV(vs, t.name);
-    return v ? (v.tag === 'DefV' ? v.value : VVar(t.name)) :
+    return v ? (v.tag === 'DefV' ? v.value : VNe(t)) :
       impossible('evaluate var');
   }
   if (t.tag === 'App')
@@ -27,13 +33,15 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
       v => evaluate(t.body, Cons(DefV(t.name, v), vs)));
   if (t.tag === 'Let')
     return evaluate(t.body, Cons(DefV(t.name, evaluate(t.value, vs)), vs));
+  if (t.tag === 'Meta') return t.term || VNe(t);
   return impossible('evaluate');
 };
 
-export const quote = (v: Val, vs: EnvV = Nil): Term => {
+export const quote = (v_: Val, vs: EnvV = Nil): Term => {
+  const v = force(v_);
   if (v.tag === 'Type') return v;
   if (v.tag === 'VNe')
-    return foldr((v, a) => App(a, quote(v, vs)), Var(v.head) as Term, v.args);
+    return foldr((v, a) => App(a, quote(v, vs)), v.head as Term, v.args);
   if (v.tag === 'VAbs') {
     const x = fresh(vs, v.name);
     return Abs(x, quote(v.body(VVar(x)), Cons(BoundV(x), vs)), quote(v.type, vs));
