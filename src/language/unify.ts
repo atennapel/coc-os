@@ -1,11 +1,11 @@
 import { EnvV, fresh, BoundV, EnvT } from './env';
 import { Val, VVar, Head } from './values';
-import { terr, impossible } from './util';
+import { terr, impossible } from '../util';
 import { showTerm, Term, freshMeta, app1, Var, Abs, Pi, Let, App, Meta, abs } from './terms';
 import { quote, vapp, force, evaluate } from './nbe';
-import { Cons, zipWith_, toArray, Nil, List, map, contains } from './list';
-import { log } from './config';
-import { Name } from './names';
+import { Cons, zipWith_, toArray, Nil, List, map, contains } from '../list';
+import { log } from '../config';
+import { Name } from '../names';
 
 const checkSpine = (sp: List<Val>): List<Name> =>
   map(sp, x_ => {

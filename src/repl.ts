@@ -1,8 +1,11 @@
-import { normalize } from './nbe';
-import { elaborate } from './elaborate';
-import { parse } from './parser';
-import { showTerm } from './terms';
+import { normalize } from './language/nbe';
+import { elaborate } from './language/elaborate';
+import { parse } from './language/parser';
+import { showTerm } from './language/terms';
 import { config } from './config';
+import { showCore } from './core/terms';
+import { toCore } from './language/translation';
+import { typecheck } from './core/typecheck';
 
 export const initREPL = () => {};
 
@@ -19,7 +22,10 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     console.log(`type: ${showTerm(type)}`);
     const nf = normalize(term);
     console.log(`nmfm: ${showTerm(nf)}`);
-    return _cb(`${showTerm(term)} : ${showTerm(type)} ~> ${showTerm(nf)}`);
+    const core = toCore(term);
+    const cty = typecheck(core);
+    console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
+    return _cb(`${showTerm(term)} : ${showTerm(type)} ~> ${showTerm(nf)} ~> ${showCore(core)} : ${showCore(cty)}`);
   } catch (err) {
     return _cb('' + err, true);
   }

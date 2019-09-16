@@ -1,9 +1,12 @@
-import { elaborate } from './elaborate';
+import { elaborate } from './language/elaborate';
 import { runREPL, initREPL } from './repl';
 import * as readline from 'readline';
-import { showTerm } from './terms';
-import { normalize } from './nbe';
-import { parse } from './parser';
+import { showTerm } from './language/terms';
+import { normalize } from './language/nbe';
+import { parse } from './language/parser';
+import { toCore } from './language/translation';
+import { typecheck } from './core/typecheck';
+import { showCore } from './core/terms';
 
 if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
@@ -13,6 +16,9 @@ if (process.argv[2]) {
   console.log(`term: ${showTerm(term)}`);
   console.log(`type: ${showTerm(type)}`);
   console.log(`nmfm: ${showTerm(normalize(term))}`);
+  const core = toCore(term);
+  const cty = typecheck(core);
+  console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
   process.exit();
 }
 

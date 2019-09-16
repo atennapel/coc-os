@@ -1,6 +1,6 @@
 import { Type, Meta, Var } from './terms';
-import { List, Nil } from './list';
-import { Name } from './names';
+import { List, Nil } from '../list';
+import { Name } from '../names';
 
 export type Val = VNe | VAbs | VPi | Type;
 

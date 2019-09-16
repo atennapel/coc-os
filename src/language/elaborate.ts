@@ -1,11 +1,11 @@
 import { EnvT, EnvV, fresh, DefV, BoundT, lookupT, BoundV, DefT, showEnvT } from './env';
 import { Term, showTerm, Abs, Type, Pi, App, Let } from './terms';
 import { Val, VVar } from './values';
-import { terr } from './util';
-import { Nil, Cons } from './list';
+import { terr } from '../util';
+import { Nil, Cons } from '../list';
 import { quote, evaluate, force } from './nbe';
 import { unify, newMeta, zonk } from './unify';
-import { log } from './config';
+import { log } from '../config';
 
 export interface Env {
   readonly vals: EnvV;

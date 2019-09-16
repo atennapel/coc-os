@@ -1,6 +1,6 @@
-import { Name, freshName } from './names';
+import { Name, freshName } from '../names';
 import { Val } from './values';
-import { List, map, first, toString, Nil } from './list';
+import { List, map, first, toString, Nil } from '../list';
 import { showTerm } from './terms';
 import { quote } from './nbe';
 

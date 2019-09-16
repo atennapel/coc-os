@@ -1,6 +1,7 @@
 import { List, each } from './list';
 
 export type Name = string;
+export type Ix = number;
 
 export const splitName = (x: Name): [Name, number] => {
   const s = x.split('$');

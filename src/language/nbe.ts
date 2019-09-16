@@ -1,6 +1,6 @@
 import { Val, VNe, VVar, VAbs, VPi } from './values';
-import { impossible } from './util';
-import { Cons, Nil, foldr } from './list';
+import { impossible } from '../util';
+import { Cons, Nil, foldr } from '../list';
 import { EnvV, fresh, DefV, BoundV, lookupV } from './env';
 import { Term, Abs, Pi, App, Type } from './terms';
 

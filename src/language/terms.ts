@@ -1,5 +1,5 @@
-import { impossible } from './util';
-import { Name } from './names';
+import { impossible } from '../util';
+import { Name } from '../names';
 import { Val } from './values';
 
 export type Term = Var | Abs | App | Let | Ann | Pi | Type | Hole | Meta;
