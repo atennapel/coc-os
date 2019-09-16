@@ -872,6 +872,7 @@ const config_1 = require("./config");
 const terms_2 = require("./core/terms");
 const translation_1 = require("./language/translation");
 const typecheck_1 = require("./core/typecheck");
+const nbe_2 = require("./core/nbe");
 exports.initREPL = () => { };
 exports.runREPL = (_s, _cb) => {
     try {
@@ -889,14 +890,16 @@ exports.runREPL = (_s, _cb) => {
         const core = translation_1.toCore(term);
         const cty = typecheck_1.typecheck(core);
         console.log(`core: ${terms_2.showCore(core)} : ${terms_2.showCore(cty)}`);
-        return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~> ${terms_1.showTerm(nf)} ~> ${terms_2.showCore(core)} : ${terms_2.showCore(cty)}`);
+        const cnf = nbe_2.cnormalize(core);
+        console.log(`conf: ${terms_2.showCore(cnf)}`);
+        return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~>\n${terms_1.showTerm(nf)} ~>\n${terms_2.showCore(core)} : ${terms_2.showCore(cty)} ~>\n${terms_2.showCore(cnf)}`);
     }
     catch (err) {
         return _cb('' + err, true);
     }
 };
 
-},{"./config":1,"./core/terms":3,"./core/typecheck":4,"./language/elaborate":6,"./language/nbe":8,"./language/parser":9,"./language/terms":10,"./language/translation":11}],17:[function(require,module,exports){
+},{"./config":1,"./core/nbe":2,"./core/terms":3,"./core/typecheck":4,"./language/elaborate":6,"./language/nbe":8,"./language/parser":9,"./language/terms":10,"./language/translation":11}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {

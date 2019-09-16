@@ -7,6 +7,7 @@ import { parse } from './language/parser';
 import { toCore } from './language/translation';
 import { typecheck } from './core/typecheck';
 import { showCore } from './core/terms';
+import { cnormalize } from './core/nbe';
 
 if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
@@ -19,6 +20,7 @@ if (process.argv[2]) {
   const core = toCore(term);
   const cty = typecheck(core);
   console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
+  console.log(`conf: ${showCore(cnormalize(core))}`);
   process.exit();
 }
 

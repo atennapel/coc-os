@@ -6,6 +6,7 @@ import { config } from './config';
 import { showCore } from './core/terms';
 import { toCore } from './language/translation';
 import { typecheck } from './core/typecheck';
+import { cnormalize } from './core/nbe';
 
 export const initREPL = () => {};
 
@@ -25,7 +26,9 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     const core = toCore(term);
     const cty = typecheck(core);
     console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
-    return _cb(`${showTerm(term)} : ${showTerm(type)} ~> ${showTerm(nf)} ~> ${showCore(core)} : ${showCore(cty)}`);
+    const cnf = cnormalize(core);
+    console.log(`conf: ${showCore(cnf)}`);
+    return _cb(`${showTerm(term)} : ${showTerm(type)} ~>\n${showTerm(nf)} ~>\n${showCore(core)} : ${showCore(cty)} ~>\n${showCore(cnf)}`);
   } catch (err) {
     return _cb('' + err, true);
   }

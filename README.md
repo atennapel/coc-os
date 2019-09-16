@@ -7,3 +7,9 @@ Run an example:
 Start repl:
 - `npm run cli`
 - Or open `index.html`
+
+TODO:
+- definitions
+- hashes
+- implicit functions
+- erasure
