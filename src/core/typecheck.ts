@@ -3,7 +3,7 @@ import { terr } from '../util';
 import { cquote, cvapp, cevaluate } from './nbe';
 import { showCore, Core, CType, CPi } from './terms';
 import { zipWith_, Cons, Nil, index } from '../list';
-import { CEnv } from './env';
+import { CEnv, CHashEnv } from './env';
 
 export const cheadeq = (a: CHead, b: CHead): boolean =>
   a === b || (a.tag === 'CVar' && b.tag === 'CVar' && a.index === b.index);
@@ -33,55 +33,60 @@ export const eqtype = (k: number, a: CVal, b: CVal): void => {
   return terr(`typecheck failed: ${showCore(cquote(b, k))} ~ ${showCore(cquote(a, k))}`);
 };
 
-const check = (tenv: CEnv, venv: CEnv, k: number, t: Core, ty: CVal): void => {  
+const check = (henv: CHashEnv, tenv: CEnv, venv: CEnv, k: number, t: Core, ty: CVal): void => {  
   if (t.tag === 'CLet') {
-    check(tenv, venv, k, t.type, CType);
-    const vty = cevaluate(t.type, venv);
-    check(tenv, venv, k, t.value, vty);
-    check(Cons(vty, tenv), Cons(cevaluate(t.value, venv), venv), k + 1, t.body, ty);
+    check(henv, tenv, venv, k, t.type, CType);
+    const vty = cevaluate(t.type, henv, venv);
+    check(henv, tenv, venv, k, t.value, vty);
+    check(henv, Cons(vty, tenv), Cons(cevaluate(t.value, henv, venv), venv), k + 1, t.body, ty);
     return;
   }
-  const ty2 = synth(tenv, venv, k, t);
+  const ty2 = synth(henv, tenv, venv, k, t);
   eqtype(k, ty2, ty);
 };
 
-const synth = (tenv: CEnv, venv: CEnv, k: number, t: Core): CVal => {
+const synth = (henv: CHashEnv, tenv: CEnv, venv: CEnv, k: number, t: Core): CVal => {
   if (t.tag === 'CType') return CType;
   if (t.tag === 'CVar')
     return index(tenv, t.index) || terr(`var out of scope ${t.index}`);
   if (t.tag === 'CAbs') {
-    check(tenv, venv, k, t.type, CType);
-    const type = cevaluate(t.type, venv);
-    const rt = synth(Cons(type, tenv), Cons(CVVar(k), venv), k + 1, t.body);
-    return cevaluate(CPi(t.type, cquote(rt, k + 1)), venv);
+    check(henv, tenv, venv, k, t.type, CType);
+    const type = cevaluate(t.type, henv, venv);
+    const rt = synth(henv, Cons(type, tenv), Cons(CVVar(k), venv), k + 1, t.body);
+    return cevaluate(CPi(t.type, cquote(rt, k + 1)), henv, venv);
   }
   if (t.tag === 'CPi') {
-    check(tenv, venv, k, t.type, CType);
-    check(Cons(cevaluate(t.type, venv), tenv), Cons(CVVar(k), venv), k + 1, t.body, CType);
+    check(henv, tenv, venv, k, t.type, CType);
+    check(henv, Cons(cevaluate(t.type, henv, venv), tenv), Cons(CVVar(k), venv), k + 1, t.body, CType);
     return CType;
   }
   if (t.tag === 'CApp') {
-    const ta = synth(tenv, venv, k, t.left);
-    return synthapp(tenv, venv, k, ta, t.right);
+    const ta = synth(henv, tenv, venv, k, t.left);
+    return synthapp(henv, tenv, venv, k, ta, t.right);
   }
   if (t.tag === 'CLet') {
-    check(tenv, venv, k, t.type, CType);
-    const vty = cevaluate(t.type, venv);
-    check(tenv, venv, k, t.value, vty);
-    return synth(Cons(vty, tenv), Cons(cevaluate(t.value, venv), venv), k + 1, t.body);
+    check(henv, tenv, venv, k, t.type, CType);
+    const vty = cevaluate(t.type, henv, venv);
+    check(henv, tenv, venv, k, t.value, vty);
+    return synth(henv, Cons(vty, tenv), Cons(cevaluate(t.value, henv, venv), venv), k + 1, t.body);
+  }
+  if (t.tag === 'CHash') {
+    const r = henv[t.hash];
+    if (!r) return terr(`undefined hash ${showCore(t)}`);
+    return r.type;
   }
   return terr(`cannot synth ${showCore(t)}`);
 };
 
-const synthapp = (tenv: CEnv, venv: CEnv, k: number, ta: CVal, b: Core): CVal => {
+const synthapp = (henv: CHashEnv, tenv: CEnv, venv: CEnv, k: number, ta: CVal, b: Core): CVal => {
   if (ta.tag === 'CVPi') {
-    check(tenv, venv, k, b, ta.type);
-    return ta.body(cevaluate(b, venv));
+    check(henv, tenv, venv, k, b, ta.type);
+    return ta.body(cevaluate(b, henv, venv));
   }
   return terr(`invalid type in synthapp: ${showCore(cquote(ta, k))}`);
 };
 
-export const typecheck = (t: Core): Core => {
-  const ty = synth(Nil, Nil, 0, t);
+export const typecheck = (henv: CHashEnv, t: Core): Core => {
+  const ty = synth(henv, Nil, Nil, 0, t);
   return cquote(ty);
 };

@@ -6,8 +6,9 @@ export const terr = (msg: string) => {
   throw new TypeError(msg);
 };
 
-export const mapobj = <A, B>(o: { [key: string]: A }, f: (v: A) => B): { [key: string]: B } => {
-  const n: { [key: string]: B } = {};
-  for (let k in o) n[k] = f(o[k]);
+export type Obj<T> = { [key: string]: T };
+export const mapobj = <A, B>(o: Obj<A>, f: (v: A, o: Obj<B>) => B): Obj<B> => {
+  const n: Obj<B> = {};
+  for (let k in o) n[k] = f(o[k], n);
   return n;
 };

@@ -1,7 +1,8 @@
 import { impossible } from '../util';
 import { Ix } from '../names';
+import { HashStr } from '../hash';
 
-export type Core = CVar | CAbs | CApp | CLet | CPi | CType;
+export type Core = CVar | CAbs | CApp | CLet | CPi | CType | CHash;
 
 export interface CVar {
   readonly tag: 'CVar';
@@ -47,6 +48,12 @@ export interface CType {
 }
 export const CType: CType = { tag: 'CType' };
 
+export interface CHash {
+  readonly tag: 'CHash';
+  readonly hash: HashStr;
+}
+export const CHash = (hash: HashStr): CHash => ({ tag: 'CHash', hash });
+
 export const showCore = (t: Core): string => {
   if (t.tag === 'CVar') return `${t.index}`;
   if (t.tag === 'CAbs')
@@ -58,5 +65,6 @@ export const showCore = (t: Core): string => {
   if (t.tag === 'CPi')
     return `(${showCore(t.type)} -> ${showCore(t.body)})`;
   if (t.tag === 'CType') return '*';
+  if (t.tag === 'CHash') return `#${t.hash}`;
   return impossible('showCore');
 };

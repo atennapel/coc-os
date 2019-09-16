@@ -9,7 +9,9 @@ Start repl:
 - Or open `index.html`
 
 TODO:
-- definitions
-- hashes
+- hashes in domain?
+- constants
+- (de)serialization of core terms
+- hashbases and namebases
 - implicit functions
 - erasure

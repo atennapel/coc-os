@@ -1,5 +1,5 @@
 import { elaborate } from './language/elaborate';
-import { runREPL, initREPL } from './repl';
+import { runREPL, initREPL, henv, chenv } from './repl';
 import * as readline from 'readline';
 import { showTerm } from './language/terms';
 import { normalize } from './language/nbe';
@@ -13,14 +13,14 @@ if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
   const tm = parse(sc);
   console.log(`inpt: ${showTerm(tm)}`);
-  const [term, type] = elaborate(tm);
+  const [term, type] = elaborate(henv, tm);
   console.log(`term: ${showTerm(term)}`);
   console.log(`type: ${showTerm(type)}`);
-  console.log(`nmfm: ${showTerm(normalize(term))}`);
+  console.log(`nmfm: ${showTerm(normalize(term, henv))}`);
   const core = toCore(term);
-  const cty = typecheck(core);
+  const cty = typecheck(chenv, core);
   console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
-  console.log(`conf: ${showCore(cnormalize(core))}`);
+  console.log(`conf: ${showCore(cnormalize(core, chenv))}`);
   process.exit();
 }
 

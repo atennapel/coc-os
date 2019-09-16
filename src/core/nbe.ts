@@ -1,7 +1,7 @@
 import { impossible } from '../util';
 import { Cons, Nil, foldr, index, map } from '../list';
 import { CVal, CVNe, CVAbs, CVPi, CVVar } from './values';
-import { CEnv } from './env';
+import { CEnv, CHashEnv } from './env';
 import { Core, CApp, CAbs, CPi, CVar } from './terms';
 
 export const cvapp = (a: CVal, b: CVal): CVal => {
@@ -10,20 +10,25 @@ export const cvapp = (a: CVal, b: CVal): CVal => {
   return impossible('cvapp');
 };
 
-export const cevaluate = (t: Core, vs: CEnv = Nil): CVal => {
+export const cevaluate = (t: Core, henv: CHashEnv, vs: CEnv = Nil): CVal => {
   if (t.tag === 'CType') return t;
   if (t.tag === 'CVar') {
     const v = index(vs, t.index);
     return v || impossible('evaluate cvar');
   }
   if (t.tag === 'CApp')
-    return cvapp(cevaluate(t.left, vs), cevaluate(t.right, vs));
+    return cvapp(cevaluate(t.left, henv, vs), cevaluate(t.right, henv, vs));
   if (t.tag === 'CAbs')
-    return CVAbs(cevaluate(t.type, vs), v => cevaluate(t.body, Cons(v, vs)));
+    return CVAbs(cevaluate(t.type, henv, vs), v => cevaluate(t.body, henv, Cons(v, vs)));
   if (t.tag === 'CPi')
-    return CVPi(cevaluate(t.type, vs), v => cevaluate(t.body, Cons(v, vs)));
+    return CVPi(cevaluate(t.type, henv, vs), v => cevaluate(t.body, henv, Cons(v, vs)));
   if (t.tag === 'CLet')
-    return cevaluate(t.body, Cons(cevaluate(t.value, vs), vs));
+    return cevaluate(t.body, henv, Cons(cevaluate(t.value, henv, vs), vs));
+  if (t.tag === 'CHash') {
+    const r = henv[t.hash];
+    if (!r) return impossible(`no val of hash: #${t.hash}`);
+    return r.value;
+  }
   return impossible('cevaluate');
 };
 
@@ -42,5 +47,5 @@ export const cquote = (v: CVal, k: number = 0): Core => {
   return impossible('cquote');
 };
 
-export const cnormalize = (t: Core, vs: CEnv = Nil, k: number = 0): Core =>
-  cquote(cevaluate(t, vs), k);
+export const cnormalize = (t: Core, henv: CHashEnv, vs: CEnv = Nil, k: number = 0): Core =>
+  cquote(cevaluate(t, henv, vs), k);

@@ -1,11 +1,12 @@
 import { Term, showTerm } from './terms';
-import { Core, CType, CVar, CApp, CLet, CPi, CAbs } from '../core/terms';
+import { Core, CType, CVar, CApp, CLet, CPi, CAbs, CHash } from '../core/terms';
 import { impossible } from '../util';
 import { Ix, Name } from '../names';
 import { List, lookup, Nil, Cons } from '../list';
 
 export const toCore = (t: Term, k: number = 0, ns: List<[Name, Ix]> = Nil): Core => {
   if (t.tag === 'Type') return CType;
+  if (t.tag === 'Hash') return CHash(t.hash);
   if (t.tag === 'Var') {
     const i = lookup(ns, t.name);
     return i === null ? impossible('toCore var') : CVar(k - i - 1);

@@ -1,7 +1,7 @@
 import { Val, VNe, VVar, VAbs, VPi } from './values';
 import { impossible } from '../util';
 import { Cons, Nil, foldr } from '../list';
-import { EnvV, fresh, DefV, BoundV, lookupV } from './env';
+import { EnvV, fresh, DefV, BoundV, lookupV, HashEnv } from './env';
 import { Term, Abs, Pi, App, Type } from './terms';
 
 export const vapp = (a: Val, b: Val): Val => {
@@ -16,7 +16,7 @@ export const force = (v: Val): Val => {
   return v;
 };
 
-export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
+export const evaluate = (t: Term, henv: HashEnv, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return t;
   if (t.tag === 'Var') {
     const v = lookupV(vs, t.name);
@@ -24,17 +24,22 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
       impossible('evaluate var');
   }
   if (t.tag === 'App')
-    return vapp(evaluate(t.left, vs), evaluate(t.right, vs));
+    return vapp(evaluate(t.left, henv, vs), evaluate(t.right, henv, vs));
   if (t.tag === 'Abs')
   // TODO: fix when meta solving considers types
-    return VAbs(t.name, t.type ? evaluate(t.type, vs) : Type,
-      v => evaluate(t.body, Cons(DefV(t.name, v), vs)));
+    return VAbs(t.name, t.type ? evaluate(t.type, henv, vs) : Type,
+      v => evaluate(t.body, henv, Cons(DefV(t.name, v), vs)));
   if (t.tag === 'Pi')
-    return VPi(t.name, evaluate(t.type, vs),
-      v => evaluate(t.body, Cons(DefV(t.name, v), vs)));
+    return VPi(t.name, evaluate(t.type, henv, vs),
+      v => evaluate(t.body, henv, Cons(DefV(t.name, v), vs)));
   if (t.tag === 'Let')
-    return evaluate(t.body, Cons(DefV(t.name, evaluate(t.value, vs)), vs));
+    return evaluate(t.body, henv, Cons(DefV(t.name, evaluate(t.value, henv, vs)), vs));
   if (t.tag === 'Meta') return t.term || VNe(t);
+  if (t.tag === 'Hash') {
+    const r = henv[t.hash];
+    if (!r) return impossible(`no val of hash: #${t.hash}`);
+    return r.value;
+  }
   return impossible('evaluate');
 };
 
@@ -54,5 +59,5 @@ export const quote = (v_: Val, vs: EnvV = Nil): Term => {
   return impossible('quote');
 };
 
-export const normalize = (t: Term, vs: EnvV = Nil): Term =>
-  quote(evaluate(t, vs), vs);
+export const normalize = (t: Term, henv: HashEnv,  vs: EnvV = Nil): Term =>
+  quote(evaluate(t, henv, vs), vs);

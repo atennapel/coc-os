@@ -1,4 +1,4 @@
-import { EnvV, fresh, BoundV, EnvT } from './env';
+import { EnvV, fresh, BoundV, EnvT, HashEnv } from './env';
 import { Val, VVar, Head } from './values';
 import { terr, impossible } from '../util';
 import { showTerm, Term, freshMeta, app1, Var, Abs, Pi, Let, App, Meta, abs } from './terms';
@@ -51,7 +51,7 @@ const solve = (vs: EnvV, m: Meta, sp_: List<Val>, rhs_: Val): void => {
   // TODO: add types to the parameters of the solution
   const sol = abs(sparr, rhs);
   log(() => `${showTerm(m)} := ${showTerm(abs(sparr, rhs))}`);
-  m.term = evaluate(sol);
+  m.term = evaluate(sol, {});
 };
 
 const eqHead = (a: Head, b: Head): boolean => {
@@ -109,31 +109,32 @@ const R = <A, B>(v: B): Either<A, B> => [true, v];
 const either = <A, B, R>(e: Either<A, B>, l: (v: A) => R, r: (v: B) => R): R =>
   e[0] ? r(e[1]) : l(e[1]);
 
-const zonkApp = (vs: EnvV, t: Term): Either<Val, Term> => {
+const zonkApp = (henv: HashEnv, vs: EnvV, t: Term): Either<Val, Term> => {
   if (t.tag === 'Meta') return t.term ? L(t.term) : R(t);
   if (t.tag === 'App')
     return either(
-      zonkApp(vs, t.left),
-      x => L(vapp(x, evaluate(t.right, vs))),
-      x => R(App(x, zonk(t.right, vs))),
+      zonkApp(henv, vs, t.left),
+      x => L(vapp(x, evaluate(t.right, henv, vs))),
+      x => R(App(x, zonk(t.right, henv, vs))),
     );
-  return R(zonk(t, vs));
+  return R(zonk(t, henv, vs));
 };
-export const zonk = (tm: Term, vs: EnvV = Nil): Term => {
+export const zonk = (tm: Term, henv: HashEnv, vs: EnvV = Nil): Term => {
   if (tm.tag === 'Var') return tm;
   if (tm.tag === 'Meta') return tm.term ? quote(tm.term, vs) : tm;
   if (tm.tag === 'Type') return tm;
   if (tm.tag === 'Abs')
-    return Abs(tm.name, zonk(tm.body, Cons(BoundV(tm.name), vs)), tm.type && zonk(tm.type, vs));
+    return Abs(tm.name, zonk(tm.body, henv, Cons(BoundV(tm.name), vs)), tm.type && zonk(tm.type, henv, vs));
   if (tm.tag === 'Pi')
-    return Pi(tm.name, zonk(tm.type, vs), zonk(tm.body, Cons(BoundV(tm.name), vs)));
+    return Pi(tm.name, zonk(tm.type, henv, vs), zonk(tm.body, henv, Cons(BoundV(tm.name), vs)));
   if (tm.tag === 'Let')
-    return Let(tm.name, zonk(tm.value, vs), zonk(tm.body, Cons(BoundV(tm.name), vs)), tm.type && zonk(tm.type, vs));
+    return Let(tm.name, zonk(tm.value, henv, vs), zonk(tm.body, henv, Cons(BoundV(tm.name), vs)), tm.type && zonk(tm.type, henv, vs));
   if (tm.tag === 'App')
     return either(
-      zonkApp(vs, tm.left),
-      x => quote(vapp(x, evaluate(tm.right, vs)), vs),
-      x => App(x, zonk(tm.right, vs)),
+      zonkApp(henv, vs, tm.left),
+      x => quote(vapp(x, evaluate(tm.right, henv, vs)), vs),
+      x => App(x, zonk(tm.right, henv, vs)),
     );
+  if (tm.tag === 'Hash') return tm;
   return impossible(`zonk`);
 };

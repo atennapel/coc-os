@@ -27,7 +27,7 @@ exports.cvapp = (a, b) => {
         return values_1.CVNe(a.head, list_1.Cons(b, a.args));
     return util_1.impossible('cvapp');
 };
-exports.cevaluate = (t, vs = list_1.Nil) => {
+exports.cevaluate = (t, henv, vs = list_1.Nil) => {
     if (t.tag === 'CType')
         return t;
     if (t.tag === 'CVar') {
@@ -35,13 +35,19 @@ exports.cevaluate = (t, vs = list_1.Nil) => {
         return v || util_1.impossible('evaluate cvar');
     }
     if (t.tag === 'CApp')
-        return exports.cvapp(exports.cevaluate(t.left, vs), exports.cevaluate(t.right, vs));
+        return exports.cvapp(exports.cevaluate(t.left, henv, vs), exports.cevaluate(t.right, henv, vs));
     if (t.tag === 'CAbs')
-        return values_1.CVAbs(exports.cevaluate(t.type, vs), v => exports.cevaluate(t.body, list_1.Cons(v, vs)));
+        return values_1.CVAbs(exports.cevaluate(t.type, henv, vs), v => exports.cevaluate(t.body, henv, list_1.Cons(v, vs)));
     if (t.tag === 'CPi')
-        return values_1.CVPi(exports.cevaluate(t.type, vs), v => exports.cevaluate(t.body, list_1.Cons(v, vs)));
+        return values_1.CVPi(exports.cevaluate(t.type, henv, vs), v => exports.cevaluate(t.body, henv, list_1.Cons(v, vs)));
     if (t.tag === 'CLet')
-        return exports.cevaluate(t.body, list_1.Cons(exports.cevaluate(t.value, vs), vs));
+        return exports.cevaluate(t.body, henv, list_1.Cons(exports.cevaluate(t.value, henv, vs), vs));
+    if (t.tag === 'CHash') {
+        const r = henv[t.hash];
+        if (!r)
+            return util_1.impossible(`no val of hash: #${t.hash}`);
+        return r.value;
+    }
     return util_1.impossible('cevaluate');
 };
 exports.cquote = (v, k = 0) => {
@@ -55,7 +61,7 @@ exports.cquote = (v, k = 0) => {
         return terms_1.CPi(exports.cquote(v.type, k), exports.cquote(v.body(values_1.CVVar(k)), k + 1));
     return util_1.impossible('cquote');
 };
-exports.cnormalize = (t, vs = list_1.Nil, k = 0) => exports.cquote(exports.cevaluate(t, vs), k);
+exports.cnormalize = (t, henv, vs = list_1.Nil, k = 0) => exports.cquote(exports.cevaluate(t, henv, vs), k);
 
 },{"../list":14,"../util":17,"./terms":3,"./values":5}],3:[function(require,module,exports){
 "use strict";
@@ -67,6 +73,7 @@ exports.CApp = (left, right) => ({ tag: 'CApp', left, right });
 exports.CLet = (type, value, body) => ({ tag: 'CLet', type, value, body });
 exports.CPi = (type, body) => ({ tag: 'CPi', type, body });
 exports.CType = { tag: 'CType' };
+exports.CHash = (hash) => ({ tag: 'CHash', hash });
 exports.showCore = (t) => {
     if (t.tag === 'CVar')
         return `${t.index}`;
@@ -80,6 +87,8 @@ exports.showCore = (t) => {
         return `(${exports.showCore(t.type)} -> ${exports.showCore(t.body)})`;
     if (t.tag === 'CType')
         return '*';
+    if (t.tag === 'CHash')
+        return `#${t.hash}`;
     return util_1.impossible('showCore');
 };
 
@@ -117,54 +126,60 @@ exports.eqtype = (k, a, b) => {
         return list_1.zipWith_((x, y) => exports.eqtype(k, x, y), a.args, b.args);
     return util_1.terr(`typecheck failed: ${terms_1.showCore(nbe_1.cquote(b, k))} ~ ${terms_1.showCore(nbe_1.cquote(a, k))}`);
 };
-const check = (tenv, venv, k, t, ty) => {
+const check = (henv, tenv, venv, k, t, ty) => {
     if (t.tag === 'CLet') {
-        check(tenv, venv, k, t.type, terms_1.CType);
-        const vty = nbe_1.cevaluate(t.type, venv);
-        check(tenv, venv, k, t.value, vty);
-        check(list_1.Cons(vty, tenv), list_1.Cons(nbe_1.cevaluate(t.value, venv), venv), k + 1, t.body, ty);
+        check(henv, tenv, venv, k, t.type, terms_1.CType);
+        const vty = nbe_1.cevaluate(t.type, henv, venv);
+        check(henv, tenv, venv, k, t.value, vty);
+        check(henv, list_1.Cons(vty, tenv), list_1.Cons(nbe_1.cevaluate(t.value, henv, venv), venv), k + 1, t.body, ty);
         return;
     }
-    const ty2 = synth(tenv, venv, k, t);
+    const ty2 = synth(henv, tenv, venv, k, t);
     exports.eqtype(k, ty2, ty);
 };
-const synth = (tenv, venv, k, t) => {
+const synth = (henv, tenv, venv, k, t) => {
     if (t.tag === 'CType')
         return terms_1.CType;
     if (t.tag === 'CVar')
         return list_1.index(tenv, t.index) || util_1.terr(`var out of scope ${t.index}`);
     if (t.tag === 'CAbs') {
-        check(tenv, venv, k, t.type, terms_1.CType);
-        const type = nbe_1.cevaluate(t.type, venv);
-        const rt = synth(list_1.Cons(type, tenv), list_1.Cons(values_1.CVVar(k), venv), k + 1, t.body);
-        return nbe_1.cevaluate(terms_1.CPi(t.type, nbe_1.cquote(rt, k + 1)), venv);
+        check(henv, tenv, venv, k, t.type, terms_1.CType);
+        const type = nbe_1.cevaluate(t.type, henv, venv);
+        const rt = synth(henv, list_1.Cons(type, tenv), list_1.Cons(values_1.CVVar(k), venv), k + 1, t.body);
+        return nbe_1.cevaluate(terms_1.CPi(t.type, nbe_1.cquote(rt, k + 1)), henv, venv);
     }
     if (t.tag === 'CPi') {
-        check(tenv, venv, k, t.type, terms_1.CType);
-        check(list_1.Cons(nbe_1.cevaluate(t.type, venv), tenv), list_1.Cons(values_1.CVVar(k), venv), k + 1, t.body, terms_1.CType);
+        check(henv, tenv, venv, k, t.type, terms_1.CType);
+        check(henv, list_1.Cons(nbe_1.cevaluate(t.type, henv, venv), tenv), list_1.Cons(values_1.CVVar(k), venv), k + 1, t.body, terms_1.CType);
         return terms_1.CType;
     }
     if (t.tag === 'CApp') {
-        const ta = synth(tenv, venv, k, t.left);
-        return synthapp(tenv, venv, k, ta, t.right);
+        const ta = synth(henv, tenv, venv, k, t.left);
+        return synthapp(henv, tenv, venv, k, ta, t.right);
     }
     if (t.tag === 'CLet') {
-        check(tenv, venv, k, t.type, terms_1.CType);
-        const vty = nbe_1.cevaluate(t.type, venv);
-        check(tenv, venv, k, t.value, vty);
-        return synth(list_1.Cons(vty, tenv), list_1.Cons(nbe_1.cevaluate(t.value, venv), venv), k + 1, t.body);
+        check(henv, tenv, venv, k, t.type, terms_1.CType);
+        const vty = nbe_1.cevaluate(t.type, henv, venv);
+        check(henv, tenv, venv, k, t.value, vty);
+        return synth(henv, list_1.Cons(vty, tenv), list_1.Cons(nbe_1.cevaluate(t.value, henv, venv), venv), k + 1, t.body);
+    }
+    if (t.tag === 'CHash') {
+        const r = henv[t.hash];
+        if (!r)
+            return util_1.terr(`undefined hash ${terms_1.showCore(t)}`);
+        return r.type;
     }
     return util_1.terr(`cannot synth ${terms_1.showCore(t)}`);
 };
-const synthapp = (tenv, venv, k, ta, b) => {
+const synthapp = (henv, tenv, venv, k, ta, b) => {
     if (ta.tag === 'CVPi') {
-        check(tenv, venv, k, b, ta.type);
-        return ta.body(nbe_1.cevaluate(b, venv));
+        check(henv, tenv, venv, k, b, ta.type);
+        return ta.body(nbe_1.cevaluate(b, henv, venv));
     }
     return util_1.terr(`invalid type in synthapp: ${terms_1.showCore(nbe_1.cquote(ta, k))}`);
 };
-exports.typecheck = (t) => {
-    const ty = synth(list_1.Nil, list_1.Nil, 0, t);
+exports.typecheck = (henv, t) => {
+    const ty = synth(henv, list_1.Nil, list_1.Nil, 0, t);
     return nbe_1.cquote(ty);
 };
 
@@ -190,32 +205,32 @@ const nbe_1 = require("./nbe");
 const unify_1 = require("./unify");
 const config_1 = require("../config");
 ;
-const check = (env, tm, ty_) => {
+const check = (henv, env, tm, ty_) => {
     config_1.log(() => `check ${terms_1.showTerm(tm)} : ${terms_1.showTerm(nbe_1.quote(ty_, env.vals))} in ${env_1.showEnvT(env.types)}`);
     const ty = nbe_1.force(ty_);
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
         const x = env_1.fresh(env.vals, tm.name);
         const v = values_1.VVar(x);
-        return terms_1.Abs(x, check({
+        return terms_1.Abs(x, check(henv, {
             vals: list_1.Cons(env_1.DefV(x, v), env.vals),
             types: list_1.Cons(env_1.BoundT(x, ty.type), env.types),
         }, tm.body, ty.body(v)), nbe_1.quote(ty.type, env.vals));
     }
     if (tm.tag === 'Let') {
-        const [val, tty, vty] = synthLetValue(env, tm.value, tm.type);
-        const body = check({
-            vals: list_1.Cons(env_1.DefV(tm.name, nbe_1.evaluate(val, env.vals)), env.vals),
+        const [val, tty, vty] = synthLetValue(henv, env, tm.value, tm.type);
+        const body = check(henv, {
+            vals: list_1.Cons(env_1.DefV(tm.name, nbe_1.evaluate(val, henv, env.vals)), env.vals),
             types: list_1.Cons(env_1.DefT(tm.name, vty), env.types),
         }, tm.body, ty);
         return terms_1.Let(tm.name, val, body, tty);
     }
     if (tm.tag === 'Hole')
         return unify_1.newMeta(env.types);
-    const [etm, ity] = synth(env, tm);
+    const [etm, ity] = synth(henv, env, tm);
     unify_1.unify(env.vals, ity, ty);
     return etm;
 };
-const synth = (env, tm) => {
+const synth = (henv, env, tm) => {
     config_1.log(() => `synth ${terms_1.showTerm(tm)} in ${env_1.showEnvT(env.types)}`);
     if (tm.tag === 'Type')
         return [terms_1.Type, terms_1.Type];
@@ -228,85 +243,92 @@ const synth = (env, tm) => {
         return [tm, ty.type];
     }
     if (tm.tag === 'Pi') {
-        const ty = check(env, tm.type, terms_1.Type);
-        const vty = nbe_1.evaluate(ty, env.vals);
-        const term = check({
+        const ty = check(henv, env, tm.type, terms_1.Type);
+        const vty = nbe_1.evaluate(ty, henv, env.vals);
+        const term = check(henv, {
             vals: list_1.Cons(env_1.BoundV(tm.name), env.vals),
             types: list_1.Cons(env_1.BoundT(tm.name, vty), env.types),
         }, tm.body, terms_1.Type);
         return [terms_1.Pi(tm.name, ty, term), terms_1.Type];
     }
     if (tm.tag === 'Ann') {
-        const ty = check(env, tm.type, terms_1.Type);
-        const vty = nbe_1.evaluate(ty, env.vals);
-        const term = check(env, tm.term, vty);
+        const ty = check(henv, env, tm.type, terms_1.Type);
+        const vty = nbe_1.evaluate(ty, henv, env.vals);
+        const term = check(henv, env, tm.term, vty);
         return [term, vty];
     }
     if (tm.tag === 'App') {
-        const [l, ty] = synth(env, tm.left);
-        const [r, rty] = synthapp(env, ty, tm.right);
+        const [l, ty] = synth(henv, env, tm.left);
+        const [r, rty] = synthapp(henv, env, ty, tm.right);
         return [terms_1.App(l, r), rty];
     }
     if (tm.tag === 'Abs' && tm.type) {
-        const ty = check(env, tm.type, terms_1.Type);
-        const vty = nbe_1.evaluate(ty, env.vals);
+        const ty = check(henv, env, tm.type, terms_1.Type);
+        const vty = nbe_1.evaluate(ty, henv, env.vals);
         const venv = list_1.Cons(env_1.BoundV(tm.name), env.vals);
-        const [body, rty] = synth({
+        const [body, rty] = synth(henv, {
             vals: venv,
             types: list_1.Cons(env_1.BoundT(tm.name, vty), env.types),
         }, tm.body);
         return [
             terms_1.Abs(tm.name, body, ty),
-            nbe_1.evaluate(terms_1.Pi(tm.name, ty, nbe_1.quote(rty, venv)), env.vals),
+            nbe_1.evaluate(terms_1.Pi(tm.name, ty, nbe_1.quote(rty, venv)), henv, env.vals),
         ];
     }
     if (tm.tag === 'Abs' && !tm.type) {
         const ty = unify_1.newMeta(env.types);
-        const vty = nbe_1.evaluate(ty, env.vals);
+        const vty = nbe_1.evaluate(ty, henv, env.vals);
         const rty = unify_1.newMeta(list_1.Cons(env_1.BoundT(tm.name, vty), env.types));
-        const tpi = nbe_1.evaluate(terms_1.Pi(tm.name, ty, rty), env.vals);
-        const term = check(env, tm, tpi);
+        const tpi = nbe_1.evaluate(terms_1.Pi(tm.name, ty, rty), henv, env.vals);
+        const term = check(henv, env, tm, tpi);
         return [term, tpi];
     }
     if (tm.tag === 'Let') {
-        const [val, ty, vty] = synthLetValue(env, tm.value, tm.type);
-        const [body, rty] = synth({
-            vals: list_1.Cons(env_1.DefV(tm.name, nbe_1.evaluate(val, env.vals)), env.vals),
+        const [val, ty, vty] = synthLetValue(henv, env, tm.value, tm.type);
+        const [body, rty] = synth(henv, {
+            vals: list_1.Cons(env_1.DefV(tm.name, nbe_1.evaluate(val, henv, env.vals)), env.vals),
             types: list_1.Cons(env_1.DefT(tm.name, vty), env.types),
         }, tm.body);
         return [terms_1.Let(tm.name, val, body, ty), rty];
     }
+    if (tm.tag === 'Hash') {
+        const r = henv[tm.hash];
+        if (!r)
+            return util_1.terr(`undefined hash ${terms_1.showTerm(tm)}`);
+        return [tm, r.type];
+    }
     if (tm.tag === 'Hole')
-        return [unify_1.newMeta(env.types), nbe_1.evaluate(unify_1.newMeta(env.types), env.vals)];
+        return [unify_1.newMeta(env.types), nbe_1.evaluate(unify_1.newMeta(env.types), henv, env.vals)];
     return util_1.terr(`cannot synth ${terms_1.showTerm(tm)}`);
 };
-const synthLetValue = (env, val, ty) => {
+const synthLetValue = (henv, env, val, ty) => {
     if (ty) {
-        const ety = check(env, ty, terms_1.Type);
-        const vty = nbe_1.evaluate(ety, env.vals);
-        const ev = check(env, val, vty);
+        const ety = check(henv, env, ty, terms_1.Type);
+        const vty = nbe_1.evaluate(ety, henv, env.vals);
+        const ev = check(henv, env, val, vty);
         return [ev, ety, vty];
     }
     else {
-        const [ev, vty] = synth(env, val);
+        const [ev, vty] = synth(henv, env, val);
         return [ev, nbe_1.quote(vty, env.vals), vty];
     }
 };
-const synthapp = (env, ty_, tm) => {
+const synthapp = (henv, env, ty_, tm) => {
     config_1.log(() => `synthapp ${terms_1.showTerm(nbe_1.quote(ty_, env.vals))} @ ${terms_1.showTerm(tm)} in ${env_1.showEnvT(env.types)}`);
     const ty = nbe_1.force(ty_);
     if (ty.tag === 'VPi') {
-        const arg = check(env, tm, ty.type);
-        const varg = nbe_1.evaluate(arg, env.vals);
+        const arg = check(henv, env, tm, ty.type);
+        const varg = nbe_1.evaluate(arg, henv, env.vals);
         return [arg, ty.body(varg)];
     }
     return util_1.terr(`expected a function type but got ${terms_1.showTerm(nbe_1.quote(ty, env.vals))}`);
 };
-exports.elaborate = (tm, env = { vals: list_1.Nil, types: list_1.Nil }) => {
-    const [etm, ty] = synth(env, tm);
+exports.elaborate = (henv, tm, env = { vals: list_1.Nil, types: list_1.Nil }) => {
+    terms_1.resetMetaId();
+    const [etm, ty] = synth(henv, env, tm);
     return [
-        unify_1.zonk(etm, env.vals),
-        unify_1.zonk(nbe_1.quote(nbe_1.force(ty), env.vals), env.vals),
+        unify_1.zonk(etm, {}, env.vals),
+        unify_1.zonk(nbe_1.quote(nbe_1.force(ty), env.vals), {}, env.vals),
     ];
 };
 
@@ -346,7 +368,7 @@ exports.force = (v) => {
         return exports.force(list_1.foldr((x, y) => exports.vapp(y, x), v.head.term, v.args));
     return v;
 };
-exports.evaluate = (t, vs = list_1.Nil) => {
+exports.evaluate = (t, henv, vs = list_1.Nil) => {
     if (t.tag === 'Type')
         return t;
     if (t.tag === 'Var') {
@@ -355,16 +377,22 @@ exports.evaluate = (t, vs = list_1.Nil) => {
             util_1.impossible('evaluate var');
     }
     if (t.tag === 'App')
-        return exports.vapp(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
+        return exports.vapp(exports.evaluate(t.left, henv, vs), exports.evaluate(t.right, henv, vs));
     if (t.tag === 'Abs')
         // TODO: fix when meta solving considers types
-        return values_1.VAbs(t.name, t.type ? exports.evaluate(t.type, vs) : terms_1.Type, v => exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, v), vs)));
+        return values_1.VAbs(t.name, t.type ? exports.evaluate(t.type, henv, vs) : terms_1.Type, v => exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, v), vs)));
     if (t.tag === 'Pi')
-        return values_1.VPi(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, v), vs)));
+        return values_1.VPi(t.name, exports.evaluate(t.type, henv, vs), v => exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, v), vs)));
     if (t.tag === 'Let')
-        return exports.evaluate(t.body, list_1.Cons(env_1.DefV(t.name, exports.evaluate(t.value, vs)), vs));
+        return exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, exports.evaluate(t.value, henv, vs)), vs));
     if (t.tag === 'Meta')
         return t.term || values_1.VNe(t);
+    if (t.tag === 'Hash') {
+        const r = henv[t.hash];
+        if (!r)
+            return util_1.impossible(`no val of hash: #${t.hash}`);
+        return r.value;
+    }
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = list_1.Nil) => {
@@ -383,7 +411,7 @@ exports.quote = (v_, vs = list_1.Nil) => {
     }
     return util_1.impossible('quote');
 };
-exports.normalize = (t, vs = list_1.Nil) => exports.quote(exports.evaluate(t, vs), vs);
+exports.normalize = (t, henv, vs = list_1.Nil) => exports.quote(exports.evaluate(t, henv, vs), vs);
 
 },{"../list":14,"../util":17,"./env":7,"./terms":10,"./values":13}],9:[function(require,module,exports){
 "use strict";
@@ -421,6 +449,8 @@ const tokenize = (sc) => {
             else if (c === ';')
                 state = COMMENT;
             else if (/[\_a-z]/i.test(c))
+                t += c, state = NAME;
+            else if (c === '#')
                 t += c, state = NAME;
             else if (c === '(')
                 b.push(c), p.push(r), r = [];
@@ -528,6 +558,8 @@ const expr = (t) => {
     if (t.tag === 'List')
         return exprs(t.list);
     const x = t.name;
+    if (x[0] === '#')
+        return terms_1.Hash(x.slice(1));
     if (x === '*')
         return terms_1.Type;
     if (x === '_')
@@ -545,15 +577,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("../util");
 exports.Var = (name) => ({ tag: 'Var', name });
 exports.Abs = (name, body, type) => ({ tag: 'Abs', name, body, type });
-exports.abs = (ns, body) => ns.reduceRight((x, y) => exports.Abs(y, x), body);
+exports.abs = (ns, body) => ns.reduceRight((b, x) => exports.Abs(x, b), body);
+exports.absty = (ns, body) => ns.reduceRight((b, [x, t]) => exports.Abs(x, b, t), body);
 exports.App = (left, right) => ({ tag: 'App', left, right });
 exports.appFrom = (ts) => ts.reduce(exports.App);
+exports.app = (...ts) => exports.appFrom(ts);
 exports.app1 = (f, as) => as.reduce(exports.App, f);
 exports.Let = (name, value, body, type) => ({ tag: 'Let', name, value, body, type });
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Pi = (name, type, body) => ({ tag: 'Pi', name, type, body });
 exports.funFrom = (ts) => ts.reduceRight((x, y) => exports.Pi('_', y, x));
+exports.fun = (...ts) => exports.funFrom(ts);
 exports.Type = { tag: 'Type' };
+exports.Hash = (hash) => ({ tag: 'Hash', hash });
 exports.Hole = { tag: 'Hole' };
 let metaId = 0;
 exports.resetMetaId = () => { metaId = 0; };
@@ -577,6 +613,8 @@ exports.showTerm = (t) => {
         return '_';
     if (t.tag === 'Meta')
         return `?${t.term ? '!' : ''}${t.id}`;
+    if (t.tag === 'Hash')
+        return `#${t.hash}`;
     return util_1.impossible('showTerm');
 };
 
@@ -590,6 +628,8 @@ const list_1 = require("../list");
 exports.toCore = (t, k = 0, ns = list_1.Nil) => {
     if (t.tag === 'Type')
         return terms_2.CType;
+    if (t.tag === 'Hash')
+        return terms_2.CHash(t.hash);
     if (t.tag === 'Var') {
         const i = list_1.lookup(ns, t.name);
         return i === null ? util_1.impossible('toCore var') : terms_2.CVar(k - i - 1);
@@ -670,7 +710,7 @@ const solve = (vs, m, sp_, rhs_) => {
     // TODO: add types to the parameters of the solution
     const sol = terms_1.abs(sparr, rhs);
     config_1.log(() => `${terms_1.showTerm(m)} := ${terms_1.showTerm(terms_1.abs(sparr, rhs))}`);
-    m.term = nbe_1.evaluate(sol);
+    m.term = nbe_1.evaluate(sol, {});
 };
 const eqHead = (a, b) => {
     if (a === b)
@@ -722,14 +762,14 @@ exports.newMeta = (ts) => terms_1.app1(terms_1.freshMeta(), list_1.toArray(ts, x
 const L = (v) => [false, v];
 const R = (v) => [true, v];
 const either = (e, l, r) => e[0] ? r(e[1]) : l(e[1]);
-const zonkApp = (vs, t) => {
+const zonkApp = (henv, vs, t) => {
     if (t.tag === 'Meta')
         return t.term ? L(t.term) : R(t);
     if (t.tag === 'App')
-        return either(zonkApp(vs, t.left), x => L(nbe_1.vapp(x, nbe_1.evaluate(t.right, vs))), x => R(terms_1.App(x, exports.zonk(t.right, vs))));
-    return R(exports.zonk(t, vs));
+        return either(zonkApp(henv, vs, t.left), x => L(nbe_1.vapp(x, nbe_1.evaluate(t.right, henv, vs))), x => R(terms_1.App(x, exports.zonk(t.right, henv, vs))));
+    return R(exports.zonk(t, henv, vs));
 };
-exports.zonk = (tm, vs = list_1.Nil) => {
+exports.zonk = (tm, henv, vs = list_1.Nil) => {
     if (tm.tag === 'Var')
         return tm;
     if (tm.tag === 'Meta')
@@ -737,13 +777,15 @@ exports.zonk = (tm, vs = list_1.Nil) => {
     if (tm.tag === 'Type')
         return tm;
     if (tm.tag === 'Abs')
-        return terms_1.Abs(tm.name, exports.zonk(tm.body, list_1.Cons(env_1.BoundV(tm.name), vs)), tm.type && exports.zonk(tm.type, vs));
+        return terms_1.Abs(tm.name, exports.zonk(tm.body, henv, list_1.Cons(env_1.BoundV(tm.name), vs)), tm.type && exports.zonk(tm.type, henv, vs));
     if (tm.tag === 'Pi')
-        return terms_1.Pi(tm.name, exports.zonk(tm.type, vs), exports.zonk(tm.body, list_1.Cons(env_1.BoundV(tm.name), vs)));
+        return terms_1.Pi(tm.name, exports.zonk(tm.type, henv, vs), exports.zonk(tm.body, henv, list_1.Cons(env_1.BoundV(tm.name), vs)));
     if (tm.tag === 'Let')
-        return terms_1.Let(tm.name, exports.zonk(tm.value, vs), exports.zonk(tm.body, list_1.Cons(env_1.BoundV(tm.name), vs)), tm.type && exports.zonk(tm.type, vs));
+        return terms_1.Let(tm.name, exports.zonk(tm.value, henv, vs), exports.zonk(tm.body, henv, list_1.Cons(env_1.BoundV(tm.name), vs)), tm.type && exports.zonk(tm.type, henv, vs));
     if (tm.tag === 'App')
-        return either(zonkApp(vs, tm.left), x => nbe_1.quote(nbe_1.vapp(x, nbe_1.evaluate(tm.right, vs)), vs), x => terms_1.App(x, exports.zonk(tm.right, vs)));
+        return either(zonkApp(henv, vs, tm.left), x => nbe_1.quote(nbe_1.vapp(x, nbe_1.evaluate(tm.right, henv, vs)), vs), x => terms_1.App(x, exports.zonk(tm.right, henv, vs)));
+    if (tm.tag === 'Hash')
+        return tm;
     return util_1.impossible(`zonk`);
 };
 
@@ -873,6 +915,30 @@ const terms_2 = require("./core/terms");
 const translation_1 = require("./language/translation");
 const typecheck_1 = require("./core/typecheck");
 const nbe_2 = require("./core/nbe");
+const util_1 = require("./util");
+const v = terms_1.Var;
+exports.replenv = {
+    Nat: {
+        value: terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.fun(v('t'), v('t')), v('t'))),
+        type: terms_1.Type,
+    },
+    z: {
+        value: terms_1.absty([['t', terms_1.Type], ['z', v('t')], ['s', terms_1.fun(v('t'), v('t'))]], v('z')),
+        type: terms_1.Hash('Nat'),
+    },
+    s: {
+        value: terms_1.absty([['n', terms_1.Hash('Nat')], ['t', terms_1.Type], ['z', v('t')], ['s', terms_1.fun(v('t'), v('t'))]], terms_1.app(v('s'), terms_1.app(v('n'), v('t'), v('z'), v('s')))),
+        type: terms_1.fun(terms_1.Hash('Nat'), terms_1.Hash('Nat')),
+    },
+};
+exports.henv = util_1.mapobj(exports.replenv, ({ value, type }, e) => ({
+    value: nbe_1.evaluate(value, e),
+    type: nbe_1.evaluate(type, e),
+}));
+exports.chenv = util_1.mapobj(exports.replenv, ({ value, type }, e) => ({
+    value: nbe_2.cevaluate(translation_1.toCore(value), e),
+    type: nbe_2.cevaluate(translation_1.toCore(type), e),
+}));
 exports.initREPL = () => { };
 exports.runREPL = (_s, _cb) => {
     try {
@@ -882,15 +948,15 @@ exports.runREPL = (_s, _cb) => {
         }
         const tm = parser_1.parse(_s);
         console.log(`inpt: ${terms_1.showTerm(tm)}`);
-        const [term, type] = elaborate_1.elaborate(tm);
+        const [term, type] = elaborate_1.elaborate(exports.henv, tm);
         console.log(`term: ${terms_1.showTerm(term)}`);
         console.log(`type: ${terms_1.showTerm(type)}`);
-        const nf = nbe_1.normalize(term);
+        const nf = nbe_1.normalize(term, exports.henv);
         console.log(`nmfm: ${terms_1.showTerm(nf)}`);
         const core = translation_1.toCore(term);
-        const cty = typecheck_1.typecheck(core);
+        const cty = typecheck_1.typecheck(exports.chenv, core);
         console.log(`core: ${terms_2.showCore(core)} : ${terms_2.showCore(cty)}`);
-        const cnf = nbe_2.cnormalize(core);
+        const cnf = nbe_2.cnormalize(core, exports.chenv);
         console.log(`conf: ${terms_2.showCore(cnf)}`);
         return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~>\n${terms_1.showTerm(nf)} ~>\n${terms_2.showCore(core)} : ${terms_2.showCore(cty)} ~>\n${terms_2.showCore(cnf)}`);
     }
@@ -899,7 +965,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./core/nbe":2,"./core/terms":3,"./core/typecheck":4,"./language/elaborate":6,"./language/nbe":8,"./language/parser":9,"./language/terms":10,"./language/translation":11}],17:[function(require,module,exports){
+},{"./config":1,"./core/nbe":2,"./core/terms":3,"./core/typecheck":4,"./language/elaborate":6,"./language/nbe":8,"./language/parser":9,"./language/terms":10,"./language/translation":11,"./util":17}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -911,7 +977,7 @@ exports.terr = (msg) => {
 exports.mapobj = (o, f) => {
     const n = {};
     for (let k in o)
-        n[k] = f(o[k]);
+        n[k] = f(o[k], n);
     return n;
 };
 

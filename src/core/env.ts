@@ -7,3 +7,5 @@ export type CEnv = List<CVal>;
 
 export const showCEnv = (l: CEnv, k: number = 0): string =>
   toString(l, e => showCore(cquote(e, k)));
+
+export type CHashEnv = { [key: string]: { value: CVal, type: CVal } };

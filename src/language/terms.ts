@@ -1,8 +1,9 @@
 import { impossible } from '../util';
 import { Name } from '../names';
 import { Val } from './values';
+import { HashStr } from '../hash';
 
-export type Term = Var | Abs | App | Let | Ann | Pi | Type | Hole | Meta;
+export type Term = Var | Abs | App | Let | Ann | Pi | Type | Hash | Hole | Meta;
 
 export interface Var {
   readonly tag: 'Var';
@@ -19,7 +20,9 @@ export interface Abs {
 export const Abs = (name: Name, body: Term, type?: Term): Abs =>
   ({ tag: 'Abs', name, body, type });
 export const abs = (ns: Name[], body: Term): Term =>
-  ns.reduceRight((x, y) => Abs(y, x), body);
+  ns.reduceRight((b, x) => Abs(x, b), body);
+export const absty = (ns: [Name, Term][], body: Term): Term =>
+  ns.reduceRight((b, [x, t]) => Abs(x, b, t), body);
 
 export interface App {
   readonly tag: 'App';
@@ -30,6 +33,7 @@ export const App = (left: Term, right: Term): App =>
   ({ tag: 'App', left, right });
 export const appFrom = (ts: Term[]): Term =>
   ts.reduce(App);
+export const app = (...ts: Term[]): Term => appFrom(ts);
 export const app1 = (f: Term, as: Term[]): Term =>
   as.reduce(App, f);
 
@@ -61,11 +65,18 @@ export const Pi = (name: Name, type: Term, body: Term): Pi =>
   ({ tag: 'Pi', name, type, body });
 export const funFrom = (ts: Term[]): Term =>
   ts.reduceRight((x, y) => Pi('_', y, x));
+export const fun = (...ts: Term[]): Term => funFrom(ts);
 
 export interface Type {
   readonly tag: 'Type';
 }
 export const Type: Type = { tag: 'Type' };
+
+export interface Hash {
+  readonly tag: 'Hash';
+  readonly hash: HashStr;
+}
+export const Hash = (hash: HashStr): Hash => ({ tag: 'Hash', hash });
 
 export interface Hole {
   readonly tag: 'Hole';
@@ -98,5 +109,6 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'Meta') return `?${t.term ? '!' : ''}${t.id}`;
+  if (t.tag === 'Hash') return `#${t.hash}`;
   return impossible('showTerm');
 };

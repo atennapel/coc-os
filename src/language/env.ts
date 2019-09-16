@@ -50,3 +50,5 @@ export const lookupT = (l: EnvT, x: Name): EntryT | null =>
 
 export const showEnvT = (l: EnvT, vs: EnvV = Nil): string =>
   toString(l, e => `${e.tag === 'BoundT' ? '' : ':'}${e.name} : ${showTerm(quote(e.type, vs))}`);
+
+export type HashEnv = { [key: string]: { value: Val, type: Val } };

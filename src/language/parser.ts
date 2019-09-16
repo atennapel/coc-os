@@ -1,4 +1,4 @@
-import { Type, Var, Abs, Pi, Ann, Let, Term, appFrom, abs, funFrom, Hole } from './terms';
+import { Type, Var, Abs, Pi, Ann, Let, Term, appFrom, abs, funFrom, Hole, Hash } from './terms';
 
 const err = (msg: string) => { throw new SyntaxError(msg) };
 
@@ -33,6 +33,7 @@ const tokenize = (sc: string): Token[] => {
       else if (SYM1.indexOf(c) >= 0) r.push(TName(c));
       else if (c === ';') state = COMMENT;
       else if (/[\_a-z]/i.test(c)) t += c, state = NAME;
+      else if (c === '#') t += c, state = NAME;
       else if(c === '(') b.push(c), p.push(r), r = [];
       else if(c === ')') {
         if(b.length === 0) return err(`unmatched bracket: ${c}`);
@@ -115,6 +116,7 @@ const exprs = (ts: Token[]): Term => {
 const expr = (t: Token): Term => {
   if (t.tag === 'List') return exprs(t.list);
   const x = t.name;
+  if (x[0] === '#') return Hash(x.slice(1));
   if (x === '*') return Type;
   if (x === '_') return Hole;
   return Var(x);
