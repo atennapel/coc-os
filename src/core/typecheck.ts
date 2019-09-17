@@ -5,8 +5,12 @@ import { showCore, Core, CType, CPi } from './terms';
 import { zipWith_, Cons, Nil, index } from '../list';
 import { CEnv, CHashEnv } from './env';
 
-export const cheadeq = (a: CHead, b: CHead): boolean =>
-  a === b || (a.tag === 'CVar' && b.tag === 'CVar' && a.index === b.index);
+const cheadeq = (a: CHead, b: CHead): boolean => {
+  if (a === b) return true;
+  if (a.tag === 'CVar') return b.tag === 'CVar' && a.index === b.index;
+  if (a.tag === 'CHash') return b.tag === 'CHash' && a.hash === b.hash;
+  return false;
+};
 
 export const eqtype = (k: number, a: CVal, b: CVal): void => {
   if (a.tag === 'CType' && b.tag === 'CType') return;

@@ -2,10 +2,11 @@ import { CVal } from './values';
 import { List, toString } from '../list';
 import { showCore } from './terms';
 import { cquote } from './nbe';
+import { Obj } from '../util';
 
 export type CEnv = List<CVal>;
 
 export const showCEnv = (l: CEnv, k: number = 0): string =>
   toString(l, e => showCore(cquote(e, k)));
 
-export type CHashEnv = { [key: string]: { value: CVal, type: CVal } };
+export type CHashEnv = Obj<{value: CVal, type: CVal, opaque?: boolean }>;

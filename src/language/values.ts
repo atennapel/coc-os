@@ -1,10 +1,11 @@
-import { Type, Meta, Var } from './terms';
+import { Type, Meta, Var, Hash } from './terms';
 import { List, Nil } from '../list';
 import { Name } from '../names';
+import { HashStr } from '../hash';
 
 export type Val = VNe | VAbs | VPi | Type;
 
-export type Head = Var | Meta;
+export type Head = Var | Meta | Hash;
 
 export interface VNe {
   readonly tag: 'VNe';
@@ -14,6 +15,7 @@ export interface VNe {
 export const VNe = (head: Head, args: List<Val> = Nil): VNe =>
   ({ tag: 'VNe', head, args });
 export const VVar = (name: Name): VNe => VNe(Var(name), Nil);
+export const VHash = (hash: HashStr): VNe => VNe(Hash(hash), Nil);
 
 export type Clos = (value: Val) => Val;
 

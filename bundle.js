@@ -46,7 +46,7 @@ exports.cevaluate = (t, henv, vs = list_1.Nil) => {
         const r = henv[t.hash];
         if (!r)
             return util_1.impossible(`no val of hash: #${t.hash}`);
-        return r.value;
+        return r.opaque ? values_1.CVNe(t) : r.value;
     }
     return util_1.impossible('cevaluate');
 };
@@ -54,7 +54,7 @@ exports.cquote = (v, k = 0) => {
     if (v.tag === 'CType')
         return v;
     if (v.tag === 'CVNe')
-        return list_1.foldr((x, y) => terms_1.CApp(y, x), terms_1.CVar(k - (v.head.index + 1)), list_1.map(v.args, x => exports.cquote(x, k)));
+        return list_1.foldr((x, y) => terms_1.CApp(y, x), v.head.tag === 'CHash' ? v.head : terms_1.CVar(k - (v.head.index + 1)), list_1.map(v.args, x => exports.cquote(x, k)));
     if (v.tag === 'CVAbs')
         return terms_1.CAbs(exports.cquote(v.type, k), exports.cquote(v.body(values_1.CVVar(k)), k + 1));
     if (v.tag === 'CVPi')
@@ -100,7 +100,15 @@ const util_1 = require("../util");
 const nbe_1 = require("./nbe");
 const terms_1 = require("./terms");
 const list_1 = require("../list");
-exports.cheadeq = (a, b) => a === b || (a.tag === 'CVar' && b.tag === 'CVar' && a.index === b.index);
+const cheadeq = (a, b) => {
+    if (a === b)
+        return true;
+    if (a.tag === 'CVar')
+        return b.tag === 'CVar' && a.index === b.index;
+    if (a.tag === 'CHash')
+        return b.tag === 'CHash' && a.hash === b.hash;
+    return false;
+};
 exports.eqtype = (k, a, b) => {
     if (a.tag === 'CType' && b.tag === 'CType')
         return;
@@ -122,7 +130,7 @@ exports.eqtype = (k, a, b) => {
         const v = values_1.CVVar(k);
         return exports.eqtype(k + 1, a.body(v), a.body(v));
     }
-    if (a.tag === 'CVNe' && b.tag === 'CVNe' && exports.cheadeq(a.head, b.head))
+    if (a.tag === 'CVNe' && b.tag === 'CVNe' && cheadeq(a.head, b.head))
         return list_1.zipWith_((x, y) => exports.eqtype(k, x, y), a.args, b.args);
     return util_1.terr(`typecheck failed: ${terms_1.showCore(nbe_1.cquote(b, k))} ~ ${terms_1.showCore(nbe_1.cquote(a, k))}`);
 };
@@ -190,6 +198,7 @@ const terms_1 = require("./terms");
 const list_1 = require("../list");
 exports.CVNe = (head, args = list_1.Nil) => ({ tag: 'CVNe', head, args });
 exports.CVVar = (index) => exports.CVNe(terms_1.CVar(index), list_1.Nil);
+exports.CVHash = (hash) => exports.CVNe(terms_1.CHash(hash), list_1.Nil);
 exports.CVAbs = (type, body) => ({ tag: 'CVAbs', type, body });
 exports.CVPi = (type, body) => ({ tag: 'CVPi', type, body });
 
@@ -391,7 +400,7 @@ exports.evaluate = (t, henv, vs = list_1.Nil) => {
         const r = henv[t.hash];
         if (!r)
             return util_1.impossible(`no val of hash: #${t.hash}`);
-        return r.value;
+        return r.opaque ? values_1.VNe(t) : r.value;
     }
     return util_1.impossible('evaluate');
 };
@@ -717,6 +726,8 @@ const eqHead = (a, b) => {
         return true;
     if (a.tag === 'Var')
         return b.tag === 'Var' && a.name === b.name;
+    if (a.tag === 'Hash')
+        return b.tag === 'Hash' && a.hash === b.hash;
     return false;
 };
 exports.unify = (vs, a_, b_) => {
@@ -796,6 +807,7 @@ const terms_1 = require("./terms");
 const list_1 = require("../list");
 exports.VNe = (head, args = list_1.Nil) => ({ tag: 'VNe', head, args });
 exports.VVar = (name) => exports.VNe(terms_1.Var(name), list_1.Nil);
+exports.VHash = (hash) => exports.VNe(terms_1.Hash(hash), list_1.Nil);
 exports.VAbs = (name, type, body) => ({ tag: 'VAbs', name, type, body });
 exports.VPi = (name, type, body) => ({ tag: 'VPi', name, type, body });
 
@@ -921,6 +933,7 @@ exports.replenv = {
     Nat: {
         value: terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.fun(v('t'), v('t')), v('t'))),
         type: terms_1.Type,
+        opaque: true,
     },
     z: {
         value: terms_1.absty([['t', terms_1.Type], ['z', v('t')], ['s', terms_1.fun(v('t'), v('t'))]], v('z')),
@@ -930,14 +943,20 @@ exports.replenv = {
         value: terms_1.absty([['n', terms_1.Hash('Nat')], ['t', terms_1.Type], ['z', v('t')], ['s', terms_1.fun(v('t'), v('t'))]], terms_1.app(v('s'), terms_1.app(v('n'), v('t'), v('z'), v('s')))),
         type: terms_1.fun(terms_1.Hash('Nat'), terms_1.Hash('Nat')),
     },
+    iterNat: {
+        value: terms_1.absty([['x', terms_1.Hash('Nat')]], v('x')),
+        type: terms_1.fun(terms_1.Hash('Nat'), terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.fun(v('t'), v('t')), v('t')))),
+    },
 };
-exports.henv = util_1.mapobj(exports.replenv, ({ value, type }, e) => ({
+exports.henv = util_1.mapobj(exports.replenv, ({ value, type, opaque }, e) => ({
     value: nbe_1.evaluate(value, e),
     type: nbe_1.evaluate(type, e),
+    opaque,
 }));
-exports.chenv = util_1.mapobj(exports.replenv, ({ value, type }, e) => ({
+exports.chenv = util_1.mapobj(exports.replenv, ({ value, type, opaque }, e) => ({
     value: nbe_2.cevaluate(translation_1.toCore(value), e),
     type: nbe_2.cevaluate(translation_1.toCore(type), e),
+    opaque,
 }));
 exports.initREPL = () => { };
 exports.runREPL = (_s, _cb) => {

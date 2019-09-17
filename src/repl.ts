@@ -12,10 +12,11 @@ import { HashEnv } from './language/env';
 import { mapobj } from './util';
 
 const v = Var;
-export const replenv: { [key: string]: { value: Term, type: Term } } = {
+export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boolean } } = {
   Nat: {
     value: Pi('t', Type, fun(v('t'), fun(v('t'), v('t')), v('t'))),
     type: Type,
+    opaque: true,
   },
   z: {
     value: absty([['t', Type], ['z', v('t')], ['s', fun(v('t'), v('t'))]], v('z')),
@@ -28,14 +29,44 @@ export const replenv: { [key: string]: { value: Term, type: Term } } = {
     ),
     type: fun(Hash('Nat'), Hash('Nat')),
   },
+  unfoldNat: {
+    value: absty([['x', Hash('Nat')]], v('x')),
+    type: fun(Hash('Nat'), Pi('t', Type, fun(v('t'), fun(v('t'), v('t')), v('t')))),
+  },
+
+  List: {
+    value: absty([['t', Type]], Pi('r', Type, fun(v('r'), fun(v('t'), v('r'), v('r')), v('r')))),
+    type: fun(Type, Type),
+    opaque: true,
+  },
+  Nil: {
+    value: absty([['t', Type], ['r', Type], ['n', v('r')], ['c', fun(v('t'), v('r'), v('r'))]], v('n')),
+    type: Pi('t', Type, app(Hash('List'), v('t'))),
+  },
+  Cons: {
+    value: absty([
+      ['t', Type],
+      ['x', v('t')],
+      ['xs', app(Hash('List'), v('t'))],
+      ['r', Type], ['n', v('r')], ['c', fun(v('t'), v('r'), v('r'))]],
+      app(v('c'), v('x'), app(v('xs'), v('r'), v('n'), v('c'))),
+    ),
+    type: Pi('t', Type, fun(v('t'), app(Hash('List'), v('t')), app(Hash('List'), v('t')))),
+  },
+  unfoldList: {
+    value: absty([['t', Type], ['l', app(Hash('List'), v('t'))]], v('l')),
+    type: Pi('t', Type, fun(app(Hash('List'), v('t')), Pi('r', Type, fun(v('r'), fun(v('t'), v('r'), v('r')), v('r'))))),
+  },
 };
-export const henv: HashEnv = mapobj(replenv, ({ value, type }, e) => ({
+export const henv: HashEnv = mapobj(replenv, ({ value, type, opaque }, e) => ({
   value: evaluate(value, e),
   type: evaluate(type, e),
+  opaque,
 }));
-export const chenv: CHashEnv = mapobj(replenv, ({ value, type }, e) => ({
+export const chenv: CHashEnv = mapobj(replenv, ({ value, type, opaque }, e) => ({
   value: cevaluate(toCore(value), e),
   type: cevaluate(toCore(type), e),
+  opaque,
 }));
 
 export const initREPL = () => {};

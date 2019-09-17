@@ -16,6 +16,7 @@ const checkSpine = (sp: List<Val>): List<Name> =>
 
 const checkSolution = (m: Meta, sp: List<Name>, t: Term): void => {
   if (t.tag === 'Type') return;
+  if (t.tag === 'Hash') return;
   if (t.tag === 'Var') {
     if (!contains(sp, t.name)) return terr(`scope error: ${t.name}`);
     return;
@@ -57,6 +58,7 @@ const solve = (vs: EnvV, m: Meta, sp_: List<Val>, rhs_: Val): void => {
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
   if (a.tag === 'Var') return b.tag === 'Var' && a.name === b.name;
+  if (a.tag === 'Hash') return b.tag === 'Hash' && a.hash === b.hash;
   return false;
 };
 

@@ -37,8 +37,8 @@ export const evaluate = (t: Term, henv: HashEnv, vs: EnvV = Nil): Val => {
   if (t.tag === 'Meta') return t.term || VNe(t);
   if (t.tag === 'Hash') {
     const r = henv[t.hash];
-    if (!r) return impossible(`no val of hash: #${t.hash}`);
-    return r.value;
+    if (!r) return VNe(t);
+    return r.opaque ? VNe(t) : r.value;
   }
   return impossible('evaluate');
 };

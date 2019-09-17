@@ -26,8 +26,8 @@ export const cevaluate = (t: Core, henv: CHashEnv, vs: CEnv = Nil): CVal => {
     return cevaluate(t.body, henv, Cons(cevaluate(t.value, henv, vs), vs));
   if (t.tag === 'CHash') {
     const r = henv[t.hash];
-    if (!r) return impossible(`no val of hash: #${t.hash}`);
-    return r.value;
+    if (!r) return CVNe(t);
+    return r.opaque ? CVNe(t) : r.value;
   }
   return impossible('cevaluate');
 };
@@ -37,7 +37,7 @@ export const cquote = (v: CVal, k: number = 0): Core => {
   if (v.tag === 'CVNe')
     return foldr(
       (x, y) => CApp(y, x),
-      CVar(k - (v.head.index + 1)) as Core,
+      v.head.tag === 'CHash' ? v.head : CVar(k - (v.head.index + 1)) as Core,
       map(v.args, x => cquote(x, k))
     );
   if (v.tag === 'CVAbs')

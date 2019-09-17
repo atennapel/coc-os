@@ -9,9 +9,9 @@ Start repl:
 - Or open `index.html`
 
 TODO:
-- hashes in domain?
-- constants
 - (de)serialization of core terms
 - hashbases and namebases
+- fold/unfold opaque definitions correctly
+- constants
 - implicit functions
 - erasure

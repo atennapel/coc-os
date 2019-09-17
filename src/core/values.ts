@@ -1,10 +1,11 @@
-import { CVar, CType } from './terms';
+import { CVar, CType, CHash } from './terms';
 import { List, Nil } from '../list';
 import { Ix } from '../names';
+import { HashStr } from '../hash';
 
 export type CVal = CVNe | CVAbs | CVPi | CType;
 
-export type CHead = CVar;
+export type CHead = CVar | CHash;
 
 export interface CVNe {
   readonly tag: 'CVNe';
@@ -14,6 +15,7 @@ export interface CVNe {
 export const CVNe = (head: CHead, args: List<CVal> = Nil): CVNe =>
   ({ tag: 'CVNe', head, args });
 export const CVVar = (index: Ix): CVNe => CVNe(CVar(index), Nil);
+export const CVHash = (hash: HashStr): CVNe => CVNe(CHash(hash), Nil);
 
 export type CClos = (value: CVal) => CVal;
 
