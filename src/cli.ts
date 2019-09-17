@@ -8,6 +8,8 @@ import { toCore } from './language/translation';
 import { typecheck } from './core/typecheck';
 import { showCore } from './core/terms';
 import { cnormalize } from './core/nbe';
+import { serializeCore, deserializeCore } from './core/serialize';
+import { hashBytes } from './hash';
 
 if (process.argv[2]) {
   const sc = require('fs').readFileSync(process.argv[2], 'utf8');
@@ -21,6 +23,11 @@ if (process.argv[2]) {
   const cty = typecheck(chenv, core);
   console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
   console.log(`conf: ${showCore(cnormalize(core, chenv))}`);
+  const ser = serializeCore(core);
+  const hsh = hashBytes(ser);
+  console.log(`serz: ${ser.toString('hex')}`);
+  console.log(`hash: ${hsh.toString('hex')}`);
+  console.log(`desz: ${showCore(deserializeCore(ser))}`);
   process.exit();
 }
 

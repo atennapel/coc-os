@@ -10,6 +10,8 @@ import { cnormalize, cevaluate } from './core/nbe';
 import { CHashEnv } from './core/env';
 import { HashEnv } from './language/env';
 import { mapobj } from './util';
+import { serializeCore, deserializeCore } from './core/serialize';
+import { hashBytes } from './hash';
 
 const v = Var;
 export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boolean } } = {
@@ -89,7 +91,12 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
     const cnf = cnormalize(core, chenv);
     console.log(`conf: ${showCore(cnf)}`);
-    return _cb(`${showTerm(term)} : ${showTerm(type)} ~>\n${showTerm(nf)} ~>\n${showCore(core)} : ${showCore(cty)} ~>\n${showCore(cnf)}`);
+    const ser = serializeCore(core);
+    const hsh = hashBytes(ser);
+    console.log(`serz: ${ser.toString('hex')}`);
+    console.log(`hash: ${hsh.toString('hex')}`);
+    console.log(`desz: ${showCore(deserializeCore(ser))}`);
+    return _cb(`${showTerm(term)} : ${showTerm(type)} ~>\n${showTerm(nf)} ~>\n${showCore(core)} : ${showCore(cty)} ~>\n${showCore(cnf)} ~>\n${ser.toString('hex')} ~>\n${hsh.toString('hex')}`);
   } catch (err) {
     return _cb('' + err, true);
   }
