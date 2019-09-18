@@ -16,7 +16,7 @@ export const force = (v: Val): Val => {
   return v;
 };
 
-export const evaluate = (t: Term, henv: HashEnv, vs: EnvV = Nil): Val => {
+export const evaluate = (t: Term, henv: HashEnv, vs: EnvV = Nil, ignoreOpaque: boolean = false): Val => {
   if (t.tag === 'Type') return t;
   if (t.tag === 'Var') {
     const v = lookupV(vs, t.name);
@@ -24,21 +24,21 @@ export const evaluate = (t: Term, henv: HashEnv, vs: EnvV = Nil): Val => {
       impossible('evaluate var');
   }
   if (t.tag === 'App')
-    return vapp(evaluate(t.left, henv, vs), evaluate(t.right, henv, vs));
+    return vapp(evaluate(t.left, henv, vs, ignoreOpaque), evaluate(t.right, henv, vs, ignoreOpaque));
   if (t.tag === 'Abs')
   // TODO: fix when meta solving considers types
-    return VAbs(t.name, t.type ? evaluate(t.type, henv, vs) : Type,
-      v => evaluate(t.body, henv, Cons(DefV(t.name, v), vs)));
+    return VAbs(t.name, t.type ? evaluate(t.type, henv, vs, ignoreOpaque) : Type,
+      v => evaluate(t.body, henv, Cons(DefV(t.name, v), vs), ignoreOpaque));
   if (t.tag === 'Pi')
-    return VPi(t.name, evaluate(t.type, henv, vs),
-      v => evaluate(t.body, henv, Cons(DefV(t.name, v), vs)));
+    return VPi(t.name, evaluate(t.type, henv, vs, ignoreOpaque),
+      v => evaluate(t.body, henv, Cons(DefV(t.name, v), vs), ignoreOpaque));
   if (t.tag === 'Let')
-    return evaluate(t.body, henv, Cons(DefV(t.name, evaluate(t.value, henv, vs)), vs));
+    return evaluate(t.body, henv, Cons(DefV(t.name, evaluate(t.value, henv, vs, ignoreOpaque)), vs), ignoreOpaque);
   if (t.tag === 'Meta') return t.term || VNe(t);
   if (t.tag === 'Hash') {
     const r = henv[t.hash];
     if (!r) return VNe(t);
-    return r.opaque ? VNe(t) : r.value;
+    return !ignoreOpaque && r.opaque ? VNe(t) : r.value;
   }
   return impossible('evaluate');
 };
@@ -59,5 +59,5 @@ export const quote = (v_: Val, vs: EnvV = Nil): Term => {
   return impossible('quote');
 };
 
-export const normalize = (t: Term, henv: HashEnv,  vs: EnvV = Nil): Term =>
-  quote(evaluate(t, henv, vs), vs);
+export const normalize = (t: Term, henv: HashEnv, ignoreOpaque: boolean = false, vs: EnvV = Nil): Term =>
+  quote(evaluate(t, henv, vs, ignoreOpaque), vs);

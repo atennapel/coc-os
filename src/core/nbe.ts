@@ -10,24 +10,24 @@ export const cvapp = (a: CVal, b: CVal): CVal => {
   return impossible('cvapp');
 };
 
-export const cevaluate = (t: Core, henv: CHashEnv, vs: CEnv = Nil): CVal => {
+export const cevaluate = (t: Core, henv: CHashEnv, vs: CEnv = Nil, ignoreOpaque: boolean = false): CVal => {
   if (t.tag === 'CType') return t;
   if (t.tag === 'CVar') {
     const v = index(vs, t.index);
     return v || impossible('evaluate cvar');
   }
   if (t.tag === 'CApp')
-    return cvapp(cevaluate(t.left, henv, vs), cevaluate(t.right, henv, vs));
+    return cvapp(cevaluate(t.left, henv, vs, ignoreOpaque), cevaluate(t.right, henv, vs, ignoreOpaque));
   if (t.tag === 'CAbs')
-    return CVAbs(cevaluate(t.type, henv, vs), v => cevaluate(t.body, henv, Cons(v, vs)));
+    return CVAbs(cevaluate(t.type, henv, vs, ignoreOpaque), v => cevaluate(t.body, henv, Cons(v, vs), ignoreOpaque));
   if (t.tag === 'CPi')
-    return CVPi(cevaluate(t.type, henv, vs), v => cevaluate(t.body, henv, Cons(v, vs)));
+    return CVPi(cevaluate(t.type, henv, vs, ignoreOpaque), v => cevaluate(t.body, henv, Cons(v, vs), ignoreOpaque));
   if (t.tag === 'CLet')
-    return cevaluate(t.body, henv, Cons(cevaluate(t.value, henv, vs), vs));
+    return cevaluate(t.body, henv, Cons(cevaluate(t.value, henv, vs, ignoreOpaque), vs), ignoreOpaque);
   if (t.tag === 'CHash') {
     const r = henv[t.hash];
     if (!r) return CVNe(t);
-    return r.opaque ? CVNe(t) : r.value;
+    return !ignoreOpaque && r.opaque ? CVNe(t) : r.value;
   }
   return impossible('cevaluate');
 };
@@ -47,5 +47,5 @@ export const cquote = (v: CVal, k: number = 0): Core => {
   return impossible('cquote');
 };
 
-export const cnormalize = (t: Core, henv: CHashEnv, vs: CEnv = Nil, k: number = 0): Core =>
-  cquote(cevaluate(t, henv, vs), k);
+export const cnormalize = (t: Core, henv: CHashEnv, ignoreOpaque: boolean = false, vs: CEnv = Nil, k: number = 0): Core =>
+  cquote(cevaluate(t, henv, vs, ignoreOpaque), k);

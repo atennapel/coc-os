@@ -18,11 +18,13 @@ if (process.argv[2]) {
   const [term, type] = elaborate(henv, tm);
   console.log(`term: ${showTerm(term)}`);
   console.log(`type: ${showTerm(type)}`);
-  console.log(`nmfm: ${showTerm(normalize(term, henv))}`);
+  console.log(`nmfo: ${showTerm(normalize(term, henv, false))}`);
+  console.log(`nmfm: ${showTerm(normalize(term, henv, true))}`);
   const core = toCore(term);
   const cty = typecheck(chenv, core);
   console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
-  console.log(`conf: ${showCore(cnormalize(core, chenv))}`);
+  console.log(`cono: ${showCore(cnormalize(core, chenv, false))}`);
+  console.log(`conf: ${showCore(cnormalize(core, chenv, true))}`);
   const ser = serializeCore(core);
   const hsh = hashBytes(ser);
   console.log(`serz: ${ser.toString('hex')}`);

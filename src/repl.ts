@@ -15,6 +15,27 @@ import { hashBytes } from './hash';
 
 const v = Var;
 export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boolean } } = {
+  IO: {
+    value: Hash('IO'),
+    type: Type,
+    opaque: true,
+  },
+  returnIO: {
+    value: Hash('returnIO'),
+    type: Pi('t', Type, fun(v('t'), app(Hash('IO'), v('t')))),
+    opaque: true,
+  },
+  bindIO: {
+    value: Hash('bindIO'),
+    type: Pi('a', Type, Pi('b', Type, fun(fun(v('a'), app(Hash('IO'), v('b'))), app(Hash('IO'), v('a')), app(Hash('IO'), v('b'))))),
+    opaque: true,
+  },
+  beepIO: {
+    value: Hash('beepIO'),
+    type: app(Hash('IO'), fun(Type, Type)),
+    opaque: true,
+  },
+
   Nat: {
     value: Pi('t', Type, fun(v('t'), fun(v('t'), v('t')), v('t'))),
     type: Type,
@@ -23,6 +44,7 @@ export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boole
   z: {
     value: absty([['t', Type], ['z', v('t')], ['s', fun(v('t'), v('t'))]], v('z')),
     type: Hash('Nat'),
+    opaque: true,
   },
   s: {
     value: absty(
@@ -30,6 +52,7 @@ export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boole
       app(v('s'), app(v('n'), v('t'), v('z'), v('s'))),
     ),
     type: fun(Hash('Nat'), Hash('Nat')),
+    opaque: true,
   },
   unfoldNat: {
     value: absty([['x', Hash('Nat')]], v('x')),
@@ -44,6 +67,7 @@ export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boole
   Nil: {
     value: absty([['t', Type], ['r', Type], ['n', v('r')], ['c', fun(v('t'), v('r'), v('r'))]], v('n')),
     type: Pi('t', Type, app(Hash('List'), v('t'))),
+    opaque: true,
   },
   Cons: {
     value: absty([
@@ -54,6 +78,7 @@ export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boole
       app(v('c'), v('x'), app(v('xs'), v('r'), v('n'), v('c'))),
     ),
     type: Pi('t', Type, fun(v('t'), app(Hash('List'), v('t')), app(Hash('List'), v('t')))),
+    opaque: true,
   },
   unfoldList: {
     value: absty([['t', Type], ['l', app(Hash('List'), v('t'))]], v('l')),
@@ -84,12 +109,14 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     const [term, type] = elaborate(henv, tm);
     console.log(`term: ${showTerm(term)}`);
     console.log(`type: ${showTerm(type)}`);
-    const nf = normalize(term, henv);
+    console.log(`nmfo: ${showTerm(normalize(term, henv, false))}`);
+    const nf = normalize(term, henv, true);
     console.log(`nmfm: ${showTerm(nf)}`);
     const core = toCore(term);
     const cty = typecheck(chenv, core);
     console.log(`core: ${showCore(core)} : ${showCore(cty)}`);
-    const cnf = cnormalize(core, chenv);
+    console.log(`cono: ${showCore(cnormalize(core, chenv, false))}`);
+    const cnf = cnormalize(core, chenv, true);
     console.log(`conf: ${showCore(cnf)}`);
     const ser = serializeCore(core);
     const hsh = hashBytes(ser);

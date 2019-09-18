@@ -27,7 +27,7 @@ exports.cvapp = (a, b) => {
         return values_1.CVNe(a.head, list_1.Cons(b, a.args));
     return util_1.impossible('cvapp');
 };
-exports.cevaluate = (t, henv, vs = list_1.Nil) => {
+exports.cevaluate = (t, henv, vs = list_1.Nil, ignoreOpaque = false) => {
     if (t.tag === 'CType')
         return t;
     if (t.tag === 'CVar') {
@@ -35,18 +35,18 @@ exports.cevaluate = (t, henv, vs = list_1.Nil) => {
         return v || util_1.impossible('evaluate cvar');
     }
     if (t.tag === 'CApp')
-        return exports.cvapp(exports.cevaluate(t.left, henv, vs), exports.cevaluate(t.right, henv, vs));
+        return exports.cvapp(exports.cevaluate(t.left, henv, vs, ignoreOpaque), exports.cevaluate(t.right, henv, vs, ignoreOpaque));
     if (t.tag === 'CAbs')
-        return values_1.CVAbs(exports.cevaluate(t.type, henv, vs), v => exports.cevaluate(t.body, henv, list_1.Cons(v, vs)));
+        return values_1.CVAbs(exports.cevaluate(t.type, henv, vs, ignoreOpaque), v => exports.cevaluate(t.body, henv, list_1.Cons(v, vs), ignoreOpaque));
     if (t.tag === 'CPi')
-        return values_1.CVPi(exports.cevaluate(t.type, henv, vs), v => exports.cevaluate(t.body, henv, list_1.Cons(v, vs)));
+        return values_1.CVPi(exports.cevaluate(t.type, henv, vs, ignoreOpaque), v => exports.cevaluate(t.body, henv, list_1.Cons(v, vs), ignoreOpaque));
     if (t.tag === 'CLet')
-        return exports.cevaluate(t.body, henv, list_1.Cons(exports.cevaluate(t.value, henv, vs), vs));
+        return exports.cevaluate(t.body, henv, list_1.Cons(exports.cevaluate(t.value, henv, vs, ignoreOpaque), vs), ignoreOpaque);
     if (t.tag === 'CHash') {
         const r = henv[t.hash];
         if (!r)
             return values_1.CVNe(t);
-        return r.opaque ? values_1.CVNe(t) : r.value;
+        return !ignoreOpaque && r.opaque ? values_1.CVNe(t) : r.value;
     }
     return util_1.impossible('cevaluate');
 };
@@ -61,7 +61,7 @@ exports.cquote = (v, k = 0) => {
         return terms_1.CPi(exports.cquote(v.type, k), exports.cquote(v.body(values_1.CVVar(k)), k + 1));
     return util_1.impossible('cquote');
 };
-exports.cnormalize = (t, henv, vs = list_1.Nil, k = 0) => exports.cquote(exports.cevaluate(t, henv, vs), k);
+exports.cnormalize = (t, henv, ignoreOpaque = false, vs = list_1.Nil, k = 0) => exports.cquote(exports.cevaluate(t, henv, vs, ignoreOpaque), k);
 
 },{"../list":16,"../util":19,"./terms":4,"./values":6}],3:[function(require,module,exports){
 (function (Buffer){
@@ -523,7 +523,7 @@ exports.force = (v) => {
         return exports.force(list_1.foldr((x, y) => exports.vapp(y, x), v.head.term, v.args));
     return v;
 };
-exports.evaluate = (t, henv, vs = list_1.Nil) => {
+exports.evaluate = (t, henv, vs = list_1.Nil, ignoreOpaque = false) => {
     if (t.tag === 'Type')
         return t;
     if (t.tag === 'Var') {
@@ -532,21 +532,21 @@ exports.evaluate = (t, henv, vs = list_1.Nil) => {
             util_1.impossible('evaluate var');
     }
     if (t.tag === 'App')
-        return exports.vapp(exports.evaluate(t.left, henv, vs), exports.evaluate(t.right, henv, vs));
+        return exports.vapp(exports.evaluate(t.left, henv, vs, ignoreOpaque), exports.evaluate(t.right, henv, vs, ignoreOpaque));
     if (t.tag === 'Abs')
         // TODO: fix when meta solving considers types
-        return values_1.VAbs(t.name, t.type ? exports.evaluate(t.type, henv, vs) : terms_1.Type, v => exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, v), vs)));
+        return values_1.VAbs(t.name, t.type ? exports.evaluate(t.type, henv, vs, ignoreOpaque) : terms_1.Type, v => exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, v), vs), ignoreOpaque));
     if (t.tag === 'Pi')
-        return values_1.VPi(t.name, exports.evaluate(t.type, henv, vs), v => exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, v), vs)));
+        return values_1.VPi(t.name, exports.evaluate(t.type, henv, vs, ignoreOpaque), v => exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, v), vs), ignoreOpaque));
     if (t.tag === 'Let')
-        return exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, exports.evaluate(t.value, henv, vs)), vs));
+        return exports.evaluate(t.body, henv, list_1.Cons(env_1.DefV(t.name, exports.evaluate(t.value, henv, vs, ignoreOpaque)), vs), ignoreOpaque);
     if (t.tag === 'Meta')
         return t.term || values_1.VNe(t);
     if (t.tag === 'Hash') {
         const r = henv[t.hash];
         if (!r)
             return values_1.VNe(t);
-        return r.opaque ? values_1.VNe(t) : r.value;
+        return !ignoreOpaque && r.opaque ? values_1.VNe(t) : r.value;
     }
     return util_1.impossible('evaluate');
 };
@@ -566,7 +566,7 @@ exports.quote = (v_, vs = list_1.Nil) => {
     }
     return util_1.impossible('quote');
 };
-exports.normalize = (t, henv, vs = list_1.Nil) => exports.quote(exports.evaluate(t, henv, vs), vs);
+exports.normalize = (t, henv, ignoreOpaque = false, vs = list_1.Nil) => exports.quote(exports.evaluate(t, henv, vs, ignoreOpaque), vs);
 
 },{"../list":16,"../util":19,"./env":9,"./terms":12,"./values":15}],11:[function(require,module,exports){
 "use strict";
@@ -1080,6 +1080,26 @@ const serialize_1 = require("./core/serialize");
 const hash_1 = require("./hash");
 const v = terms_1.Var;
 exports.replenv = {
+    IO: {
+        value: terms_1.Hash('IO'),
+        type: terms_1.Type,
+        opaque: true,
+    },
+    returnIO: {
+        value: terms_1.Hash('returnIO'),
+        type: terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.app(terms_1.Hash('IO'), v('t')))),
+        opaque: true,
+    },
+    bindIO: {
+        value: terms_1.Hash('bindIO'),
+        type: terms_1.Pi('a', terms_1.Type, terms_1.Pi('b', terms_1.Type, terms_1.fun(terms_1.fun(v('a'), terms_1.app(terms_1.Hash('IO'), v('b'))), terms_1.app(terms_1.Hash('IO'), v('a')), terms_1.app(terms_1.Hash('IO'), v('b'))))),
+        opaque: true,
+    },
+    beepIO: {
+        value: terms_1.Hash('beepIO'),
+        type: terms_1.app(terms_1.Hash('IO'), terms_1.fun(terms_1.Type, terms_1.Type)),
+        opaque: true,
+    },
     Nat: {
         value: terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.fun(v('t'), v('t')), v('t'))),
         type: terms_1.Type,
@@ -1088,10 +1108,12 @@ exports.replenv = {
     z: {
         value: terms_1.absty([['t', terms_1.Type], ['z', v('t')], ['s', terms_1.fun(v('t'), v('t'))]], v('z')),
         type: terms_1.Hash('Nat'),
+        opaque: true,
     },
     s: {
         value: terms_1.absty([['n', terms_1.Hash('Nat')], ['t', terms_1.Type], ['z', v('t')], ['s', terms_1.fun(v('t'), v('t'))]], terms_1.app(v('s'), terms_1.app(v('n'), v('t'), v('z'), v('s')))),
         type: terms_1.fun(terms_1.Hash('Nat'), terms_1.Hash('Nat')),
+        opaque: true,
     },
     unfoldNat: {
         value: terms_1.absty([['x', terms_1.Hash('Nat')]], v('x')),
@@ -1105,6 +1127,7 @@ exports.replenv = {
     Nil: {
         value: terms_1.absty([['t', terms_1.Type], ['r', terms_1.Type], ['n', v('r')], ['c', terms_1.fun(v('t'), v('r'), v('r'))]], v('n')),
         type: terms_1.Pi('t', terms_1.Type, terms_1.app(terms_1.Hash('List'), v('t'))),
+        opaque: true,
     },
     Cons: {
         value: terms_1.absty([
@@ -1114,6 +1137,7 @@ exports.replenv = {
             ['r', terms_1.Type], ['n', v('r')], ['c', terms_1.fun(v('t'), v('r'), v('r'))]
         ], terms_1.app(v('c'), v('x'), terms_1.app(v('xs'), v('r'), v('n'), v('c')))),
         type: terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.app(terms_1.Hash('List'), v('t')), terms_1.app(terms_1.Hash('List'), v('t')))),
+        opaque: true,
     },
     unfoldList: {
         value: terms_1.absty([['t', terms_1.Type], ['l', terms_1.app(terms_1.Hash('List'), v('t'))]], v('l')),
@@ -1142,12 +1166,14 @@ exports.runREPL = (_s, _cb) => {
         const [term, type] = elaborate_1.elaborate(exports.henv, tm);
         console.log(`term: ${terms_1.showTerm(term)}`);
         console.log(`type: ${terms_1.showTerm(type)}`);
-        const nf = nbe_1.normalize(term, exports.henv);
+        console.log(`nmfo: ${terms_1.showTerm(nbe_1.normalize(term, exports.henv, false))}`);
+        const nf = nbe_1.normalize(term, exports.henv, true);
         console.log(`nmfm: ${terms_1.showTerm(nf)}`);
         const core = translation_1.toCore(term);
         const cty = typecheck_1.typecheck(exports.chenv, core);
         console.log(`core: ${terms_2.showCore(core)} : ${terms_2.showCore(cty)}`);
-        const cnf = nbe_2.cnormalize(core, exports.chenv);
+        console.log(`cono: ${terms_2.showCore(nbe_2.cnormalize(core, exports.chenv, false))}`);
+        const cnf = nbe_2.cnormalize(core, exports.chenv, true);
         console.log(`conf: ${terms_2.showCore(cnf)}`);
         const ser = serialize_1.serializeCore(core);
         const hsh = hash_1.hashBytes(ser);

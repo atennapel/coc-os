@@ -9,7 +9,8 @@ Start repl:
 - Or open `index.html`
 
 TODO:
-- (de)serialization of core terms
+- pretty printing
+- (de)serialization of opaque core terms
 - hashbases and namebases
 - fold/unfold opaque definitions correctly
 - constants
