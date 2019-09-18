@@ -1115,6 +1115,10 @@ exports.replenv = {
         type: terms_1.fun(terms_1.Hash('Nat'), terms_1.Hash('Nat')),
         opaque: true,
     },
+    foldNat: {
+        value: terms_1.absty([['x', terms_1.Hash('Nat')]], v('x')),
+        type: terms_1.fun(terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.fun(v('t'), v('t')), v('t'))), terms_1.Hash('Nat')),
+    },
     unfoldNat: {
         value: terms_1.absty([['x', terms_1.Hash('Nat')]], v('x')),
         type: terms_1.fun(terms_1.Hash('Nat'), terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.fun(v('t'), v('t')), v('t')))),
@@ -1138,6 +1142,10 @@ exports.replenv = {
         ], terms_1.app(v('c'), v('x'), terms_1.app(v('xs'), v('r'), v('n'), v('c')))),
         type: terms_1.Pi('t', terms_1.Type, terms_1.fun(v('t'), terms_1.app(terms_1.Hash('List'), v('t')), terms_1.app(terms_1.Hash('List'), v('t')))),
         opaque: true,
+    },
+    foldList: {
+        value: terms_1.absty([['t', terms_1.Type], ['l', terms_1.app(terms_1.Hash('List'), v('t'))]], v('l')),
+        type: terms_1.Pi('t', terms_1.Type, terms_1.fun(terms_1.Pi('r', terms_1.Type, terms_1.fun(v('r'), terms_1.fun(v('t'), v('r'), v('r')), v('r'))), terms_1.app(terms_1.Hash('List'), v('t')))),
     },
     unfoldList: {
         value: terms_1.absty([['t', terms_1.Type], ['l', terms_1.app(terms_1.Hash('List'), v('t'))]], v('l')),

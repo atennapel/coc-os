@@ -54,6 +54,10 @@ export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boole
     type: fun(Hash('Nat'), Hash('Nat')),
     opaque: true,
   },
+  foldNat: {
+    value: absty([['x', Hash('Nat')]], v('x')),
+    type: fun(Pi('t', Type, fun(v('t'), fun(v('t'), v('t')), v('t'))), Hash('Nat')),
+  },
   unfoldNat: {
     value: absty([['x', Hash('Nat')]], v('x')),
     type: fun(Hash('Nat'), Pi('t', Type, fun(v('t'), fun(v('t'), v('t')), v('t')))),
@@ -79,6 +83,10 @@ export const replenv: { [key: string]: { value: Term, type: Term, opaque?: boole
     ),
     type: Pi('t', Type, fun(v('t'), app(Hash('List'), v('t')), app(Hash('List'), v('t')))),
     opaque: true,
+  },
+  foldList: {
+    value: absty([['t', Type], ['l', app(Hash('List'), v('t'))]], v('l')),
+    type: Pi('t', Type, fun(Pi('r', Type, fun(v('r'), fun(v('t'), v('r'), v('r')), v('r'))), app(Hash('List'), v('t')))),
   },
   unfoldList: {
     value: absty([['t', Type], ['l', app(Hash('List'), v('t'))]], v('l')),
