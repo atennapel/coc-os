@@ -126,12 +126,18 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     console.log(`cono: ${showCore(cnormalize(core, chenv, false))}`);
     const cnf = cnormalize(core, chenv, true);
     console.log(`conf: ${showCore(cnf)}`);
-    const ser = serializeCore(core);
-    const hsh = hashBytes(ser);
-    console.log(`serz: ${ser.toString('hex')}`);
-    console.log(`hash: ${hsh.toString('hex')}`);
-    console.log(`desz: ${showCore(deserializeCore(ser))}`);
-    return _cb(`${showTerm(term)} : ${showTerm(type)} ~>\n${showTerm(nf)} ~>\n${showCore(core)} : ${showCore(cty)} ~>\n${showCore(cnf)} ~>\n${ser.toString('hex')} ~>\n${hsh.toString('hex')}`);
+    let ser = null;
+    let hsh = null;
+    try {
+      ser = serializeCore(core);
+      hsh = hashBytes(ser);
+      console.log(`serz: ${ser.toString('hex')}`);
+      console.log(`hash: ${hsh.toString('hex')}`);
+      console.log(`desz: ${showCore(deserializeCore(ser))}`);
+    } catch (err) {
+      console.log(`${err}`);
+    }
+    return _cb(`${showTerm(term)} : ${showTerm(type)} ~>\n${showTerm(nf)} ~>\n${showCore(core)} : ${showCore(cty)} ~>\n${showCore(cnf)} ~>\n${ser ? ser.toString('hex') : 'could not serialize'} ~>\n${hsh ? hsh.toString('hex') : 'could not hash'}`);
   } catch (err) {
     return _cb('' + err, true);
   }
