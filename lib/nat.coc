@@ -1,4 +1,0 @@
-let Nat (/t * -> t (-> t t) t)
-lett z Nat (\(t z s) z)
-lett s (-> Nat Nat) (\(n t z s) s (n t z s))
-s (s (s z))

@@ -1,3 +1,0 @@
-let Functor (\: f (-> * *) / a * / b * -> (-> a b) (f a) (f b))
-lett arrFunctor (/ r * Functor (\t -> r t)) (\(r a b f g x) f (g x))
-arrFunctor
