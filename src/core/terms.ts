@@ -46,20 +46,20 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
-    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App', f)} ${
+    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let', f)} ${
       as.map(([im, t], i) =>
         im ? `{${showTerm(t)}}` :
-          `${showTermP(t.tag === 'App' || (t.tag === 'Abs' && i < as.length - 1) || (t.tag === 'Pi' && i < as.length - 1), t)}`).join(' ')}`;
+          `${showTermP(t.tag === 'App' || (t.tag === 'Let' && i < as.length - 1) || (t.tag === 'Abs' && i < as.length - 1) || (t.tag === 'Pi' && i < as.length - 1), t)}`).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
-    return `\\${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App', t)).join(' ')}. ${showTerm(b)}`;
+    return `\\${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `/${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App', t)).join(' ')}. ${showTerm(b)}`;
+    return `/${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Let')
-    return `let ${showTerm(t.type)} = ${showTerm(t.val)} in ${showTerm(t.body)}`;
+    return `let ${t.impl ? `{${showTerm(t.type)}}` : showTermP(t.type.tag === 'Abs' || t.type.tag === 'Pi' || t.type.tag === 'App' || t.type.tag === 'Let', t)} = ${showTermP(t.val.tag === 'Abs' || t.val.tag === 'Pi' || t.val.tag === 'App' || t.val.tag === 'Let', t.val)} in ${showTerm(t.body)}`;
   return t;
 };
