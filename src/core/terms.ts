@@ -53,13 +53,13 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
-    return `\\${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
+    return `λ${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `/${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
+    return `π${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Let')
-    return `let ${t.impl ? `{${showTerm(t.type)}}` : showTermP(t.type.tag === 'Abs' || t.type.tag === 'Pi' || t.type.tag === 'App' || t.type.tag === 'Let', t)} = ${showTermP(t.val.tag === 'Abs' || t.val.tag === 'Pi' || t.val.tag === 'App' || t.val.tag === 'Let', t.val)} in ${showTerm(t.body)}`;
+    return `let ${t.impl ? `{${showTerm(t.type)}}` : showTermP(t.type.tag === 'Abs' || t.type.tag === 'Pi' || t.type.tag === 'App' || t.type.tag === 'Let', t.type)} = ${showTerm(t.val)} in ${showTerm(t.body)}`;
   return t;
 };
