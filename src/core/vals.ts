@@ -1,6 +1,6 @@
-import { Ix, Term, Abs, Var, App, Pi } from './terms';
+import { Ix, Term, Abs, Var, App, Pi, Type } from './terms';
 import { List, Nil, Cons, index, foldr } from '../list';
-import { impossible } from './util';
+import { impossible } from '../util';
 
 export type Head = Ix;
 export type Clos = (val: Val) => Val;
@@ -12,6 +12,7 @@ export type Val
 
 export type EnvV = List<Val>;
 
+export const VType = Type as Val;
 export const VNe = (head: Head, args: List<[boolean, Val]> = Nil): Val =>
   ({ tag: 'VNe', head, args });
 export const VAbs = (type: Val, impl: boolean, body: Clos): Val =>
