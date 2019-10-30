@@ -12,7 +12,7 @@ import { erase, showETerm } from './erased/terms';
 
 const v = Var;
 
-const term = Abs(Type, true, Abs(Type, true, Abs(v(1), false, Abs(v(1), false, v(1)))));
+const term = Abs(Type, true, Abs(v(0), false, Abs(Type, true, Abs(v(0), false, v(2)))));
 console.log(showTerm(term));
 const norm = normalize(term);
 console.log(showTerm(norm));
