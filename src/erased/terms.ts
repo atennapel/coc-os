@@ -50,7 +50,6 @@ export const shift = (d: Ix, c: Ix, t: Erased): Erased => {
 export const erase = (t: Term): Erased => {
   if (t.tag === 'Type') return EType;
   if (t.tag === 'Pi') return EType;
-  if (t.tag === 'Var') return EVar(t.index);
   if (t.tag === 'App') return t.impl ? erase(t.left) : EApp(erase(t.left), erase(t.right));
   if (t.tag === 'Abs') return t.impl ? shift(-1, 0, erase(t.body)) : EAbs(erase(t.body));
   if (t.tag === 'Let')
