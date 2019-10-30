@@ -1,19 +1,19 @@
 import { normalize } from './core/vals';
 // @ts-ignore
-import { Pi, showTerm, Type, Var, Let, Abs } from './core/terms';
+import { Pi, showTerm, Type, Var, Let, Abs, App } from './core/terms';
 // @ts-ignore
 import { erase, showETerm } from './erased/terms';
 import { typecheck } from './core/typecheck';
 
 /**
  * TODO:
- * - typechecking
+ * - surface language
  */
 
 const v = Var;
 
 try {
-  const term = Abs(Type, true, v(0));
+  const term = App(Abs(Type, true, Abs(v(0), false, v(0))), true, Type);
   console.log(showTerm(term));
   const ty = typecheck(term);
   console.log(showTerm(ty));

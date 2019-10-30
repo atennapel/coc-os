@@ -35,6 +35,22 @@ const check = (tenv: EnvV, venv: EnvV, k: number, tm: Term, ty: Val): void => {
     return terr(`typecheck failed: got ${showTerm(quote(ty2, k))}, expected ${showTerm(quote(ty, k))}`);
 };
 
+const isImplicitUsed = (k: number, t: Term): boolean => {
+  if (t.tag === 'Type') return false;
+  if (t.tag === 'Pi') return false;
+  if (t.tag === 'Var') return t.index === k;
+  if (t.tag === 'App') {
+    if (isImplicitUsed(k, t.left)) return true;
+    return t.impl ? false : isImplicitUsed(k, t.right);
+  }
+  if (t.tag === 'Abs') return isImplicitUsed(k + 1, t.body);
+  if (t.tag === 'Let') {
+    if (!t.impl && isImplicitUsed(k, t.val)) return true;
+    return isImplicitUsed(k + 1, t.body);
+  }
+  return t;
+};
+
 const synth = (tenv: EnvV, venv: EnvV, k: number, tm: Term): Val => {
   if (tm.tag === 'Type') return VType;
   if (tm.tag === 'Var')
@@ -49,14 +65,16 @@ const synth = (tenv: EnvV, venv: EnvV, k: number, tm: Term): Val => {
     return synthapp(tenv, venv, k, ty, tm.impl, tm.right);
   }
   if (tm.tag === 'Abs') {
-    // TODO impl check
+    if (tm.impl && isImplicitUsed(0, tm.body))
+      return terr(`implicit used in ${showTerm(tm)}`);
     check(tenv, venv, k, tm.type, VType);
     const type = evaluate(tm.type, venv);
     const rt = synth(Cons(type, tenv), Cons(VVar(k), venv), k + 1, tm.body);
     return evaluate(Pi(tm.type, tm.impl, quote(rt, k + 1)), venv);
   }
-  if (tm.tag === 'Let') {
-    // TODO impl check
+  if (tm.impl && tm.tag === 'Let') {
+    if (isImplicitUsed(0, tm.body))
+      return terr(`implicit used in ${showTerm(tm)}`);
     check(tenv, venv, k, tm.type, VType);
     const vty = evaluate(tm.type, venv);
     check(tenv, venv, k, tm.val, vty);
