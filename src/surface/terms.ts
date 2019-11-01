@@ -1,18 +1,21 @@
 import * as C from '../core/terms';
+import { Val } from './vals';
 
 export type Name = string;
-
+export type Var = { tag: 'Var', name: Name };
+export type MetaId = number;
+export type Meta = { tag: 'Meta', id: MetaId, val: Val | null };
 export type Term
-  = { tag: 'Var', name: Name }
+  = Var
   | { tag: 'App', left: Term, impl: boolean, right: Term }
   | { tag: 'Abs', name: Name, type: Term | null, impl: boolean, body: Term }
   | { tag: 'Pi', name: Name, type: Term, impl: boolean, body: Term }
   | { tag: 'Let', name: Name, type: Term | null, impl: boolean, val: Term, body: Term }
   | { tag: 'Type' }
   | { tag: 'Hole' }
-  // TODO: meta;
+  | Meta;
 
-export const Var = (name: Name): Term => ({ tag: 'Var', name });
+export const Var = (name: Name): Var => ({ tag: 'Var', name });
 export const App = (left: Term, impl: boolean, right: Term): Term => ({ tag: 'App', left, impl, right });
 export const Abs = (name: Name, type: Term | null, impl: boolean, body: Term): Term =>
   ({ tag: 'Abs', name, type, impl, body });
@@ -22,6 +25,9 @@ export const Let = (name: Name, type: Term | null, impl: boolean, val: Term, bod
   ({ tag: 'Let', name, type, impl, val, body });
 export const Type: Term = C.Type as Term;
 export const Hole: Term = { tag: 'Hole' };
+
+let tmetaId: MetaId = 0;
+export const Meta = (): Meta => ({ tag: 'Meta', id: tmetaId++, val: null });
 
 export const flattenApp = (t: Term): [Term, [boolean, Term][]] => {
   const r: [boolean, Term][] = [];
@@ -54,6 +60,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'Var') return `${t.name}`;
+  if (t.tag === 'Meta') return `?${t.val ? '!' : ''}${t.id}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
     return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let', f)} ${
