@@ -31,7 +31,7 @@ export const vapp = (a: Val, impl: boolean, b: Val): Val => {
 export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return t;
   if (t.tag === 'Var')
-    return index(vs, t.index) || impossible(`eval ${t.index}`)
+    return index(vs, t.index) || impossible(`evaluate ${t.index}`)
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.impl, evaluate(t.right, vs));
   if (t.tag === 'Abs')

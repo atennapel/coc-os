@@ -1,29 +1,46 @@
-import { Var, Meta, Type, Name, Term, App } from './terms';
-import { List, Nil, Cons, foldr } from '../list';
+import { Var, Meta, Type, Name, Term, App, Abs, Pi } from './terms';
+import { List, Nil, Cons, foldr, lookup } from '../list';
 import { impossible } from '../util';
 
 export type Head = Var | Meta;
 export type Clos = (val: Val) => Val;
 export type Val
   = { tag: 'VNe', head: Head, args: List<[boolean, Val]> }
-  | { tag: 'VAbs', type: Val, impl: boolean, body: Clos }
-  | { tag: 'VPi', type: Val, impl: boolean, body: Clos }
+  | { tag: 'VAbs', name: Name, type: Val, impl: boolean, body: Clos }
+  | { tag: 'VPi', name: Name, type: Val, impl: boolean, body: Clos }
   | { tag: 'Type' };
 
-export type EnvV = List<Val>;
+export type EnvV = List<[Name, Val | true]>;
 
 export const VType = Type as Val;
 export const VNe = (head: Head, args: List<[boolean, Val]> = Nil): Val =>
   ({ tag: 'VNe', head, args });
-export const VAbs = (type: Val, impl: boolean, body: Clos): Val =>
-  ({ tag: 'VAbs', type, impl, body});
-export const VPi = (type: Val, impl: boolean, body: Clos): Val =>
-  ({ tag: 'VPi', type, impl, body});
+export const VAbs = (name: Name, type: Val, impl: boolean, body: Clos): Val =>
+  ({ tag: 'VAbs', name, type, impl, body});
+export const VPi = (name: Name, type: Val, impl: boolean, body: Clos): Val =>
+  ({ tag: 'VPi', name, type, impl, body});
 
 export const VVar = (name: Name): Val => VNe(Var(name));
 
+export const nextName = (name: Name): Name => {
+  const ps = name.split('$');
+  if (ps.length === 2) {
+    const a = ps[0];
+    const b = +ps[1];
+    if (!isNaN(b)) return `${a}\$${b + 1}`;
+    return a;
+  }
+  return `${name}\$${0}`;
+};
 export const fresh = (vs: EnvV, name: Name): Name => {
-  
+  while (lookup(vs, name) !== null) name = nextName(name);
+  return name;
+};
+
+export const force = (v: Val): Val => {
+  if (v.tag === 'VNe' && v.head.tag === 'Meta' && v.head.val)
+    return force(foldr(([i, x], y) => vapp(y, i, x), v.head.val, v.args));
+  return v;
 };
 
 export const vapp = (a: Val, impl: boolean, b: Val): Val => {
@@ -34,34 +51,42 @@ export const vapp = (a: Val, impl: boolean, b: Val): Val => {
 
 export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return t;
-  if (t.tag === 'Var')
-    return index(vs, t.index) || impossible(`eval ${t.index}`)
+  if (t.tag === 'Var') {
+    const v = lookup(vs, t.name);
+    return v !== true && v !== null ? v : impossible(`evaluate ${t.name}`)
+  }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.impl, evaluate(t.right, vs));
-  if (t.tag === 'Abs')
-    return VAbs(evaluate(t.type, vs), t.impl, v => evaluate(t.body, Cons(v, vs)));
+  if (t.tag === 'Abs' && t.type)
+    return VAbs(t.name, evaluate(t.type, vs), t.impl, v => evaluate(t.body, Cons([t.name, v], vs)));
   if (t.tag === 'Pi')
-    return VPi(evaluate(t.type, vs), t.impl, v => evaluate(t.body, Cons(v, vs)));
+    return VPi(t.name, evaluate(t.type, vs), t.impl, v => evaluate(t.body, Cons([t.name, v], vs)));
   if (t.tag === 'Let')
-    return evaluate(t.body, Cons(evaluate(t.val), vs));
-  return t;
+    return evaluate(t.body, Cons([t.name, evaluate(t.val)], vs));
+  if (t.tag === 'Meta')
+    return t.val || VNe(t);
+  return impossible('evaluate');
 };
 
-// force first
-export const quote = (v: Val, k: number = 0): Term => {
+export const quote = (v_: Val, vs: EnvV = Nil): Term => {
+  const v = force(v_);
   if (v.tag === 'Type') return v;
   if (v.tag === 'VNe')
     return foldr(
-      ([impl, x], y) => App(y, impl, quote(x, k)),
-      Var(k - (v.head + 1)),
+      ([impl, x], y) => App(y, impl, quote(x, vs)),
+      v.head as Term,
       v.args,
     );
-  if (v.tag === 'VAbs')
-    return Abs(quote(v.type, k), v.impl, quote(v.body(VVar(k)), k + 1));
-  if (v.tag === 'VPi')
-    return Pi(quote(v.type, k), v.impl, quote(v.body(VVar(k)), k + 1));
+  if (v.tag === 'VAbs') {
+    const x = fresh(vs, v.name);
+    return Abs(x, quote(v.type, vs), v.impl, quote(v.body(VVar(x)), Cons([x, true], vs)));
+  }
+  if (v.tag === 'VPi') {
+    const x = fresh(vs, v.name);
+    return Pi(x, quote(v.type, vs), v.impl, quote(v.body(VVar(x)), Cons([x, true], vs)));
+  }
   return v;
 };
 
-export const normalize = (t: Term, vs: EnvV = Nil, k: number = 0): Term =>
-  quote(evaluate(t, vs), k);  
+export const normalize = (t: Term, vs: EnvV = Nil): Term =>
+  quote(evaluate(t, vs), vs); 

@@ -7,7 +7,10 @@ import { typecheck } from './core/typecheck';
 
 /**
  * TODO:
- * - surface language
+ * - unification
+ * - typechecking/elaboration
+ * - convert surface to core
+ * - delaboration/redecoration
  */
 
 const v = Var;
