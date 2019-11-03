@@ -45,6 +45,16 @@ export const each = <T>(l: List<T>, fn: (val: T) => void): void => {
   }
 };
 
+export const length = <T>(l: List<T>): number => {
+  let n = 0;
+  let c = l;
+  while (c.tag === 'Cons') {
+    n++;
+    c = c.tail;
+  }
+  return n;
+};
+
 export const reverse = <T>(l: List<T>): List<T> =>
   listFrom(toArray(l, x => x).reverse());
 
