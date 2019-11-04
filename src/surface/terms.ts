@@ -11,6 +11,7 @@ export type Term
   | { tag: 'Abs', name: Name, type: Term | null, impl: boolean, body: Term }
   | { tag: 'Pi', name: Name, type: Term, impl: boolean, body: Term }
   | { tag: 'Let', name: Name, type: Term | null, impl: boolean, val: Term, body: Term }
+  | { tag: 'Ann', term: Term, type: Term }
   | { tag: 'Type' }
   | { tag: 'Hole' }
   | Meta;
@@ -23,6 +24,8 @@ export const Pi = (name: Name, type: Term, impl: boolean, body: Term): Term =>
   ({ tag: 'Pi', name, type, impl, body });
 export const Let = (name: Name, type: Term | null, impl: boolean, val: Term, body: Term): Term =>
   ({ tag: 'Let', name, type, impl, val, body });
+export const Ann = (term: Term, type: Term): Term =>
+  ({ tag: 'Ann', term, type });
 export const Type: Term = C.Type as Term;
 export const Hole: Term = { tag: 'Hole' };
 
@@ -63,22 +66,24 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Meta') return `?${t.val ? '!' : ''}${t.id}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
-    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let', f)} ${
+    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann', f)} ${
       as.map(([im, t], i) =>
         im ? `{${showTerm(t)}}` :
-          `${showTermP(t.tag === 'App' || (t.tag === 'Let' && i < as.length - 1) || (t.tag === 'Abs' && i < as.length - 1) || (t.tag === 'Pi' && i < as.length - 1), t)}`).join(' ')}`;
+          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || (t.tag === 'Let' && i < as.length - 1) || (t.tag === 'Abs' && i < as.length - 1) || (t.tag === 'Pi' && i < as.length - 1), t)}`).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
-    return `λ${as.map(([x, im, t]) => im ? `{${x}${t ? ` : ${showTerm(t)}` : ''}}` : !t ? x : `(${x} : ${showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)})`).join(' ')}. ${showTerm(b)}`;
+    return `λ${as.map(([x, im, t]) => im ? `{${x}${t ? ` : ${showTermP(t.tag === 'Ann', t)}` : ''}}` : !t ? x : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `π${as.map(([x, im, t]) => im ? `{${x} : ${showTerm(t)}}` : `(${x} : ${showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)})`).join(' ')}. ${showTerm(b)}`;
+    return `π${as.map(([x, im, t]) => im ? `{${x} : ${showTermP(t.tag === 'Ann', t)}}` : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Let')
     return t.type ?
-      `let ${t.impl ? `{${t.name} : ${showTerm(t.type)}}` : `${t.name} : ${showTermP(t.type.tag === 'Abs' || t.type.tag === 'Pi' || t.type.tag === 'App' || t.type.tag === 'Let', t.type)}`} = ${showTerm(t.val)} in ${showTerm(t.body)}` :
-      `let ${t.name} = ${showTerm(t.val)} in ${showTerm(t.body)}`;
+      `let ${t.impl ? `{${t.name} : ${showTermP(t.type.tag === 'Ann', t.type)}}` : `${t.name} : ${showTermP(t.type.tag === 'Ann', t.type)}`} = ${showTerm(t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}` :
+      `let ${t.name} = ${showTerm(t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
+  if (t.tag === 'Ann')
+    return `${showTerm(t.term)} : ${showTerm(t.type)}`;
   return t;
 };
