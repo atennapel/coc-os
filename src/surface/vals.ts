@@ -33,6 +33,7 @@ export const nextName = (name: Name): Name => {
   return `${name}\$${0}`;
 };
 export const fresh = (vs: EnvV, name: Name): Name => {
+  if (name === '_') return '_';
   while (lookup(vs, name) !== null) name = nextName(name);
   return name;
 };

@@ -67,6 +67,14 @@ export const toArray = <T, R>(l: List<T>, fn: (val: T) => R): R[] => {
   }
   return r;
 };
+export const toArrayFilter = <T, R>(l: List<T>, m: (val: T) => R, f: (val: T) => boolean) => {
+  const a = [];
+  while (l.tag === 'Cons') {
+    if (f(l.head)) a.push(m(l.head));
+    l = l.tail;
+  }
+  return a;
+};
 
 export const append = <T>(a: List<T>, b: List<T>): List<T> =>
   a.tag === 'Cons' ? Cons(a.head, append(a.tail, b)) : b;
