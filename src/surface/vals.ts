@@ -54,7 +54,7 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return t;
   if (t.tag === 'Var') {
     const v = lookup(vs, t.name);
-    return v !== true && v !== null ? v : impossible(`evaluate ${t.name}`)
+    return v === true ? VVar(t.name) : v !== null ? v : impossible(`evaluate ${t.name}`)
   }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.impl, evaluate(t.right, vs));
@@ -89,5 +89,6 @@ export const quote = (v_: Val, vs: EnvV = Nil): Term => {
   return v;
 };
 
+// only use this with elaborated terms
 export const normalize = (t: Term, vs: EnvV = Nil): Term =>
   quote(evaluate(t, vs), vs); 

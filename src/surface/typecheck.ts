@@ -26,6 +26,7 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): Val => {
 const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): void => {
   const ty = force(ty_);
   console.log(`check ${showTerm(tm)} : ${showTerm(quote(ty, vs))}`);
+  if (ty.tag === 'Type' && tm.tag === 'Type') return;
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
     const x = fresh(vs, ty.name);
     const vx = VVar(x);
