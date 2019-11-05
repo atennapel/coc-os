@@ -1,4 +1,4 @@
-import { Var, Meta, Type, Name, Term, App, Abs, Pi } from './terms';
+import { Var, Meta, Type, Name, Term, App, Abs, Pi, Ann, Let } from './terms';
 import { List, Nil, Cons, foldr, lookup } from '../list';
 import { impossible } from '../util';
 
@@ -87,6 +87,35 @@ export const quote = (v_: Val, vs: EnvV = Nil): Term => {
     return Pi(x, quote(v.type, vs), v.impl, quote(v.body(VVar(x)), Cons([x, true], vs)));
   }
   return v;
+};
+
+type S = [false, Val] | [true, Term];
+const zonkSpine = (vs: EnvV, tm: Term): S => {
+  if (tm.tag === 'Meta' && tm.val) return [false, tm.val];
+  if (tm.tag === 'App') {
+    const spine = zonkSpine(vs, tm.left);
+    return spine[0] ?
+      [true, App(spine[1], tm.impl, zonk(vs, tm.right))] :
+      [false, vapp(spine[1], tm.impl, evaluate(tm.right, vs))];
+  }
+  return [true, zonk(vs, tm)];
+};
+export const zonk = (vs: EnvV, tm: Term): Term => {
+  if (tm.tag === 'Meta') return tm.val ? quote(tm.val, vs) : tm;
+  if (tm.tag === 'Pi')
+    return Pi(tm.name, zonk(vs, tm.type), tm.impl, zonk(Cons([tm.name, true], vs), tm.body));
+  if (tm.tag === 'Abs')
+    return Abs(tm.name, tm.type ? zonk(vs, tm.type) : null, tm.impl, zonk(Cons([tm.name, true], vs), tm.body));
+  if (tm.tag === 'Let')
+    return Let(tm.name, tm.type ? zonk(vs, tm.type) : null, tm.impl, zonk(vs, tm.val), zonk(Cons([tm.name, true], vs), tm.body));
+  if (tm.tag === 'Ann') return Ann(zonk(vs, tm.term), tm.type);
+  if (tm.tag === 'App') {
+    const spine = zonkSpine(vs, tm.left);
+    return spine[0] ?
+      App(spine[1], tm.impl, zonk(vs, tm.right)) :
+      quote(vapp(spine[1], tm.impl, evaluate(tm.right, vs)), vs);
+  }
+  return tm;
 };
 
 // only use this with elaborated terms

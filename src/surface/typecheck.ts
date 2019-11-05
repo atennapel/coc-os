@@ -1,6 +1,6 @@
 import { List, filter, map, foldr, Nil, Cons, lookup, toArrayFilter } from '../list';
 import { Name, Term, Meta, App, Var, showTerm, Pi, flattenApp } from './terms';
-import { Val, EnvV, quote, force, fresh, VVar, evaluate, VType, VPi } from './vals';
+import { Val, EnvV, quote, force, fresh, VVar, evaluate, VType, VPi, zonk } from './vals';
 import { unify } from './unification';
 import { terr } from '../util';
 
@@ -195,5 +195,5 @@ const handleArgs = (ts: EnvT, vs: EnvV, args: List<[[boolean, Term], Val]>): voi
 
 export const typecheck = (tm: Term, ts: EnvT = Nil, vs: EnvV = Nil): Term => {
   const ty = synth(ts, vs, tm);
-  return quote(ty, vs);
+  return zonk(vs, quote(ty, vs));
 };

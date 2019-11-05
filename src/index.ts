@@ -1,10 +1,9 @@
 // @ts-ignore
-import { Var, Abs, Type, showTerm, App } from './surface/terms';
+import { Var, Abs, Type, showTerm, App, Pi } from './surface/terms';
 import { typecheck } from './surface/typecheck';
 
 /**
  * TODO:
- * - zonk
  * - elaboration
  * - convert surface to core
  * - delaboration/redecoration
@@ -12,10 +11,12 @@ import { typecheck } from './surface/typecheck';
 
 const v = Var;
 
-const id = Abs('t', Type, true, Abs('x', v('t'), false, v('x')));
+const List = Abs('t', Type, false, Pi('r', Type, true, Pi('_', v('r'), false, Pi('_', Pi('_', v('t'), false, Pi('_', v('r'), false, v('r'))), false, v('r')))));
+
+// const id = Abs('t', Type, true, Abs('x', v('t'), false, v('x')));
 
 try {
-  const term = App(id, false, Type);
+  const term = List;
   console.log(showTerm(term));
   const ty = typecheck(term);
   console.log(showTerm(ty));
