@@ -1,8 +1,8 @@
-import { List, filter, map, foldr, Nil, Cons, lookup, toArrayFilter, foldl } from '../list';
-import { Name, Term, Meta, App, Var, showTerm, Pi, flattenApp, Type, Abs, Let } from './terms';
+import { List, filter, map, foldr, Nil, Cons, lookup, foldl } from '../list';
+import { Name, Term, Meta, App, Var, showTerm, Pi, Type, Abs, Let } from './terms';
 import { Val, EnvV, quote, force, fresh, VVar, evaluate, VType, VPi, zonk } from './vals';
 import { unify } from './unification';
-import { terr, impossible } from '../util';
+import { terr } from '../util';
 
 export type EnvT = List<[Name, { bound: boolean, type: Val }]>;
 export const Bound = (type: Val) => ({ bound: true, type });
@@ -39,15 +39,17 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
     const vx = VVar(x);
     return check(Cons([x, Bound(ty.type)], ts), Cons([x, true], vs), tm, ty.body(vx));
   }
+  /*
   if (tm.tag === 'App') {
     const [fn, args] = flattenApp(tm);
-    const ty = synth(ts, vs, fn);
-    const [rt, targs] = collect(ts, vs, ty, args);
-    const rtinst = inst(ts, vs, rt);
-    unify(vs, rtinst, ty);
-    handleArgs(ts, vs, targs);
+    const [vty, fntm] = synth(ts, vs, fn);
+    const [rt, rem, targs] = collect(ts, vs, vty, args);
+    const [rtinst, ms] = inst(ts, vs, rt);
+    unify(vs, rtinst, vty);
+    const tms = handleArgs(ts, vs, targs);
     return;
   }
+  */
   if (tm.tag === 'Hole')
     return freshMeta(ts);
   if (tm.tag === 'Let') {
@@ -93,12 +95,17 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     return [vt, term];
   }
   if (tm.tag === 'App') {
+    /*
     const [fn, args] = flattenApp(tm);
     const [ty, fntm] = synth(ts, vs, fn);
-    const [rt, targs] = collect(ts, vs, ty, args);
+    const [rt, rem, targs] = collect(ts, vs, ty, args);
     const tms = handleArgs(ts, vs, targs);
     const res = foldl((acc, x) => x[0] ? App(acc, true, x[1]) : App(acc, false, ), fntm, targs);
     return [rt, res];
+    */
+   const [fn, fntm] = synth(ts, vs, tm.left);
+   const [rt, res] = synthapp(ts, vs, fn, tm.impl, tm.right);
+   return [rt, App(fntm, tm.impl, res)];
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
@@ -144,31 +151,23 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 
-const collect = (ts: EnvT, vs: EnvV, ty_: Val, args: [boolean, Term][]): [Val, List<[false, [boolean, Term], Val] | [true, Term]>] => {
+/*
+const collect = (ts: EnvT, vs: EnvV, ty_: Val, args: [boolean, Term][]): [Val, [boolean, Term][], List<[false, Term, Val] | [true, Term]>] => {
   const ty = force(ty_);
-  if (args.length === 0) return [ty, Nil];
+  if (args.length === 0) return [ty, [], Nil];
   const impl = args[0][0];
   const tm = args[0][1];
-  if (ty.tag === 'VPi' && ty.impl && impl) {
-    // {a} -> b @ {c} (instantiate with c)
-    const type = check(ts, vs, tm, ty.type);
-    const v = evaluate(tm, vs);
-    const [rt, rargs] = collect(ts, vs, ty.body(v), args.slice(1));
-    return [rt, Cons([true, type], rargs)];
+  if (ty.tag === 'VPi' && ty.name === '_' && ty.impl === impl) {
+    // (_:a) -> b @ c (pair up)
+    const [rt, rem, rargs] = collect(ts, vs, ty.body(VType), args.slice(1));
+    return [rt, rem, Cons([false, tm, ty.type], rargs)];
   }
   if (ty.tag === 'VPi' && ty.impl && !impl) {
     // {a} -> b @ c (instantiate with meta then b @ c)
     const m = freshMeta(ts);
     const vm = evaluate(m, vs);
-    const [rt, rargs] = collect(ts, vs, ty.body(vm), args);
-    return [rt, Cons([true, m], rargs)];
-  }
-  if (ty.tag === 'VPi' && !ty.impl && !impl) {
-    // a -> b @ c (pair up)
-    const x = fresh(vs, ty.name);
-    const vx = VVar(x);
-    const [rt, rargs] = collect(Cons([x, Bound(ty.type)], ts), Cons([x, vx], vs), ty.body(vx), args.slice(1));
-    return [rt, Cons([false, args[0], ty.type], rargs)];
+    const [rt, rem, rargs] = collect(ts, vs, ty.body(vm), args);
+    return [rt, rem, Cons([true, m], rargs)];
   }
   if (ty.tag === 'VNe' && ty.head.tag === 'Meta') {
     const x = fresh(vs, 'x');
@@ -176,7 +175,7 @@ const collect = (ts: EnvT, vs: EnvV, ty_: Val, args: [boolean, Term][]): [Val, L
     unify(Cons([x, true], vs), ty, pi);
     return collect(ts, vs, ty, args);
   }
-  return terr(`cannot collect ${showTerm(quote(ty, vs))} @ ${args.map(([i, t]) => i ? `{${showTerm(t)}}` : showTerm(t)).join(' ')}`);
+  return [ty, args, Nil];
 };
 
 const isMeta = (ty: Val) => ty.tag === 'VNe' && ty.head.tag === 'Meta';
@@ -199,13 +198,29 @@ const checkOnly = (ts: EnvT, vs: EnvV, a: [Term, Val][], f: (tm: Term, ty: Val) 
     }
   }
 };
-const handleArgs = (ts: EnvT, vs: EnvV, args: List<[false, [boolean, Term], Val] | [true, Term]>): Term[] => {
-  const a = toArrayFilter(args, x => !x[0] ? [x[1][1], x[2]] as [Term, Val] : impossible('handleArgs'), ([b]) => !b);
+const handleArgs = (ts: EnvT, vs: EnvV, args: List<[false, Term, Val] | [true, Term]>): Term[] => {
+  const a = toArrayFilter(args, x => !x[0] ? [x[1], x[2]] as [Term, Val] : impossible('handleArgs'), ([b]) => !b);
   console.log('handleApp', a.map(([t, ty]) => `${showTerm(t)} : ${showTerm(quote(ty, vs))}`).join(' | '));
   const b = a.map(([t]) => [t, null] as [Term, Term | null]);
   APP_CHECK_ORDER.forEach(f => checkOnly(ts, vs, a, f, b));
   checkOnly(ts, vs, a, () => true, b);
   return b.map(([_, ty]) => ty as Term);
+};
+*/
+
+const synthapp = (ts: EnvT, vs: EnvV, ty: Val, impl: boolean, arg: Term): [Val, Term] => {
+  if (ty.tag === 'VPi' && ty.impl && !impl) {
+    // {a} -> b @ c (instantiate with meta then b @ c)
+    const m = freshMeta(ts);
+    const vm = evaluate(m, vs);
+    return synthapp(ts, vs, ty.body(vm), impl, arg);
+  }
+  if (ty.tag === 'VPi' && ty.impl === impl) {
+    const tm = check(ts, vs, arg, ty.type);
+    const vm = evaluate(tm, vs);
+    return [ty.body(vm), tm];
+  }
+  return terr(`unable to syntapp: ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''}`);
 };
 
 export const typecheck = (tm: Term, ts: EnvT = Nil, vs: EnvV = Nil): [Term, Term] => {
