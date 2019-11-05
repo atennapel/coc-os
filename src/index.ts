@@ -11,15 +11,15 @@ import { typecheck } from './surface/typecheck';
 
 const v = Var;
 
-const List = Abs('t', Type, false, Pi('r', Type, true, Pi('_', v('r'), false, Pi('_', Pi('_', v('t'), false, Pi('_', v('r'), false, v('r'))), false, v('r')))));
+// const List = Abs('t', Type, false, Pi('r', Type, true, Pi('_', v('r'), false, Pi('_', Pi('_', v('t'), false, Pi('_', v('r'), false, v('r'))), false, v('r')))));
 
-// const id = Abs('t', Type, true, Abs('x', v('t'), false, v('x')));
+const id = Abs('t', Type, true, Abs('x', v('t'), false, v('x')));
 
 try {
-  const term = List;
+  const term = App(id, false, Type);
   console.log(showTerm(term));
-  const ty = typecheck(term);
-  console.log(showTerm(ty));
+  const [ty, tm] = typecheck(term);
+  console.log(`${showTerm(tm)} : ${showTerm(ty)}`);
 } catch (err) {
   console.log('' + err);
 }
