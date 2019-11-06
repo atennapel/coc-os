@@ -67,48 +67,58 @@ const exprs = (ts: Token[]): Term => {
   const head = ts[0];
   if (head.tag === 'Name') {
     const x = head.name;
-    if (x === '\\' || x === 'fn') {
+    if (x === '\\' || x === 'fn' || x === '\\i' || x === 'fni') {
       const args = ts[1];
       if (!args) return err(`abs missing args`);
       const rest = exprs(ts.slice(2));
-      if (args.tag === 'Name') return Abs(args.name, null, false, rest);
+      const impl = x === '\\i' || x === 'fni';
+      if (args.tag === 'Name') return Abs(args.name, null, impl, rest);
       return args.list.map(a => a.tag === 'Name' ? a.name : err(`nested list in args of abs`))
-        .reduceRight((x, y) => Abs(y, null, false, x), rest);
+        .reduceRight((x, y) => Abs(y, null, impl, x), rest);
     }
-    if (x === '/' || x === 'pi') {
+    if (x === '/' || x === 'pi' || x === '/i' || x === 'pii') {
       if (ts.length < 3) return err(`invalid use of / or pi`);
       const arg = ts[1];
       if (arg.tag !== 'Name') return err(`invalid arg for pi`);
       const rest = exprs(ts.slice(3));
-      return Pi(arg.name, expr(ts[2]), false, rest);
+      const impl = x === '/i' || x === 'pii';
+      return Pi(arg.name, expr(ts[2]), impl, rest);
     }
-    if (x === '\\:' || x === 'fnt') {
+    if (x === '\\:' || x === 'fnt' || x === '\\i:' || x === 'fnit') {
       if (ts.length < 3) return err(`invalid use of \\: or fnt`);
       const arg = ts[1];
       if (arg.tag !== 'Name') return err(`invalid arg for fnt`);
       const rest = exprs(ts.slice(3));
-      return Abs(arg.name, expr(ts[2]), false, rest);
+      const impl = x === '\\i:' || x === 'fnit';
+      return Abs(arg.name, expr(ts[2]), impl, rest);
     }
     if (x === ':') {
       if (ts.length !== 3) return err(`invalid annotation`);
       return Ann(expr(ts[1]), expr(ts[2]));
     }
-    if (x === '->') {
-      return ts.slice(1).map(expr).reduceRight((x, y) => Pi('_', y, false, x));
+    if (x === '->' || x === '->i') {
+      const impl = x === '->i';
+      return ts.slice(1).map(expr).reduceRight((x, y) => Pi('_', y, impl, x));
     }
-    if (x === 'let') {
+    if (x === 'let' || x === 'leti') {
       if (ts.length < 3) return err(`invalid let`);
-      const x = ts[1];
-      if (x.tag !== 'Name') return err(`invalid let name`);
+      const xx = ts[1];
+      if (xx.tag !== 'Name') return err(`invalid let name`);
       const rest = exprs(ts.slice(3));
-      return Let(x.name, null, false, expr(ts[2]), rest);
+      const impl = x === 'leti';
+      return Let(xx.name, null, impl, expr(ts[2]), rest);
     }
-    if (x === 'lett') {
+    if (x === 'lett' || x === 'letit') {
       if (ts.length < 4) return err(`invalid lett`);
-      const x = ts[1];
-      if (x.tag !== 'Name') return err(`invalid let name`);
+      const xx = ts[1];
+      if (xx.tag !== 'Name') return err(`invalid let name`);
       const rest = exprs(ts.slice(4));
-      return Let(x.name, expr(ts[3]), false, rest, expr(ts[2]));
+      const impl = x === 'letit';
+      return Let(xx.name, expr(ts[3]), impl, rest, expr(ts[2]));
+    }
+    if (x === '@') {
+      if (ts.length !== 3) return err(`invalid implicit application`);
+      return App(expr(ts[1]), true, expr(ts[2]));
     }
   }
   return ts.map(expr).reduce((x, y) => App(x, false, y));

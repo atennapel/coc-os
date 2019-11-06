@@ -73,11 +73,11 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
-    return `λ${as.map(([x, im, t]) => im ? `{${x}${t ? ` : ${showTermP(t.tag === 'Ann', t)}` : ''}}` : !t ? x : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
+    return `\\${as.map(([x, im, t]) => im ? `{${x}${t ? ` : ${showTermP(t.tag === 'Ann', t)}` : ''}}` : !t ? x : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `π${as.map(([x, im, t]) => im ? `{${x} : ${showTermP(t.tag === 'Ann', t)}}` : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
+    return `//${as.map(([x, im, t]) => im ? `{${x} : ${showTermP(t.tag === 'Ann', t)}}` : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Let')
     return t.type ?
