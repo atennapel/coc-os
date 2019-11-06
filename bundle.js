@@ -427,7 +427,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'Let')
         return t.type ?
             `let ${t.impl ? `{${t.name} : ${exports.showTermP(t.type.tag === 'Ann', t.type)}}` : `${t.name} : ${exports.showTermP(t.type.tag === 'Ann', t.type)}`} = ${exports.showTerm(t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}` :
-            `let ${t.name} = ${exports.showTerm(t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
+            `let ${t.impl ? `{${t.name}}` : t.name} = ${exports.showTerm(t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
     if (t.tag === 'Ann')
         return `${exports.showTerm(t.term)} : ${exports.showTerm(t.type)}`;
     return t;

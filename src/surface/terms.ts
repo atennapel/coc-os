@@ -82,7 +82,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Let')
     return t.type ?
       `let ${t.impl ? `{${t.name} : ${showTermP(t.type.tag === 'Ann', t.type)}}` : `${t.name} : ${showTermP(t.type.tag === 'Ann', t.type)}`} = ${showTerm(t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}` :
-      `let ${t.name} = ${showTerm(t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
+      `let ${t.impl ? `{${t.name}}` : t.name} = ${showTerm(t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
   if (t.tag === 'Ann')
     return `${showTerm(t.term)} : ${showTerm(t.type)}`;
   return t;
