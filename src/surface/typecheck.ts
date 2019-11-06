@@ -38,7 +38,8 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   if (ty.tag === 'VPi' && ty.impl && !(tm.tag === 'Abs' && tm.type && tm.impl)) {
     const x = fresh(vs, ty.name);
     const vx = VVar(x);
-    return check(Cons([x, Bound(ty.type)], ts), Cons([x, true], vs), tm, ty.body(vx));
+    const term = check(Cons([x, Bound(ty.type)], ts), Cons([x, true], vs), tm, ty.body(vx));
+    return Abs(ty.name, quote(ty.type, vs), true, term);
   }
   /*
   if (tm.tag === 'App') {

@@ -209,8 +209,8 @@ const matchingBracket = (c) => {
         return '(';
     return err(`invalid bracket: ${c}`);
 };
-const SYM1 = ['\\', ':', '/', '*'];
-const SYM2 = ['\\:', '->'];
+const SYM1 = ['\\', ':', '/', '*', '@'];
+const SYM2 = ['\\:', '->', '\\@', '\\@:', '/@', '-@'];
 const START = 0;
 const NAME = 1;
 const COMMENT = 2;
@@ -280,35 +280,35 @@ const exprs = (ts) => {
     const head = ts[0];
     if (head.tag === 'Name') {
         const x = head.name;
-        if (x === '\\' || x === 'fn' || x === '\\i' || x === 'fni') {
+        if (x === '\\' || x === 'fn' || x === '\\@' || x === 'fni') {
             const args = ts[1];
             if (!args)
                 return err(`abs missing args`);
             const rest = exprs(ts.slice(2));
-            const impl = x === '\\i' || x === 'fni';
+            const impl = x === '\\@' || x === 'fni';
             if (args.tag === 'Name')
                 return terms_1.Abs(args.name, null, impl, rest);
             return args.list.map(a => a.tag === 'Name' ? a.name : err(`nested list in args of abs`))
                 .reduceRight((x, y) => terms_1.Abs(y, null, impl, x), rest);
         }
-        if (x === '/' || x === 'pi' || x === '/i' || x === 'pii') {
+        if (x === '/' || x === 'pi' || x === '/@' || x === 'pii') {
             if (ts.length < 3)
                 return err(`invalid use of / or pi`);
             const arg = ts[1];
             if (arg.tag !== 'Name')
                 return err(`invalid arg for pi`);
             const rest = exprs(ts.slice(3));
-            const impl = x === '/i' || x === 'pii';
+            const impl = x === '/@' || x === 'pii';
             return terms_1.Pi(arg.name, expr(ts[2]), impl, rest);
         }
-        if (x === '\\:' || x === 'fnt' || x === '\\i:' || x === 'fnit') {
+        if (x === '\\:' || x === 'fnt' || x === '\\@:' || x === 'fnit') {
             if (ts.length < 3)
                 return err(`invalid use of \\: or fnt`);
             const arg = ts[1];
             if (arg.tag !== 'Name')
                 return err(`invalid arg for fnt`);
             const rest = exprs(ts.slice(3));
-            const impl = x === '\\i:' || x === 'fnit';
+            const impl = x === '\\@:' || x === 'fnit';
             return terms_1.Abs(arg.name, expr(ts[2]), impl, rest);
         }
         if (x === ':') {
@@ -316,8 +316,8 @@ const exprs = (ts) => {
                 return err(`invalid annotation`);
             return terms_1.Ann(expr(ts[1]), expr(ts[2]));
         }
-        if (x === '->' || x === '->i') {
-            const impl = x === '->i';
+        if (x === '->' || x === '-@') {
+            const impl = x === '-@';
             return ts.slice(1).map(expr).reduceRight((x, y) => terms_1.Pi('_', y, impl, x));
         }
         if (x === 'let' || x === 'leti') {
@@ -472,7 +472,8 @@ const check = (ts, vs, tm, ty_) => {
     if (ty.tag === 'VPi' && ty.impl && !(tm.tag === 'Abs' && tm.type && tm.impl)) {
         const x = vals_1.fresh(vs, ty.name);
         const vx = vals_1.VVar(x);
-        return check(list_1.Cons([x, exports.Bound(ty.type)], ts), list_1.Cons([x, true], vs), tm, ty.body(vx));
+        const term = check(list_1.Cons([x, exports.Bound(ty.type)], ts), list_1.Cons([x, true], vs), tm, ty.body(vx));
+        return terms_1.Abs(ty.name, vals_1.quote(ty.type, vs), true, term);
     }
     /*
     if (tm.tag === 'App') {

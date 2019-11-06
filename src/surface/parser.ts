@@ -13,8 +13,8 @@ const matchingBracket = (c: Bracket): Bracket => {
   return err(`invalid bracket: ${c}`);
 }
 
-const SYM1: string[] = ['\\', ':', '/', '*'];
-const SYM2: string[] = ['\\:', '->'];
+const SYM1: string[] = ['\\', ':', '/', '*', '@'];
+const SYM2: string[] = ['\\:', '->', '\\@', '\\@:', '/@', '-@'];
 
 const START = 0;
 const NAME = 1;
@@ -67,37 +67,37 @@ const exprs = (ts: Token[]): Term => {
   const head = ts[0];
   if (head.tag === 'Name') {
     const x = head.name;
-    if (x === '\\' || x === 'fn' || x === '\\i' || x === 'fni') {
+    if (x === '\\' || x === 'fn' || x === '\\@' || x === 'fni') {
       const args = ts[1];
       if (!args) return err(`abs missing args`);
       const rest = exprs(ts.slice(2));
-      const impl = x === '\\i' || x === 'fni';
+      const impl = x === '\\@' || x === 'fni';
       if (args.tag === 'Name') return Abs(args.name, null, impl, rest);
       return args.list.map(a => a.tag === 'Name' ? a.name : err(`nested list in args of abs`))
         .reduceRight((x, y) => Abs(y, null, impl, x), rest);
     }
-    if (x === '/' || x === 'pi' || x === '/i' || x === 'pii') {
+    if (x === '/' || x === 'pi' || x === '/@' || x === 'pii') {
       if (ts.length < 3) return err(`invalid use of / or pi`);
       const arg = ts[1];
       if (arg.tag !== 'Name') return err(`invalid arg for pi`);
       const rest = exprs(ts.slice(3));
-      const impl = x === '/i' || x === 'pii';
+      const impl = x === '/@' || x === 'pii';
       return Pi(arg.name, expr(ts[2]), impl, rest);
     }
-    if (x === '\\:' || x === 'fnt' || x === '\\i:' || x === 'fnit') {
+    if (x === '\\:' || x === 'fnt' || x === '\\@:' || x === 'fnit') {
       if (ts.length < 3) return err(`invalid use of \\: or fnt`);
       const arg = ts[1];
       if (arg.tag !== 'Name') return err(`invalid arg for fnt`);
       const rest = exprs(ts.slice(3));
-      const impl = x === '\\i:' || x === 'fnit';
+      const impl = x === '\\@:' || x === 'fnit';
       return Abs(arg.name, expr(ts[2]), impl, rest);
     }
     if (x === ':') {
       if (ts.length !== 3) return err(`invalid annotation`);
       return Ann(expr(ts[1]), expr(ts[2]));
     }
-    if (x === '->' || x === '->i') {
-      const impl = x === '->i';
+    if (x === '->' || x === '-@') {
+      const impl = x === '-@';
       return ts.slice(1).map(expr).reduceRight((x, y) => Pi('_', y, impl, x));
     }
     if (x === 'let' || x === 'leti') {
