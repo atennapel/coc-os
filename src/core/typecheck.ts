@@ -72,12 +72,10 @@ const synth = (tenv: EnvV, venv: EnvV, k: number, tm: Term): Val => {
     const rt = synth(Cons(type, tenv), Cons(VVar(k), venv), k + 1, tm.body);
     return evaluate(Pi(tm.type, tm.impl, quote(rt, k + 1)), venv);
   }
-  if (tm.impl && tm.tag === 'Let') {
-    if (isImplicitUsed(0, tm.body))
+  if (tm.tag === 'Let') {
+    if (tm.impl && isImplicitUsed(0, tm.body))
       return terr(`implicit used in ${showTerm(tm)}`);
-    check(tenv, venv, k, tm.type, VType);
-    const vty = evaluate(tm.type, venv);
-    check(tenv, venv, k, tm.val, vty);
+    const vty = synth(tenv, venv, k, tm.val);
     return synth(Cons(vty, tenv), Cons(evaluate(tm.val, venv), venv), k + 1, tm.body);
   }
   return terr(`cannot synth ${showTerm(tm)}`);

@@ -6,8 +6,8 @@ import { setConfig } from './config';
 
 /**
  * TODO:
+ * - check if implicit is used
  * - fix parsing of lets
- * - core let does not need type
  * - erased normalization
  * - convert surface to core
  * - delaboration/redecoration

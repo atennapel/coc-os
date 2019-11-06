@@ -20,7 +20,7 @@ exports.Var = (index) => ({ tag: 'Var', index });
 exports.App = (left, impl, right) => ({ tag: 'App', left, impl, right });
 exports.Abs = (type, impl, body) => ({ tag: 'Abs', type, impl, body });
 exports.Pi = (type, impl, body) => ({ tag: 'Pi', type, impl, body });
-exports.Let = (type, impl, val, body) => ({ tag: 'Let', type, impl, val, body });
+exports.Let = (val, impl, body) => ({ tag: 'Let', impl, val, body });
 exports.Type = { tag: 'Type' };
 exports.flattenApp = (t) => {
     const r = [];
@@ -66,7 +66,7 @@ exports.showTerm = (t) => {
         return `π${as.map(([im, t]) => im ? `{${exports.showTerm(t)}}` : exports.showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${exports.showTerm(b)}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.impl ? `{${exports.showTerm(t.type)}}` : exports.showTermP(t.type.tag === 'Abs' || t.type.tag === 'Pi' || t.type.tag === 'App' || t.type.tag === 'Let', t.type)} = ${exports.showTerm(t.val)} in ${exports.showTerm(t.body)}`;
+        return `let ${t.impl ? `implicitly ` : ''}${exports.showTerm(t.val)} in ${exports.showTerm(t.body)}`;
     return t;
 };
 
@@ -699,7 +699,7 @@ exports.typecheck = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
     const zterm = vals_1.zonk(vs, term);
     config_1.log(() => terms_1.showTerm(zterm));
     if (terms_1.containsAnyMetas(zty) || terms_1.containsAnyHoles(zty) || terms_1.containsAnyMetas(zterm) || terms_1.containsAnyHoles(zterm))
-        return util_1.terr(`unsolved metas, ${terms_1.showTerm(zterm)} : ${terms_1.showTerm(zty)}`);
+        return util_1.terr(`unsolved metas or holes: ${terms_1.showTerm(zterm)} : ${terms_1.showTerm(zty)}`);
     return [zty, zterm];
 };
 

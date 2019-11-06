@@ -4,14 +4,14 @@ export type Term
   | { tag: 'App', left: Term, impl: boolean, right: Term }
   | { tag: 'Abs', type: Term, impl: boolean, body: Term }
   | { tag: 'Pi', type: Term, impl: boolean, body: Term }
-  | { tag: 'Let', type: Term, impl: boolean, val: Term, body: Term }
+  | { tag: 'Let', val: Term, impl: boolean, body: Term }
   | { tag: 'Type' };
 
 export const Var = (index: Ix): Term => ({ tag: 'Var', index });
 export const App = (left: Term, impl: boolean, right: Term): Term => ({ tag: 'App', left, impl, right });
 export const Abs = (type: Term, impl: boolean, body: Term): Term => ({ tag: 'Abs', type, impl, body });
 export const Pi = (type: Term, impl: boolean, body: Term): Term => ({ tag: 'Pi', type, impl, body });
-export const Let = (type: Term, impl: boolean, val: Term, body: Term): Term => ({ tag: 'Let', type, impl, val, body });
+export const Let = (val: Term, impl: boolean, body: Term): Term => ({ tag: 'Let', impl, val, body });
 export const Type: Term = { tag: 'Type' };
 
 export const flattenApp = (t: Term): [Term, [boolean, Term][]] => {
@@ -60,6 +60,6 @@ export const showTerm = (t: Term): string => {
     return `π${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Let')
-    return `let ${t.impl ? `{${showTerm(t.type)}}` : showTermP(t.type.tag === 'Abs' || t.type.tag === 'Pi' || t.type.tag === 'App' || t.type.tag === 'Let', t.type)} = ${showTerm(t.val)} in ${showTerm(t.body)}`;
+    return `let ${t.impl ? `implicitly ` : ''}${showTerm(t.val)} in ${showTerm(t.body)}`;
   return t;
 };
