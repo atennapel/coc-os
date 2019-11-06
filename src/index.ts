@@ -7,7 +7,6 @@ import { setConfig } from './config';
 /**
  * TODO:
  * - check if implicit is used
- * - fix parsing of lets
  * - erased normalization
  * - convert surface to core
  * - delaboration/redecoration

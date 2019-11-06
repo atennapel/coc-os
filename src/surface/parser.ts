@@ -114,7 +114,7 @@ const exprs = (ts: Token[]): Term => {
       if (xx.tag !== 'Name') return err(`invalid let name`);
       const rest = exprs(ts.slice(4));
       const impl = x === 'letit';
-      return Let(xx.name, expr(ts[3]), impl, rest, expr(ts[2]));
+      return Let(xx.name, expr(ts[2]), impl, expr(ts[3]), rest);
     }
     if (x === '@') {
       if (ts.length !== 3) return err(`invalid implicit application`);

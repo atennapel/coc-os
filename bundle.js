@@ -338,7 +338,7 @@ const exprs = (ts) => {
                 return err(`invalid let name`);
             const rest = exprs(ts.slice(4));
             const impl = x === 'letit';
-            return terms_1.Let(xx.name, expr(ts[3]), impl, rest, expr(ts[2]));
+            return terms_1.Let(xx.name, expr(ts[2]), impl, expr(ts[3]), rest);
         }
         if (x === '@') {
             if (ts.length !== 3)
