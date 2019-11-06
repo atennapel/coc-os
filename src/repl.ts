@@ -1,4 +1,4 @@
-import { config } from './config';
+import { config, log } from './config';
 import { parse } from './surface/parser';
 import { showTerm } from './surface/terms';
 import { typecheck } from './surface/typecheck';
@@ -13,12 +13,12 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       return _cb(`debug is now ${config.debug}`);
     }
     const tm = parse(_s);
-    console.log(`inpt: ${showTerm(tm)}`);
+    log(() => `inpt: ${showTerm(tm)}`);
     const [type, term] = typecheck(tm);
-    console.log(`term: ${showTerm(term)}`);
-    console.log(`type: ${showTerm(type)}`);
+    log(() => `term: ${showTerm(term)}`);
+    log(() => `type: ${showTerm(type)}`);
     const nf = normalize(term);
-    console.log(`nmfm: ${showTerm(nf)}`);
+    log(() => `nmfm: ${showTerm(nf)}`);
     return _cb(`${showTerm(term)} : ${showTerm(type)} ~>\n${showTerm(nf)}`);
   } catch (err) {
     return _cb('' + err, true);

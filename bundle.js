@@ -182,12 +182,12 @@ exports.runREPL = (_s, _cb) => {
             return _cb(`debug is now ${config_1.config.debug}`);
         }
         const tm = parser_1.parse(_s);
-        console.log(`inpt: ${terms_1.showTerm(tm)}`);
+        config_1.log(() => `inpt: ${terms_1.showTerm(tm)}`);
         const [type, term] = typecheck_1.typecheck(tm);
-        console.log(`term: ${terms_1.showTerm(term)}`);
-        console.log(`type: ${terms_1.showTerm(type)}`);
+        config_1.log(() => `term: ${terms_1.showTerm(term)}`);
+        config_1.log(() => `type: ${terms_1.showTerm(type)}`);
         const nf = vals_1.normalize(term);
-        console.log(`nmfm: ${terms_1.showTerm(nf)}`);
+        config_1.log(() => `nmfm: ${terms_1.showTerm(nf)}`);
         return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~>\n${terms_1.showTerm(nf)}`);
     }
     catch (err) {
