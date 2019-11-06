@@ -11,6 +11,21 @@ export const Def = (type: Val) => ({ bound: false, type });
 export const showEnvT = (l: EnvT, vs: EnvV): string =>
   toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${showTerm(quote(b.type, vs))}`);
 
+const isImplicitUsed = (x: Name, t: Term): boolean => {
+  if (t.tag === 'Var') return t.name === x;
+  if (t.tag === 'App') {
+    if (isImplicitUsed(x, t.left)) return true;
+    return t.impl ? false : isImplicitUsed(x, t.right);
+  }
+  if (t.tag === 'Abs')
+    return (t.type && isImplicitUsed(x, t.type)) || (t.name !== x && isImplicitUsed(x, t.body));
+  if (t.tag === 'Pi') return false; // ?
+  if (t.tag === 'Let')
+    return (t.type && isImplicitUsed(x, t.type)) || (!t.impl && isImplicitUsed(x, t.val)) || (t.name !== x && isImplicitUsed(x, t.body));
+  if (t.tag === 'Ann') return isImplicitUsed(x, t.term);
+  return false;
+};
+
 const freshMeta = (ts: EnvT): Term => {
   const spine = map(filter(ts, ([x, { bound }]) => bound), ([x, _]) => Var(x));
   return foldr((x, y) => App(y, false, x), Meta() as Term, spine);
@@ -32,6 +47,8 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, vs))} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
   if (ty.tag === 'Type' && tm.tag === 'Type') return Type;
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
+    if (tm.impl && isImplicitUsed(tm.name, tm.body))
+      return terr(`implicit used in ${showTerm(tm)}`);
     const x = fresh(vs, ty.name);
     const vx = VVar(x);
     const body = check(Cons([tm.name, Bound(ty.type)], ts), Cons([tm.name, vx], vs), tm.body, ty.body(vx));
@@ -57,6 +74,8 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   if (tm.tag === 'Hole')
     return freshMeta(ts);
   if (tm.tag === 'Let') {
+    if (tm.impl && isImplicitUsed(tm.name, tm.body))
+      return terr(`implicit used in ${showTerm(tm)}`);
     if (tm.type) {
       const type = check(ts, vs, tm.type, VType);
       const vt = evaluate(type, vs);
@@ -112,6 +131,8 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
    return [rt, App(foldl((f, a) => App(f, true, a), fntm, ms), tm.impl, res)];
   }
   if (tm.tag === 'Abs') {
+    if (tm.impl && isImplicitUsed(tm.name, tm.body))
+      return terr(`implicit used in ${showTerm(tm)}`);
     if (tm.type) {
       const type = check(ts, vs, tm.type, VType);
       const vt = evaluate(type, vs);
@@ -132,6 +153,8 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     return [vt, t];
   }
   if (tm.tag === 'Let') {
+    if (tm.impl && isImplicitUsed(tm.name, tm.body))
+      return terr(`implicit used in ${showTerm(tm)}`);
     if (tm.type) {
       const type = check(ts, vs, tm.type, VType);
       const vt = evaluate(type, vs);

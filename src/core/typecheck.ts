@@ -37,7 +37,7 @@ const check = (tenv: EnvV, venv: EnvV, k: number, tm: Term, ty: Val): void => {
 
 const isImplicitUsed = (k: number, t: Term): boolean => {
   if (t.tag === 'Type') return false;
-  if (t.tag === 'Pi') return false;
+  if (t.tag === 'Pi') return false; // ?
   if (t.tag === 'Var') return t.index === k;
   if (t.tag === 'App') {
     if (isImplicitUsed(k, t.left)) return true;

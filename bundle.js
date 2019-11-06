@@ -653,6 +653,24 @@ const config_1 = require("../config");
 exports.Bound = (type) => ({ bound: true, type });
 exports.Def = (type) => ({ bound: false, type });
 exports.showEnvT = (l, vs) => list_1.toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${terms_1.showTerm(vals_1.quote(b.type, vs))}`);
+const isImplicitUsed = (x, t) => {
+    if (t.tag === 'Var')
+        return t.name === x;
+    if (t.tag === 'App') {
+        if (isImplicitUsed(x, t.left))
+            return true;
+        return t.impl ? false : isImplicitUsed(x, t.right);
+    }
+    if (t.tag === 'Abs')
+        return (t.type && isImplicitUsed(x, t.type)) || (t.name !== x && isImplicitUsed(x, t.body));
+    if (t.tag === 'Pi')
+        return false; // ?
+    if (t.tag === 'Let')
+        return (t.type && isImplicitUsed(x, t.type)) || (!t.impl && isImplicitUsed(x, t.val)) || (t.name !== x && isImplicitUsed(x, t.body));
+    if (t.tag === 'Ann')
+        return isImplicitUsed(x, t.term);
+    return false;
+};
 const freshMeta = (ts) => {
     const spine = list_1.map(list_1.filter(ts, ([x, { bound }]) => bound), ([x, _]) => terms_1.Var(x));
     return list_1.foldr((x, y) => terms_1.App(y, false, x), terms_1.Meta(), spine);
@@ -673,6 +691,8 @@ const check = (ts, vs, tm, ty_) => {
     if (ty.tag === 'Type' && tm.tag === 'Type')
         return terms_1.Type;
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${terms_1.showTerm(tm)}`);
         const x = vals_1.fresh(vs, ty.name);
         const vx = vals_1.VVar(x);
         const body = check(list_1.Cons([tm.name, exports.Bound(ty.type)], ts), list_1.Cons([tm.name, vx], vs), tm.body, ty.body(vx));
@@ -698,6 +718,8 @@ const check = (ts, vs, tm, ty_) => {
     if (tm.tag === 'Hole')
         return freshMeta(ts);
     if (tm.tag === 'Let') {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${terms_1.showTerm(tm)}`);
         if (tm.type) {
             const type = check(ts, vs, tm.type, vals_1.VType);
             const vt = vals_1.evaluate(type, vs);
@@ -754,6 +776,8 @@ const synth = (ts, vs, tm) => {
         return [rt, terms_1.App(list_1.foldl((f, a) => terms_1.App(f, true, a), fntm, ms), tm.impl, res)];
     }
     if (tm.tag === 'Abs') {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${terms_1.showTerm(tm)}`);
         if (tm.type) {
             const type = check(ts, vs, tm.type, vals_1.VType);
             const vt = vals_1.evaluate(type, vs);
@@ -775,6 +799,8 @@ const synth = (ts, vs, tm) => {
         return [vt, t];
     }
     if (tm.tag === 'Let') {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${terms_1.showTerm(tm)}`);
         if (tm.type) {
             const type = check(ts, vs, tm.type, vals_1.VType);
             const vt = vals_1.evaluate(type, vs);
