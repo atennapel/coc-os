@@ -87,3 +87,22 @@ export const showTerm = (t: Term): string => {
     return `${showTerm(t.term)} : ${showTerm(t.type)}`;
   return t;
 };
+
+export const containsAnyMetas = (t: Term): boolean => {
+  if (t.tag === 'Meta') return true;
+  if (t.tag === 'App') return containsAnyMetas(t.left) || containsAnyMetas(t.right);
+  if (t.tag === 'Abs') return (t.type && containsAnyMetas(t.type)) || containsAnyMetas(t.body);
+  if (t.tag === 'Pi') return containsAnyMetas(t.type) || containsAnyMetas(t.body);
+  if (t.tag === 'Let') return (t.type && containsAnyMetas(t.type)) || containsAnyMetas(t.val) || containsAnyMetas(t.body);
+  if (t.tag === 'Ann') return containsAnyMetas(t.term) || containsAnyMetas(t.type);
+  return false;
+};
+export const containsAnyHoles = (t: Term): boolean => {
+  if (t.tag === 'Hole') return true;
+  if (t.tag === 'App') return containsAnyMetas(t.left) || containsAnyMetas(t.right);
+  if (t.tag === 'Abs') return (t.type && containsAnyMetas(t.type)) || containsAnyMetas(t.body);
+  if (t.tag === 'Pi') return containsAnyMetas(t.type) || containsAnyMetas(t.body);
+  if (t.tag === 'Let') return (t.type && containsAnyMetas(t.type)) || containsAnyMetas(t.val) || containsAnyMetas(t.body);
+  if (t.tag === 'Ann') return containsAnyMetas(t.term) || containsAnyMetas(t.type);
+  return false;
+};

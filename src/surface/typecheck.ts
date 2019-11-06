@@ -1,5 +1,5 @@
 import { List, filter, map, foldr, Nil, Cons, lookup, foldl, toString } from '../list';
-import { Name, Term, Meta, App, Var, showTerm, Pi, Type, Abs, Let } from './terms';
+import { Name, Term, Meta, App, Var, showTerm, Pi, Type, Abs, Let, containsAnyMetas, containsAnyHoles } from './terms';
 import { Val, EnvV, quote, force, fresh, VVar, evaluate, VType, VPi, zonk, showEnvV } from './vals';
 import { unify } from './unification';
 import { terr } from '../util';
@@ -235,5 +235,7 @@ export const typecheck = (tm: Term, ts: EnvT = Nil, vs: EnvV = Nil): [Term, Term
   log(() => showTerm(term));
   const zterm = zonk(vs, term);
   log(() => showTerm(zterm));
+  if (containsAnyMetas(zty) || containsAnyHoles(zty) || containsAnyMetas(zterm) || containsAnyHoles(zterm))
+    return terr(`unsolved metas or holes: ${showTerm(zterm)} : ${showTerm(zty)}`);
   return [zty, zterm];
 };

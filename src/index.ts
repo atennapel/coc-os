@@ -6,7 +6,9 @@ import { setConfig } from './config';
 
 /**
  * TODO:
- * - fix elaboration
+ * - fix parsing of lets
+ * - core let does not need type
+ * - erased normalization
  * - convert surface to core
  * - delaboration/redecoration
  */

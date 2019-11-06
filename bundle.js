@@ -432,6 +432,36 @@ exports.showTerm = (t) => {
         return `${exports.showTerm(t.term)} : ${exports.showTerm(t.type)}`;
     return t;
 };
+exports.containsAnyMetas = (t) => {
+    if (t.tag === 'Meta')
+        return true;
+    if (t.tag === 'App')
+        return exports.containsAnyMetas(t.left) || exports.containsAnyMetas(t.right);
+    if (t.tag === 'Abs')
+        return (t.type && exports.containsAnyMetas(t.type)) || exports.containsAnyMetas(t.body);
+    if (t.tag === 'Pi')
+        return exports.containsAnyMetas(t.type) || exports.containsAnyMetas(t.body);
+    if (t.tag === 'Let')
+        return (t.type && exports.containsAnyMetas(t.type)) || exports.containsAnyMetas(t.val) || exports.containsAnyMetas(t.body);
+    if (t.tag === 'Ann')
+        return exports.containsAnyMetas(t.term) || exports.containsAnyMetas(t.type);
+    return false;
+};
+exports.containsAnyHoles = (t) => {
+    if (t.tag === 'Hole')
+        return true;
+    if (t.tag === 'App')
+        return exports.containsAnyMetas(t.left) || exports.containsAnyMetas(t.right);
+    if (t.tag === 'Abs')
+        return (t.type && exports.containsAnyMetas(t.type)) || exports.containsAnyMetas(t.body);
+    if (t.tag === 'Pi')
+        return exports.containsAnyMetas(t.type) || exports.containsAnyMetas(t.body);
+    if (t.tag === 'Let')
+        return (t.type && exports.containsAnyMetas(t.type)) || exports.containsAnyMetas(t.val) || exports.containsAnyMetas(t.body);
+    if (t.tag === 'Ann')
+        return exports.containsAnyMetas(t.term) || exports.containsAnyMetas(t.type);
+    return false;
+};
 
 },{"../core/terms":2}],7:[function(require,module,exports){
 "use strict";
@@ -668,6 +698,8 @@ exports.typecheck = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
     config_1.log(() => terms_1.showTerm(term));
     const zterm = vals_1.zonk(vs, term);
     config_1.log(() => terms_1.showTerm(zterm));
+    if (terms_1.containsAnyMetas(zty) || terms_1.containsAnyHoles(zty) || terms_1.containsAnyMetas(zterm) || terms_1.containsAnyHoles(zterm))
+        return util_1.terr(`unsolved metas, ${terms_1.showTerm(zterm)} : ${terms_1.showTerm(zty)}`);
     return [zty, zterm];
 };
 
