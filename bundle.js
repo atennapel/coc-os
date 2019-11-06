@@ -422,7 +422,7 @@ exports.showTerm = (t) => {
     }
     if (t.tag === 'Pi') {
         const [as, b] = exports.flattenPi(t);
-        return `//${as.map(([x, im, t]) => im ? `{${x} : ${exports.showTermP(t.tag === 'Ann', t)}}` : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${exports.showTermP(b.tag === 'Ann', b)}`;
+        return `/${as.map(([x, im, t]) => im ? `{${x} : ${exports.showTermP(t.tag === 'Ann', t)}}` : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${exports.showTermP(b.tag === 'Ann', b)}`;
     }
     if (t.tag === 'Let')
         return t.type ?

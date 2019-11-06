@@ -77,7 +77,7 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `//${as.map(([x, im, t]) => im ? `{${x} : ${showTermP(t.tag === 'Ann', t)}}` : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
+    return `/${as.map(([x, im, t]) => im ? `{${x} : ${showTermP(t.tag === 'Ann', t)}}` : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Let')
     return t.type ?
