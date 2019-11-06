@@ -1,6 +1,6 @@
-import { List, filter, map, foldr, Nil, Cons, lookup, foldl } from '../list';
+import { List, filter, map, foldr, Nil, Cons, lookup, foldl, toString } from '../list';
 import { Name, Term, Meta, App, Var, showTerm, Pi, Type, Abs, Let } from './terms';
-import { Val, EnvV, quote, force, fresh, VVar, evaluate, VType, VPi, zonk } from './vals';
+import { Val, EnvV, quote, force, fresh, VVar, evaluate, VType, VPi, zonk, showEnvV } from './vals';
 import { unify } from './unification';
 import { terr } from '../util';
 import { log } from '../config';
@@ -8,6 +8,8 @@ import { log } from '../config';
 export type EnvT = List<[Name, { bound: boolean, type: Val }]>;
 export const Bound = (type: Val) => ({ bound: true, type });
 export const Def = (type: Val) => ({ bound: false, type });
+export const showEnvT = (l: EnvT, vs: EnvV): string =>
+  toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${showTerm(quote(b.type, vs))}`);
 
 const freshMeta = (ts: EnvT): Term => {
   const spine = map(filter(ts, ([x, { bound }]) => bound), ([x, _]) => Var(x));
@@ -27,7 +29,7 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
 
 const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   const ty = force(ty_);
-  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, vs))}`);
+  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, vs))} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
   if (ty.tag === 'Type' && tm.tag === 'Type') return Type;
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
     const x = fresh(vs, ty.name);
@@ -39,7 +41,7 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
     const x = fresh(vs, ty.name);
     const vx = VVar(x);
     const term = check(Cons([x, Bound(ty.type)], ts), Cons([x, true], vs), tm, ty.body(vx));
-    return Abs(ty.name, quote(ty.type, vs), true, term);
+    return Abs(x, quote(ty.type, vs), true, term);
   }
   /*
   if (tm.tag === 'App') {
@@ -83,7 +85,7 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: boolean): Val => {
 };
 
 const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
-  log(() => `synth ${showTerm(tm)}`);
+  log(() => `synth ${showTerm(tm)} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
   if (tm.tag === 'Type') return [VType, tm];
   if (tm.tag === 'Var') {
     const ty = lookup(ts, tm.name);
@@ -211,6 +213,7 @@ const handleArgs = (ts: EnvT, vs: EnvV, args: List<[false, Term, Val] | [true, T
 */
 
 const synthapp = (ts: EnvT, vs: EnvV, ty: Val, impl: boolean, arg: Term): [Val, Term, List<Term>] => {
+  log(() => `synthapp ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
   if (ty.tag === 'VPi' && ty.impl && !impl) {
     // {a} -> b @ c (instantiate with meta then b @ c)
     const m = freshMeta(ts);
@@ -228,5 +231,9 @@ const synthapp = (ts: EnvT, vs: EnvV, ty: Val, impl: boolean, arg: Term): [Val, 
 
 export const typecheck = (tm: Term, ts: EnvT = Nil, vs: EnvV = Nil): [Term, Term] => {
   const [ty, term] = synth(ts, vs, tm);
-  return [zonk(vs, quote(ty, vs)), zonk(vs, term)];
+  const zty = zonk(vs, quote(ty, vs));
+  log(() => showTerm(term));
+  const zterm = zonk(vs, term);
+  log(() => showTerm(zterm));
+  return [zty, zterm];
 };

@@ -444,6 +444,7 @@ const util_1 = require("../util");
 const config_1 = require("../config");
 exports.Bound = (type) => ({ bound: true, type });
 exports.Def = (type) => ({ bound: false, type });
+exports.showEnvT = (l, vs) => list_1.toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${terms_1.showTerm(vals_1.quote(b.type, vs))}`);
 const freshMeta = (ts) => {
     const spine = list_1.map(list_1.filter(ts, ([x, { bound }]) => bound), ([x, _]) => terms_1.Var(x));
     return list_1.foldr((x, y) => terms_1.App(y, false, x), terms_1.Meta(), spine);
@@ -460,7 +461,7 @@ const inst = (ts, vs, ty_) => {
 };
 const check = (ts, vs, tm, ty_) => {
     const ty = vals_1.force(ty_);
-    config_1.log(() => `check ${terms_1.showTerm(tm)} : ${terms_1.showTerm(vals_1.quote(ty, vs))}`);
+    config_1.log(() => `check ${terms_1.showTerm(tm)} : ${terms_1.showTerm(vals_1.quote(ty, vs))} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
     if (ty.tag === 'Type' && tm.tag === 'Type')
         return terms_1.Type;
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
@@ -473,7 +474,7 @@ const check = (ts, vs, tm, ty_) => {
         const x = vals_1.fresh(vs, ty.name);
         const vx = vals_1.VVar(x);
         const term = check(list_1.Cons([x, exports.Bound(ty.type)], ts), list_1.Cons([x, true], vs), tm, ty.body(vx));
-        return terms_1.Abs(ty.name, vals_1.quote(ty.type, vs), true, term);
+        return terms_1.Abs(x, vals_1.quote(ty.type, vs), true, term);
     }
     /*
     if (tm.tag === 'App') {
@@ -516,7 +517,7 @@ const freshPi = (ts, vs, x, impl) => {
     return vals_1.VPi(x, va, impl, v => vals_1.evaluate(b, list_1.Cons([x, v], vs)));
 };
 const synth = (ts, vs, tm) => {
-    config_1.log(() => `synth ${terms_1.showTerm(tm)}`);
+    config_1.log(() => `synth ${terms_1.showTerm(tm)} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
     if (tm.tag === 'Type')
         return [vals_1.VType, tm];
     if (tm.tag === 'Var') {
@@ -646,6 +647,7 @@ const handleArgs = (ts: EnvT, vs: EnvV, args: List<[false, Term, Val] | [true, T
 };
 */
 const synthapp = (ts, vs, ty, impl, arg) => {
+    config_1.log(() => `synthapp ${terms_1.showTerm(vals_1.quote(ty, vs))} @ ${impl ? '{' : ''}${terms_1.showTerm(arg)}${impl ? '}' : ''} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
     if (ty.tag === 'VPi' && ty.impl && !impl) {
         // {a} -> b @ c (instantiate with meta then b @ c)
         const m = freshMeta(ts);
@@ -662,7 +664,11 @@ const synthapp = (ts, vs, ty, impl, arg) => {
 };
 exports.typecheck = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
     const [ty, term] = synth(ts, vs, tm);
-    return [vals_1.zonk(vs, vals_1.quote(ty, vs)), vals_1.zonk(vs, term)];
+    const zty = vals_1.zonk(vs, vals_1.quote(ty, vs));
+    config_1.log(() => terms_1.showTerm(term));
+    const zterm = vals_1.zonk(vs, term);
+    config_1.log(() => terms_1.showTerm(zterm));
+    return [zty, zterm];
 };
 
 },{"../config":1,"../list":3,"../util":10,"./terms":6,"./unification":8,"./vals":9}],8:[function(require,module,exports){
@@ -672,6 +678,7 @@ const list_1 = require("../list");
 const vals_1 = require("./vals");
 const terms_1 = require("./terms");
 const util_1 = require("../util");
+const config_1 = require("../config");
 const checkSpine = (spine) => list_1.map(spine, v_ => {
     const v = vals_1.force(v_);
     if (v.tag === 'VNe' && v.head.tag === 'Var')
@@ -720,6 +727,7 @@ const eqHead = (a, b) => a === b || (a.tag === 'Var' && b.tag === 'Var' && a.nam
 exports.unify = (vs, a_, b_) => {
     const a = vals_1.force(a_);
     const b = vals_1.force(b_);
+    config_1.log(() => `unify ${terms_1.showTerm(vals_1.quote(a, vs))} ~ ${terms_1.showTerm(vals_1.quote(b, vs))} in ${vals_1.showEnvV(vs)}`);
     if (a.tag === 'Type' && b.tag === 'Type')
         return;
     if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.impl === b.impl) {
@@ -763,12 +771,13 @@ exports.unify = (vs, a_, b_) => {
     return util_1.terr(`cannot unify: ${terms_1.showTerm(ta)} ~ ${terms_1.showTerm(tb)}`);
 };
 
-},{"../list":3,"../util":10,"./terms":6,"./vals":9}],9:[function(require,module,exports){
+},{"../config":1,"../list":3,"../util":10,"./terms":6,"./vals":9}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("./terms");
 const list_1 = require("../list");
 const util_1 = require("../util");
+exports.showEnvV = (l) => list_1.toString(l, ([x, b]) => b === true ? x : `${x} = ${terms_1.showTerm(exports.quote(b, l))}`);
 exports.VType = terms_1.Type;
 exports.VNe = (head, args = list_1.Nil) => ({ tag: 'VNe', head, args });
 exports.VAbs = (name, type, impl, body) => ({ tag: 'VAbs', name, type, impl, body });

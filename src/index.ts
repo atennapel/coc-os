@@ -1,24 +1,30 @@
 // @ts-ignore
 import { Var, Abs, Type, showTerm, App, Pi } from './surface/terms';
 import { typecheck } from './surface/typecheck';
+import { parse } from './surface/parser';
+import { setConfig } from './config';
 
 /**
  * TODO:
- * - elaboration
+ * - fix elaboration
  * - convert surface to core
  * - delaboration/redecoration
  */
 
-const v = Var;
+const script = `
+let Nat (/@ t * -> t (-> t t) t)
+let z (: (\\(z s) z) Nat)
+let s (: (\\(n z s) s (n z s)) (-> Nat Nat))
+(s (s z))
+`;
 
-// const List = Abs('t', Type, false, Pi('r', Type, true, Pi('_', v('r'), false, Pi('_', Pi('_', v('t'), false, Pi('_', v('r'), false, v('r'))), false, v('r')))));
-// const id = Abs('t', Type, true, Abs('x', v('t'), false, v('x')));
+setConfig({ debug: true });
 
 try {
-  const term = App(Abs('x', null, false, v('x')), false, Type);
+  const term = parse(script);
   console.log(showTerm(term));
   const [ty, tm] = typecheck(term);
   console.log(`${showTerm(tm)} : ${showTerm(ty)}`);
 } catch (err) {
-  console.log('' + err);
+  console.log(err);
 }

@@ -1,7 +1,8 @@
 import { List, map, contains, Cons, Nil, foldl, zipWith_, length } from '../list';
-import { Val, force, EnvV, quote, evaluate, Head, fresh, VVar, vapp } from './vals';
+import { Val, force, EnvV, quote, evaluate, Head, fresh, VVar, vapp, showEnvV } from './vals';
 import { Name, Meta, Term, showTerm, Abs, Type } from './terms';
 import { terr, impossible } from '../util';
+import { log } from '../config';
 
 const checkSpine = (spine: List<Val>): List<Name> =>
   map(spine, v_ => {
@@ -56,6 +57,7 @@ const eqHead = (a: Head, b: Head): boolean =>
 export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
   const a = force(a_);
   const b = force(b_);
+  log(() => `unify ${showTerm(quote(a, vs))} ~ ${showTerm(quote(b, vs))} in ${showEnvV(vs)}`);
   if (a.tag === 'Type' && b.tag === 'Type') return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.impl === b.impl) {
     unify(vs, a.type, b.type);

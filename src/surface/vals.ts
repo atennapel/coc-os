@@ -1,5 +1,5 @@
-import { Var, Meta, Type, Name, Term, App, Abs, Pi, Ann, Let } from './terms';
-import { List, Nil, Cons, foldr, lookup } from '../list';
+import { Var, Meta, Type, Name, Term, App, Abs, Pi, Ann, Let, showTerm } from './terms';
+import { List, Nil, Cons, foldr, lookup, toString } from '../list';
 import { impossible } from '../util';
 
 export type Head = Var | Meta;
@@ -11,6 +11,8 @@ export type Val
   | { tag: 'Type' };
 
 export type EnvV = List<[Name, Val | true]>;
+export const showEnvV = (l: EnvV): string =>
+  toString(l, ([x, b]) => b === true ? x : `${x} = ${showTerm(quote(b, l))}`);
 
 export const VType = Type as Val;
 export const VNe = (head: Head, args: List<[boolean, Val]> = Nil): Val =>
