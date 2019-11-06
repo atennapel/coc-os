@@ -3,6 +3,7 @@ import { Name, Term, Meta, App, Var, showTerm, Pi, Type, Abs, Let } from './term
 import { Val, EnvV, quote, force, fresh, VVar, evaluate, VType, VPi, zonk } from './vals';
 import { unify } from './unification';
 import { terr } from '../util';
+import { log } from '../config';
 
 export type EnvT = List<[Name, { bound: boolean, type: Val }]>;
 export const Bound = (type: Val) => ({ bound: true, type });
@@ -26,7 +27,7 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
 
 const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   const ty = force(ty_);
-  console.log(`check ${showTerm(tm)} : ${showTerm(quote(ty, vs))}`);
+  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, vs))}`);
   if (ty.tag === 'Type' && tm.tag === 'Type') return Type;
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
     const x = fresh(vs, ty.name);
@@ -81,7 +82,7 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: boolean): Val => {
 };
 
 const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
-  console.log(`synth ${showTerm(tm)}`);
+  log(() => `synth ${showTerm(tm)}`);
   if (tm.tag === 'Type') return [VType, tm];
   if (tm.tag === 'Var') {
     const ty = lookup(ts, tm.name);
