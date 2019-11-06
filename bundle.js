@@ -59,11 +59,11 @@ exports.showTerm = (t) => {
     }
     if (t.tag === 'Abs') {
         const [as, b] = exports.flattenAbs(t);
-        return `λ${as.map(([im, t]) => im ? `{${exports.showTerm(t)}}` : exports.showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${exports.showTerm(b)}`;
+        return `\\${as.map(([im, t]) => im ? `{${exports.showTerm(t)}}` : exports.showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${exports.showTerm(b)}`;
     }
     if (t.tag === 'Pi') {
         const [as, b] = exports.flattenPi(t);
-        return `π${as.map(([im, t]) => im ? `{${exports.showTerm(t)}}` : exports.showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${exports.showTerm(b)}`;
+        return `/${as.map(([im, t]) => im ? `{${exports.showTerm(t)}}` : exports.showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${exports.showTerm(b)}`;
     }
     if (t.tag === 'Let')
         return `let ${t.impl ? `implicitly ` : ''}${exports.showTerm(t.val)} in ${exports.showTerm(t.body)}`;
@@ -71,6 +71,151 @@ exports.showTerm = (t) => {
 };
 
 },{}],3:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const terms_1 = require("./terms");
+const list_1 = require("../list");
+const util_1 = require("../util");
+exports.VType = terms_1.Type;
+exports.VNe = (head, args = list_1.Nil) => ({ tag: 'VNe', head, args });
+exports.VAbs = (type, impl, body) => ({ tag: 'VAbs', type, impl, body });
+exports.VPi = (type, impl, body) => ({ tag: 'VPi', type, impl, body });
+exports.VVar = (index) => exports.VNe(index);
+exports.vapp = (a, impl, b) => {
+    if (a.tag === 'VAbs')
+        return a.body(b);
+    if (a.tag === 'VNe')
+        return exports.VNe(a.head, list_1.Cons([impl, b], a.args));
+    return util_1.impossible('vapp');
+};
+exports.evaluate = (t, vs = list_1.Nil) => {
+    if (t.tag === 'Type')
+        return t;
+    if (t.tag === 'Var')
+        return list_1.index(vs, t.index) || util_1.impossible(`evaluate ${t.index}`);
+    if (t.tag === 'App')
+        return exports.vapp(exports.evaluate(t.left, vs), t.impl, exports.evaluate(t.right, vs));
+    if (t.tag === 'Abs')
+        return exports.VAbs(exports.evaluate(t.type, vs), t.impl, v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+    if (t.tag === 'Pi')
+        return exports.VPi(exports.evaluate(t.type, vs), t.impl, v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+    if (t.tag === 'Let')
+        return exports.evaluate(t.body, list_1.Cons(exports.evaluate(t.val), vs));
+    return t;
+};
+exports.quote = (v, k = 0) => {
+    if (v.tag === 'Type')
+        return v;
+    if (v.tag === 'VNe')
+        return list_1.foldr(([impl, x], y) => terms_1.App(y, impl, exports.quote(x, k)), terms_1.Var(k - (v.head + 1)), v.args);
+    if (v.tag === 'VAbs')
+        return terms_1.Abs(exports.quote(v.type, k), v.impl, exports.quote(v.body(exports.VVar(k)), k + 1));
+    if (v.tag === 'VPi')
+        return terms_1.Pi(exports.quote(v.type, k), v.impl, exports.quote(v.body(exports.VVar(k)), k + 1));
+    return v;
+};
+exports.normalize = (t, vs = list_1.Nil, k = 0) => exports.quote(exports.evaluate(t, vs), k);
+
+},{"../list":6,"../util":13,"./terms":2}],4:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const terms_1 = require("../core/terms");
+exports.EVar = (index) => terms_1.Var(index);
+exports.EApp = (left, right) => ({ tag: 'EApp', left, right });
+exports.EAbs = (body) => ({ tag: 'EAbs', body });
+exports.ELet = (val, body) => ({ tag: 'ELet', val, body });
+exports.EType = terms_1.Type;
+exports.flattenEApp = (t) => {
+    const r = [];
+    while (t.tag === 'EApp') {
+        r.push(t.right);
+        t = t.left;
+    }
+    return [t, r.reverse()];
+};
+exports.showETermP = (b, t) => b ? `(${exports.showETerm(t)})` : exports.showETerm(t);
+exports.showETerm = (t) => {
+    if (t.tag === 'Type')
+        return '*';
+    if (t.tag === 'Var')
+        return `${t.index}`;
+    if (t.tag === 'EApp') {
+        const [f, as] = exports.flattenEApp(t);
+        return `${exports.showETermP(f.tag === 'EAbs' || f.tag === 'EApp' || f.tag === 'ELet', f)} ${as.map((t, i) => `${exports.showETermP(t.tag === 'EApp' || (t.tag === 'ELet' && i < as.length - 1) || (t.tag === 'EAbs' && i < as.length - 1), t)}`).join(' ')}`;
+    }
+    if (t.tag === 'EAbs')
+        return `\\${exports.showETerm(t.body)}`;
+    if (t.tag === 'ELet')
+        return `let ${exports.showETerm(t.val)} in ${exports.showETerm(t.body)}`;
+    return t;
+};
+exports.shift = (d, c, t) => {
+    if (t.tag === 'Var')
+        return t.index < c ? t : exports.EVar(t.index + d);
+    if (t.tag === 'EAbs')
+        return exports.EAbs(exports.shift(d, c + 1, t.body));
+    if (t.tag === 'ELet')
+        return exports.ELet(exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'EApp')
+        return exports.EApp(exports.shift(d, c, t.left), exports.shift(d, c, t.right));
+    return t;
+};
+exports.erase = (t) => {
+    if (t.tag === 'Type')
+        return exports.EType;
+    if (t.tag === 'Pi')
+        return exports.EType;
+    if (t.tag === 'App')
+        return t.impl ? exports.erase(t.left) : exports.EApp(exports.erase(t.left), exports.erase(t.right));
+    if (t.tag === 'Abs')
+        return t.impl ? exports.shift(-1, 0, exports.erase(t.body)) : exports.EAbs(exports.erase(t.body));
+    if (t.tag === 'Let')
+        return t.impl ? exports.shift(-1, 0, exports.erase(t.body)) : exports.ELet(exports.erase(t.val), exports.erase(t.body));
+    return t;
+};
+
+},{"../core/terms":2}],5:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const list_1 = require("../list");
+const util_1 = require("../util");
+const terms_1 = require("./terms");
+exports.VType = terms_1.EType;
+exports.VNe = (head, args = list_1.Nil) => ({ tag: 'VNe', head, args });
+exports.VAbs = (body) => ({ tag: 'VAbs', body });
+exports.VVar = (index) => exports.VNe(index);
+exports.vapp = (a, b) => {
+    if (a.tag === 'VAbs')
+        return a.body(b);
+    if (a.tag === 'VNe')
+        return exports.VNe(a.head, list_1.Cons(b, a.args));
+    return util_1.impossible('vapp');
+};
+exports.evaluate = (t, vs = list_1.Nil) => {
+    if (t.tag === 'Type')
+        return t;
+    if (t.tag === 'Var')
+        return list_1.index(vs, t.index) || util_1.impossible(`evaluate ${t.index}`);
+    if (t.tag === 'EApp')
+        return exports.vapp(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
+    if (t.tag === 'EAbs')
+        return exports.VAbs(v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+    if (t.tag === 'ELet')
+        return exports.evaluate(t.body, list_1.Cons(exports.evaluate(t.val), vs));
+    return t;
+};
+exports.quote = (v, k = 0) => {
+    if (v.tag === 'Type')
+        return v;
+    if (v.tag === 'VNe')
+        return list_1.foldr((x, y) => terms_1.EApp(y, exports.quote(x, k)), terms_1.EVar(k - (v.head + 1)), v.args);
+    if (v.tag === 'VAbs')
+        return terms_1.EAbs(exports.quote(v.body(exports.VVar(k)), k + 1));
+    return v;
+};
+exports.normalize = (t, vs = list_1.Nil, k = 0) => exports.quote(exports.evaluate(t, vs), k);
+
+},{"../list":6,"../util":13,"./terms":4}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Nil = { tag: 'Nil' };
@@ -166,7 +311,7 @@ exports.range = (n) => n <= 0 ? exports.Nil : exports.Cons(n - 1, exports.range(
 exports.contains = (l, v) => l.tag === 'Cons' ? (l.head === v || exports.contains(l.tail, v)) : false;
 exports.max = (l) => exports.foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTEGER, l);
 
-},{}],4:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_1 = require("./config");
@@ -174,6 +319,10 @@ const parser_1 = require("./surface/parser");
 const terms_1 = require("./surface/terms");
 const typecheck_1 = require("./surface/typecheck");
 const vals_1 = require("./surface/vals");
+const C = require("./core/terms");
+const CV = require("./core/vals");
+const terms_2 = require("./erased/terms");
+const EV = require("./erased/vals");
 exports.initREPL = () => { };
 exports.runREPL = (_s, _cb) => {
     try {
@@ -188,14 +337,22 @@ exports.runREPL = (_s, _cb) => {
         config_1.log(() => `type: ${terms_1.showTerm(type)}`);
         const nf = vals_1.normalize(term);
         config_1.log(() => `nmfm: ${terms_1.showTerm(nf)}`);
-        return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~>\n${terms_1.showTerm(nf)}`);
+        const core = terms_1.toCore(term);
+        config_1.log(() => `core: ${C.showTerm(core)}`);
+        const cnm = CV.normalize(core);
+        config_1.log(() => `ncor: ${C.showTerm(cnm)}`);
+        const er = terms_2.erase(core);
+        config_1.log(() => `eras: ${terms_2.showETerm(er)}`);
+        const ner = EV.normalize(er);
+        config_1.log(() => `nera: ${terms_2.showETerm(ner)}`);
+        return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~>\n${terms_1.showTerm(nf)} ~>\n${C.showTerm(core)} ~>\n${C.showTerm(core)} ~>\n${C.showTerm(cnm)} ~>\n${terms_2.showETerm(er)} ~>\n${terms_2.showETerm(ner)}`);
     }
     catch (err) {
         return _cb('' + err, true);
     }
 };
 
-},{"./config":1,"./surface/parser":5,"./surface/terms":6,"./surface/typecheck":7,"./surface/vals":9}],5:[function(require,module,exports){
+},{"./config":1,"./core/terms":2,"./core/vals":3,"./erased/terms":4,"./erased/vals":5,"./surface/parser":8,"./surface/terms":9,"./surface/typecheck":10,"./surface/vals":12}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("./terms");
@@ -363,10 +520,12 @@ exports.parse = (s) => {
     return exprs(ts);
 };
 
-},{"./terms":6}],6:[function(require,module,exports){
+},{"./terms":9}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const C = require("../core/terms");
+const list_1 = require("../list");
+const util_1 = require("../util");
 exports.Var = (name) => ({ tag: 'Var', name });
 exports.App = (left, impl, right) => ({ tag: 'App', left, impl, right });
 exports.Abs = (name, type, impl, body) => ({ tag: 'Abs', name, type, impl, body });
@@ -462,8 +621,27 @@ exports.containsAnyHoles = (t) => {
         return exports.containsAnyMetas(t.term) || exports.containsAnyMetas(t.type);
     return false;
 };
+exports.toCore = (t, is = list_1.Nil, k = 0) => {
+    if (t.tag === 'Type')
+        return C.Type;
+    if (t.tag === 'Var') {
+        const n = list_1.lookup(is, t.name);
+        if (n === null)
+            return util_1.impossible(`toCore: ${exports.showTerm(t)}`);
+        return C.Var(k - n - 1);
+    }
+    if (t.tag === 'App')
+        return C.App(exports.toCore(t.left, is, k), t.impl, exports.toCore(t.right, is, k));
+    if (t.tag === 'Abs' && t.type)
+        return C.Abs(exports.toCore(t.type, is, k), t.impl, exports.toCore(t.body, list_1.Cons([t.name, k], is), k + 1));
+    if (t.tag === 'Pi')
+        return C.Pi(exports.toCore(t.type, is, k), t.impl, exports.toCore(t.body, list_1.Cons([t.name, k], is), k + 1));
+    if (t.tag === 'Let')
+        return C.Let(exports.toCore(t.val, is, k), t.impl, exports.toCore(t.body, list_1.Cons([t.name, k], is), k + 1));
+    return util_1.impossible(`toCore: ${exports.showTerm(t)}`);
+};
 
-},{"../core/terms":2}],7:[function(require,module,exports){
+},{"../core/terms":2,"../list":6,"../util":13}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -703,7 +881,7 @@ exports.typecheck = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
     return [zty, zterm];
 };
 
-},{"../config":1,"../list":3,"../util":10,"./terms":6,"./unification":8,"./vals":9}],8:[function(require,module,exports){
+},{"../config":1,"../list":6,"../util":13,"./terms":9,"./unification":11,"./vals":12}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -803,7 +981,7 @@ exports.unify = (vs, a_, b_) => {
     return util_1.terr(`cannot unify: ${terms_1.showTerm(ta)} ~ ${terms_1.showTerm(tb)}`);
 };
 
-},{"../config":1,"../list":3,"../util":10,"./terms":6,"./vals":9}],9:[function(require,module,exports){
+},{"../config":1,"../list":6,"../util":13,"./terms":9,"./vals":12}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("./terms");
@@ -913,7 +1091,7 @@ exports.zonk = (vs, tm) => {
 // only use this with elaborated terms
 exports.normalize = (t, vs = list_1.Nil) => exports.quote(exports.evaluate(t, vs), vs);
 
-},{"../list":3,"../util":10,"./terms":6}],10:[function(require,module,exports){
+},{"../list":6,"../util":13,"./terms":9}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -923,7 +1101,7 @@ exports.terr = (msg) => {
     throw new TypeError(msg);
 };
 
-},{}],11:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -979,4 +1157,4 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":4}]},{},[11]);
+},{"./repl":7}]},{},[14]);

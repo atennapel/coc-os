@@ -33,7 +33,7 @@ export const showETerm = (t: Erased): string => {
       as.map((t, i) =>
           `${showETermP(t.tag === 'EApp' || (t.tag === 'ELet' && i < as.length - 1) || (t.tag === 'EAbs' && i < as.length - 1), t)}`).join(' ')}`;
   }
-  if (t.tag === 'EAbs') return `λ${showETerm(t.body)}`;
+  if (t.tag === 'EAbs') return `\\${showETerm(t.body)}`;
   if (t.tag === 'ELet')
     return `let ${showETerm(t.val)} in ${showETerm(t.body)}`;
   return t;

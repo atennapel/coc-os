@@ -53,11 +53,11 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
-    return `λ${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
+    return `\\${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `π${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
+    return `/${as.map(([im, t]) => im ? `{${showTerm(t)}}` : showTermP(t.tag === 'Abs' || t.tag === 'Pi' || t.tag === 'App' || t.tag === 'Let', t)).join(' ')}. ${showTerm(b)}`;
   }
   if (t.tag === 'Let')
     return `let ${t.impl ? `implicitly ` : ''}${showTerm(t.val)} in ${showTerm(t.body)}`;

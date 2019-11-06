@@ -1,5 +1,7 @@
 import * as C from '../core/terms';
 import { Val } from './vals';
+import { List, lookup, Cons, Nil } from '../list';
+import { impossible } from '../util';
 
 export type Name = string;
 export type Var = { tag: 'Var', name: Name };
@@ -105,4 +107,18 @@ export const containsAnyHoles = (t: Term): boolean => {
   if (t.tag === 'Let') return (t.type && containsAnyMetas(t.type)) || containsAnyMetas(t.val) || containsAnyMetas(t.body);
   if (t.tag === 'Ann') return containsAnyMetas(t.term) || containsAnyMetas(t.type);
   return false;
+};
+
+export const toCore = (t: Term, is: List<[Name, number]> = Nil, k: number = 0): C.Term => {
+  if (t.tag === 'Type') return C.Type;
+  if (t.tag === 'Var') {
+    const n = lookup(is, t.name);
+    if (n === null) return impossible(`toCore: ${showTerm(t)}`);
+    return C.Var(k - n - 1);
+  }
+  if (t.tag === 'App') return C.App(toCore(t.left, is, k), t.impl, toCore(t.right, is, k));
+  if (t.tag === 'Abs' && t.type) return C.Abs(toCore(t.type, is, k), t.impl, toCore(t.body, Cons([t.name, k], is), k + 1));
+  if (t.tag === 'Pi') return C.Pi(toCore(t.type, is, k), t.impl, toCore(t.body, Cons([t.name, k], is), k + 1));
+  if (t.tag === 'Let') return C.Let(toCore(t.val, is, k), t.impl, toCore(t.body, Cons([t.name, k], is), k + 1));
+  return impossible(`toCore: ${showTerm(t)}`);
 };
