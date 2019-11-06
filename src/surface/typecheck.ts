@@ -106,8 +106,8 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     return [rt, res];
     */
    const [fn, fntm] = synth(ts, vs, tm.left);
-   const [rt, res] = synthapp(ts, vs, fn, tm.impl, tm.right);
-   return [rt, App(fntm, tm.impl, res)];
+   const [rt, res, ms] = synthapp(ts, vs, fn, tm.impl, tm.right);
+   return [rt, App(foldl((f, a) => App(f, true, a), fntm, ms), tm.impl, res)];
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
@@ -210,17 +210,18 @@ const handleArgs = (ts: EnvT, vs: EnvV, args: List<[false, Term, Val] | [true, T
 };
 */
 
-const synthapp = (ts: EnvT, vs: EnvV, ty: Val, impl: boolean, arg: Term): [Val, Term] => {
+const synthapp = (ts: EnvT, vs: EnvV, ty: Val, impl: boolean, arg: Term): [Val, Term, List<Term>] => {
   if (ty.tag === 'VPi' && ty.impl && !impl) {
     // {a} -> b @ c (instantiate with meta then b @ c)
     const m = freshMeta(ts);
     const vm = evaluate(m, vs);
-    return synthapp(ts, vs, ty.body(vm), impl, arg);
+    const [rt, ft, l] = synthapp(ts, vs, ty.body(vm), impl, arg);
+    return [rt, ft, Cons(m, l)];
   }
   if (ty.tag === 'VPi' && ty.impl === impl) {
     const tm = check(ts, vs, arg, ty.type);
     const vm = evaluate(tm, vs);
-    return [ty.body(vm), tm];
+    return [ty.body(vm), tm, Nil];
   }
   return terr(`unable to syntapp: ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''}`);
 };

@@ -541,8 +541,8 @@ const synth = (ts, vs, tm) => {
         return [rt, res];
         */
         const [fn, fntm] = synth(ts, vs, tm.left);
-        const [rt, res] = synthapp(ts, vs, fn, tm.impl, tm.right);
-        return [rt, terms_1.App(fntm, tm.impl, res)];
+        const [rt, res, ms] = synthapp(ts, vs, fn, tm.impl, tm.right);
+        return [rt, terms_1.App(list_1.foldl((f, a) => terms_1.App(f, true, a), fntm, ms), tm.impl, res)];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
@@ -650,12 +650,13 @@ const synthapp = (ts, vs, ty, impl, arg) => {
         // {a} -> b @ c (instantiate with meta then b @ c)
         const m = freshMeta(ts);
         const vm = vals_1.evaluate(m, vs);
-        return synthapp(ts, vs, ty.body(vm), impl, arg);
+        const [rt, ft, l] = synthapp(ts, vs, ty.body(vm), impl, arg);
+        return [rt, ft, list_1.Cons(m, l)];
     }
     if (ty.tag === 'VPi' && ty.impl === impl) {
         const tm = check(ts, vs, arg, ty.type);
         const vm = vals_1.evaluate(tm, vs);
-        return [ty.body(vm), tm];
+        return [ty.body(vm), tm, list_1.Nil];
     }
     return util_1.terr(`unable to syntapp: ${terms_1.showTerm(vals_1.quote(ty, vs))} @ ${impl ? '{' : ''}${terms_1.showTerm(arg)}${impl ? '}' : ''}`);
 };
