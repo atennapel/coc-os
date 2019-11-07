@@ -662,11 +662,11 @@ const isImplicitUsed = (x, t) => {
         return t.impl ? false : isImplicitUsed(x, t.right);
     }
     if (t.tag === 'Abs')
-        return (t.type && isImplicitUsed(x, t.type)) || (t.name !== x && isImplicitUsed(x, t.body));
+        return t.name !== x && isImplicitUsed(x, t.body);
     if (t.tag === 'Pi')
         return false; // ?
     if (t.tag === 'Let')
-        return (t.type && isImplicitUsed(x, t.type)) || (!t.impl && isImplicitUsed(x, t.val)) || (t.name !== x && isImplicitUsed(x, t.body));
+        return (!t.impl && isImplicitUsed(x, t.val)) || (t.name !== x && isImplicitUsed(x, t.body));
     if (t.tag === 'Ann')
         return isImplicitUsed(x, t.term);
     return false;
