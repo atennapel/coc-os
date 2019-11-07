@@ -333,8 +333,8 @@ exports.runREPL = (_s, _cb) => {
         const tm = parser_1.parse(_s);
         config_1.log(() => `inpt: ${terms_1.showTerm(tm)}`);
         const [type, term] = typecheck_1.typecheck(tm);
-        config_1.log(() => `term: ${terms_1.showTerm(term)}`);
         config_1.log(() => `type: ${terms_1.showTerm(type)}`);
+        config_1.log(() => `term: ${terms_1.showTerm(term)}`);
         const nf = vals_1.normalize(term);
         config_1.log(() => `nmfm: ${terms_1.showTerm(nf)}`);
         const core = terms_1.toCore(term);
@@ -345,7 +345,7 @@ exports.runREPL = (_s, _cb) => {
         config_1.log(() => `eras: ${terms_2.showETerm(er)}`);
         const ner = EV.normalize(er);
         config_1.log(() => `nera: ${terms_2.showETerm(ner)}`);
-        return _cb(`${terms_1.showTerm(term)} : ${terms_1.showTerm(type)} ~>\n${terms_1.showTerm(nf)} ~>\n${C.showTerm(core)} ~>\n${C.showTerm(core)} ~>\n${C.showTerm(cnm)} ~>\n${terms_2.showETerm(er)} ~>\n${terms_2.showETerm(ner)}`);
+        return _cb(`${terms_1.showTerm(type)}\n${terms_1.showTerm(term)}\n${terms_1.showTerm(nf)}\n${C.showTerm(core)}\n${C.showTerm(core)}\n${C.showTerm(cnm)}\n${terms_2.showETerm(er)}\n${terms_2.showETerm(ner)}`);
     }
     catch (err) {
         return _cb('' + err, true);

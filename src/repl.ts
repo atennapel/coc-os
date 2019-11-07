@@ -19,8 +19,8 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     const tm = parse(_s);
     log(() => `inpt: ${showTerm(tm)}`);
     const [type, term] = typecheck(tm);
-    log(() => `term: ${showTerm(term)}`);
     log(() => `type: ${showTerm(type)}`);
+    log(() => `term: ${showTerm(term)}`);
     const nf = normalize(term);
     log(() => `nmfm: ${showTerm(nf)}`);
     const core = toCore(term);
@@ -31,7 +31,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     log(() => `eras: ${showETerm(er)}`);
     const ner = EV.normalize(er);
     log(() => `nera: ${showETerm(ner)}`);
-    return _cb(`${showTerm(term)} : ${showTerm(type)} ~>\n${showTerm(nf)} ~>\n${C.showTerm(core)} ~>\n${C.showTerm(core)} ~>\n${C.showTerm(cnm)} ~>\n${showETerm(er)} ~>\n${showETerm(ner)}`);
+    return _cb(`${showTerm(type)}\n${showTerm(term)}\n${showTerm(nf)}\n${C.showTerm(core)}\n${C.showTerm(core)}\n${C.showTerm(cnm)}\n${showETerm(er)}\n${showETerm(ner)}`);
   } catch (err) {
     return _cb('' + err, true);
   }
