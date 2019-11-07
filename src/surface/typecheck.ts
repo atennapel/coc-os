@@ -82,12 +82,12 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
       const val = check(ts, vs, tm.val, vt);
       const vv = evaluate(val, vs);
       const body = check(Cons([tm.name, Def(vt)], ts), Cons([tm.name, vv], vs), tm.body, ty);
-      return Let(tm.name, type, tm.impl, val, body);
+      return Let(tm.name, null, tm.impl, val, body);
     } else {
       const [vt, val] = synth(ts, vs, tm.val);
       const vv = evaluate(val, vs);
       const body = check(Cons([tm.name, Def(vt)], ts), Cons([tm.name, vv], vs), tm.body, ty);
-      return Let(tm.name, quote(vt, vs), tm.impl, val, body);
+      return Let(tm.name, null, tm.impl, val, body);
     }
   }
   const [ty2, term] = synth(ts, vs, tm);
@@ -161,12 +161,12 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
       const val = check(ts, vs, tm.val, vt);
       const vv = evaluate(val, vs);
       const [tr, body] = synth(Cons([tm.name, Def(vt)], ts), Cons([tm.name, vv], vs), tm.body);
-      return [tr, Let(tm.name, type, tm.impl, val, body)];
+      return [tr, Let(tm.name, null, tm.impl, val, body)];
     } else {
       const [vt, val] = synth(ts, vs, tm.val);
       const vv = evaluate(val, vs);
       const [tr, body] = synth(Cons([tm.name, Def(vt)], ts), Cons([tm.name, vv], vs), tm.body);
-      return [tr, Let(tm.name, quote(vt, vs), tm.impl, val, body)];
+      return [tr, Let(tm.name, null, tm.impl, val, body)];
     }
   }
   if (tm.tag === 'Pi') {

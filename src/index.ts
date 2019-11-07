@@ -11,10 +11,8 @@ import * as EV from './erased/vals';
 
 /**
  * TODO:
- * - remove type from elab let
  * - fix repl msg
  * - repl let cmd
- * - check if implicit is used
  * - delaboration/redecoration
  */
 

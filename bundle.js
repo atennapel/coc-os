@@ -726,13 +726,13 @@ const check = (ts, vs, tm, ty_) => {
             const val = check(ts, vs, tm.val, vt);
             const vv = vals_1.evaluate(val, vs);
             const body = check(list_1.Cons([tm.name, exports.Def(vt)], ts), list_1.Cons([tm.name, vv], vs), tm.body, ty);
-            return terms_1.Let(tm.name, type, tm.impl, val, body);
+            return terms_1.Let(tm.name, null, tm.impl, val, body);
         }
         else {
             const [vt, val] = synth(ts, vs, tm.val);
             const vv = vals_1.evaluate(val, vs);
             const body = check(list_1.Cons([tm.name, exports.Def(vt)], ts), list_1.Cons([tm.name, vv], vs), tm.body, ty);
-            return terms_1.Let(tm.name, vals_1.quote(vt, vs), tm.impl, val, body);
+            return terms_1.Let(tm.name, null, tm.impl, val, body);
         }
     }
     const [ty2, term] = synth(ts, vs, tm);
@@ -807,13 +807,13 @@ const synth = (ts, vs, tm) => {
             const val = check(ts, vs, tm.val, vt);
             const vv = vals_1.evaluate(val, vs);
             const [tr, body] = synth(list_1.Cons([tm.name, exports.Def(vt)], ts), list_1.Cons([tm.name, vv], vs), tm.body);
-            return [tr, terms_1.Let(tm.name, type, tm.impl, val, body)];
+            return [tr, terms_1.Let(tm.name, null, tm.impl, val, body)];
         }
         else {
             const [vt, val] = synth(ts, vs, tm.val);
             const vv = vals_1.evaluate(val, vs);
             const [tr, body] = synth(list_1.Cons([tm.name, exports.Def(vt)], ts), list_1.Cons([tm.name, vv], vs), tm.body);
-            return [tr, terms_1.Let(tm.name, vals_1.quote(vt, vs), tm.impl, val, body)];
+            return [tr, terms_1.Let(tm.name, null, tm.impl, val, body)];
         }
     }
     if (tm.tag === 'Pi') {
