@@ -11,7 +11,7 @@ import * as EV from './erased/vals';
 
 /**
  * TODO:
- * - repl let cmd
+ * - repl let cmd, fix defs in debruijn
  * - delaboration/redecoration
  */
 

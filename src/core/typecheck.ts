@@ -1,6 +1,6 @@
 import { Val, quote, EnvV, VVar, vapp, VType, evaluate } from './vals';
 import { Term, showTerm, Pi } from './terms';
-import { Nil, zipWith, and, index, Cons } from '../list';
+import { Nil, zipWith, and, index, Cons, length } from '../list';
 import { terr } from '../util';
 
 const conv = (k: number, a: Val, b: Val): boolean => {
@@ -89,5 +89,5 @@ const synthapp = (tenv: EnvV, venv: EnvV, k: number, ty: Val, impl: boolean, tm:
   return terr(`invalid type in synthapp: ${showTerm(quote(ty, k))} @ ${showTerm(tm)}`);
 };
 
-export const typecheck = (tm: Term): Term =>
-  quote(synth(Nil, Nil, 0, tm));
+export const typecheck = (tm: Term, tenv: EnvV = Nil, venv: EnvV = Nil): Term =>
+  quote(synth(tenv, venv, length(tenv), tm));

@@ -73,6 +73,107 @@ exports.showTerm = (t) => {
 },{}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const vals_1 = require("./vals");
+const terms_1 = require("./terms");
+const list_1 = require("../list");
+const util_1 = require("../util");
+const conv = (k, a, b) => {
+    if (a === b)
+        return true;
+    if (a.tag === 'Type' && b.tag === 'Type')
+        return true;
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.impl === b.impl) {
+        if (!conv(k, a.type, b.type))
+            return false;
+        const v = vals_1.VVar(k);
+        return conv(k + 1, a.body(v), a.body(v));
+    }
+    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.impl === b.impl) {
+        if (!conv(k, a.type, b.type))
+            return false;
+        const v = vals_1.VVar(k);
+        return conv(k + 1, a.body(v), a.body(v));
+    }
+    if (a.tag === 'VAbs') {
+        const v = vals_1.VVar(k);
+        return conv(k + 1, a.body(v), vals_1.vapp(b, a.impl, v));
+    }
+    if (b.tag === 'VAbs') {
+        const v = vals_1.VVar(k);
+        return conv(k + 1, vals_1.vapp(a, b.impl, v), b.body(v));
+    }
+    if (a.tag === 'VNe' && b.tag === 'VNe' && a.head === b.head)
+        return list_1.and(list_1.zipWith(([i, x], [j, y]) => i === j && conv(k, x, y), a.args, b.args));
+    return false;
+};
+const check = (tenv, venv, k, tm, ty) => {
+    const ty2 = synth(tenv, venv, k, tm);
+    if (!conv(k, ty2, ty))
+        return util_1.terr(`typecheck failed: got ${terms_1.showTerm(vals_1.quote(ty2, k))}, expected ${terms_1.showTerm(vals_1.quote(ty, k))}`);
+};
+const isImplicitUsed = (k, t) => {
+    if (t.tag === 'Type')
+        return false;
+    if (t.tag === 'Pi')
+        return false; // ?
+    if (t.tag === 'Var')
+        return t.index === k;
+    if (t.tag === 'App') {
+        if (isImplicitUsed(k, t.left))
+            return true;
+        return t.impl ? false : isImplicitUsed(k, t.right);
+    }
+    if (t.tag === 'Abs')
+        return isImplicitUsed(k + 1, t.body);
+    if (t.tag === 'Let') {
+        if (!t.impl && isImplicitUsed(k, t.val))
+            return true;
+        return isImplicitUsed(k + 1, t.body);
+    }
+    return t;
+};
+const synth = (tenv, venv, k, tm) => {
+    if (tm.tag === 'Type')
+        return vals_1.VType;
+    if (tm.tag === 'Var')
+        return list_1.index(tenv, tm.index) || util_1.terr(`var out of scope ${terms_1.showTerm(tm)}`);
+    if (tm.tag === 'Pi') {
+        check(tenv, venv, k, tm.type, vals_1.VType);
+        check(list_1.Cons(vals_1.evaluate(tm.type, venv), tenv), list_1.Cons(vals_1.VVar(k), venv), k + 1, tm.body, vals_1.VType);
+        return vals_1.VType;
+    }
+    if (tm.tag === 'App') {
+        const ty = synth(tenv, venv, k, tm.left);
+        return synthapp(tenv, venv, k, ty, tm.impl, tm.right);
+    }
+    if (tm.tag === 'Abs') {
+        if (tm.impl && isImplicitUsed(0, tm.body))
+            return util_1.terr(`implicit used in ${terms_1.showTerm(tm)}`);
+        check(tenv, venv, k, tm.type, vals_1.VType);
+        const type = vals_1.evaluate(tm.type, venv);
+        const rt = synth(list_1.Cons(type, tenv), list_1.Cons(vals_1.VVar(k), venv), k + 1, tm.body);
+        return vals_1.evaluate(terms_1.Pi(tm.type, tm.impl, vals_1.quote(rt, k + 1)), venv);
+    }
+    if (tm.tag === 'Let') {
+        if (tm.impl && isImplicitUsed(0, tm.body))
+            return util_1.terr(`implicit used in ${terms_1.showTerm(tm)}`);
+        const vty = synth(tenv, venv, k, tm.val);
+        return synth(list_1.Cons(vty, tenv), list_1.Cons(vals_1.evaluate(tm.val, venv), venv), k + 1, tm.body);
+    }
+    return util_1.terr(`cannot synth ${terms_1.showTerm(tm)}`);
+};
+const synthapp = (tenv, venv, k, ty, impl, tm) => {
+    if (ty.tag === 'VPi' && ty.impl === impl) {
+        check(tenv, venv, k, tm, ty.type);
+        return ty.body(vals_1.evaluate(tm, venv));
+    }
+    return util_1.terr(`invalid type in synthapp: ${terms_1.showTerm(vals_1.quote(ty, k))} @ ${terms_1.showTerm(tm)}`);
+};
+exports.typecheck = (tm, tenv = list_1.Nil, venv = list_1.Nil) => vals_1.quote(synth(tenv, venv, list_1.length(tenv), tm));
+
+},{"../list":7,"../util":14,"./terms":2,"./vals":4}],4:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("./terms");
 const list_1 = require("../list");
 const util_1 = require("../util");
@@ -116,7 +217,7 @@ exports.quote = (v, k = 0) => {
 };
 exports.normalize = (t, vs = list_1.Nil, k = 0) => exports.quote(exports.evaluate(t, vs), k);
 
-},{"../list":6,"../util":13,"./terms":2}],4:[function(require,module,exports){
+},{"../list":7,"../util":14,"./terms":2}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("../core/terms");
@@ -174,7 +275,7 @@ exports.erase = (t) => {
     return t;
 };
 
-},{"../core/terms":2}],5:[function(require,module,exports){
+},{"../core/terms":2}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -215,7 +316,7 @@ exports.quote = (v, k = 0) => {
 };
 exports.normalize = (t, vs = list_1.Nil, k = 0) => exports.quote(exports.evaluate(t, vs), k);
 
-},{"../list":6,"../util":13,"./terms":4}],6:[function(require,module,exports){
+},{"../list":7,"../util":14,"./terms":5}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Nil = { tag: 'Nil' };
@@ -311,7 +412,7 @@ exports.range = (n) => n <= 0 ? exports.Nil : exports.Cons(n - 1, exports.range(
 exports.contains = (l, v) => l.tag === 'Cons' ? (l.head === v || exports.contains(l.tail, v)) : false;
 exports.max = (l) => exports.foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTEGER, l);
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_1 = require("./config");
@@ -321,38 +422,75 @@ const typecheck_1 = require("./surface/typecheck");
 const vals_1 = require("./surface/vals");
 const C = require("./core/terms");
 const CV = require("./core/vals");
+const CT = require("./core/typecheck");
 const terms_2 = require("./erased/terms");
 const EV = require("./erased/vals");
-exports.initREPL = () => { };
+const list_1 = require("./list");
+const env = { ts: list_1.Nil, vs: list_1.Nil, tsc: list_1.Nil, vsc: list_1.Nil, vse: list_1.Nil };
+exports.initREPL = () => {
+    env.ts = list_1.Nil;
+    env.vs = list_1.Nil;
+    env.tsc = list_1.Nil;
+    env.vsc = list_1.Nil;
+    env.vse = list_1.Nil;
+};
 exports.runREPL = (_s, _cb) => {
     try {
         if (_s === ':debug') {
             config_1.config.debug = !config_1.config.debug;
             return _cb(`debug is now ${config_1.config.debug}`);
         }
+        if (_s.startsWith(':let')) {
+            const spl = _s.slice(4).split(/\s+/g);
+            const name = spl[1];
+            const body = spl.slice(2).join(' ');
+            config_1.log(() => `${name} ; ${body}`);
+            const tm = parser_1.parse(body);
+            config_1.log(() => `inpt: ${terms_1.showTerm(tm)}`);
+            const [type, term] = typecheck_1.typecheck(tm, env.ts, env.vs);
+            config_1.log(() => `type: ${terms_1.showTerm(type)}`);
+            config_1.log(() => `term: ${terms_1.showTerm(term)}`);
+            env.ts = list_1.Cons([name, typecheck_1.Def(vals_1.evaluate(type, env.vs))], env.ts);
+            env.vs = list_1.Cons([name, vals_1.evaluate(term, env.vs)], env.vs);
+            const nf = vals_1.normalize(term, env.vs);
+            config_1.log(() => `nmfm: ${terms_1.showTerm(nf)}`);
+            const core = terms_1.toCore(term);
+            config_1.log(() => `core: ${C.showTerm(core)}`);
+            const ctype = CT.typecheck(core, env.tsc, env.vsc);
+            config_1.log(() => `tcor: ${C.showTerm(ctype)}`);
+            const cnm = CV.normalize(core, env.vsc);
+            config_1.log(() => `ncor: ${C.showTerm(cnm)}`);
+            const er = terms_2.erase(core);
+            config_1.log(() => `eras: ${terms_2.showETerm(er)}`);
+            const ner = EV.normalize(er, env.vse);
+            config_1.log(() => `nera: ${terms_2.showETerm(ner)}`);
+            return _cb(`defined ${name}\n${terms_1.showTerm(type)}\n${terms_1.showTerm(term)}\n${terms_1.showTerm(nf)}\n${C.showTerm(core)}\n${C.showTerm(ctype)}\n${C.showTerm(cnm)}\n${terms_2.showETerm(er)}\n${terms_2.showETerm(ner)}`);
+        }
         const tm = parser_1.parse(_s);
         config_1.log(() => `inpt: ${terms_1.showTerm(tm)}`);
-        const [type, term] = typecheck_1.typecheck(tm);
+        const [type, term] = typecheck_1.typecheck(tm, env.ts, env.vs);
         config_1.log(() => `type: ${terms_1.showTerm(type)}`);
         config_1.log(() => `term: ${terms_1.showTerm(term)}`);
-        const nf = vals_1.normalize(term);
+        const nf = vals_1.normalize(term, env.vs);
         config_1.log(() => `nmfm: ${terms_1.showTerm(nf)}`);
         const core = terms_1.toCore(term);
         config_1.log(() => `core: ${C.showTerm(core)}`);
-        const cnm = CV.normalize(core);
+        const ctype = CT.typecheck(core, env.tsc, env.vsc);
+        config_1.log(() => `tcor: ${C.showTerm(ctype)}`);
+        const cnm = CV.normalize(core, env.vsc);
         config_1.log(() => `ncor: ${C.showTerm(cnm)}`);
         const er = terms_2.erase(core);
         config_1.log(() => `eras: ${terms_2.showETerm(er)}`);
-        const ner = EV.normalize(er);
+        const ner = EV.normalize(er, env.vse);
         config_1.log(() => `nera: ${terms_2.showETerm(ner)}`);
-        return _cb(`${terms_1.showTerm(type)}\n${terms_1.showTerm(term)}\n${terms_1.showTerm(nf)}\n${C.showTerm(core)}\n${C.showTerm(core)}\n${C.showTerm(cnm)}\n${terms_2.showETerm(er)}\n${terms_2.showETerm(ner)}`);
+        return _cb(`${terms_1.showTerm(type)}\n${terms_1.showTerm(term)}\n${terms_1.showTerm(nf)}\n${C.showTerm(core)}\n${C.showTerm(ctype)}\n${C.showTerm(cnm)}\n${terms_2.showETerm(er)}\n${terms_2.showETerm(ner)}`);
     }
     catch (err) {
         return _cb('' + err, true);
     }
 };
 
-},{"./config":1,"./core/terms":2,"./core/vals":3,"./erased/terms":4,"./erased/vals":5,"./surface/parser":8,"./surface/terms":9,"./surface/typecheck":10,"./surface/vals":12}],8:[function(require,module,exports){
+},{"./config":1,"./core/terms":2,"./core/typecheck":3,"./core/vals":4,"./erased/terms":5,"./erased/vals":6,"./list":7,"./surface/parser":9,"./surface/terms":10,"./surface/typecheck":11,"./surface/vals":13}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("./terms");
@@ -520,7 +658,7 @@ exports.parse = (s) => {
     return exprs(ts);
 };
 
-},{"./terms":9}],9:[function(require,module,exports){
+},{"./terms":10}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const C = require("../core/terms");
@@ -641,7 +779,7 @@ exports.toCore = (t, is = list_1.Nil, k = 0) => {
     return util_1.impossible(`toCore: ${exports.showTerm(t)}`);
 };
 
-},{"../core/terms":2,"../list":6,"../util":13}],10:[function(require,module,exports){
+},{"../core/terms":2,"../list":7,"../util":14}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -907,7 +1045,7 @@ exports.typecheck = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
     return [zty, zterm];
 };
 
-},{"../config":1,"../list":6,"../util":13,"./terms":9,"./unification":11,"./vals":12}],11:[function(require,module,exports){
+},{"../config":1,"../list":7,"../util":14,"./terms":10,"./unification":12,"./vals":13}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -1007,7 +1145,7 @@ exports.unify = (vs, a_, b_) => {
     return util_1.terr(`cannot unify: ${terms_1.showTerm(ta)} ~ ${terms_1.showTerm(tb)}`);
 };
 
-},{"../config":1,"../list":6,"../util":13,"./terms":9,"./vals":12}],12:[function(require,module,exports){
+},{"../config":1,"../list":7,"../util":14,"./terms":10,"./vals":13}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const terms_1 = require("./terms");
@@ -1117,7 +1255,7 @@ exports.zonk = (vs, tm) => {
 // only use this with elaborated terms
 exports.normalize = (t, vs = list_1.Nil) => exports.quote(exports.evaluate(t, vs), vs);
 
-},{"../list":6,"../util":13,"./terms":9}],13:[function(require,module,exports){
+},{"../list":7,"../util":14,"./terms":10}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -1127,7 +1265,7 @@ exports.terr = (msg) => {
     throw new TypeError(msg);
 };
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -1183,4 +1321,4 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":7}]},{},[14]);
+},{"./repl":8}]},{},[15]);
