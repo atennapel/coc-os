@@ -1,6 +1,6 @@
 {
   "name": "coc-os",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "",
   "main": "build/src/index.js",
   "scripts": {
@@ -23,8 +23,8 @@
   },
   "homepage": "https://github.com/atennapel/coc-os#readme",
   "devDependencies": {
-    "@types/node": "^12.11.7",
+    "@types/node": "^12.12.14",
     "browserify": "^16.5.0",
-    "typescript": "^3.6.4"
+    "typescript": "^3.7.2"
   }
 }
