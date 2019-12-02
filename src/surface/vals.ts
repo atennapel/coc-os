@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup } from '../list';
 import { Name, freshName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann } from './syntax';
 import { impossible } from '../util';
 
 export type Head
@@ -94,29 +94,36 @@ export const quote = (v_: Val, vs: EnvV): Term => {
 
 type S = [false, Val] | [true, Term];
 const zonkSpine = (vs: EnvV, tm: Term): S => {
-  if (tm.tag === 'Meta' && tm.val) return [false, tm.val];
+  if (tm.tag === 'Meta') {
+    const s = getMeta(tm.id);
+    if (s.tag === 'Unsolved') return [true, zonk(vs, tm)];
+    return [false, s.val];
+  }
   if (tm.tag === 'App') {
     const spine = zonkSpine(vs, tm.left);
     return spine[0] ?
-      [true, App(spine[1], tm.impl, zonk(vs, tm.right))] :
-      [false, vapp(spine[1], tm.impl, evaluate(tm.right, vs))];
+      [true, App(spine[1], zonk(vs, tm.right))] :
+      [false, vapp(spine[1], evaluate(tm.right, vs))];
   }
   return [true, zonk(vs, tm)];
 };
 export const zonk = (vs: EnvV, tm: Term): Term => {
-  if (tm.tag === 'Meta') return tm.val ? quote(tm.val, vs) : tm;
+  if (tm.tag === 'Meta') {
+    const s = getMeta(tm.id);
+    return s.tag === 'Solved' ? quote(s.val, vs) : tm;
+  }
   if (tm.tag === 'Pi')
-    return Pi(tm.name, zonk(vs, tm.type), tm.impl, zonk(Cons([tm.name, true], vs), tm.body));
+    return Pi(tm.name, zonk(vs, tm.type), zonk(Cons([tm.name, Nothing], vs), tm.body));
   if (tm.tag === 'Abs')
-    return Abs(tm.name, tm.type ? zonk(vs, tm.type) : null, tm.impl, zonk(Cons([tm.name, true], vs), tm.body));
+    return Abs(tm.name, tm.type ? zonk(vs, tm.type) : null, zonk(Cons([tm.name, Nothing], vs), tm.body));
   if (tm.tag === 'Let')
-    return Let(tm.name, tm.type ? zonk(vs, tm.type) : null, tm.impl, zonk(vs, tm.val), zonk(Cons([tm.name, true], vs), tm.body));
+    return Let(tm.name, zonk(vs, tm.val), zonk(Cons([tm.name, Nothing], vs), tm.body));
   if (tm.tag === 'Ann') return Ann(zonk(vs, tm.term), tm.type);
   if (tm.tag === 'App') {
     const spine = zonkSpine(vs, tm.left);
     return spine[0] ?
-      App(spine[1], tm.impl, zonk(vs, tm.right)) :
-      quote(vapp(spine[1], tm.impl, evaluate(tm.right, vs)), vs);
+      App(spine[1], zonk(vs, tm.right)) :
+      quote(vapp(spine[1], evaluate(tm.right, vs)), vs);
   }
   return tm;
 };
