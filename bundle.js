@@ -292,7 +292,9 @@ const synthapp = (ts, vs, ty_, arg) => {
         return [ty.body(vm), tm];
     }
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-        const pi = freshPi(ts, vs, '_');
+        const a = metas_1.freshMetaId();
+        const b = metas_1.freshMetaId();
+        const pi = vals_1.VPi('_', vals_1.VNe(vals_1.HMeta(a), ty.args), () => vals_1.VNe(vals_1.HMeta(b), ty.args));
         unify_1.unify(vs, ty, pi);
         return synthapp(ts, vs, pi, arg);
     }

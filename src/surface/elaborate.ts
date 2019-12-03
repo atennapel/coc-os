@@ -1,8 +1,8 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil } from '../list';
 import { Name, freshName } from '../names';
-import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar } from './vals';
+import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta } from './vals';
 import { showTerm, Term, Var, App, Type, Let, Pi, Abs } from './syntax';
-import { freshMeta, resetMetas } from './metas';
+import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
 import { terr } from '../util';
@@ -113,7 +113,9 @@ const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, arg: Term): [Val, Term] => {
     return [ty.body(vm), tm];
   }
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-    const pi = freshPi(ts, vs, '_');
+    const a = freshMetaId();
+    const b = freshMetaId();
+    const pi = VPi('_', VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
     unify(vs, ty, pi);
     return synthapp(ts, vs, pi, arg);
   }
