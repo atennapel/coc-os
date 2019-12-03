@@ -158,7 +158,7 @@ exports.runREPL = (_s, _cb) => {
         tm_ = tm;
         config_1.log(() => syntax_1.showTerm(ty));
         config_1.log(() => syntax_1.showTerm(tm));
-        msg += `${syntax_1.showTerm(ty)}\n${syntax_1.showTerm(tm)}`;
+        msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}`;
     }
     catch (err) {
         config_1.log(() => '' + err);
@@ -167,7 +167,7 @@ exports.runREPL = (_s, _cb) => {
     try {
         const n = vals_1.normalize(tm_);
         config_1.log(() => syntax_1.showTerm(n));
-        msg += '\n' + syntax_1.showTerm(n);
+        msg += '\nnorm: ' + syntax_1.showTerm(n);
         return _cb(msg);
     }
     catch (err) {
@@ -335,11 +335,134 @@ exports.freshMeta = () => syntax_1.Meta(exports.freshMetaId());
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("../util");
+const syntax_1 = require("./syntax");
+const config_1 = require("../config");
+const TName = (name) => ({ tag: 'Name', name });
+const TList = (list) => ({ tag: 'List', list });
+const matchingBracket = (c) => {
+    if (c === '(')
+        return ')';
+    if (c === ')')
+        return '(';
+    return util_1.serr(`invalid bracket: ${c}`);
+};
+const SYM1 = ['\\', ':', '/', '.', '*'];
+const SYM2 = ['->'];
+const START = 0;
+const NAME = 1;
+const COMMENT = 2;
+const tokenize = (sc) => {
+    let state = START;
+    let r = [];
+    let t = '';
+    let esc = false;
+    let p = [], b = [];
+    for (let i = 0, l = sc.length; i <= l; i++) {
+        const c = sc[i] || ' ';
+        const next = sc[i + 1] || '';
+        if (state === START) {
+            if (SYM2.indexOf(c + next) >= 0)
+                r.push(TName(c + next)), i++;
+            else if (SYM1.indexOf(c) >= 0)
+                r.push(TName(c));
+            else if (c === ';')
+                state = COMMENT;
+            else if (/[\_a-z]/i.test(c))
+                t += c, state = NAME;
+            else if (c === '(')
+                b.push(c), p.push(r), r = [];
+            else if (c === ')') {
+                if (b.length === 0)
+                    return util_1.serr(`unmatched bracket: ${c}`);
+                const br = b.pop();
+                if (matchingBracket(br) !== c)
+                    return util_1.serr(`unmatched bracket: ${br} and ${c}`);
+                const a = p.pop();
+                a.push(TList(r));
+                r = a;
+            }
+            else if (/\s/.test(c))
+                continue;
+            else
+                return util_1.serr(`invalid char ${c} in tokenize`);
+        }
+        else if (state === NAME) {
+            if (!/[a-z0-9\_]/i.test(c)) {
+                r.push(TName(t));
+                t = '', i--, state = START;
+            }
+            else
+                t += c;
+        }
+        else if (state === COMMENT) {
+            if (c === '\n')
+                state = START;
+        }
+    }
+    if (b.length > 0)
+        return util_1.serr(`unclosed brackets: ${b.join(' ')}`);
+    if (state !== START && state !== COMMENT)
+        return util_1.serr('invalid tokenize end state');
+    if (esc)
+        return util_1.serr(`escape is true after tokenize`);
+    return r;
+};
+/*
+TODO:
+{ tag: 'App', left: Term, right: Term }
+{ tag: 'Abs', name: Name, type: Term | null, body: Term }
+{ tag: 'Pi', name: Name, type: Term, body: Term }
+{ tag: 'Let', name: Name, val: Term, body: Term }
+{ tag: 'Ann', term: Term, type: Term }
+*/
+const expr = (t) => {
+    if (t.tag === 'List')
+        return exprs(t.list);
+    if (t.tag === 'Name') {
+        const x = t.name;
+        if (x === '*')
+            return syntax_1.Type;
+        if (x === '_')
+            return syntax_1.Hole;
+        if (/[a-z]/i.test(x[0]))
+            return syntax_1.Var(x);
+        return util_1.serr(`invalid name: ${x}`);
+    }
+    return t;
+};
+const exprs = (ts) => {
+    if (ts.length === 0)
+        return syntax_1.Var('Unit');
+    if (ts.length === 1)
+        return expr(ts[0]);
+    if (ts[0].tag === 'Name' && ts[0].name === '\\') {
+        const args = [];
+        let found = false;
+        let i = 1;
+        for (; i < ts.length; i++) {
+            const c = ts[i];
+            if (c.tag === 'Name' && c.name === '.') {
+                found = true;
+                break;
+            }
+            if (c.tag === 'Name')
+                args.push(c.name);
+            return util_1.serr('invalid lambda arg');
+        }
+        if (!found)
+            return util_1.serr(`. not found after \\`);
+        const body = exprs(ts.slice(i));
+        return args.reduceRight((x, y) => syntax_1.Abs(y, null, x), body);
+    }
+    return ts.map(expr).reduce(syntax_1.App);
+};
 exports.parse = (s) => {
-    return util_1.serr('unimplemented');
+    const ts = tokenize(s);
+    config_1.log(() => ts);
+    return exprs(ts);
 };
 
-},{"../util":12}],9:[function(require,module,exports){
+},{"../config":1,"../util":12,"./syntax":9}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Var = (name) => ({ tag: 'Var', name });

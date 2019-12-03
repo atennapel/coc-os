@@ -21,7 +21,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     tm_ = tm;
     log(() => showTerm(ty));
     log(() => showTerm(tm));
-    msg += `${showTerm(ty)}\n${showTerm(tm)}`;
+    msg += `type: ${showTerm(ty)}\nterm: ${showTerm(tm)}`;
   } catch (err) {
     log(() => ''+err);
     return _cb(''+err, true);
@@ -29,7 +29,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
   try {
     const n = normalize(tm_);
     log(() => showTerm(n));
-    msg += '\n' + showTerm(n);
+    msg += '\nnorm: ' + showTerm(n);
     return _cb(msg);
   } catch (err) {
     log(() => ''+err);
