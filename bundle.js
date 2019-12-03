@@ -478,27 +478,79 @@ exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Type = { tag: 'Type' };
 exports.Hole = { tag: 'Hole' };
 exports.Meta = (id) => ({ tag: 'Meta', id });
-exports.showTerm = (t) => {
+exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
         return t.name;
     if (t.tag === 'App')
-        return `(${exports.showTerm(t.left)} ${exports.showTerm(t.right)})`;
+        return `(${exports.showTermSimple(t.left)} ${exports.showTermSimple(t.right)})`;
     if (t.tag === 'Abs')
         return t.type ?
-            `(\\(${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})` :
-            `(\\${t.name}. ${exports.showTerm(t.body)})`;
+            `(\\(${t.name} : ${exports.showTermSimple(t.type)}). ${exports.showTermSimple(t.body)})` :
+            `(\\${t.name}. ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Pi')
-        return `((${t.name} : ${exports.showTerm(t.type)}) -> ${exports.showTerm(t.body)})`;
+        return `((${t.name} : ${exports.showTermSimple(t.type)}) -> ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Let')
-        return `(let ${t.name} = ${exports.showTerm(t.val)} in ${exports.showTerm(t.body)})`;
+        return `(let ${t.name} = ${exports.showTermSimple(t.val)} in ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Ann')
-        return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
+        return `(${exports.showTermSimple(t.term)} : ${exports.showTermSimple(t.type)})`;
     if (t.tag === 'Type')
         return `*`;
     if (t.tag === 'Hole')
         return `_`;
     if (t.tag === 'Meta')
         return `?${t.id}`;
+    return t;
+};
+exports.flattenApp = (t) => {
+    const r = [];
+    while (t.tag === 'App') {
+        r.push(t.right);
+        t = t.left;
+    }
+    return [t, r.reverse()];
+};
+exports.flattenAbs = (t) => {
+    const r = [];
+    while (t.tag === 'Abs') {
+        r.push([t.name, t.type]);
+        t = t.body;
+    }
+    return [r, t];
+};
+exports.flattenPi = (t) => {
+    const r = [];
+    while (t.tag === 'Pi') {
+        r.push([t.name, t.type]);
+        t = t.body;
+    }
+    return [r, t];
+};
+exports.showTermP = (b, t) => b ? `(${exports.showTerm(t)})` : exports.showTerm(t);
+exports.showTerm = (t) => {
+    if (t.tag === 'Type')
+        return '*';
+    if (t.tag === 'Hole')
+        return '_';
+    if (t.tag === 'Var')
+        return `${t.name}`;
+    if (t.tag === 'Meta')
+        return `?${t.id}`;
+    if (t.tag === 'App') {
+        const [f, as] = exports.flattenApp(t);
+        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann', f)} ${as.map((t, i) => `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || (t.tag === 'Let' && i < as.length - 1) || (t.tag === 'Abs' && i < as.length - 1) || (t.tag === 'Pi' && i < as.length - 1), t)}`).join(' ')}`;
+    }
+    if (t.tag === 'Abs') {
+        const [as, b] = exports.flattenAbs(t);
+        return `\\${as.map(([x, t]) => !t ? x : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${exports.showTermP(b.tag === 'Ann', b)}`;
+    }
+    if (t.tag === 'Pi') {
+        const [as, b] = exports.flattenPi(t);
+        return `${as.map(([x, t]) => x === '_' ? exports.showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi', t) : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' -> ')} -> ${exports.showTermP(b.tag === 'Ann', b)}`;
+    }
+    if (t.tag === 'Let')
+        return `let ${t.name} = ${exports.showTerm(t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
+    if (t.tag === 'Ann')
+        return `${exports.showTerm(t.term)} : ${exports.showTerm(t.type)}`;
     return t;
 };
 
