@@ -193,7 +193,7 @@ exports.Bound = (type) => ({ bound: true, type });
 exports.Def = (type) => ({ bound: false, type });
 exports.showEnvT = (l, vs) => list_1.toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${syntax_1.showTerm(vals_1.quote(b.type, vs))}`);
 const newMeta = (ts) => {
-    const spine = list_1.map(list_1.filter(ts, ([x, { bound }]) => bound), ([x, _]) => syntax_1.Var(x));
+    const spine = list_1.map(list_1.filter(ts, ([x, { bound }]) => bound && x !== '_'), ([x, _]) => syntax_1.Var(x));
     return list_1.foldr((x, y) => syntax_1.App(y, x), metas_1.freshMeta(), spine);
 };
 const check = (ts, vs, tm, ty_) => {

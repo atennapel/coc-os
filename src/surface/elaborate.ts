@@ -15,7 +15,7 @@ export const showEnvT = (l: EnvT, vs: EnvV): string =>
   toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${showTerm(quote(b.type, vs))}`);
 
 const newMeta = (ts: EnvT): Term => {
-  const spine = map(filter(ts, ([x, { bound }]) => bound), ([x, _]) => Var(x));
+  const spine = map(filter(ts, ([x, { bound }]) => bound && x !== '_'), ([x, _]) => Var(x));
   return foldr((x, y) => App(y, x), freshMeta() as Term, spine);
 };
 
