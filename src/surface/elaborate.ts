@@ -113,7 +113,7 @@ const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, arg: Term): [Val, Term] => {
     return [ty.body(vm), tm];
   }
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-    const pi = freshPi(ts, vs, 'x'); // x or fresh??
+    const pi = freshPi(ts, vs, '_');
     unify(vs, ty, pi);
     return synthapp(ts, vs, pi, arg);
   }

@@ -292,7 +292,7 @@ const synthapp = (ts, vs, ty_, arg) => {
         return [ty.body(vm), tm];
     }
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-        const pi = freshPi(ts, vs, 'x'); // x or fresh??
+        const pi = freshPi(ts, vs, '_');
         unify_1.unify(vs, ty, pi);
         return synthapp(ts, vs, pi, arg);
     }
