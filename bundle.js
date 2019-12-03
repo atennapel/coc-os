@@ -417,6 +417,11 @@ TODO:
 { tag: 'Let', name: Name, val: Term, body: Term }
 { tag: 'Ann', term: Term, type: Term }
 */
+const lambdaParams = (t) => {
+    if (t.tag === 'Name')
+        return [[t.name, null]];
+    return util_1.serr(`invalid lambda param`);
+};
 const expr = (t) => {
     if (t.tag === 'List')
         return exprs(t.list);
@@ -447,16 +452,12 @@ const exprs = (ts) => {
                 found = true;
                 break;
             }
-            if (c.tag === 'Name') {
-                args.push(c.name);
-                continue;
-            }
-            return util_1.serr('invalid lambda arg');
+            lambdaParams(c).forEach(x => args.push(x));
         }
         if (!found)
             return util_1.serr(`. not found after \\`);
         const body = exprs(ts.slice(i + 1));
-        return args.reduceRight((x, y) => syntax_1.Abs(y, null, x), body);
+        return args.reduceRight((x, [name, ty]) => syntax_1.Abs(name, ty, x), body);
     }
     return ts.map(expr).reduce(syntax_1.App);
 };

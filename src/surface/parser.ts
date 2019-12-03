@@ -1,6 +1,7 @@
 import { serr } from '../util'
 import { Term, Var, App, Hole, Type, Abs } from './syntax';
 import { log } from '../config';
+import { Name } from '../names';
 
 type Token = { tag: 'Name', name: string } | { tag: 'List', list: Token[] };
 const TName = (name: string): Token => ({ tag: 'Name', name });
@@ -69,6 +70,11 @@ TODO:
 { tag: 'Ann', term: Term, type: Term }
 */
 
+const lambdaParams = (t: Token): [Name, Term | null][] => {
+  if (t.tag === 'Name') return [[t.name, null]];
+  return serr(`invalid lambda param`);
+};
+
 const expr = (t: Token): Term => {
   if (t.tag === 'List') return exprs(t.list);
   if (t.tag === 'Name') {
@@ -85,7 +91,7 @@ const exprs = (ts: Token[]): Term => {
   if (ts.length === 0) return Var('Unit');
   if (ts.length === 1) return expr(ts[0]);
   if (ts[0].tag === 'Name' && ts[0].name === '\\') {
-    const args: string[] = [];
+    const args: [Name, Term | null][] = [];
     let found = false;
     let i = 1;
     for (; i < ts.length; i++) {
@@ -94,15 +100,11 @@ const exprs = (ts: Token[]): Term => {
         found = true;
         break;
       }
-      if (c.tag === 'Name') {
-        args.push(c.name);
-        continue;
-      }
-      return serr('invalid lambda arg');
+      lambdaParams(c).forEach(x => args.push(x));
     }
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1));
-    return args.reduceRight((x, y) => Abs(y, null, x), body);
+    return args.reduceRight((x, [name, ty]) => Abs(name, ty, x), body);
   }
   return ts.map(expr).reduce(App);
 };
