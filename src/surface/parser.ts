@@ -94,11 +94,14 @@ const exprs = (ts: Token[]): Term => {
         found = true;
         break;
       }
-      if (c.tag === 'Name') args.push(c.name);
+      if (c.tag === 'Name') {
+        args.push(c.name);
+        continue;
+      }
       return serr('invalid lambda arg');
     }
     if (!found) return serr(`. not found after \\`);
-    const body = exprs(ts.slice(i));
+    const body = exprs(ts.slice(i + 1));
     return args.reduceRight((x, y) => Abs(y, null, x), body);
   }
   return ts.map(expr).reduce(App);

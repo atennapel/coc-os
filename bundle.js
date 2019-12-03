@@ -154,7 +154,7 @@ exports.runREPL = (_s, _cb) => {
     try {
         const t = parser_1.parse(_s);
         config_1.log(() => syntax_1.showTerm(t));
-        const [tm, ty] = elaborate_1.elaborate(t);
+        const [ty, tm] = elaborate_1.elaborate(t);
         tm_ = tm;
         config_1.log(() => syntax_1.showTerm(ty));
         config_1.log(() => syntax_1.showTerm(tm));
@@ -445,13 +445,15 @@ const exprs = (ts) => {
                 found = true;
                 break;
             }
-            if (c.tag === 'Name')
+            if (c.tag === 'Name') {
                 args.push(c.name);
+                continue;
+            }
             return util_1.serr('invalid lambda arg');
         }
         if (!found)
             return util_1.serr(`. not found after \\`);
-        const body = exprs(ts.slice(i));
+        const body = exprs(ts.slice(i + 1));
         return args.reduceRight((x, y) => syntax_1.Abs(y, null, x), body);
     }
     return ts.map(expr).reduce(syntax_1.App);

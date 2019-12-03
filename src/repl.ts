@@ -17,7 +17,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
   try {
     const t = parse(_s);
     log(() => showTerm(t));
-    const [tm, ty] = elaborate(t);
+    const [ty, tm] = elaborate(t);
     tm_ = tm;
     log(() => showTerm(ty));
     log(() => showTerm(tm));
