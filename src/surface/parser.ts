@@ -63,11 +63,8 @@ const tokenize = (sc: string): Token[] => {
 
 /*
 TODO:
-{ tag: 'App', left: Term, right: Term }
-{ tag: 'Abs', name: Name, type: Term | null, body: Term }
-{ tag: 'Pi', name: Name, type: Term, body: Term }
+{ tag: 'Pi', name: Name, type: Term, body: Term } ->
 { tag: 'Let', name: Name, val: Term, body: Term }
-{ tag: 'Ann', term: Term, type: Term }
 */
 
 const tunit = Var('UnitType');
