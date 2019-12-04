@@ -4,6 +4,7 @@ import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
 import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann } from './syntax';
 import { impossible } from '../util';
+import { getEnv } from './env';
 
 export type Head
   = { tag: 'HVar', name: Name }
@@ -52,7 +53,11 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var') {
     const v = lookup(vs, t.name);
-    if (!v) return impossible(`evaluate ${t.name}`);
+    if (!v) {
+      const r = getEnv(t.name);
+      if (!r) return impossible(`evaluate ${t.name}`);
+      return r[0];
+    }
     return caseMaybe(v, v => v, () => VVar(t.name));
   }
   if (t.tag === 'App')

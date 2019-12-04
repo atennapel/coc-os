@@ -7,6 +7,7 @@ import { log } from '../config';
 import { Just, Nothing } from '../maybe';
 import { terr } from '../util';
 import { unify } from './unify';
+import { getEnv } from './env';
 
 export type EnvT = List<[Name, { bound: boolean, type: Val }]>;
 export const Bound = (type: Val) => ({ bound: true, type });
@@ -55,7 +56,11 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   if (tm.tag === 'Var') {
     if (tm.name === '_') return terr(`invalid name _`);
     const ty = lookup(ts, tm.name);
-    if (!ty) return terr(`undefined var ${tm.name}`);
+    if (!ty) {
+      const r = getEnv(tm.name);
+      if (!r) return terr(`undefined var ${tm.name}`);
+      return [r[1], tm];
+    }
     return [ty.type, tm];
   }
   if (tm.tag === 'Ann') {

@@ -177,7 +177,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./surface/elaborate":6,"./surface/parser":8,"./surface/syntax":9,"./surface/vals":11}],6:[function(require,module,exports){
+},{"./config":1,"./surface/elaborate":6,"./surface/parser":9,"./surface/syntax":10,"./surface/vals":12}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -189,6 +189,7 @@ const config_1 = require("../config");
 const maybe_1 = require("../maybe");
 const util_1 = require("../util");
 const unify_1 = require("./unify");
+const env_1 = require("./env");
 exports.Bound = (type) => ({ bound: true, type });
 exports.Def = (type) => ({ bound: false, type });
 exports.showEnvT = (l, vs) => list_1.toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${syntax_1.showTerm(vals_1.quote(b.type, vs))}`);
@@ -233,8 +234,12 @@ const synth = (ts, vs, tm) => {
         if (tm.name === '_')
             return util_1.terr(`invalid name _`);
         const ty = list_1.lookup(ts, tm.name);
-        if (!ty)
-            return util_1.terr(`undefined var ${tm.name}`);
+        if (!ty) {
+            const r = env_1.getEnv(tm.name);
+            if (!r)
+                return util_1.terr(`undefined var ${tm.name}`);
+            return [r[1], tm];
+        }
         return [ty.type, tm];
     }
     if (tm.tag === 'Ann') {
@@ -310,7 +315,17 @@ exports.elaborate = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
     return [zty, zterm];
 };
 
-},{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":12,"./metas":7,"./syntax":9,"./unify":10,"./vals":11}],7:[function(require,module,exports){
+},{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":13,"./env":7,"./metas":8,"./syntax":10,"./unify":11,"./vals":12}],7:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+let env = {};
+exports.resetEnv = () => { env = {}; };
+exports.getEnv = (name) => env[name] || null;
+exports.setEnv = (name, val, ty) => {
+    env[name] = [val, ty];
+};
+
+},{}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -333,7 +348,7 @@ exports.freshMetaId = () => {
 };
 exports.freshMeta = () => syntax_1.Meta(exports.freshMetaId());
 
-},{"../util":12,"./syntax":9}],8:[function(require,module,exports){
+},{"../util":13,"./syntax":10}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("../util");
@@ -411,11 +426,8 @@ const tokenize = (sc) => {
 };
 /*
 TODO:
-{ tag: 'App', left: Term, right: Term }
-{ tag: 'Abs', name: Name, type: Term | null, body: Term }
-{ tag: 'Pi', name: Name, type: Term, body: Term }
+{ tag: 'Pi', name: Name, type: Term, body: Term } ->
 { tag: 'Let', name: Name, val: Term, body: Term }
-{ tag: 'Ann', term: Term, type: Term }
 */
 const tunit = syntax_1.Var('UnitType');
 const unit = syntax_1.Var('Unit');
@@ -527,7 +539,7 @@ exports.parse = (s) => {
     return exprs(ts);
 };
 
-},{"../config":1,"../util":12,"./syntax":9}],9:[function(require,module,exports){
+},{"../config":1,"../util":13,"./syntax":10}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Var = (name) => ({ tag: 'Var', name });
@@ -615,7 +627,7 @@ exports.showTerm = (t) => {
     return t;
 };
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const names_1 = require("../names");
@@ -716,7 +728,7 @@ exports.unify = (vs, a_, b_) => {
     return util_1.terr(`cannot unify: ${syntax_1.showTerm(ta)} ~ ${syntax_1.showTerm(tb)}`);
 };
 
-},{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":12,"./metas":7,"./syntax":9,"./vals":11}],11:[function(require,module,exports){
+},{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":13,"./metas":8,"./syntax":10,"./vals":12}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -725,6 +737,7 @@ const metas_1 = require("./metas");
 const maybe_1 = require("../maybe");
 const syntax_1 = require("./syntax");
 const util_1 = require("../util");
+const env_1 = require("./env");
 exports.showEnvV = (l) => list_1.toString(l, ([x, b]) => maybe_1.caseMaybe(b, val => `${x} = ${syntax_1.showTerm(exports.quote(val, l))}`, () => x));
 exports.HVar = (name) => ({ tag: 'HVar', name });
 exports.HMeta = (id) => ({ tag: 'HMeta', id });
@@ -755,8 +768,12 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.VType;
     if (t.tag === 'Var') {
         const v = list_1.lookup(vs, t.name);
-        if (!v)
-            return util_1.impossible(`evaluate ${t.name}`);
+        if (!v) {
+            const r = env_1.getEnv(t.name);
+            if (!r)
+                return util_1.impossible(`evaluate ${t.name}`);
+            return r[0];
+        }
         return maybe_1.caseMaybe(v, v => v, () => exports.VVar(t.name));
     }
     if (t.tag === 'App')
@@ -830,7 +847,7 @@ exports.zonk = (vs, tm) => {
 // only use this with elaborated terms
 exports.normalize = (t, vs = list_1.Nil) => exports.quote(exports.evaluate(t, vs), vs);
 
-},{"../list":2,"../maybe":3,"../names":4,"../util":12,"./metas":7,"./syntax":9}],12:[function(require,module,exports){
+},{"../list":2,"../maybe":3,"../names":4,"../util":13,"./env":7,"./metas":8,"./syntax":10}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -843,7 +860,7 @@ exports.serr = (msg) => {
     throw new SyntaxError(msg);
 };
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -899,4 +916,4 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":5}]},{},[13]);
+},{"./repl":5}]},{},[14]);
