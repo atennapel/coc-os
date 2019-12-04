@@ -417,9 +417,29 @@ TODO:
 { tag: 'Let', name: Name, val: Term, body: Term }
 { tag: 'Ann', term: Term, type: Term }
 */
+const tunit = syntax_1.Var('UnitType');
+const unit = syntax_1.Var('Unit');
+const isName = (t, x) => t.tag === 'Name' && t.name === x;
+const isNames = (t) => t.map(x => {
+    if (x.tag !== 'Name')
+        return util_1.serr(`expected name`);
+    return x.name;
+});
 const lambdaParams = (t) => {
     if (t.tag === 'Name')
         return [[t.name, null]];
+    if (t.tag === 'List') {
+        const a = t.list;
+        if (a.length === 0)
+            return [['_', tunit]];
+        const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
+        if (i === -1)
+            return isNames(a).map(x => [x, null]);
+        const ns = a.slice(0, i);
+        const rest = a.slice(i + 1);
+        const ty = exprs(rest);
+        return isNames(ns).map(x => [x, ty]);
+    }
     return util_1.serr(`invalid lambda param`);
 };
 const expr = (t) => {
@@ -439,16 +459,16 @@ const expr = (t) => {
 };
 const exprs = (ts) => {
     if (ts.length === 0)
-        return syntax_1.Var('Unit');
+        return unit;
     if (ts.length === 1)
         return expr(ts[0]);
-    if (ts[0].tag === 'Name' && ts[0].name === '\\') {
+    if (isName(ts[0], '\\')) {
         const args = [];
         let found = false;
         let i = 1;
         for (; i < ts.length; i++) {
             const c = ts[i];
-            if (c.tag === 'Name' && c.name === '.') {
+            if (isName(c, '.')) {
                 found = true;
                 break;
             }
@@ -458,6 +478,27 @@ const exprs = (ts) => {
             return util_1.serr(`. not found after \\`);
         const body = exprs(ts.slice(i + 1));
         return args.reduceRight((x, [name, ty]) => syntax_1.Abs(name, ty, x), body);
+    }
+    if (isName(ts[0], '/')) {
+        const args = [];
+        let found = false;
+        let i = 1;
+        for (; i < ts.length; i++) {
+            const c = ts[i];
+            if (isName(c, '.')) {
+                found = true;
+                break;
+            }
+            lambdaParams(c).forEach(([x, ty]) => {
+                if (!ty)
+                    return util_1.serr('pi parameter requires type');
+                return args.push([x, ty]);
+            });
+        }
+        if (!found)
+            return util_1.serr(`. not found after /`);
+        const body = exprs(ts.slice(i + 1));
+        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, ty, x), body);
     }
     return ts.map(expr).reduce(syntax_1.App);
 };
