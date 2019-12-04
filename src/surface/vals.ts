@@ -75,7 +75,7 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   return impossible('evaluate');
 };
 
-export const quote = (v_: Val, vs: EnvV): Term => {
+export const quote = (v_: Val, vs: EnvV = Nil): Term => {
   const v = force(v_);
   if (v.tag === 'VType') return Type;
   if (v.tag === 'VNe') {

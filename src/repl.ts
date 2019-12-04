@@ -2,8 +2,8 @@ import { parse } from './surface/parser';
 import { log, setConfig, config } from './config';
 import { showTerm } from './surface/syntax';
 import { elaborate } from './surface/elaborate';
-import { normalize, evaluate } from './surface/vals';
-import { resetEnv, setEnv } from './surface/env';
+import { normalize, evaluate, quote } from './surface/vals';
+import { resetEnv, setEnv, getEnvMap, delEnv } from './surface/env';
 
 const help = `
 EXAMPLES
@@ -14,6 +14,8 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:def name term] set a name
+[:defs] show all defs
+[:del name] delete a name
 `.trim();
 
 export const initREPL = () => {
@@ -27,6 +29,16 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
   if (_s === ':debug' || _s === ':d') {
     setConfig({ debug: !config.debug });
     return _cb(`debug: ${config.debug}`);
+  }
+  if (_s === ':defs') {
+    const e = getEnvMap();
+    const msg = Object.keys(e).map(k => `${k} : ${showTerm(quote(e[k][1]))} = ${showTerm(quote(e[k][0]))}`).join('\n');
+    return _cb(msg || 'no definitions');
+  }
+  if (_s.startsWith(':del')) {
+    const name = _s.slice(4).trim();
+    delEnv(name);
+    return _cb(`deleted ${name}`);
   }
   let name = null;
   if (_s.startsWith(':def')) {

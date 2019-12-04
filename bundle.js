@@ -152,6 +152,8 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:def name term] set a name
+[:defs] show all defs
+[:del name] delete a name
 `.trim();
 exports.initREPL = () => {
     env_1.resetEnv();
@@ -163,6 +165,16 @@ exports.runREPL = (_s, _cb) => {
     if (_s === ':debug' || _s === ':d') {
         config_1.setConfig({ debug: !config_1.config.debug });
         return _cb(`debug: ${config_1.config.debug}`);
+    }
+    if (_s === ':defs') {
+        const e = env_1.getEnvMap();
+        const msg = Object.keys(e).map(k => `${k} : ${syntax_1.showTerm(vals_1.quote(e[k][1]))} = ${syntax_1.showTerm(vals_1.quote(e[k][0]))}`).join('\n');
+        return _cb(msg || 'no definitions');
+    }
+    if (_s.startsWith(':del')) {
+        const name = _s.slice(4).trim();
+        env_1.delEnv(name);
+        return _cb(`deleted ${name}`);
     }
     let name = null;
     if (_s.startsWith(':def')) {
@@ -347,9 +359,13 @@ exports.elaborate = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
 Object.defineProperty(exports, "__esModule", { value: true });
 let env = {};
 exports.resetEnv = () => { env = {}; };
+exports.getEnvMap = () => env;
 exports.getEnv = (name) => env[name] || null;
 exports.setEnv = (name, val, ty) => {
     env[name] = [val, ty];
+};
+exports.delEnv = (name) => {
+    delete env[name];
 };
 
 },{}],8:[function(require,module,exports){
@@ -817,7 +833,7 @@ exports.evaluate = (t, vs = list_1.Nil) => {
     }
     return util_1.impossible('evaluate');
 };
-exports.quote = (v_, vs) => {
+exports.quote = (v_, vs = list_1.Nil) => {
     const v = exports.force(v_);
     if (v.tag === 'VType')
         return syntax_1.Type;
