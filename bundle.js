@@ -164,13 +164,21 @@ exports.runREPL = (_s, _cb) => {
         config_1.setConfig({ debug: !config_1.config.debug });
         return _cb(`debug: ${config_1.config.debug}`);
     }
+    let name = null;
+    if (_s.startsWith(':def')) {
+        const rest = _s.slice(4).trim();
+        name = rest.split(/\s+/)[0].trim();
+        _s = rest.slice(name.length).trim();
+    }
     let msg = '';
     let tm_;
+    let ty_;
     try {
         const t = parser_1.parse(_s);
         config_1.log(() => syntax_1.showTerm(t));
         const [ty, tm] = elaborate_1.elaborate(t);
         tm_ = tm;
+        ty_ = ty;
         config_1.log(() => syntax_1.showTerm(ty));
         config_1.log(() => syntax_1.showTerm(tm));
         msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}`;
@@ -183,6 +191,10 @@ exports.runREPL = (_s, _cb) => {
         const n = vals_1.normalize(tm_);
         config_1.log(() => syntax_1.showTerm(n));
         msg += '\nnorm: ' + syntax_1.showTerm(n);
+        if (name) {
+            env_1.setEnv(name, vals_1.evaluate(tm_), vals_1.evaluate(ty_));
+            msg += `\ndefined ${name}`;
+        }
         return _cb(msg);
     }
     catch (err) {
