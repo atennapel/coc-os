@@ -351,6 +351,8 @@ exports.elaborate = (tm, ts = list_1.Nil, vs = list_1.Nil) => {
     config_1.log(() => syntax_1.showTerm(term));
     const zterm = vals_1.zonk(vs, term);
     config_1.log(() => syntax_1.showTerm(zterm));
+    if (syntax_1.isUnsolved(zty) || syntax_1.isUnsolved(zterm))
+        return util_1.terr(`unsolved type or term: ${syntax_1.showTerm(zterm)} : ${syntax_1.showTerm(zty)}`);
     return [zty, zterm];
 };
 
@@ -667,6 +669,30 @@ exports.showTerm = (t) => {
         return `let ${t.name} = ${exports.showTerm(t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
     if (t.tag === 'Ann')
         return `${exports.showTerm(t.term)} : ${exports.showTerm(t.type)}`;
+    return t;
+};
+exports.isUnsolved = (t) => {
+    if (t.tag === 'Type')
+        return false;
+    if (t.tag === 'Hole')
+        return true;
+    if (t.tag === 'Var')
+        return false;
+    if (t.tag === 'Meta')
+        return true;
+    if (t.tag === 'App')
+        return exports.isUnsolved(t.left) || exports.isUnsolved(t.right);
+    if (t.tag === 'Abs') {
+        if (t.type && exports.isUnsolved(t.type))
+            return true;
+        return exports.isUnsolved(t.body);
+    }
+    if (t.tag === 'Pi')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
+    if (t.tag === 'Let')
+        return exports.isUnsolved(t.val) || exports.isUnsolved(t.body);
+    if (t.tag === 'Ann')
+        return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
     return t;
 };
 

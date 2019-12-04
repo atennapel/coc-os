@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil } from '../list';
 import { Name, freshName } from '../names';
 import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs } from './syntax';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -134,5 +134,7 @@ export const elaborate = (tm: Term, ts: EnvT = Nil, vs: EnvV = Nil): [Term, Term
   log(() => showTerm(term));
   const zterm = zonk(vs, term);
   log(() => showTerm(zterm));
+  if (isUnsolved(zty) || isUnsolved(zterm))
+    return terr(`unsolved type or term: ${showTerm(zterm)} : ${showTerm(zty)}`);
   return [zty, zterm];
 };

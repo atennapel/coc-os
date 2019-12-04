@@ -97,3 +97,19 @@ export const showTerm = (t: Term): string => {
     return `${showTerm(t.term)} : ${showTerm(t.type)}`;
   return t;
 };
+
+export const isUnsolved = (t: Term): boolean => {
+  if (t.tag === 'Type') return false;
+  if (t.tag === 'Hole') return true;
+  if (t.tag === 'Var') return false;
+  if (t.tag === 'Meta') return true;
+  if (t.tag === 'App') return isUnsolved(t.left) || isUnsolved(t.right);
+  if (t.tag === 'Abs') {
+    if (t.type && isUnsolved(t.type)) return true;
+    return isUnsolved(t.body);
+  }
+  if (t.tag === 'Pi') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
+  if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
+  return t;
+};
