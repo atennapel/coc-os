@@ -1,5 +1,5 @@
 import { serr } from '../util'
-import { Term, Var, App, Hole, Type, Abs, Pi } from './syntax';
+import { Term, Var, App, Hole, Type, Abs, Pi, Ann } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
 
@@ -95,6 +95,20 @@ const lambdaParams = (t: Token): [Name, Term | null][] => {
   }
   return serr(`invalid lambda param`);
 };
+const piParams = (t: Token): [Name, Term][] => {
+  if (t.tag === 'Name') return [['_', expr(t)]];
+  if (t.tag === 'List') {
+    const a = t.list;
+    if (a.length === 0) return [['_', tunit]];
+    const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
+    if (i === -1) return [['_', expr(t)]];
+    const ns = a.slice(0, i);
+    const rest = a.slice(i + 1);
+    const ty = exprs(rest);
+    return isNames(ns).map(x => [x, ty]);
+  }
+  return serr(`invalid pi param`);
+};
 
 const expr = (t: Token): Term => {
   if (t.tag === 'List') return exprs(t.list);
@@ -111,6 +125,12 @@ const expr = (t: Token): Term => {
 const exprs = (ts: Token[]): Term => {
   if (ts.length === 0) return unit;
   if (ts.length === 1) return expr(ts[0]);
+  const i = ts.findIndex(x => isName(x, ':'));
+  if (i >= 0) {
+    const a = ts.slice(0, i);
+    const b = ts.slice(i + 1);
+    return Ann(exprs(a), exprs(b));
+  }
   if (isName(ts[0], '\\')) {
     const args: [Name, Term | null][] = [];
     let found = false;
@@ -137,10 +157,7 @@ const exprs = (ts: Token[]): Term => {
         found = true;
         break;
       }
-      lambdaParams(c).forEach(([x, ty]) => {
-        if (!ty) return serr('pi parameter requires type');
-        return args.push([x, ty])
-      });
+      piParams(c).forEach(a => args.push(a));
     }
     if (!found) return serr(`. not found after /`);
     const body = exprs(ts.slice(i + 1));
