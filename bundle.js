@@ -142,9 +142,24 @@ const config_1 = require("./config");
 const syntax_1 = require("./surface/syntax");
 const elaborate_1 = require("./surface/elaborate");
 const vals_1 = require("./surface/vals");
+const env_1 = require("./surface/env");
+const help = `
+EXAMPLES
+identity = \\(t : *) (x : t). x
+zero = \\t z s. z : /(t : *) t (/t. t). t
+
+COMMANDS
+[:help or :h] this help message
+[:debug or :d] toggle debug log messages
+[:def name term] set a name
+`.trim();
 exports.initREPL = () => {
+    env_1.resetEnv();
 };
 exports.runREPL = (_s, _cb) => {
+    _s = _s.trim();
+    if (_s === ':help' || _s === ':h')
+        return _cb(help);
     if (_s === ':debug' || _s === ':d') {
         config_1.setConfig({ debug: !config_1.config.debug });
         return _cb(`debug: ${config_1.config.debug}`);
@@ -177,7 +192,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./surface/elaborate":6,"./surface/parser":9,"./surface/syntax":10,"./surface/vals":12}],6:[function(require,module,exports){
+},{"./config":1,"./surface/elaborate":6,"./surface/env":7,"./surface/parser":9,"./surface/syntax":10,"./surface/vals":12}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
