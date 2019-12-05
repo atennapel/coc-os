@@ -1,6 +1,6 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil } from '../list';
-import { Name, freshName } from '../names';
-import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta } from './vals';
+import { Name } from '../names';
+import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName } from './vals';
 import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
@@ -59,7 +59,7 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     if (!ty) {
       const r = getEnv(tm.name);
       if (!r) return terr(`undefined var ${tm.name}`);
-      return [r[1], tm];
+      return [r.type, tm];
     }
     return [ty.type, tm];
   }
@@ -78,9 +78,11 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     if (tm.type) {
       const type = check(ts, vs, tm.type, VType);
       const vt = evaluate(type, vs);
-      const [rt, body] = synth(Cons([tm.name, Bound(vt)], ts), Cons([tm.name, Nothing], vs), tm.body);
+      const x = freshName(vs, tm.name);
+      const vx = VVar(x);
+      const [rt, body] = synth(Cons([tm.name, Bound(vt)], ts), Cons([tm.name, Just(vx)], vs), tm.body);
       return [
-        evaluate(Pi(tm.name, tm.type, quote(rt, Cons([tm.name, Nothing], vs))), vs),
+        evaluate(Pi(tm.name, type, quote(rt, Cons([tm.name, Nothing], vs))), vs),
         Abs(tm.name, type, body),
       ];
     } else {
@@ -105,6 +107,18 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     const vt = evaluate(type, vs);
     const body = check(Cons([tm.name, Bound(vt)], ts), Cons([tm.name, Nothing], vs), tm.body, VType);
     return [VType, Pi(tm.name, type, body)];
+  }
+  if (tm.tag === 'Opq') {
+    const x = tm.name;
+    const r = getEnv(x);
+    if (!r || !r.opaque) return terr(`undefined opaque ${showTerm(tm)}`);
+    const tmp = Cons([x, Nothing] as [Name, any], Nil);
+    const xf = freshName(tmp, 'f');
+    return [
+      // {f : typeX -> *} -> f X -> f valX
+      evaluate(Pi(xf, Pi('_', quote(r.type), Type), Pi('_', App(Var(xf), Var(x)), App(Var(xf), quote(r.val))))),
+      tm,
+    ];
   }
   return terr(`cannot synth ${showTerm(tm)}`);
 };

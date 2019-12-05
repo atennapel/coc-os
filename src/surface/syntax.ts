@@ -10,6 +10,7 @@ export type Term
   | { tag: 'Ann', term: Term, type: Term }
   | { tag: 'Type' }
   | { tag: 'Hole' }
+  | { tag: 'Opq', name: Name }
   | { tag: 'Meta', id: TMetaId };
 
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
@@ -25,6 +26,7 @@ export const Ann = (term: Term, type: Term): Term =>
   ({ tag: 'Ann', term, type });
 export const Type: Term = { tag: 'Type' };
 export const Hole: Term = { tag: 'Hole' };
+export const Opq = (name: Name): Term => ({ tag: 'Opq', name });
 export const Meta = (id: TMetaId): Term => ({ tag: 'Meta', id });
 
 export const showTermSimple = (t: Term): string => {
@@ -42,6 +44,7 @@ export const showTermSimple = (t: Term): string => {
     return `(${showTermSimple(t.term)} : ${showTermSimple(t.type)})`;
   if (t.tag === 'Type') return `*`;
   if (t.tag === 'Hole') return `_`;
+  if (t.tag === 'Opq') return `~${t.name}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   return t;
 };
@@ -77,11 +80,12 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'Var') return `${t.name}`;
+  if (t.tag === 'Opq') return `~${t.name}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
     return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann', f)} ${
-      as.map((t, i) => `${showTermP(t.tag === 'App' || t.tag === 'Ann' || (t.tag === 'Let' && i < as.length - 1) || (t.tag === 'Abs' && i < as.length - 1) || (t.tag === 'Pi' && i < as.length - 1), t)}`).join(' ')}`;
+      as.map((t, i) => `${showTermP(t.tag === 'App' || t.tag === 'Ann' || (t.tag === 'Let' && i < as.length - 1) || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi', t)}`).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
@@ -99,10 +103,11 @@ export const showTerm = (t: Term): string => {
 };
 
 export const isUnsolved = (t: Term): boolean => {
-  if (t.tag === 'Type') return false;
-  if (t.tag === 'Hole') return true;
-  if (t.tag === 'Var') return false;
   if (t.tag === 'Meta') return true;
+  if (t.tag === 'Hole') return true;
+  if (t.tag === 'Type') return false;
+  if (t.tag === 'Var') return false;
+  if (t.tag === 'Opq') return false;
   if (t.tag === 'App') return isUnsolved(t.left) || isUnsolved(t.right);
   if (t.tag === 'Abs') {
     if (t.type && isUnsolved(t.type)) return true;

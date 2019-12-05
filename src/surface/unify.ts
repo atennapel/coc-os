@@ -1,6 +1,6 @@
-import { Name, freshName } from '../names';
+import { Name } from '../names';
 import { List, map, contains, Cons, foldl, Nil, length, zipWith_ } from '../list';
-import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp } from './vals';
+import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName } from './vals';
 import { terr, impossible } from '../util';
 import { Term, showTerm, Type, Abs } from './syntax';
 import { log } from '../config';
@@ -42,6 +42,7 @@ const checkSolution = (m: TMetaId, spine: List<Name>, tm: Term): void => {
     checkSolution(m, Cons(tm.name, spine), tm.body);
     return;
   }
+  if (tm.tag === 'Opq') return;
   return impossible(`checkSolution (?${m}): non-normal term: ${showTerm(tm)}`);
 };
 
@@ -58,6 +59,7 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
   const b = force(b_);
   log(() => `unify ${showTerm(quote(a, vs))} ~ ${showTerm(quote(b, vs))} in ${showEnvV(vs)}`);
   if (a.tag === 'VType' && b.tag === 'VType') return;
+  if (a.tag === 'VOpq' && b.tag === 'VOpq' && a.name === b.name) return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     unify(vs, a.type, b.type);
     const x = freshName(vs, a.name);

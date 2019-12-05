@@ -14,6 +14,7 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:def name term] set a name
+[:opq name term] set a name opaquely
 [:defs] show all defs
 [:del name] delete a name
 `.trim();
@@ -32,7 +33,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
   }
   if (_s === ':defs') {
     const e = getEnvMap();
-    const msg = Object.keys(e).map(k => `${k} : ${showTerm(quote(e[k][1]))} = ${showTerm(quote(e[k][0]))}`).join('\n');
+    const msg = Object.keys(e).map(k => `${e[k].opaque ? 'opaque ' : ''}${k} : ${showTerm(quote(e[k].type))} = ${showTerm(quote(e[k].val))}`).join('\n');
     return _cb(msg || 'no definitions');
   }
   if (_s.startsWith(':del')) {
@@ -41,7 +42,9 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     return _cb(`deleted ${name}`);
   }
   let name = null;
-  if (_s.startsWith(':def')) {
+  let opq = false;
+  if (_s.startsWith(':def') || _s.startsWith(':opq')) {
+    opq = _s.startsWith(':opq');
     const rest = _s.slice(4).trim();
     name = rest.split(/\s+/)[0].trim();
     _s = rest.slice(name.length).trim();
@@ -67,7 +70,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     log(() => showTerm(n));
     msg += '\nnorm: ' + showTerm(n);
     if (name) {
-      setEnv(name, evaluate(tm_), evaluate(ty_));
+      setEnv(name, evaluate(tm_), evaluate(ty_), opq);
       msg += `\ndefined ${name}`;
     }
     return _cb(msg);
