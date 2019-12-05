@@ -28,7 +28,7 @@ const checkOpenNames = (ns: Name[]): void => {
 };
 
 const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
-  const ty = force(ty_);
+  const ty = force(vs, ty_);
   log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, vs))} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
   if (tm.tag === 'Open') {
@@ -140,7 +140,7 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
 };
 
 const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, arg: Term): [Val, Term] => {
-  const ty = force(ty_);
+  const ty = force(vs, ty_);
   log(() => `synthapp ${showTerm(quote(ty, vs))} @ ${showTerm(arg)} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
   if (ty.tag === 'VPi') {
     const tm = check(ts, vs, arg, ty.type);

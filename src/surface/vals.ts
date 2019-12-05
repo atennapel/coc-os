@@ -47,11 +47,16 @@ export const VType: Val = { tag: 'VType' };
 export const VVar = (name: Name): Val => VNe(HVar(name));
 export const VMeta = (id: TMetaId): Val => VNe(HMeta(id));
 
-export const force = (v: Val): Val => {
+export const force = (vs: EnvV, v: Val): Val => {
   if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
     const val = getMeta(v.head.id);
     if (val.tag === 'Unsolved') return v;
-    return force(foldr((x, y) => vapp(y, x), val.val, v.args));
+    return force(vs, foldr((x, y) => vapp(y, x), val.val, v.args));
+  }
+  if (v.tag === 'VNe' && v.head.tag === 'HVar' && lookup(vs.vals, v.head.name) === null) {
+    const r = getEnv(v.head.name);
+    if (r && r.opaque && contains(vs.opened, v.head.name))
+      return force(vs, foldr((x, y) => vapp(y, x), r.val, v.args));
   }
   return v;
 };
@@ -104,7 +109,7 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
 };
 
 export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
-  const v = force(v_);
+  const v = force(vs, v_);
   if (v.tag === 'VType') return Type;
   if (v.tag === 'VNe') {
     const h = v.head;

@@ -239,7 +239,7 @@ const checkOpenNames = (ns) => {
     });
 };
 const check = (ts, vs, tm, ty_) => {
-    const ty = vals_1.force(ty_);
+    const ty = vals_1.force(vs, ty_);
     config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(vals_1.quote(ty, vs))} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return syntax_1.Type;
@@ -354,7 +354,7 @@ const synth = (ts, vs, tm) => {
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
 };
 const synthapp = (ts, vs, ty_, arg) => {
-    const ty = vals_1.force(ty_);
+    const ty = vals_1.force(vs, ty_);
     config_1.log(() => `synthapp ${syntax_1.showTerm(vals_1.quote(ty, vs))} @ ${syntax_1.showTerm(arg)} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
     if (ty.tag === 'VPi') {
         const tm = check(ts, vs, arg, ty.type);
@@ -776,8 +776,8 @@ const config_1 = require("../config");
 const maybe_1 = require("../maybe");
 const metas_1 = require("./metas");
 const env_1 = require("./env");
-const checkSpine = (spine) => list_1.map(spine, v_ => {
-    const v = vals_1.force(v_);
+const checkSpine = (vs, spine) => list_1.map(spine, v_ => {
+    const v = vals_1.force(vs, v_);
     if (v.tag === 'VNe' && v.head.tag === 'HVar')
         return v.head.name;
     return util_1.terr(`not a var in spine`);
@@ -820,15 +820,15 @@ const checkSolution = (vs, m, spine, tm) => {
     return util_1.impossible(`checkSolution (?${m}): non-normal term: ${syntax_1.showTerm(tm)}`);
 };
 const solve = (vs, m, spine, val) => {
-    const spinex = checkSpine(spine);
+    const spinex = checkSpine(vs, spine);
     const rhs = vals_1.quote(val, vs);
     checkSolution(vs, m, spinex, rhs);
     const solution = vals_1.evaluate(list_1.foldl((x, y) => syntax_1.Abs(y, syntax_1.Type, x), rhs, spinex), vals_1.emptyEnvV);
     metas_1.setMeta(m, solution);
 };
 exports.unify = (vs, a_, b_) => {
-    const a = vals_1.force(vals_1.revaluate(vs, a_));
-    const b = vals_1.force(vals_1.revaluate(vs, b_));
+    const a = vals_1.force(vs, a_);
+    const b = vals_1.force(vs, b_);
     config_1.log(() => `unify ${syntax_1.showTerm(vals_1.quote(a, vs))} ~ ${syntax_1.showTerm(vals_1.quote(b, vs))} in ${vals_1.showEnvV(vs)}`);
     if (a.tag === 'VType' && b.tag === 'VType')
         return;
@@ -900,12 +900,17 @@ exports.VOpq = (name) => ({ tag: 'VOpq', name });
 exports.VType = { tag: 'VType' };
 exports.VVar = (name) => exports.VNe(exports.HVar(name));
 exports.VMeta = (id) => exports.VNe(exports.HMeta(id));
-exports.force = (v) => {
+exports.force = (vs, v) => {
     if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
         const val = metas_1.getMeta(v.head.id);
         if (val.tag === 'Unsolved')
             return v;
-        return exports.force(list_1.foldr((x, y) => exports.vapp(y, x), val.val, v.args));
+        return exports.force(vs, list_1.foldr((x, y) => exports.vapp(y, x), val.val, v.args));
+    }
+    if (v.tag === 'VNe' && v.head.tag === 'HVar' && list_1.lookup(vs.vals, v.head.name) === null) {
+        const r = env_1.getEnv(v.head.name);
+        if (r && r.opaque && list_1.contains(vs.opened, v.head.name))
+            return exports.force(vs, list_1.foldr((x, y) => exports.vapp(y, x), r.val, v.args));
     }
     return v;
 };
@@ -960,7 +965,7 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = exports.emptyEnvV) => {
-    const v = exports.force(v_);
+    const v = exports.force(vs, v_);
     if (v.tag === 'VType')
         return syntax_1.Type;
     if (v.tag === 'VNe') {

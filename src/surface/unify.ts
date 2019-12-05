@@ -1,6 +1,6 @@
 import { Name } from '../names';
 import { List, map, contains, Cons, foldl, length, zipWith_, lookup } from '../list';
-import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName, emptyEnvV, extendV, revaluate } from './vals';
+import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName, emptyEnvV, extendV } from './vals';
 import { terr, impossible } from '../util';
 import { Term, showTerm, Type, Abs } from './syntax';
 import { log } from '../config';
@@ -8,9 +8,9 @@ import { Nothing } from '../maybe';
 import { TMetaId, setMeta } from './metas';
 import { getEnv } from './env';
 
-const checkSpine = (spine: List<Val>): List<Name> =>
+const checkSpine = (vs: EnvV, spine: List<Val>): List<Name> =>
   map(spine, v_ => {
-    const v = force(v_);
+    const v = force(vs, v_);
     if (v.tag === 'VNe' && v.head.tag === 'HVar')
       return v.head.name;
     return terr(`not a var in spine`);
@@ -52,7 +52,7 @@ const checkSolution = (vs: EnvV, m: TMetaId, spine: List<Name>, tm: Term): void 
 };
 
 const solve = (vs: EnvV, m: TMetaId, spine: List<Val>, val: Val): void => {
-  const spinex = checkSpine(spine);
+  const spinex = checkSpine(vs, spine);
   const rhs = quote(val, vs);
   checkSolution(vs, m, spinex, rhs);
   const solution = evaluate(foldl((x, y) => Abs(y, Type, x), rhs, spinex), emptyEnvV);
@@ -60,8 +60,8 @@ const solve = (vs: EnvV, m: TMetaId, spine: List<Val>, val: Val): void => {
 };
 
 export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
-  const a = force(revaluate(vs, a_));
-  const b = force(revaluate(vs, b_));
+  const a = force(vs, a_);
+  const b = force(vs, b_);
   log(() => `unify ${showTerm(quote(a, vs))} ~ ${showTerm(quote(b, vs))} in ${showEnvV(vs)}`);
   if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VOpq' && b.tag === 'VOpq' && a.name === b.name) return;
