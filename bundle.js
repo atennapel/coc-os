@@ -327,10 +327,11 @@ const synth = (ts, vs, tm) => {
         if (!r || !r.opaque)
             return util_1.terr(`undefined opaque ${syntax_1.showTerm(tm)}`);
         const tmp = list_1.Cons([x, maybe_1.Nothing], list_1.Nil);
+        const xr = vals_1.freshName(tmp, 'r');
         const xf = vals_1.freshName(tmp, 'f');
         return [
-            // {f : typeX -> *} -> f X -> f valX
-            vals_1.evaluate(syntax_1.Pi(xf, syntax_1.Pi('_', vals_1.quote(r.type), syntax_1.Type), syntax_1.Pi('_', syntax_1.App(syntax_1.Var(xf), syntax_1.Var(x)), syntax_1.App(syntax_1.Var(xf), vals_1.quote(r.val))))),
+            // {r : *} -> {f : typeX -> r} -> f X -> f valX
+            vals_1.evaluate(syntax_1.Pi(xr, syntax_1.Type, syntax_1.Pi(xf, syntax_1.Pi('_', vals_1.quote(r.type), syntax_1.Var(xr)), syntax_1.Pi('_', syntax_1.App(syntax_1.Var(xf), syntax_1.Var(x)), syntax_1.App(syntax_1.Var(xf), vals_1.quote(r.val)))))),
             tm,
         ];
     }
@@ -865,12 +866,12 @@ exports.freshName = (vs, name_) => {
     config_1.log(() => `freshName ${name_} -> ${name} in ${exports.showEnvV(vs)}`);
     return name;
 };
-const vid = exports.VAbs('x', exports.VType, v => v);
+const vopq = exports.VAbs('x', exports.VType, () => exports.VAbs('y', exports.VType, v => v));
 exports.vapp = (a, b) => {
     if (a.tag === 'VAbs')
         return a.body(b);
     if (a.tag === 'VOpq')
-        return vid;
+        return vopq;
     if (a.tag === 'VNe')
         return exports.VNe(a.head, list_1.Cons(b, a.args));
     return util_1.impossible('vapp');

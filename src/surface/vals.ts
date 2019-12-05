@@ -56,11 +56,11 @@ export const freshName = (vs: EnvV, name_: Name): Name => {
   return name;
 };
 
-const vid = VAbs('x', VType, v => v);
+const vopq = VAbs('x', VType, () => VAbs('y', VType, v => v));
 
 export const vapp = (a: Val, b: Val): Val => {
   if (a.tag === 'VAbs') return a.body(b);
-  if (a.tag === 'VOpq') return vid;
+  if (a.tag === 'VOpq') return vopq;
   if (a.tag === 'VNe') return VNe(a.head, Cons(b, a.args));
   return impossible('vapp');
 };

@@ -113,10 +113,11 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     const r = getEnv(x);
     if (!r || !r.opaque) return terr(`undefined opaque ${showTerm(tm)}`);
     const tmp = Cons([x, Nothing] as [Name, any], Nil);
+    const xr = freshName(tmp, 'r');
     const xf = freshName(tmp, 'f');
     return [
-      // {f : typeX -> *} -> f X -> f valX
-      evaluate(Pi(xf, Pi('_', quote(r.type), Type), Pi('_', App(Var(xf), Var(x)), App(Var(xf), quote(r.val))))),
+      // {r : *} -> {f : typeX -> r} -> f X -> f valX
+      evaluate(Pi(xr, Type, Pi(xf, Pi('_', quote(r.type), Var(xr)), Pi('_', App(Var(xf), Var(x)), App(Var(xf), quote(r.val)))))),
       tm,
     ];
   }
