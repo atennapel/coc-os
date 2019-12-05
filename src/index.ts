@@ -16,4 +16,6 @@ PROBLEMS:
 :def s \n. toNat (\t z s. s (fromNat n t z s)) : /Nat.Nat
 \(Nat:*) x. s x
 
+\(t:*)(n:Nat). /(r:/Nat. *) (nil : r z) (cons : /(m:Nat)(head:t)(tail:r m). r (s m)). r n
+
 */

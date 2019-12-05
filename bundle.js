@@ -737,8 +737,11 @@ const checkSolution = (vs, m, spine, tm) => {
     if (tm.tag === 'Var') {
         if (list_1.contains(spine, tm.name))
             return;
-        if (env_1.getEnv(tm.name) && list_1.lookup(vs, tm.name) !== null)
-            return util_1.terr(`cannot solve with ${tm.name}, name is locally shadowed`);
+        if (env_1.getEnv(tm.name)) {
+            if (list_1.lookup(vs, tm.name) !== null)
+                return util_1.terr(`cannot solve with ${tm.name}, name is locally shadowed`);
+            return;
+        }
         return util_1.terr(`scope error ${tm.name}`);
     }
     if (tm.tag === 'App') {

@@ -19,8 +19,11 @@ const checkSpine = (spine: List<Val>): List<Name> =>
 const checkSolution = (vs: EnvV, m: TMetaId, spine: List<Name>, tm: Term): void => {
   if (tm.tag === 'Var') {
     if (contains(spine,  tm.name)) return;
-    if (getEnv(tm.name) && lookup(vs, tm.name) !== null)
-      return terr(`cannot solve with ${tm.name}, name is locally shadowed`);
+    if (getEnv(tm.name)) {
+      if (lookup(vs, tm.name) !== null)
+        return terr(`cannot solve with ${tm.name}, name is locally shadowed`);
+      return;
+    }
     return terr(`scope error ${tm.name}`);
   }
   if (tm.tag === 'App') {
