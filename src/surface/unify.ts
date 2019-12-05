@@ -1,11 +1,12 @@
 import { Name } from '../names';
-import { List, map, contains, Cons, foldl, Nil, length, zipWith_ } from '../list';
+import { List, map, contains, Cons, foldl, Nil, length, zipWith_, lookup } from '../list';
 import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName } from './vals';
 import { terr, impossible } from '../util';
 import { Term, showTerm, Type, Abs } from './syntax';
 import { log } from '../config';
 import { Nothing } from '../maybe';
 import { TMetaId, setMeta } from './metas';
+import { getEnv } from './env';
 
 const checkSpine = (spine: List<Val>): List<Name> =>
   map(spine, v_ => {
@@ -15,15 +16,16 @@ const checkSpine = (spine: List<Val>): List<Name> =>
     return terr(`not a var in spine`);
   });
 
-const checkSolution = (m: TMetaId, spine: List<Name>, tm: Term): void => {
+const checkSolution = (vs: EnvV, m: TMetaId, spine: List<Name>, tm: Term): void => {
   if (tm.tag === 'Var') {
-    if (!contains(spine,  tm.name))
-      return terr(`scope error ${tm.name}`);
-    return;
+    if (contains(spine,  tm.name)) return;
+    if (getEnv(tm.name) && lookup(vs, tm.name) !== null)
+      return terr(`cannot solve with ${tm.name}, name is locally shadowed`);
+    return terr(`scope error ${tm.name}`);
   }
   if (tm.tag === 'App') {
-    checkSolution(m, spine, tm.left);
-    checkSolution(m, spine, tm.right);
+    checkSolution(vs, m, spine, tm.left);
+    checkSolution(vs, m, spine, tm.right);
     return;
   }
   if (tm.tag === 'Type') return;
@@ -33,13 +35,13 @@ const checkSolution = (m: TMetaId, spine: List<Name>, tm: Term): void => {
     return;
   }
   if (tm.tag === 'Abs' && tm.type) {
-    checkSolution(m, spine, tm.type);
-    checkSolution(m, Cons(tm.name, spine), tm.body);
+    checkSolution(vs, m, spine, tm.type);
+    checkSolution(vs, m, Cons(tm.name, spine), tm.body);
     return;
   }
   if (tm.tag === 'Pi') {
-    checkSolution(m, spine, tm.type);
-    checkSolution(m, Cons(tm.name, spine), tm.body);
+    checkSolution(vs, m, spine, tm.type);
+    checkSolution(vs, m, Cons(tm.name, spine), tm.body);
     return;
   }
   if (tm.tag === 'Opq') return;
@@ -49,7 +51,7 @@ const checkSolution = (m: TMetaId, spine: List<Name>, tm: Term): void => {
 const solve = (vs: EnvV, m: TMetaId, spine: List<Val>, val: Val): void => {
   const spinex = checkSpine(spine);
   const rhs = quote(val, vs);
-  checkSolution(m, spinex, rhs);
+  checkSolution(vs, m, spinex, rhs);
   const solution = evaluate(foldl((x, y) => Abs(y, Type, x), rhs, spinex), Nil);
   setMeta(m, solution);
 };

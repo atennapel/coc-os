@@ -2,7 +2,6 @@ console.log(42);
 
 /**
 TODO:
-- bug with global names in meta solving
 - pi parser
 - let parser
 - implicit functions

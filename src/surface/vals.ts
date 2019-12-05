@@ -50,7 +50,7 @@ export const force = (v: Val): Val => {
 export const freshName = (vs: EnvV, name_: Name): Name => {
   if (name_ === '_') return '_';
   let name = name_;
-  while (lookup(vs, name) !== null)
+  while (lookup(vs, name) !== null || getEnv(name))
     name = nextName(name);
   log(() => `freshName ${name_} -> ${name} in ${showEnvV(vs)}`);
   return name;

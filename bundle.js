@@ -259,6 +259,10 @@ const freshPi = (ts, vs, x) => {
     const b = newMeta(list_1.Cons([x, exports.Bound(va)], ts));
     return vals_1.VPi(x, va, v => vals_1.evaluate(b, list_1.Cons([x, maybe_1.Just(v)], vs)));
 };
+const freshPiType = (ts, vs, x, va) => {
+    const b = newMeta(list_1.Cons([x, exports.Bound(va)], ts));
+    return vals_1.VPi(x, va, v => vals_1.evaluate(b, list_1.Cons([x, maybe_1.Just(v)], vs)));
+};
 const synth = (ts, vs, tm) => {
     config_1.log(() => `synth ${syntax_1.showTerm(tm)} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
     if (tm.tag === 'Type')
@@ -290,13 +294,9 @@ const synth = (ts, vs, tm) => {
         if (tm.type) {
             const type = check(ts, vs, tm.type, vals_1.VType);
             const vt = vals_1.evaluate(type, vs);
-            const x = vals_1.freshName(vs, tm.name);
-            const vx = vals_1.VVar(x);
-            const [rt, body] = synth(list_1.Cons([tm.name, exports.Bound(vt)], ts), list_1.Cons([tm.name, maybe_1.Just(vx)], vs), tm.body);
-            return [
-                vals_1.evaluate(syntax_1.Pi(tm.name, type, vals_1.quote(rt, list_1.Cons([tm.name, maybe_1.Nothing], vs))), vs),
-                syntax_1.Abs(tm.name, type, body),
-            ];
+            const pi = freshPiType(ts, vs, tm.name, vt);
+            const term = check(ts, vs, syntax_1.Abs(tm.name, null, tm.body), pi);
+            return [pi, term];
         }
         else {
             const pi = freshPi(ts, vs, tm.name);
@@ -726,21 +726,24 @@ const syntax_1 = require("./syntax");
 const config_1 = require("../config");
 const maybe_1 = require("../maybe");
 const metas_1 = require("./metas");
+const env_1 = require("./env");
 const checkSpine = (spine) => list_1.map(spine, v_ => {
     const v = vals_1.force(v_);
     if (v.tag === 'VNe' && v.head.tag === 'HVar')
         return v.head.name;
     return util_1.terr(`not a var in spine`);
 });
-const checkSolution = (m, spine, tm) => {
+const checkSolution = (vs, m, spine, tm) => {
     if (tm.tag === 'Var') {
-        if (!list_1.contains(spine, tm.name))
-            return util_1.terr(`scope error ${tm.name}`);
-        return;
+        if (list_1.contains(spine, tm.name))
+            return;
+        if (env_1.getEnv(tm.name) && list_1.lookup(vs, tm.name) !== null)
+            return util_1.terr(`cannot solve with ${tm.name}, name is locally shadowed`);
+        return util_1.terr(`scope error ${tm.name}`);
     }
     if (tm.tag === 'App') {
-        checkSolution(m, spine, tm.left);
-        checkSolution(m, spine, tm.right);
+        checkSolution(vs, m, spine, tm.left);
+        checkSolution(vs, m, spine, tm.right);
         return;
     }
     if (tm.tag === 'Type')
@@ -751,13 +754,13 @@ const checkSolution = (m, spine, tm) => {
         return;
     }
     if (tm.tag === 'Abs' && tm.type) {
-        checkSolution(m, spine, tm.type);
-        checkSolution(m, list_1.Cons(tm.name, spine), tm.body);
+        checkSolution(vs, m, spine, tm.type);
+        checkSolution(vs, m, list_1.Cons(tm.name, spine), tm.body);
         return;
     }
     if (tm.tag === 'Pi') {
-        checkSolution(m, spine, tm.type);
-        checkSolution(m, list_1.Cons(tm.name, spine), tm.body);
+        checkSolution(vs, m, spine, tm.type);
+        checkSolution(vs, m, list_1.Cons(tm.name, spine), tm.body);
         return;
     }
     if (tm.tag === 'Opq')
@@ -767,7 +770,7 @@ const checkSolution = (m, spine, tm) => {
 const solve = (vs, m, spine, val) => {
     const spinex = checkSpine(spine);
     const rhs = vals_1.quote(val, vs);
-    checkSolution(m, spinex, rhs);
+    checkSolution(vs, m, spinex, rhs);
     const solution = vals_1.evaluate(list_1.foldl((x, y) => syntax_1.Abs(y, syntax_1.Type, x), rhs, spinex), list_1.Nil);
     metas_1.setMeta(m, solution);
 };
@@ -820,7 +823,7 @@ exports.unify = (vs, a_, b_) => {
     return util_1.terr(`cannot unify: ${syntax_1.showTerm(ta)} ~ ${syntax_1.showTerm(tb)}`);
 };
 
-},{"../config":1,"../list":2,"../maybe":3,"../util":13,"./metas":8,"./syntax":10,"./vals":12}],12:[function(require,module,exports){
+},{"../config":1,"../list":2,"../maybe":3,"../util":13,"./env":7,"./metas":8,"./syntax":10,"./vals":12}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -854,7 +857,7 @@ exports.freshName = (vs, name_) => {
     if (name_ === '_')
         return '_';
     let name = name_;
-    while (list_1.lookup(vs, name) !== null)
+    while (list_1.lookup(vs, name) !== null || env_1.getEnv(name))
         name = names_1.nextName(name);
     config_1.log(() => `freshName ${name_} -> ${name} in ${exports.showEnvV(vs)}`);
     return name;

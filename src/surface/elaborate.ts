@@ -49,6 +49,10 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name): Val => {
   const b = newMeta(Cons([x, Bound(va)], ts));
   return VPi(x, va, v => evaluate(b, Cons([x, Just(v)], vs)));
 };
+const freshPiType = (ts: EnvT, vs: EnvV, x: Name, va: Val): Val => {
+  const b = newMeta(Cons([x, Bound(va)], ts));
+  return VPi(x, va, v => evaluate(b, Cons([x, Just(v)], vs)));
+};
 
 const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   log(() => `synth ${showTerm(tm)} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
@@ -78,13 +82,9 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     if (tm.type) {
       const type = check(ts, vs, tm.type, VType);
       const vt = evaluate(type, vs);
-      const x = freshName(vs, tm.name);
-      const vx = VVar(x);
-      const [rt, body] = synth(Cons([tm.name, Bound(vt)], ts), Cons([tm.name, Just(vx)], vs), tm.body);
-      return [
-        evaluate(Pi(tm.name, type, quote(rt, Cons([tm.name, Nothing], vs))), vs),
-        Abs(tm.name, type, body),
-      ];
+      const pi = freshPiType(ts, vs, tm.name, vt);
+      const term = check(ts, vs, Abs(tm.name, null, tm.body), pi);
+      return [pi, term];
     } else {
       const pi = freshPi(ts, vs, tm.name);
       const term = check(ts, vs, tm, pi);
