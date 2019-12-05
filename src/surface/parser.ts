@@ -1,5 +1,5 @@
 import { serr } from '../util'
-import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Opq, Open } from './syntax';
+import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
 
@@ -33,7 +33,6 @@ const tokenize = (sc: string): Token[] => {
       if (SYM2.indexOf(c + next) >= 0) r.push(TName(c + next)), i++;
       else if (SYM1.indexOf(c) >= 0) r.push(TName(c));
       else if (c === ';') state = COMMENT;
-      else if (c === '~') t += c, state = NAME;
       else if (/[\_a-z]/i.test(c)) t += c, state = NAME;
       else if(c === '(') b.push(c), p.push(r), r = [];
       else if(c === ')') {
@@ -114,7 +113,6 @@ const expr = (t: Token): Term => {
     const x = t.name;
     if (x === '*') return Type;
     if (x === '_') return Hole;
-    if (x[0] === '~' && x.length > 1) return Opq(x.slice(1));
     if (/[a-z]/i.test(x[0])) return Var(x);
     return serr(`invalid name: ${x}`);
   }

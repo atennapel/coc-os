@@ -10,7 +10,6 @@ export type Term
   | { tag: 'Ann', term: Term, type: Term }
   | { tag: 'Type' }
   | { tag: 'Hole' }
-  | { tag: 'Opq', name: Name }
   | { tag: 'Open', names: Name[], body: Term }
   | { tag: 'Meta', id: TMetaId };
 
@@ -27,7 +26,6 @@ export const Ann = (term: Term, type: Term): Term =>
   ({ tag: 'Ann', term, type });
 export const Type: Term = { tag: 'Type' };
 export const Hole: Term = { tag: 'Hole' };
-export const Opq = (name: Name): Term => ({ tag: 'Opq', name });
 export const Open = (names: Name[], body: Term): Term =>
   ({ tag: 'Open', names, body });
 export const Meta = (id: TMetaId): Term => ({ tag: 'Meta', id });
@@ -47,7 +45,6 @@ export const showTermSimple = (t: Term): string => {
     return `(${showTermSimple(t.term)} : ${showTermSimple(t.type)})`;
   if (t.tag === 'Type') return `*`;
   if (t.tag === 'Hole') return `_`;
-  if (t.tag === 'Opq') return `~${t.name}`;
   if (t.tag === 'Open')
     return `(open ${t.names.join(' ')} in ${showTermSimple(t.body)})`;
   if (t.tag === 'Meta') return `?${t.id}`;
@@ -85,7 +82,6 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'Var') return `${t.name}`;
-  if (t.tag === 'Opq') return `~${t.name}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
@@ -114,7 +110,6 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Hole') return true;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Var') return false;
-  if (t.tag === 'Opq') return false;
   if (t.tag === 'App') return isUnsolved(t.left) || isUnsolved(t.right);
   if (t.tag === 'Abs') {
     if (t.type && isUnsolved(t.type)) return true;

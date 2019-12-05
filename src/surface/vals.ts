@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Opq, Open } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 import { log } from '../config';
@@ -15,7 +15,6 @@ export type Val
   = { tag: 'VNe', head: Head, args: List<Val> }
   | { tag: 'VAbs', name: Name, type: Val, body: Clos }
   | { tag: 'VPi', name: Name, type: Val, body: Clos }
-  | { tag: 'VOpq', name: Name }
   | { tag: 'VType' };
 
 export type EnvV = {
@@ -40,8 +39,6 @@ export const VAbs = (name: Name, type: Val, body: Clos): Val =>
   ({ tag: 'VAbs', name, type, body});
 export const VPi = (name: Name, type: Val, body: Clos): Val =>
   ({ tag: 'VPi', name, type, body});
-export const VOpq = (name: Name): Val =>
-  ({ tag: 'VOpq', name });
 export const VType: Val = { tag: 'VType' };
 
 export const VVar = (name: Name): Val => VNe(HVar(name));
@@ -70,11 +67,8 @@ export const freshName = (vs: EnvV, name_: Name): Name => {
   return name;
 };
 
-const vopq = VAbs('x', VType, () => VAbs('y', VType, v => v));
-
 export const vapp = (a: Val, b: Val): Val => {
   if (a.tag === 'VAbs') return a.body(b);
-  if (a.tag === 'VOpq') return vopq;
   if (a.tag === 'VNe') return VNe(a.head, Cons(b, a.args));
   return impossible('vapp');
 };
@@ -102,7 +96,6 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
     const s = getMeta(t.id);
     return s.tag === 'Solved' ? s.val : VMeta(t.id);
   }
-  if (t.tag === 'Opq') return VOpq(t.name);
   if (t.tag === 'Open')
     return evaluate(t.body, openV(vs, t.names));
   return impossible('evaluate');
@@ -127,7 +120,6 @@ export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
     const x = freshName(vs, v.name);
     return Pi(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
-  if (v.tag === 'VOpq') return Opq(v.name);
   return v;
 };
 

@@ -47,7 +47,6 @@ const checkSolution = (vs: EnvV, m: TMetaId, spine: List<Name>, tm: Term): void 
     checkSolution(vs, m, Cons(tm.name, spine), tm.body);
     return;
   }
-  if (tm.tag === 'Opq') return;
   return impossible(`checkSolution (?${m}): non-normal term: ${showTerm(tm)}`);
 };
 
@@ -64,7 +63,6 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
   const b = force(vs, b_);
   log(() => `unify ${showTerm(quote(a, vs))} ~ ${showTerm(quote(b, vs))} in ${showEnvV(vs)}`);
   if (a.tag === 'VType' && b.tag === 'VType') return;
-  if (a.tag === 'VOpq' && b.tag === 'VOpq' && a.name === b.name) return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     unify(vs, a.type, b.type);
     const x = freshName(vs, a.name);
