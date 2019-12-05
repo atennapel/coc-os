@@ -732,7 +732,7 @@ exports.showTerm = (t) => {
         return `${as.map(([x, t]) => x === '_' ? exports.showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Open', t) : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' -> ')} -> ${exports.showTermP(b.tag === 'Ann', b)}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.name} = ${exports.showTerm(t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
+        return `let ${t.name} = ${exports.showTermP(t.val.tag === 'Let' || t.val.tag === 'Open', t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
     if (t.tag === 'Ann')
         return `${exports.showTerm(t.term)} : ${exports.showTerm(t.type)}`;
     if (t.tag === 'Open')

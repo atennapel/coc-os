@@ -97,7 +97,7 @@ export const showTerm = (t: Term): string => {
     return `${as.map(([x, t]) => x === '_' ? showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Open', t) : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Let')
-    return `let ${t.name} = ${showTerm(t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
+    return `let ${t.name} = ${showTermP(t.val.tag === 'Let' || t.val.tag === 'Open', t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
   if (t.tag === 'Ann')
     return `${showTerm(t.term)} : ${showTerm(t.type)}`;
   if (t.tag === 'Open')
