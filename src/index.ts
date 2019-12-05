@@ -3,7 +3,6 @@ console.log(42);
 /**
 TODO:
 - pi parser
-- let parser
 - implicit functions
 
 PROBLEMS:

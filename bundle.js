@@ -482,11 +482,6 @@ const tokenize = (sc) => {
         return util_1.serr(`escape is true after tokenize`);
     return r;
 };
-/*
-TODO:
-{ tag: 'Pi', name: Name, type: Term, body: Term } ->
-{ tag: 'Let', name: Name, val: Term, body: Term }
-*/
 const tunit = syntax_1.Var('UnitType');
 const unit = syntax_1.Var('Unit');
 const isName = (t, x) => t.tag === 'Name' && t.name === x;

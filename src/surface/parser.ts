@@ -61,12 +61,6 @@ const tokenize = (sc: string): Token[] => {
   return r;
 };
 
-/*
-TODO:
-{ tag: 'Pi', name: Name, type: Term, body: Term } ->
-{ tag: 'Let', name: Name, val: Term, body: Term }
-*/
-
 const tunit = Var('UnitType');
 const unit = Var('Unit');
 
