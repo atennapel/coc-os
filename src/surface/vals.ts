@@ -1,8 +1,8 @@
-import { List, Nil, toString, foldr, Cons, lookup } from '../list';
+import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../list';
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Opq } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Opq, Open } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 import { log } from '../config';
@@ -18,9 +18,18 @@ export type Val
   | { tag: 'VOpq', name: Name }
   | { tag: 'VType' };
 
-export type EnvV = List<[Name, Maybe<Val>]>;
+export type EnvV = {
+  vals: List<[Name, Maybe<Val>]>;
+  opened: List<Name>;
+};
+export const emptyEnvV: EnvV = { vals: Nil, opened: Nil };
+export const extendV = (vs: EnvV, name: Name, val: Maybe<Val>): EnvV =>
+  ({ vals: Cons([name, val], vs.vals), opened: vs.opened });
+export const openV = (vs: EnvV, names: Name[]): EnvV =>
+  ({ vals: vs.vals, opened: consAll(names, vs.opened) });
 export const showEnvV = (l: EnvV): string =>
-  toString(l, ([x, b]) => caseMaybe(b, val => `${x} = ${showTerm(quote(val, l))}`, () => x));
+  toString(l.vals, ([x, b]) => caseMaybe(b, val => `${x} = ${showTerm(quote(val, l))}`, () => x)) +
+  ` @ ${toString(l.opened)}`;
 
 export const HVar = (name: Name): Head => ({ tag: 'HVar', name });
 export const HMeta = (id: TMetaId): Head => ({ tag: 'HMeta', id });
@@ -50,7 +59,7 @@ export const force = (v: Val): Val => {
 export const freshName = (vs: EnvV, name_: Name): Name => {
   if (name_ === '_') return '_';
   let name = name_;
-  while (lookup(vs, name) !== null || getEnv(name))
+  while (lookup(vs.vals, name) !== null || getEnv(name))
     name = nextName(name);
   log(() => `freshName ${name_} -> ${name} in ${showEnvV(vs)}`);
   return name;
@@ -65,34 +74,36 @@ export const vapp = (a: Val, b: Val): Val => {
   return impossible('vapp');
 };
 
-export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
+export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var') {
-    const v = lookup(vs, t.name);
+    const v = lookup(vs.vals, t.name);
     if (!v) {
       const r = getEnv(t.name);
       if (!r) return impossible(`evaluate ${t.name}`);
-      return r.opaque ? VVar(t.name) : r.val;
+      return r.opaque && !contains(vs.opened, t.name) ? VVar(t.name) : r.val;
     }
     return caseMaybe(v, v => v, () => VVar(t.name));
   }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), evaluate(t.right, vs));
   if (t.tag === 'Abs' && t.type)
-    return VAbs(t.name, evaluate(t.type, vs),  v => evaluate(t.body, Cons([t.name, Just(v)], vs)));
+    return VAbs(t.name, evaluate(t.type, vs),  v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   if (t.tag === 'Pi')
-    return VPi(t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons([t.name, Just(v)], vs)));
+    return VPi(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   if (t.tag === 'Let')
-    return evaluate(t.body, Cons([t.name, Just(evaluate(t.val, vs))], vs));
+    return evaluate(t.body, extendV(vs, t.name, Just(evaluate(t.val, vs))));
   if (t.tag === 'Meta') {
     const s = getMeta(t.id);
     return s.tag === 'Solved' ? s.val : VMeta(t.id);
   }
   if (t.tag === 'Opq') return VOpq(t.name);
+  if (t.tag === 'Open')
+    return evaluate(t.body, openV(vs, t.names));
   return impossible('evaluate');
 };
 
-export const quote = (v_: Val, vs: EnvV = Nil): Term => {
+export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
   const v = force(v_);
   if (v.tag === 'VType') return Type;
   if (v.tag === 'VNe') {
@@ -105,11 +116,11 @@ export const quote = (v_: Val, vs: EnvV = Nil): Term => {
   }
   if (v.tag === 'VAbs') {
     const x = freshName(vs, v.name);
-    return Abs(x, quote(v.type, vs), quote(v.body(VVar(x)), Cons([x, Nothing], vs)));
+    return Abs(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
   if (v.tag === 'VPi') {
     const x = freshName(vs, v.name);
-    return Pi(x, quote(v.type, vs), quote(v.body(VVar(x)), Cons([x, Nothing], vs)));
+    return Pi(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
   if (v.tag === 'VOpq') return Opq(v.name);
   return v;
@@ -136,11 +147,11 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return s.tag === 'Solved' ? quote(s.val, vs) : tm;
   }
   if (tm.tag === 'Pi')
-    return Pi(tm.name, zonk(vs, tm.type), zonk(Cons([tm.name, Nothing], vs), tm.body));
+    return Pi(tm.name, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Abs')
-    return Abs(tm.name, tm.type ? zonk(vs, tm.type) : null, zonk(Cons([tm.name, Nothing], vs), tm.body));
+    return Abs(tm.name, tm.type ? zonk(vs, tm.type) : null, zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Let')
-    return Let(tm.name, zonk(vs, tm.val), zonk(Cons([tm.name, Nothing], vs), tm.body));
+    return Let(tm.name, zonk(vs, tm.val), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Ann') return Ann(zonk(vs, tm.term), tm.type);
   if (tm.tag === 'App') {
     const spine = zonkSpine(vs, tm.left);
@@ -148,9 +159,11 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
       App(spine[1], zonk(vs, tm.right)) :
       quote(vapp(spine[1], evaluate(tm.right, vs)), vs);
   }
+  if (tm.tag === 'Open')
+    return Open(tm.names, zonk(openV(vs, tm.names), tm.body));
   return tm;
 };
 
 // only use this with elaborated terms
-export const normalize = (t: Term, vs: EnvV = Nil): Term =>
+export const normalize = (t: Term, vs: EnvV = emptyEnvV): Term =>
   quote(evaluate(t, vs), vs);

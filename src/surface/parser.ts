@@ -1,5 +1,5 @@
 import { serr } from '../util'
-import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Opq } from './syntax';
+import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Opq, Open } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
 
@@ -161,6 +161,28 @@ const exprs = (ts: Token[]): Term => {
     if (!found) return serr(`. not found after /`);
     const body = exprs(ts.slice(i + 1));
     return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
+  }
+  if (isName(ts[0], 'open')) {
+    const args: Name[] = [];
+    let found = false;
+    let i = 1;
+    for (; i < ts.length; i++) {
+      const c = ts[i];
+      if (c.tag === 'Name') {
+        if (c.name === 'in') {
+          found = true;
+          break;
+        } else {
+          args.push(c.name);
+          continue;
+        }
+      }
+      return serr(`invalid name after open`);
+    }
+    if (!found) return serr(`in not found after open`);
+    if (args.length === 0) return serr(`empty open`);
+    const body = exprs(ts.slice(i + 1));
+    return Open(args, body);
   }
   return ts.map(expr).reduce(App);
 };

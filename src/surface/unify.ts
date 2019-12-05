@@ -1,6 +1,6 @@
 import { Name } from '../names';
-import { List, map, contains, Cons, foldl, Nil, length, zipWith_, lookup } from '../list';
-import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName } from './vals';
+import { List, map, contains, Cons, foldl, length, zipWith_, lookup } from '../list';
+import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName, emptyEnvV, extendV } from './vals';
 import { terr, impossible } from '../util';
 import { Term, showTerm, Type, Abs } from './syntax';
 import { log } from '../config';
@@ -20,7 +20,7 @@ const checkSolution = (vs: EnvV, m: TMetaId, spine: List<Name>, tm: Term): void 
   if (tm.tag === 'Var') {
     if (contains(spine,  tm.name)) return;
     if (getEnv(tm.name)) {
-      if (lookup(vs, tm.name) !== null)
+      if (lookup(vs.vals, tm.name) !== null)
         return terr(`cannot solve with ${tm.name}, name is locally shadowed`);
       return;
     }
@@ -55,7 +55,7 @@ const solve = (vs: EnvV, m: TMetaId, spine: List<Val>, val: Val): void => {
   const spinex = checkSpine(spine);
   const rhs = quote(val, vs);
   checkSolution(vs, m, spinex, rhs);
-  const solution = evaluate(foldl((x, y) => Abs(y, Type, x), rhs, spinex), Nil);
+  const solution = evaluate(foldl((x, y) => Abs(y, Type, x), rhs, spinex), emptyEnvV);
   setMeta(m, solution);
 };
 
@@ -69,26 +69,26 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
     unify(vs, a.type, b.type);
     const x = freshName(vs, a.name);
     const vx = VVar(x);
-    unify(Cons([x, Nothing], vs), a.body(vx), b.body(vx));
+    unify(extendV(vs, x, Nothing), a.body(vx), b.body(vx));
     return;
   }
   if (a.tag === 'VPi' && b.tag === 'VPi') {
     unify(vs, a.type, b.type);
     const x = freshName(vs, a.name);
     const vx = VVar(x);
-    unify(Cons([x, Nothing], vs), a.body(vx), b.body(vx));
+    unify(extendV(vs, x, Nothing), a.body(vx), b.body(vx));
     return;
   }
   if (a.tag === 'VAbs') {
     const x = freshName(vs, a.name);
     const vx = VVar(x);
-    unify(Cons([x, Nothing], vs), a.body(vx), vapp(b, vx));
+    unify(extendV(vs, x, Nothing), a.body(vx), vapp(b, vx));
     return;
   }
   if (b.tag === 'VAbs') {
     const x = freshName(vs, b.name);
     const vx = VVar(x);
-    unify(Cons([x, Nothing], vs), vapp(a, vx), b.body(vx));
+    unify(extendV(vs, x, Nothing), vapp(a, vx), b.body(vx));
     return;
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' && b.head.tag === 'HVar' && a.head.name === b.head.name)

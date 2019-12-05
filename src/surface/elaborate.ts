@@ -1,6 +1,6 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil } from '../list';
 import { Name } from '../names';
-import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName } from './vals';
+import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV } from './vals';
 import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
@@ -20,14 +20,25 @@ const newMeta = (ts: EnvT): Term => {
   return foldr((x, y) => App(y, x), freshMeta() as Term, spine);
 };
 
+const checkOpenNames = (ns: Name[]): void => {
+  ns.forEach(x => {
+    const r = getEnv(x);
+    if (!r || !r.opaque) terr(`not a opaque name in open: ${x}`);
+  });
+};
+
 const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   const ty = force(ty_);
   log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, vs))} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
+  if (tm.tag === 'Open') {
+    checkOpenNames(tm.names);
+    return check(ts, openV(vs, tm.names), tm.body, ty);
+  }
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
     const x = freshName(vs, ty.name);
     const vx = VVar(x);
-    const body = check(Cons([tm.name, Bound(ty.type)], ts), Cons([tm.name, Just(vx)], vs), tm.body, ty.body(vx));
+    const body = check(Cons([tm.name, Bound(ty.type)], ts), extendV(vs, tm.name, Just(vx)), tm.body, ty.body(vx));
     return Abs(tm.name, quote(ty.type, vs), body);
   }
   if (tm.tag === 'Hole')
@@ -35,7 +46,7 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   if (tm.tag === 'Let') {
     const [vt, val] = synth(ts, vs, tm.val);
     const vv = evaluate(val, vs);
-    const body = check(Cons([tm.name, Def(vt)], ts), Cons([tm.name, Just(vv)], vs), tm.body, ty);
+    const body = check(Cons([tm.name, Def(vt)], ts), extendV(vs, tm.name, Just(vv)), tm.body, ty);
     return Let(tm.name, val, body);
   }
   const [ty2, term] = synth(ts, vs, tm);
@@ -47,11 +58,11 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name): Val => {
   const a = newMeta(ts);
   const va = evaluate(a, vs);
   const b = newMeta(Cons([x, Bound(va)], ts));
-  return VPi(x, va, v => evaluate(b, Cons([x, Just(v)], vs)));
+  return VPi(x, va, v => evaluate(b, extendV(vs, x, Just(v))));
 };
 const freshPiType = (ts: EnvT, vs: EnvV, x: Name, va: Val): Val => {
   const b = newMeta(Cons([x, Bound(va)], ts));
-  return VPi(x, va, v => evaluate(b, Cons([x, Just(v)], vs)));
+  return VPi(x, va, v => evaluate(b, extendV(vs, x, Just(v))));
 };
 
 const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
@@ -99,20 +110,20 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   if (tm.tag === 'Let') {
     const [vt, val] = synth(ts, vs, tm.val);
     const vv = evaluate(val, vs);
-    const [tr, body] = synth(Cons([tm.name, Def(vt)], ts), Cons([tm.name, Just(vv)], vs), tm.body);
+    const [tr, body] = synth(Cons([tm.name, Def(vt)], ts), extendV(vs, tm.name, Just(vv)), tm.body);
     return [tr, Let(tm.name, val, body)];
   }
   if (tm.tag === 'Pi') {
     const type = check(ts, vs, tm.type, VType);
     const vt = evaluate(type, vs);
-    const body = check(Cons([tm.name, Bound(vt)], ts), Cons([tm.name, Nothing], vs), tm.body, VType);
+    const body = check(Cons([tm.name, Bound(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, VType);
     return [VType, Pi(tm.name, type, body)];
   }
   if (tm.tag === 'Opq') {
     const x = tm.name;
     const r = getEnv(x);
     if (!r || !r.opaque) return terr(`undefined opaque ${showTerm(tm)}`);
-    const tmp = Cons([x, Nothing] as [Name, any], Nil);
+    const tmp = extendV(emptyEnvV, x, Nothing);
     const xr = freshName(tmp, 'r');
     const xf = freshName(tmp, 'f');
     return [
@@ -120,6 +131,10 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
       evaluate(Pi(xr, Type, Pi(xf, Pi('_', quote(r.type), Var(xr)), Pi('_', App(Var(xf), Var(x)), App(Var(xf), quote(r.val)))))),
       tm,
     ];
+  }
+  if (tm.tag === 'Open') {
+    checkOpenNames(tm.names);
+    return synth(ts, openV(vs, tm.names), tm.body);
   }
   return terr(`cannot synth ${showTerm(tm)}`);
 };
@@ -142,7 +157,7 @@ const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, arg: Term): [Val, Term] => {
   return terr(`unable to syntapp: ${showTerm(quote(ty, vs))} @ ${showTerm(arg)}`);
 };
 
-export const elaborate = (tm: Term, ts: EnvT = Nil, vs: EnvV = Nil): [Term, Term] => {
+export const elaborate = (tm: Term, ts: EnvT = Nil, vs: EnvV = emptyEnvV): [Term, Term] => {
   resetMetas();
   const [ty, term] = synth(ts, vs, tm);
   const zty = zonk(vs, quote(ty, vs));
