@@ -2,7 +2,6 @@ console.log(42);
 
 /**
 TODO:
-- parser: dangling lambda
 - implicit functions
 
 PROBLEMS:

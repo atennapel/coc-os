@@ -221,6 +221,12 @@ const exprs = (ts: Token[]): Term => {
     const body = exprs(ts.slice(i + 1));
     return Let(x.name, val, body);
   }
+  const l = ts.findIndex(x => isName(x, '\\'));
+  if (l >= 0) {
+    const first = ts.slice(0, l).map(expr);
+    const rest = exprs(ts.slice(l));
+    return first.concat([rest]).reduce(App);
+  }
   return ts.map(expr).reduce(App);
 };
 
