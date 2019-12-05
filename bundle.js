@@ -421,7 +421,7 @@ const matchingBracket = (c) => {
         return '(';
     return util_1.serr(`invalid bracket: ${c}`);
 };
-const SYM1 = ['\\', ':', '/', '.', '*'];
+const SYM1 = ['\\', ':', '/', '.', '*', '='];
 const SYM2 = ['->'];
 const START = 0;
 const NAME = 1;
@@ -613,6 +613,31 @@ const exprs = (ts) => {
             return util_1.serr(`empty open`);
         const body = exprs(ts.slice(i + 1));
         return syntax_1.Open(args, body);
+    }
+    if (isName(ts[0], 'let')) {
+        const x = ts[1];
+        if (x.tag !== 'Name')
+            return util_1.serr(`invalid name for let`);
+        if (!isName(ts[2], '='))
+            return util_1.serr(`no = after name in let`);
+        const vals = [];
+        let found = false;
+        let i = 3;
+        for (; i < ts.length; i++) {
+            const c = ts[i];
+            if (c.tag === 'Name' && c.name === 'in') {
+                found = true;
+                break;
+            }
+            vals.push(c);
+        }
+        if (!found)
+            return util_1.serr(`no in after let`);
+        if (vals.length === 0)
+            return util_1.serr(`empty val in let`);
+        const val = exprs(vals);
+        const body = exprs(ts.slice(i + 1));
+        return syntax_1.Let(x.name, val, body);
     }
     return ts.map(expr).reduce(syntax_1.App);
 };

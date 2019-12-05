@@ -1,5 +1,5 @@
 import { serr } from '../util'
-import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open } from './syntax';
+import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
 
@@ -14,7 +14,7 @@ const matchingBracket = (c: Bracket): Bracket => {
   return serr(`invalid bracket: ${c}`);
 };
 
-const SYM1: string[] = ['\\', ':', '/', '.', '*'];
+const SYM1: string[] = ['\\', ':', '/', '.', '*', '='];
 const SYM2: string[] = ['->'];
 
 const START = 0;
@@ -181,6 +181,27 @@ const exprs = (ts: Token[]): Term => {
     if (args.length === 0) return serr(`empty open`);
     const body = exprs(ts.slice(i + 1));
     return Open(args, body);
+  }
+  if (isName(ts[0], 'let')) {
+    const x = ts[1];
+    if (x.tag !== 'Name') return serr(`invalid name for let`);
+    if (!isName(ts[2], '=')) return serr(`no = after name in let`);
+    const vals: Token[] = [];
+    let found = false;
+    let i = 3;
+    for (; i < ts.length; i++) {
+      const c = ts[i];
+      if (c.tag === 'Name' && c.name === 'in') {
+        found = true;
+        break;
+      }
+      vals.push(c);
+    }
+    if (!found) return serr(`no in after let`);
+    if (vals.length === 0) return serr(`empty val in let`);
+    const val = exprs(vals);
+    const body = exprs(ts.slice(i + 1));
+    return Let(x.name, val, body);
   }
   return ts.map(expr).reduce(App);
 };
