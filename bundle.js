@@ -565,17 +565,6 @@ const exprs = (ts) => {
         const b = ts.slice(i + 1);
         return syntax_1.Ann(exprs(a), exprs(b));
     }
-    const j = ts.findIndex(x => isName(x, '->'));
-    if (j >= 0) {
-        const s = splitTokens(ts, x => isName(x, '->'));
-        if (s.length < 2)
-            return util_1.serr(`parsing failed with ->`);
-        const args = s.slice(0, -1)
-            .map((p, i, a) => i === a.length - 1 ? [['_', exprs(p)]] : p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
-            .reduce((x, y) => x.concat(y), []);
-        const body = exprs(s[s.length - 1]);
-        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, ty, x), body);
-    }
     if (isName(ts[0], '\\')) {
         const args = [];
         let found = false;
@@ -659,6 +648,17 @@ const exprs = (ts) => {
         const val = exprs(vals);
         const body = exprs(ts.slice(i + 1));
         return syntax_1.Let(x.name, val, body);
+    }
+    const j = ts.findIndex(x => isName(x, '->'));
+    if (j >= 0) {
+        const s = splitTokens(ts, x => isName(x, '->'));
+        if (s.length < 2)
+            return util_1.serr(`parsing failed with ->`);
+        const args = s.slice(0, -1)
+            .map((p, i, a) => i === a.length - 1 ? [['_', exprs(p)]] : p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
+            .reduce((x, y) => x.concat(y), []);
+        const body = exprs(s[s.length - 1]);
+        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, ty, x), body);
     }
     const l = ts.findIndex(x => isName(x, '\\'));
     if (l >= 0) {

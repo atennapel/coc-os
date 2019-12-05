@@ -136,16 +136,6 @@ const exprs = (ts: Token[]): Term => {
     const b = ts.slice(i + 1);
     return Ann(exprs(a), exprs(b));
   }
-  const j = ts.findIndex(x => isName(x, '->'));
-  if (j >= 0) {
-    const s = splitTokens(ts, x => isName(x, '->'));
-    if (s.length < 2) return serr(`parsing failed with ->`);
-    const args: [Name, Term][] = s.slice(0, -1)
-      .map((p, i, a) => i === a.length - 1 ? [['_', exprs(p)] as [Name, Term]] : p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
-      .reduce((x, y) => x.concat(y), []);
-    const body = exprs(s[s.length - 1]);
-    return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
-  }
   if (isName(ts[0], '\\')) {
     const args: [Name, Term | null][] = [];
     let found = false;
@@ -220,6 +210,16 @@ const exprs = (ts: Token[]): Term => {
     const val = exprs(vals);
     const body = exprs(ts.slice(i + 1));
     return Let(x.name, val, body);
+  }
+  const j = ts.findIndex(x => isName(x, '->'));
+  if (j >= 0) {
+    const s = splitTokens(ts, x => isName(x, '->'));
+    if (s.length < 2) return serr(`parsing failed with ->`);
+    const args: [Name, Term][] = s.slice(0, -1)
+      .map((p, i, a) => i === a.length - 1 ? [['_', exprs(p)] as [Name, Term]] : p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
+      .reduce((x, y) => x.concat(y), []);
+    const body = exprs(s[s.length - 1]);
+    return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   if (l >= 0) {
