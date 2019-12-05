@@ -827,8 +827,8 @@ const solve = (vs, m, spine, val) => {
     metas_1.setMeta(m, solution);
 };
 exports.unify = (vs, a_, b_) => {
-    const a = vals_1.force(a_);
-    const b = vals_1.force(b_);
+    const a = vals_1.force(vals_1.revaluate(vs, a_));
+    const b = vals_1.force(vals_1.revaluate(vs, b_));
     config_1.log(() => `unify ${syntax_1.showTerm(vals_1.quote(a, vs))} ~ ${syntax_1.showTerm(vals_1.quote(b, vs))} in ${vals_1.showEnvV(vs)}`);
     if (a.tag === 'VType' && b.tag === 'VType')
         return;
@@ -1019,6 +1019,7 @@ exports.zonk = (vs, tm) => {
 };
 // only use this with elaborated terms
 exports.normalize = (t, vs = exports.emptyEnvV) => exports.quote(exports.evaluate(t, vs), vs);
+exports.revaluate = (vs, v) => exports.evaluate(exports.quote(v, vs), vs);
 
 },{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":13,"./env":7,"./metas":8,"./syntax":10}],13:[function(require,module,exports){
 "use strict";

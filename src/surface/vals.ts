@@ -167,3 +167,5 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
 // only use this with elaborated terms
 export const normalize = (t: Term, vs: EnvV = emptyEnvV): Term =>
   quote(evaluate(t, vs), vs);
+export const revaluate = (vs: EnvV, v: Val): Val =>
+  evaluate(quote(v, vs), vs);

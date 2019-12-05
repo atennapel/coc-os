@@ -1,6 +1,6 @@
 import { Name } from '../names';
 import { List, map, contains, Cons, foldl, length, zipWith_, lookup } from '../list';
-import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName, emptyEnvV, extendV } from './vals';
+import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName, emptyEnvV, extendV, revaluate } from './vals';
 import { terr, impossible } from '../util';
 import { Term, showTerm, Type, Abs } from './syntax';
 import { log } from '../config';
@@ -60,8 +60,8 @@ const solve = (vs: EnvV, m: TMetaId, spine: List<Val>, val: Val): void => {
 };
 
 export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
-  const a = force(a_);
-  const b = force(b_);
+  const a = force(revaluate(vs, a_));
+  const b = force(revaluate(vs, b_));
   log(() => `unify ${showTerm(quote(a, vs))} ~ ${showTerm(quote(b, vs))} in ${showEnvV(vs)}`);
   if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VOpq' && b.tag === 'VOpq' && a.name === b.name) return;
