@@ -2,7 +2,7 @@ console.log(42);
 
 /**
 TODO:
-- pi parser
+- parser: dangling lambda
 - implicit functions
 
 PROBLEMS:

@@ -72,6 +72,20 @@ const isNames = (t: Token[]): Name[] =>
     return x.name;
   });
 
+const splitTokens = (a: Token[], fn: (t: Token) => boolean): Token[][] => {
+  const r: Token[][] = [];
+  let t: Token[] = [];
+  for (let i = 0, l = a.length; i < l; i++) {
+    const c = a[i];
+    if (fn(c)) {
+      r.push(t);
+      t = [];
+    } else t.push(c);
+  }
+  r.push(t);
+  return r;
+};
+
 const lambdaParams = (t: Token): [Name, Term | null][] => {
   if (t.tag === 'Name') return [[t.name, null]];
   if (t.tag === 'List') {
@@ -121,6 +135,16 @@ const exprs = (ts: Token[]): Term => {
     const a = ts.slice(0, i);
     const b = ts.slice(i + 1);
     return Ann(exprs(a), exprs(b));
+  }
+  const j = ts.findIndex(x => isName(x, '->'));
+  if (j >= 0) {
+    const s = splitTokens(ts, x => isName(x, '->'));
+    if (s.length < 2) return serr(`parsing failed with ->`);
+    const args: [Name, Term][] = s.slice(0, -1)
+      .map((p, i, a) => i === a.length - 1 ? [['_', exprs(p)] as [Name, Term]] : p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
+      .reduce((x, y) => x.concat(y), []);
+    const body = exprs(s[s.length - 1]);
+    return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
   }
   if (isName(ts[0], '\\')) {
     const args: [Name, Term | null][] = [];
