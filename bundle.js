@@ -234,8 +234,8 @@ const maybe_1 = require("../maybe");
 const util_1 = require("../util");
 const unify_1 = require("./unify");
 const env_1 = require("./env");
-exports.Bound = (type) => ({ bound: true, type });
-exports.Def = (type) => ({ bound: false, type });
+exports.BoundT = (type) => ({ bound: true, type });
+exports.DefT = (type) => ({ bound: false, type });
 exports.showEnvT = (l, vs) => list_1.toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${syntax_1.showTerm(vals_1.quote(b.type, vs))}`);
 const newMeta = (ts) => {
     const spine = list_1.map(list_1.filter(ts, ([x, { bound }]) => bound && x !== '_'), ([x, _]) => syntax_1.Var(x));
@@ -260,7 +260,7 @@ const check = (ts, vs, tm, ty_) => {
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
         const x = vals_1.freshName(vs, ty.name);
         const vx = vals_1.VVar(x);
-        const body = check(list_1.Cons([tm.name, exports.Bound(ty.type)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vx)), tm.body, ty.body(vx));
+        const body = check(list_1.Cons([tm.name, exports.BoundT(ty.type)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vx)), tm.body, ty.body(vx));
         return syntax_1.Abs(tm.name, vals_1.quote(ty.type, vs), body);
     }
     if (tm.tag === 'Hole')
@@ -268,7 +268,7 @@ const check = (ts, vs, tm, ty_) => {
     if (tm.tag === 'Let') {
         const [vt, val] = synth(ts, vs, tm.val);
         const vv = vals_1.evaluate(val, vs);
-        const body = check(list_1.Cons([tm.name, exports.Def(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vv)), tm.body, ty);
+        const body = check(list_1.Cons([tm.name, exports.DefT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vv)), tm.body, ty);
         return syntax_1.Let(tm.name, val, body);
     }
     const [ty2, term] = synth(ts, vs, tm);
@@ -278,11 +278,11 @@ const check = (ts, vs, tm, ty_) => {
 const freshPi = (ts, vs, x) => {
     const a = newMeta(ts);
     const va = vals_1.evaluate(a, vs);
-    const b = newMeta(list_1.Cons([x, exports.Bound(va)], ts));
+    const b = newMeta(list_1.Cons([x, exports.BoundT(va)], ts));
     return vals_1.VPi(x, va, v => vals_1.evaluate(b, vals_1.extendV(vs, x, maybe_1.Just(v))));
 };
 const freshPiType = (ts, vs, x, va) => {
-    const b = newMeta(list_1.Cons([x, exports.Bound(va)], ts));
+    const b = newMeta(list_1.Cons([x, exports.BoundT(va)], ts));
     return vals_1.VPi(x, va, v => vals_1.evaluate(b, vals_1.extendV(vs, x, maybe_1.Just(v))));
 };
 const synth = (ts, vs, tm) => {
@@ -334,13 +334,13 @@ const synth = (ts, vs, tm) => {
     if (tm.tag === 'Let') {
         const [vt, val] = synth(ts, vs, tm.val);
         const vv = vals_1.evaluate(val, vs);
-        const [tr, body] = synth(list_1.Cons([tm.name, exports.Def(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vv)), tm.body);
+        const [tr, body] = synth(list_1.Cons([tm.name, exports.DefT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vv)), tm.body);
         return [tr, syntax_1.Let(tm.name, val, body)];
     }
     if (tm.tag === 'Pi') {
         const type = check(ts, vs, tm.type, vals_1.VType);
         const vt = vals_1.evaluate(type, vs);
-        const body = check(list_1.Cons([tm.name, exports.Bound(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.body, vals_1.VType);
+        const body = check(list_1.Cons([tm.name, exports.BoundT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.body, vals_1.VType);
         return [vals_1.VType, syntax_1.Pi(tm.name, type, body)];
     }
     if (tm.tag === 'Open') {
@@ -377,6 +377,15 @@ exports.elaborate = (tm, ts = list_1.Nil, vs = vals_1.emptyEnvV) => {
     if (syntax_1.isUnsolved(zty) || syntax_1.isUnsolved(zterm))
         return util_1.terr(`unsolved type or term: ${syntax_1.showTerm(zterm)} : ${syntax_1.showTerm(zty)}`);
     return [zty, zterm];
+};
+exports.elaborateDefs = (ds, ts = list_1.Nil, vs = vals_1.emptyEnvV) => {
+    for (let i = 0; i < ds.length; i++) {
+        const d = ds[i];
+        if (d.tag === 'DDef') {
+            const [ty, tm] = exports.elaborate(d.value, ts, vs);
+            env_1.setEnv(d.name, vals_1.evaluate(tm, vs), vals_1.evaluate(ty, vs), d.opaque);
+        }
+    }
 };
 
 },{"../config":1,"../list":2,"../maybe":3,"../util":13,"./env":7,"./metas":8,"./syntax":10,"./unify":11,"./vals":12}],7:[function(require,module,exports){
@@ -432,7 +441,7 @@ const matchingBracket = (c) => {
     return util_1.serr(`invalid bracket: ${c}`);
 };
 const SYM1 = ['\\', ':', '/', '.', '*', '='];
-const SYM2 = ['->'];
+const SYM2 = ['->', ':='];
 const START = 0;
 const NAME = 1;
 const COMMENT = 2;
@@ -683,6 +692,24 @@ exports.parse = (s) => {
     config_1.log(() => ts);
     return exprs(ts);
 };
+/*
+export const parseDefs = (s: string): Def[] => {
+  const ts = tokenize(s);
+  const ds: Def[] = [];
+  let acc: Token[] = [];
+  for (let i = 0; i < ts.length; i++) {
+    const c = ts[i];
+    if (c.tag === 'Name' && c.name === ':=') {
+      const x = ts[i - 1];
+      const opq = ts[i - 2];
+      if (!x || x.tag !== 'Name') return serr(`invalid name before :=`);
+      const q = !opq || opq.tag !== 'Name' || opq.name !== 'opaque';
+
+    }
+  }
+  return ds;
+};
+*/
 
 },{"../config":1,"../util":13,"./syntax":10}],10:[function(require,module,exports){
 "use strict";

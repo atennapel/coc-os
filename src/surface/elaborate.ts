@@ -7,11 +7,12 @@ import { log } from '../config';
 import { Just, Nothing } from '../maybe';
 import { terr } from '../util';
 import { unify } from './unify';
-import { getEnv } from './env';
+import { getEnv, setEnv } from './env';
+import { Def } from './definitions';
 
 export type EnvT = List<[Name, { bound: boolean, type: Val }]>;
-export const Bound = (type: Val) => ({ bound: true, type });
-export const Def = (type: Val) => ({ bound: false, type });
+export const BoundT = (type: Val) => ({ bound: true, type });
+export const DefT = (type: Val) => ({ bound: false, type });
 export const showEnvT = (l: EnvT, vs: EnvV): string =>
   toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${showTerm(quote(b.type, vs))}`);
 
@@ -38,7 +39,7 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
     const x = freshName(vs, ty.name);
     const vx = VVar(x);
-    const body = check(Cons([tm.name, Bound(ty.type)], ts), extendV(vs, tm.name, Just(vx)), tm.body, ty.body(vx));
+    const body = check(Cons([tm.name, BoundT(ty.type)], ts), extendV(vs, tm.name, Just(vx)), tm.body, ty.body(vx));
     return Abs(tm.name, quote(ty.type, vs), body);
   }
   if (tm.tag === 'Hole')
@@ -46,7 +47,7 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   if (tm.tag === 'Let') {
     const [vt, val] = synth(ts, vs, tm.val);
     const vv = evaluate(val, vs);
-    const body = check(Cons([tm.name, Def(vt)], ts), extendV(vs, tm.name, Just(vv)), tm.body, ty);
+    const body = check(Cons([tm.name, DefT(vt)], ts), extendV(vs, tm.name, Just(vv)), tm.body, ty);
     return Let(tm.name, val, body);
   }
   const [ty2, term] = synth(ts, vs, tm);
@@ -57,11 +58,11 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
 const freshPi = (ts: EnvT, vs: EnvV, x: Name): Val => {
   const a = newMeta(ts);
   const va = evaluate(a, vs);
-  const b = newMeta(Cons([x, Bound(va)], ts));
+  const b = newMeta(Cons([x, BoundT(va)], ts));
   return VPi(x, va, v => evaluate(b, extendV(vs, x, Just(v))));
 };
 const freshPiType = (ts: EnvT, vs: EnvV, x: Name, va: Val): Val => {
-  const b = newMeta(Cons([x, Bound(va)], ts));
+  const b = newMeta(Cons([x, BoundT(va)], ts));
   return VPi(x, va, v => evaluate(b, extendV(vs, x, Just(v))));
 };
 
@@ -110,13 +111,13 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   if (tm.tag === 'Let') {
     const [vt, val] = synth(ts, vs, tm.val);
     const vv = evaluate(val, vs);
-    const [tr, body] = synth(Cons([tm.name, Def(vt)], ts), extendV(vs, tm.name, Just(vv)), tm.body);
+    const [tr, body] = synth(Cons([tm.name, DefT(vt)], ts), extendV(vs, tm.name, Just(vv)), tm.body);
     return [tr, Let(tm.name, val, body)];
   }
   if (tm.tag === 'Pi') {
     const type = check(ts, vs, tm.type, VType);
     const vt = evaluate(type, vs);
-    const body = check(Cons([tm.name, Bound(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, VType);
+    const body = check(Cons([tm.name, BoundT(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, VType);
     return [VType, Pi(tm.name, type, body)];
   }
   if (tm.tag === 'Open') {
@@ -155,4 +156,14 @@ export const elaborate = (tm: Term, ts: EnvT = Nil, vs: EnvV = emptyEnvV): [Term
   if (isUnsolved(zty) || isUnsolved(zterm))
     return terr(`unsolved type or term: ${showTerm(zterm)} : ${showTerm(zty)}`);
   return [zty, zterm];
+};
+
+export const elaborateDefs = (ds: Def[], ts: EnvT = Nil, vs: EnvV = emptyEnvV): void => {
+  for (let i = 0; i < ds.length; i++) {
+    const d = ds[i];
+    if (d.tag === 'DDef') {
+      const [ty, tm] = elaborate(d.value, ts, vs);
+      setEnv(d.name, evaluate(tm, vs), evaluate(ty, vs), d.opaque);
+    }
+  }
 };

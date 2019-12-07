@@ -2,6 +2,7 @@ import { serr } from '../util'
 import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
+// import { Def } from './definitions';
 
 type Token = { tag: 'Name', name: string } | { tag: 'List', list: Token[] };
 const TName = (name: string): Token => ({ tag: 'Name', name });
@@ -15,7 +16,7 @@ const matchingBracket = (c: Bracket): Bracket => {
 };
 
 const SYM1: string[] = ['\\', ':', '/', '.', '*', '='];
-const SYM2: string[] = ['->'];
+const SYM2: string[] = ['->', ':='];
 
 const START = 0;
 const NAME = 1;
@@ -235,3 +236,22 @@ export const parse = (s: string): Term => {
   log(() => ts);
   return exprs(ts);
 };
+
+/*
+export const parseDefs = (s: string): Def[] => {
+  const ts = tokenize(s);
+  const ds: Def[] = [];
+  let acc: Token[] = [];
+  for (let i = 0; i < ts.length; i++) {
+    const c = ts[i];
+    if (c.tag === 'Name' && c.name === ':=') {
+      const x = ts[i - 1];
+      const opq = ts[i - 2];
+      if (!x || x.tag !== 'Name') return serr(`invalid name before :=`);
+      const q = !opq || opq.tag !== 'Name' || opq.name !== 'opaque';
+
+    }
+  }
+  return ds;
+};
+*/
