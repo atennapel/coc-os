@@ -136,6 +136,7 @@ const syntax_1 = require("./surface/syntax");
 const elaborate_1 = require("./surface/elaborate");
 const vals_1 = require("./surface/vals");
 const env_1 = require("./surface/env");
+const util_1 = require("./util");
 const help = `
 EXAMPLES
 identity = \\(t : *) (x : t). x
@@ -153,66 +154,75 @@ exports.initREPL = () => {
     env_1.resetEnv();
 };
 exports.runREPL = (_s, _cb) => {
-    _s = _s.trim();
-    if (_s === ':help' || _s === ':h')
-        return _cb(help);
-    if (_s === ':debug' || _s === ':d') {
-        config_1.setConfig({ debug: !config_1.config.debug });
-        return _cb(`debug: ${config_1.config.debug}`);
-    }
-    if (_s === ':defs') {
-        const e = env_1.getEnvMap();
-        const msg = Object.keys(e).map(k => `${e[k].opaque ? 'opaque ' : ''}${k} : ${syntax_1.showTerm(vals_1.quote(e[k].type))} = ${syntax_1.showTerm(vals_1.quote(e[k].val))}`).join('\n');
-        return _cb(msg || 'no definitions');
-    }
-    if (_s.startsWith(':del')) {
-        const name = _s.slice(4).trim();
-        env_1.delEnv(name);
-        return _cb(`deleted ${name}`);
-    }
-    let name = null;
-    let opq = false;
-    if (_s.startsWith(':def') || _s.startsWith(':opq')) {
-        opq = _s.startsWith(':opq');
-        const rest = _s.slice(4).trim();
-        name = rest.split(/\s+/)[0].trim();
-        _s = rest.slice(name.length).trim();
-    }
-    let msg = '';
-    let tm_;
-    let ty_;
     try {
-        const t = parser_1.parse(_s);
-        config_1.log(() => syntax_1.showTerm(t));
-        const [ty, tm] = elaborate_1.elaborate(t);
-        tm_ = tm;
-        ty_ = ty;
-        config_1.log(() => syntax_1.showTerm(ty));
-        config_1.log(() => syntax_1.showTerm(tm));
-        msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}`;
-    }
-    catch (err) {
-        config_1.log(() => '' + err);
-        return _cb('' + err, true);
-    }
-    try {
-        const n = vals_1.normalize(tm_);
-        config_1.log(() => syntax_1.showTerm(n));
-        msg += '\nnorm: ' + syntax_1.showTerm(n);
-        if (name) {
-            env_1.setEnv(name, vals_1.evaluate(tm_), vals_1.evaluate(ty_), opq);
-            msg += `\ndefined ${name}`;
+        _s = _s.trim();
+        if (_s === ':help' || _s === ':h')
+            return _cb(help);
+        if (_s === ':debug' || _s === ':d') {
+            config_1.setConfig({ debug: !config_1.config.debug });
+            return _cb(`debug: ${config_1.config.debug}`);
         }
-        return _cb(msg);
+        if (_s === ':defs') {
+            const e = env_1.getEnvMap();
+            const msg = Object.keys(e).map(k => `${e[k].opaque ? 'opaque ' : ''}${k} : ${syntax_1.showTerm(vals_1.quote(e[k].type))} = ${syntax_1.showTerm(vals_1.quote(e[k].val))}`).join('\n');
+            return _cb(msg || 'no definitions');
+        }
+        if (_s.startsWith(':del')) {
+            const name = _s.slice(4).trim();
+            env_1.delEnv(name);
+            return _cb(`deleted ${name}`);
+        }
+        let name = null;
+        let opq = false;
+        if (_s.startsWith(':def') || _s.startsWith(':opq')) {
+            opq = _s.startsWith(':opq');
+            const rest = _s.slice(4).trim();
+            const spl = rest.split('=');
+            if (spl.length < 2)
+                util_1.serr(`invalid definition`);
+            name = spl[0].trim();
+            _s = spl.slice(1).join('=');
+        }
+        let msg = '';
+        let tm_;
+        let ty_;
+        try {
+            const t = parser_1.parse(_s);
+            config_1.log(() => syntax_1.showTerm(t));
+            const [ty, tm] = elaborate_1.elaborate(t);
+            tm_ = tm;
+            ty_ = ty;
+            config_1.log(() => syntax_1.showTerm(ty));
+            config_1.log(() => syntax_1.showTerm(tm));
+            msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}`;
+        }
+        catch (err) {
+            config_1.log(() => '' + err);
+            return _cb('' + err, true);
+        }
+        try {
+            const n = vals_1.normalize(tm_);
+            config_1.log(() => syntax_1.showTerm(n));
+            msg += '\nnorm: ' + syntax_1.showTerm(n);
+            if (name) {
+                env_1.setEnv(name, vals_1.evaluate(tm_), vals_1.evaluate(ty_), opq);
+                msg += `\ndefined ${name}`;
+            }
+            return _cb(msg);
+        }
+        catch (err) {
+            config_1.log(() => '' + err);
+            msg += '\n' + err;
+            return _cb(msg, true);
+        }
     }
     catch (err) {
         config_1.log(() => '' + err);
-        msg += '\n' + err;
-        return _cb(msg);
+        return _cb(err, true);
     }
 };
 
-},{"./config":1,"./surface/elaborate":6,"./surface/env":7,"./surface/parser":9,"./surface/syntax":10,"./surface/vals":12}],6:[function(require,module,exports){
+},{"./config":1,"./surface/elaborate":6,"./surface/env":7,"./surface/parser":9,"./surface/syntax":10,"./surface/vals":12,"./util":13}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
