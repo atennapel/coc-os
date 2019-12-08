@@ -674,7 +674,7 @@ const exprs = (ts) => {
         if (s.length < 2)
             return util_1.serr(`parsing failed with ->`);
         const args = s.slice(0, -1)
-            .map((p, i, a) => i === a.length - 1 ? [['_', exprs(p)]] : p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
+            .map((p, i, a) => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
             .reduce((x, y) => x.concat(y), []);
         const body = exprs(s[s.length - 1]);
         return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, ty, x), body);
@@ -690,7 +690,9 @@ const exprs = (ts) => {
 exports.parse = (s) => {
     const ts = tokenize(s);
     config_1.log(() => ts);
-    return exprs(ts);
+    const ex = exprs(ts);
+    config_1.log(() => ex);
+    return ex;
 };
 /*
 export const parseDefs = (s: string): Def[] => {

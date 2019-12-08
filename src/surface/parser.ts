@@ -217,7 +217,7 @@ const exprs = (ts: Token[]): Term => {
     const s = splitTokens(ts, x => isName(x, '->'));
     if (s.length < 2) return serr(`parsing failed with ->`);
     const args: [Name, Term][] = s.slice(0, -1)
-      .map((p, i, a) => i === a.length - 1 ? [['_', exprs(p)] as [Name, Term]] : p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
+      .map((p, i, a) => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1]);
     return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
@@ -234,7 +234,9 @@ const exprs = (ts: Token[]): Term => {
 export const parse = (s: string): Term => {
   const ts = tokenize(s);
   log(() => ts);
-  return exprs(ts);
+  const ex = exprs(ts);
+  log(() => ex);
+  return ex;
 };
 
 /*
