@@ -2,7 +2,7 @@ import { serr } from '../util'
 import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
-// import { Def } from './definitions';
+import { Def } from './definitions';
 
 type Token = { tag: 'Name', name: string } | { tag: 'List', list: Token[] };
 const TName = (name: string): Token => ({ tag: 'Name', name });
@@ -16,7 +16,7 @@ const matchingBracket = (c: Bracket): Bracket => {
 };
 
 const SYM1: string[] = ['\\', ':', '/', '.', '*', '='];
-const SYM2: string[] = ['->', ':='];
+const SYM2: string[] = ['->'];
 
 const START = 0;
 const NAME = 1;
@@ -217,7 +217,7 @@ const exprs = (ts: Token[]): Term => {
     const s = splitTokens(ts, x => isName(x, '->'));
     if (s.length < 2) return serr(`parsing failed with ->`);
     const args: [Name, Term][] = s.slice(0, -1)
-      .map((p, i, a) => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
+      .map(p => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1]);
     return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
@@ -239,21 +239,13 @@ export const parse = (s: string): Term => {
   return ex;
 };
 
-/*
 export const parseDefs = (s: string): Def[] => {
   const ts = tokenize(s);
+  const spl = splitTokens(ts, t => t.tag === 'Name' && t.name === 'def');
   const ds: Def[] = [];
-  let acc: Token[] = [];
-  for (let i = 0; i < ts.length; i++) {
-    const c = ts[i];
-    if (c.tag === 'Name' && c.name === ':=') {
-      const x = ts[i - 1];
-      const opq = ts[i - 2];
-      if (!x || x.tag !== 'Name') return serr(`invalid name before :=`);
-      const q = !opq || opq.tag !== 'Name' || opq.name !== 'opaque';
-
-    }
+  for (let i = 0; i < spl.length; i++) {
+    const c = spl[i];
+    
   }
   return ds;
 };
-*/
