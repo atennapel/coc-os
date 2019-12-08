@@ -2,10 +2,14 @@ import { serr } from '../util'
 import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
-import { Def } from './definitions';
+import { Def, DDef } from './definitions';
 
-type Token = { tag: 'Name', name: string } | { tag: 'List', list: Token[] };
+type Token
+  = { tag: 'Name', name: string }
+  | { tag: 'Num', num: string }
+  | { tag: 'List', list: Token[] };
 const TName = (name: string): Token => ({ tag: 'Name', name });
+const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[]): Token => ({ tag: 'List', list });
 
 type Bracket = '(' | ')';
@@ -21,6 +25,7 @@ const SYM2: string[] = ['->'];
 const START = 0;
 const NAME = 1;
 const COMMENT = 2;
+const NUMBER = 3;
 const tokenize = (sc: string): Token[] => {
   let state = START;
   let r: Token[] = [];
@@ -35,6 +40,7 @@ const tokenize = (sc: string): Token[] => {
       else if (SYM1.indexOf(c) >= 0) r.push(TName(c));
       else if (c === ';') state = COMMENT;
       else if (/[\_a-z]/i.test(c)) t += c, state = NAME;
+      else if (/[0-9]/.test(c)) t += c, state = NUMBER;
       else if(c === '(') b.push(c), p.push(r), r = [];
       else if(c === ')') {
         if(b.length === 0) return serr(`unmatched bracket: ${c}`);
@@ -49,6 +55,11 @@ const tokenize = (sc: string): Token[] => {
     } else if (state === NAME) {
       if (!/[a-z0-9\_]/i.test(c)) {
         r.push(TName(t));
+        t = '', i--, state = START;
+      } else t += c;
+    } else if (state === NUMBER) {
+      if (!/[0-9]/.test(c)) {
+        r.push(TNum(t));
         t = '', i--, state = START;
       } else t += c;
     } else if (state === COMMENT) {
@@ -124,6 +135,14 @@ const expr = (t: Token): Term => {
     if (x === '_') return Hole;
     if (/[a-z]/i.test(x[0])) return Var(x);
     return serr(`invalid name: ${x}`);
+  }
+  if (t.tag === 'Num') {
+    const n = +t.num;
+    if (isNaN(n)) return serr(`invalid number: ${t.num}`);
+    const s = Var('S');
+    let c = Var('Z');
+    for (let i = 0; i < n; i++) c = App(s, c);
+    return c;
   }
   return t;
 };
@@ -241,11 +260,47 @@ export const parse = (s: string): Term => {
 
 export const parseDefs = (s: string): Def[] => {
   const ts = tokenize(s);
+  if (ts[0].tag !== 'Name' || ts[0].name !== 'def')
+    return serr(`def should start with "def"`);
   const spl = splitTokens(ts, t => t.tag === 'Name' && t.name === 'def');
   const ds: Def[] = [];
   for (let i = 0; i < spl.length; i++) {
     const c = spl[i];
-    
+    if (c.length === 0) continue;
+    if (c[0].tag === 'Name') {
+      let opq = false;
+      let name;
+      let fst = -1;
+      if (c[0].name === 'opaque') {
+        opq = true;
+        if (c[1].tag !== 'Name')
+          return serr(`def should start with a name`);
+        name = c[1].name;
+        fst = 2;
+      } else {
+        name = c[0].name;
+        fst = 1;
+      }
+      const sym = c[fst];
+      if (sym.tag !== 'Name') return serr(`def: after name should be : or =`);
+      if (sym.name === '=') {
+        ds.push(DDef(name, exprs(c.slice(fst + 1)), opq));
+        continue;
+      } else if (sym.name === ':') {
+        const tyts: Token[] = [];
+        let j = fst + 1;
+        for (; j < c.length; j++) {
+          const v = c[j];
+          if (v.tag === 'Name' && v.name === '=')
+            break;
+          else tyts.push(v);
+        }
+        const ety = exprs(tyts);
+        const body = exprs(c.slice(j + 1));
+        ds.push(DDef(name, Ann(body, ety), opq));
+        continue;
+      } else return serr(`def: : or = expected but got ${sym.name}`);
+    } else return serr(`def should start with a name`);
   }
   return ds;
 };

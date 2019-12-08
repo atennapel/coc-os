@@ -136,7 +136,6 @@ const syntax_1 = require("./surface/syntax");
 const elaborate_1 = require("./surface/elaborate");
 const vals_1 = require("./surface/vals");
 const env_1 = require("./surface/env");
-const util_1 = require("./util");
 const help = `
 EXAMPLES
 identity = \\(t : *) (x : t). x
@@ -145,8 +144,7 @@ zero = \\t z s. z : /(t : *) t (/t. t). t
 COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
-[:def name term] set a name
-[:opq name term] set a name opaquely
+[:def definitions] define names
 [:defs] show all defs
 [:del name] delete a name
 `.trim();
@@ -164,7 +162,7 @@ exports.runREPL = (_s, _cb) => {
         }
         if (_s === ':defs') {
             const e = env_1.getEnvMap();
-            const msg = Object.keys(e).map(k => `${e[k].opaque ? 'opaque ' : ''}${k} : ${syntax_1.showTerm(vals_1.quote(e[k].type))} = ${syntax_1.showTerm(vals_1.quote(e[k].val))}`).join('\n');
+            const msg = Object.keys(e).map(k => `${e[k].opaque ? 'def opaque' : 'def'} ${k} : ${syntax_1.showTerm(vals_1.quote(e[k].type))} = ${syntax_1.showTerm(vals_1.quote(e[k].val))}`).join('\n');
             return _cb(msg || 'no definitions');
         }
         if (_s.startsWith(':del')) {
@@ -172,26 +170,19 @@ exports.runREPL = (_s, _cb) => {
             env_1.delEnv(name);
             return _cb(`deleted ${name}`);
         }
-        let name = null;
-        let opq = false;
-        if (_s.startsWith(':def') || _s.startsWith(':opq')) {
-            opq = _s.startsWith(':opq');
-            const rest = _s.slice(4).trim();
-            const spl = rest.split('=');
-            if (spl.length < 2)
-                util_1.serr(`invalid definition`);
-            name = spl[0].trim();
-            _s = spl.slice(1).join('=');
+        if (_s.startsWith(':def')) {
+            const rest = _s.slice(1);
+            const ds = parser_1.parseDefs(rest);
+            const xs = elaborate_1.elaborateDefs(ds);
+            return _cb(`defined ${xs.join(' ')}`);
         }
         let msg = '';
         let tm_;
-        let ty_;
         try {
             const t = parser_1.parse(_s);
             config_1.log(() => syntax_1.showTerm(t));
             const [ty, tm] = elaborate_1.elaborate(t);
             tm_ = tm;
-            ty_ = ty;
             config_1.log(() => syntax_1.showTerm(ty));
             config_1.log(() => syntax_1.showTerm(tm));
             msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}`;
@@ -204,10 +195,6 @@ exports.runREPL = (_s, _cb) => {
             const n = vals_1.normalize(tm_);
             config_1.log(() => syntax_1.showTerm(n));
             msg += '\nnorm: ' + syntax_1.showTerm(n);
-            if (name) {
-                env_1.setEnv(name, vals_1.evaluate(tm_), vals_1.evaluate(ty_), opq);
-                msg += `\ndefined ${name}`;
-            }
             return _cb(msg);
         }
         catch (err) {
@@ -222,7 +209,18 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./surface/elaborate":6,"./surface/env":7,"./surface/parser":9,"./surface/syntax":10,"./surface/vals":12,"./util":13}],6:[function(require,module,exports){
+},{"./config":1,"./surface/elaborate":7,"./surface/env":8,"./surface/parser":10,"./surface/syntax":11,"./surface/vals":13}],6:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const syntax_1 = require("./syntax");
+exports.DDef = (name, value, opaque = false) => ({ tag: 'DDef', name, value, opaque });
+exports.showDef = (d) => {
+    if (d.tag === 'DDef')
+        return `${d.opaque ? 'opaque ' : ''}${d.name} := ${syntax_1.showTerm(d.value)}`;
+    return '';
+};
+
+},{"./syntax":11}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -379,16 +377,19 @@ exports.elaborate = (tm, ts = list_1.Nil, vs = vals_1.emptyEnvV) => {
     return [zty, zterm];
 };
 exports.elaborateDefs = (ds, ts = list_1.Nil, vs = vals_1.emptyEnvV) => {
+    const xs = [];
     for (let i = 0; i < ds.length; i++) {
         const d = ds[i];
         if (d.tag === 'DDef') {
             const [ty, tm] = exports.elaborate(d.value, ts, vs);
             env_1.setEnv(d.name, vals_1.evaluate(tm, vs), vals_1.evaluate(ty, vs), d.opaque);
+            xs.push(d.name);
         }
     }
+    return xs;
 };
 
-},{"../config":1,"../list":2,"../maybe":3,"../util":13,"./env":7,"./metas":8,"./syntax":10,"./unify":11,"./vals":12}],7:[function(require,module,exports){
+},{"../config":1,"../list":2,"../maybe":3,"../util":14,"./env":8,"./metas":9,"./syntax":11,"./unify":12,"./vals":13}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 let env = {};
@@ -402,7 +403,7 @@ exports.delEnv = (name) => {
     delete env[name];
 };
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -425,13 +426,15 @@ exports.freshMetaId = () => {
 };
 exports.freshMeta = () => syntax_1.Meta(exports.freshMetaId());
 
-},{"../util":13,"./syntax":10}],9:[function(require,module,exports){
+},{"../util":14,"./syntax":11}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("../util");
 const syntax_1 = require("./syntax");
 const config_1 = require("../config");
+const definitions_1 = require("./definitions");
 const TName = (name) => ({ tag: 'Name', name });
+const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list) => ({ tag: 'List', list });
 const matchingBracket = (c) => {
     if (c === '(')
@@ -441,10 +444,11 @@ const matchingBracket = (c) => {
     return util_1.serr(`invalid bracket: ${c}`);
 };
 const SYM1 = ['\\', ':', '/', '.', '*', '='];
-const SYM2 = ['->', ':='];
+const SYM2 = ['->'];
 const START = 0;
 const NAME = 1;
 const COMMENT = 2;
+const NUMBER = 3;
 const tokenize = (sc) => {
     let state = START;
     let r = [];
@@ -463,6 +467,8 @@ const tokenize = (sc) => {
                 state = COMMENT;
             else if (/[\_a-z]/i.test(c))
                 t += c, state = NAME;
+            else if (/[0-9]/.test(c))
+                t += c, state = NUMBER;
             else if (c === '(')
                 b.push(c), p.push(r), r = [];
             else if (c === ')') {
@@ -483,6 +489,14 @@ const tokenize = (sc) => {
         else if (state === NAME) {
             if (!/[a-z0-9\_]/i.test(c)) {
                 r.push(TName(t));
+                t = '', i--, state = START;
+            }
+            else
+                t += c;
+        }
+        else if (state === NUMBER) {
+            if (!/[0-9]/.test(c)) {
+                r.push(TNum(t));
                 t = '', i--, state = START;
             }
             else
@@ -570,6 +584,16 @@ const expr = (t) => {
         if (/[a-z]/i.test(x[0]))
             return syntax_1.Var(x);
         return util_1.serr(`invalid name: ${x}`);
+    }
+    if (t.tag === 'Num') {
+        const n = +t.num;
+        if (isNaN(n))
+            return util_1.serr(`invalid number: ${t.num}`);
+        const s = syntax_1.Var('S');
+        let c = syntax_1.Var('Z');
+        for (let i = 0; i < n; i++)
+            c = syntax_1.App(s, c);
+        return c;
     }
     return t;
 };
@@ -674,7 +698,7 @@ const exprs = (ts) => {
         if (s.length < 2)
             return util_1.serr(`parsing failed with ->`);
         const args = s.slice(0, -1)
-            .map((p, i, a) => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
+            .map(p => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
             .reduce((x, y) => x.concat(y), []);
         const body = exprs(s[s.length - 1]);
         return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, ty, x), body);
@@ -694,26 +718,63 @@ exports.parse = (s) => {
     config_1.log(() => ex);
     return ex;
 };
-/*
-export const parseDefs = (s: string): Def[] => {
-  const ts = tokenize(s);
-  const ds: Def[] = [];
-  let acc: Token[] = [];
-  for (let i = 0; i < ts.length; i++) {
-    const c = ts[i];
-    if (c.tag === 'Name' && c.name === ':=') {
-      const x = ts[i - 1];
-      const opq = ts[i - 2];
-      if (!x || x.tag !== 'Name') return serr(`invalid name before :=`);
-      const q = !opq || opq.tag !== 'Name' || opq.name !== 'opaque';
-
+exports.parseDefs = (s) => {
+    const ts = tokenize(s);
+    if (ts[0].tag !== 'Name' || ts[0].name !== 'def')
+        return util_1.serr(`def should start with "def"`);
+    const spl = splitTokens(ts, t => t.tag === 'Name' && t.name === 'def');
+    const ds = [];
+    for (let i = 0; i < spl.length; i++) {
+        const c = spl[i];
+        if (c.length === 0)
+            continue;
+        if (c[0].tag === 'Name') {
+            let opq = false;
+            let name;
+            let fst = -1;
+            if (c[0].name === 'opaque') {
+                opq = true;
+                if (c[1].tag !== 'Name')
+                    return util_1.serr(`def should start with a name`);
+                name = c[1].name;
+                fst = 2;
+            }
+            else {
+                name = c[0].name;
+                fst = 1;
+            }
+            const sym = c[fst];
+            if (sym.tag !== 'Name')
+                return util_1.serr(`def: after name should be : or =`);
+            if (sym.name === '=') {
+                ds.push(definitions_1.DDef(name, exprs(c.slice(fst + 1)), opq));
+                continue;
+            }
+            else if (sym.name === ':') {
+                const tyts = [];
+                let j = fst + 1;
+                for (; j < c.length; j++) {
+                    const v = c[j];
+                    if (v.tag === 'Name' && v.name === '=')
+                        break;
+                    else
+                        tyts.push(v);
+                }
+                const ety = exprs(tyts);
+                const body = exprs(c.slice(j + 1));
+                ds.push(definitions_1.DDef(name, syntax_1.Ann(body, ety), opq));
+                continue;
+            }
+            else
+                return util_1.serr(`def: : or = expected but got ${sym.name}`);
+        }
+        else
+            return util_1.serr(`def should start with a name`);
     }
-  }
-  return ds;
+    return ds;
 };
-*/
 
-},{"../config":1,"../util":13,"./syntax":10}],10:[function(require,module,exports){
+},{"../config":1,"../util":14,"./definitions":6,"./syntax":11}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Var = (name) => ({ tag: 'Var', name });
@@ -832,7 +893,7 @@ exports.isUnsolved = (t) => {
     return t;
 };
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -938,7 +999,7 @@ exports.unify = (vs, a_, b_) => {
     return util_1.terr(`cannot unify: ${syntax_1.showTerm(ta)} ~ ${syntax_1.showTerm(tb)}`);
 };
 
-},{"../config":1,"../list":2,"../maybe":3,"../util":13,"./env":7,"./metas":8,"./syntax":10,"./vals":12}],12:[function(require,module,exports){
+},{"../config":1,"../list":2,"../maybe":3,"../util":14,"./env":8,"./metas":9,"./syntax":11,"./vals":13}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -1081,7 +1142,7 @@ exports.zonk = (vs, tm) => {
 exports.normalize = (t, vs = exports.emptyEnvV) => exports.quote(exports.evaluate(t, vs), vs);
 exports.revaluate = (vs, v) => exports.evaluate(exports.quote(v, vs), vs);
 
-},{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":13,"./env":7,"./metas":8,"./syntax":10}],13:[function(require,module,exports){
+},{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":14,"./env":8,"./metas":9,"./syntax":11}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -1094,7 +1155,7 @@ exports.serr = (msg) => {
     throw new SyntaxError(msg);
 };
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -1150,4 +1211,4 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":5}]},{},[14]);
+},{"./repl":5}]},{},[15]);

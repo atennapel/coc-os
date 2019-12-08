@@ -158,12 +158,15 @@ export const elaborate = (tm: Term, ts: EnvT = Nil, vs: EnvV = emptyEnvV): [Term
   return [zty, zterm];
 };
 
-export const elaborateDefs = (ds: Def[], ts: EnvT = Nil, vs: EnvV = emptyEnvV): void => {
+export const elaborateDefs = (ds: Def[], ts: EnvT = Nil, vs: EnvV = emptyEnvV): Name[] => {
+  const xs: Name[] = [];
   for (let i = 0; i < ds.length; i++) {
     const d = ds[i];
     if (d.tag === 'DDef') {
       const [ty, tm] = elaborate(d.value, ts, vs);
       setEnv(d.name, evaluate(tm, vs), evaluate(ty, vs), d.opaque);
+      xs.push(d.name);
     }
   }
+  return xs;
 };
