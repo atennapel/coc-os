@@ -18,6 +18,8 @@ COMMANDS
 [:del name] delete a name
 `.trim();
 
+const loadFile = (fn: string): Promise<string> => Promise.reject(new Error('unimplemented'));
+
 export const initREPL = () => {
   resetEnv();
 };
@@ -47,6 +49,20 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const xs = elaborateDefs(ds);
       return _cb(`defined ${xs.join(' ')}`);
     }
+    if (_s.startsWith(':import')) {
+      const files = _s.slice(7).trim().split(/\s+/g);
+      Promise.all(files.map(loadFile)).then(defs => {
+        const xs: string[] = [];
+        defs.forEach(rest => {
+          const ds = parseDefs(rest);
+          const lxs = elaborateDefs(ds);
+          lxs.forEach(x => xs.push(x));
+        });
+        return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
+      }).catch(err => _cb(''+err, true));
+      return;
+    }
+    if (_s.startsWith(':')) return _cb('invalid command', true);
     let msg = '';
     let tm_;
     try {

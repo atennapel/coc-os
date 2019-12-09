@@ -1,0 +1,3 @@
+def Eq = \(t : *) (a b : t). (f : t -> *) -> f a -> f b
+
+def refl : (t : *) -> (x : t) -> Eq t x x = \t x f fa. fa
