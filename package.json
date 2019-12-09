@@ -9,7 +9,8 @@
     "runindex": "npm run build && node build/src/index",
     "main": "npm run build && node build/src/main",
     "cli": "npm run build && node build/src/cli",
-    "bundle": "npm run build && browserify build/src/web.js -o bundle.js"
+    "bundle": "npm run build && browserify build/src/web.js -o bundle.js",
+    "start": "node build/src/cli"
   },
   "repository": {
     "type": "git",

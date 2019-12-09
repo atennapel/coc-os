@@ -1,0 +1,12 @@
+def Nat = (t : *) -> t -> (t -> t) -> t
+
+def Z : Nat = \t z s. z
+def S
+  : Nat -> Nat
+  = \n t z s. s (n t z s)
+
+def add
+  : Nat -> Nat -> Nat
+  = \a b. a _ b S
+
+def main = add 1 2
