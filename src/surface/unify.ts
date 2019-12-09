@@ -89,7 +89,8 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
     unify(extendV(vs, x, Nothing), vapp(a, vx), b.body(vx));
     return;
   }
-  if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' && b.head.tag === 'HVar' && a.head.name === b.head.name)
+  if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
+    b.head.tag === 'HVar' && a.head.name === b.head.name && length(a.args) === length(b.args))
     return zipWith_((x, y) => unify(vs, x, y), a.args, b.args);
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
     return length(a.args) > length(b.args) ?

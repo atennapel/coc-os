@@ -984,7 +984,8 @@ exports.unify = (vs, a_, b_) => {
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), vals_1.vapp(a, vx), b.body(vx));
         return;
     }
-    if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' && b.head.tag === 'HVar' && a.head.name === b.head.name)
+    if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
+        b.head.tag === 'HVar' && a.head.name === b.head.name && list_1.length(a.args) === list_1.length(b.args))
         return list_1.zipWith_((x, y) => exports.unify(vs, x, y), a.args, b.args);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
         return list_1.length(a.args) > list_1.length(b.args) ?
