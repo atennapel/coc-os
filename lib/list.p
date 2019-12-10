@@ -1,8 +1,8 @@
-; not working at the moment
-
 def opaque List = \(t : *). {r : *} -> r -> (t -> r -> r) -> r
 
-def foldList = \{t : *} {r : *} (l : List t). open List in l {r}
+def foldList
+  : {t r : *} -> List t -> r -> (t -> r -> r) -> r
+  = \l. open List in l 
 
 def Nil
   : {t : *} -> List t
@@ -13,4 +13,4 @@ def Cons
 
 def map
   : {a b : *} -> (a -> b) -> List a -> List b
-  = \f l. foldList a l Nil (\head tail. Cons (f head) tail)
+  = \f l. foldList l Nil (\head tail. Cons (f head) tail)
