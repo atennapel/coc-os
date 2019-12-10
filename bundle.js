@@ -283,7 +283,33 @@ exports.DefT = (type) => ({ bound: false, type });
 exports.showEnvT = (l, vs) => list_1.toString(l, ([x, b]) => `${x} :${b.bound ? '' : '='} ${syntax_1.showTerm(vals_1.quote(b.type, vs))}`);
 const newMeta = (ts) => {
     const spine = list_1.map(list_1.filter(ts, ([x, { bound }]) => bound && x !== '_'), ([x, _]) => syntax_1.Var(x));
-    return list_1.foldr((x, y) => syntax_1.App(y, x), metas_1.freshMeta(), spine);
+    return list_1.foldr((x, y) => syntax_1.App(y, false, x), metas_1.freshMeta(), spine);
+};
+const isImplicitUsed = (x, t) => {
+    if (t.tag === 'Var')
+        return t.name === x;
+    if (t.tag === 'App') {
+        if (isImplicitUsed(x, t.left))
+            return true;
+        return t.impl ? false : isImplicitUsed(x, t.right);
+    }
+    if (t.tag === 'Abs')
+        return t.name !== x && isImplicitUsed(x, t.body);
+    if (t.tag === 'Let')
+        return (!t.impl && isImplicitUsed(x, t.val)) || (t.name !== x && isImplicitUsed(x, t.body));
+    if (t.tag === 'Ann')
+        return isImplicitUsed(x, t.term);
+    if (t.tag === 'Open')
+        return isImplicitUsed(x, t.body);
+    if (t.tag === 'Hole')
+        return false;
+    if (t.tag === 'Meta')
+        return false;
+    if (t.tag === 'Type')
+        return false;
+    if (t.tag === 'Pi')
+        return false;
+    return t;
 };
 const checkOpenNames = (ns) => {
     ns.forEach(x => {
@@ -292,42 +318,63 @@ const checkOpenNames = (ns) => {
             util_1.terr(`not a opaque name in open: ${x}`);
     });
 };
+const inst = (ts, vs, ty_) => {
+    const ty = vals_1.force(vs, ty_);
+    if (ty.tag === 'VPi' && ty.impl) {
+        const m = newMeta(ts);
+        const vm = vals_1.evaluate(m, vs);
+        const [res, args] = inst(ts, vs, ty.body(vm));
+        return [res, list_1.Cons(m, args)];
+    }
+    return [ty, list_1.Nil];
+};
 const check = (ts, vs, tm, ty_) => {
     const ty = vals_1.force(vs, ty_);
     config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(vals_1.quote(ty, vs))} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return syntax_1.Type;
+    if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${syntax_1.showTerm(tm)}`);
+        const x = vals_1.freshName(vs, ty.name);
+        const vx = vals_1.VVar(x);
+        const body = check(list_1.Cons([tm.name, exports.BoundT(ty.type)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vx)), tm.body, ty.body(vx));
+        return syntax_1.Abs(tm.name, tm.impl, vals_1.quote(ty.type, vs), body);
+    }
+    if (ty.tag === 'VPi' && ty.impl && !(tm.tag === 'Abs' && tm.type && tm.impl)) {
+        const x = vals_1.freshName(vs, ty.name);
+        const vx = vals_1.VVar(x);
+        const term = check(list_1.Cons([x, exports.BoundT(ty.type)], ts), vals_1.extendV(vs, x, maybe_1.Nothing), tm, ty.body(vx));
+        return syntax_1.Abs(x, true, vals_1.quote(ty.type, vs), term);
+    }
+    if (tm.tag === 'Hole')
+        return newMeta(ts);
     if (tm.tag === 'Open') {
         checkOpenNames(tm.names);
         return syntax_1.Open(tm.names, check(ts, vals_1.openV(vs, tm.names), tm.body, ty));
     }
-    if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi') {
-        const x = vals_1.freshName(vs, ty.name);
-        const vx = vals_1.VVar(x);
-        const body = check(list_1.Cons([tm.name, exports.BoundT(ty.type)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vx)), tm.body, ty.body(vx));
-        return syntax_1.Abs(tm.name, vals_1.quote(ty.type, vs), body);
-    }
-    if (tm.tag === 'Hole')
-        return newMeta(ts);
     if (tm.tag === 'Let') {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${syntax_1.showTerm(tm)}`);
         const [vt, val] = synth(ts, vs, tm.val);
         const vv = vals_1.evaluate(val, vs);
         const body = check(list_1.Cons([tm.name, exports.DefT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vv)), tm.body, ty);
-        return syntax_1.Let(tm.name, val, body);
+        return syntax_1.Let(tm.name, tm.impl, val, body);
     }
     const [ty2, term] = synth(ts, vs, tm);
-    unify_1.unify(vs, ty2, ty);
-    return term;
+    const [ty2inst, targs] = inst(ts, vs, ty2);
+    unify_1.unify(vs, ty2inst, ty);
+    return list_1.foldl((a, m) => syntax_1.App(a, true, m), term, targs);
 };
-const freshPi = (ts, vs, x) => {
+const freshPi = (ts, vs, x, impl) => {
     const a = newMeta(ts);
     const va = vals_1.evaluate(a, vs);
     const b = newMeta(list_1.Cons([x, exports.BoundT(va)], ts));
-    return vals_1.VPi(x, va, v => vals_1.evaluate(b, vals_1.extendV(vs, x, maybe_1.Just(v))));
+    return vals_1.VPi(x, impl, va, v => vals_1.evaluate(b, vals_1.extendV(vs, x, maybe_1.Just(v))));
 };
-const freshPiType = (ts, vs, x, va) => {
+const freshPiType = (ts, vs, x, impl, va) => {
     const b = newMeta(list_1.Cons([x, exports.BoundT(va)], ts));
-    return vals_1.VPi(x, va, v => vals_1.evaluate(b, vals_1.extendV(vs, x, maybe_1.Just(v))));
+    return vals_1.VPi(x, impl, va, v => vals_1.evaluate(b, vals_1.extendV(vs, x, maybe_1.Just(v))));
 };
 const synth = (ts, vs, tm) => {
     config_1.log(() => `synth ${syntax_1.showTerm(tm)} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
@@ -353,19 +400,21 @@ const synth = (ts, vs, tm) => {
     }
     if (tm.tag === 'App') {
         const [fn, fntm] = synth(ts, vs, tm.left);
-        const [rt, res] = synthapp(ts, vs, fn, tm.right);
-        return [rt, syntax_1.App(fntm, res)];
+        const [rt, res, ms] = synthapp(ts, vs, fn, tm.impl, tm.right);
+        return [rt, syntax_1.App(list_1.foldl((f, a) => syntax_1.App(f, true, a), fntm, ms), tm.impl, res)];
     }
     if (tm.tag === 'Abs') {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${syntax_1.showTerm(tm)}`);
         if (tm.type) {
             const type = check(ts, vs, tm.type, vals_1.VType);
             const vt = vals_1.evaluate(type, vs);
-            const pi = freshPiType(ts, vs, tm.name, vt);
-            const term = check(ts, vs, syntax_1.Abs(tm.name, null, tm.body), pi);
+            const pi = freshPiType(ts, vs, tm.name, tm.impl, vt);
+            const term = check(ts, vs, syntax_1.Abs(tm.name, tm.impl, null, tm.body), pi);
             return [pi, term];
         }
         else {
-            const pi = freshPi(ts, vs, tm.name);
+            const pi = freshPi(ts, vs, tm.name, tm.impl);
             const term = check(ts, vs, tm, pi);
             return [pi, term];
         }
@@ -376,16 +425,18 @@ const synth = (ts, vs, tm) => {
         return [vt, t];
     }
     if (tm.tag === 'Let') {
+        if (tm.impl && isImplicitUsed(tm.name, tm.body))
+            return util_1.terr(`implicit used in ${syntax_1.showTerm(tm)}`);
         const [vt, val] = synth(ts, vs, tm.val);
         const vv = vals_1.evaluate(val, vs);
         const [tr, body] = synth(list_1.Cons([tm.name, exports.DefT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Just(vv)), tm.body);
-        return [tr, syntax_1.Let(tm.name, val, body)];
+        return [tr, syntax_1.Let(tm.name, tm.impl, val, body)];
     }
     if (tm.tag === 'Pi') {
         const type = check(ts, vs, tm.type, vals_1.VType);
         const vt = vals_1.evaluate(type, vs);
         const body = check(list_1.Cons([tm.name, exports.BoundT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.body, vals_1.VType);
-        return [vals_1.VType, syntax_1.Pi(tm.name, type, body)];
+        return [vals_1.VType, syntax_1.Pi(tm.name, tm.impl, type, body)];
     }
     if (tm.tag === 'Open') {
         checkOpenNames(tm.names);
@@ -394,22 +445,29 @@ const synth = (ts, vs, tm) => {
     }
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
 };
-const synthapp = (ts, vs, ty_, arg) => {
+const synthapp = (ts, vs, ty_, impl, arg) => {
     const ty = vals_1.force(vs, ty_);
-    config_1.log(() => `synthapp ${syntax_1.showTerm(vals_1.quote(ty, vs))} @ ${syntax_1.showTerm(arg)} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
-    if (ty.tag === 'VPi') {
+    config_1.log(() => `synthapp ${syntax_1.showTerm(vals_1.quote(ty, vs))} @ ${impl ? '{' : ''}${syntax_1.showTerm(arg)}${impl ? '}' : ''} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
+    if (ty.tag === 'VPi' && ty.impl && !impl) {
+        // {a} -> b @ c (instantiate with meta then b @ c)
+        const m = newMeta(ts);
+        const vm = vals_1.evaluate(m, vs);
+        const [rt, ft, l] = synthapp(ts, vs, ty.body(vm), impl, arg);
+        return [rt, ft, list_1.Cons(m, l)];
+    }
+    if (ty.tag === 'VPi' && ty.impl === impl) {
         const tm = check(ts, vs, arg, ty.type);
         const vm = vals_1.evaluate(tm, vs);
-        return [ty.body(vm), tm];
+        return [ty.body(vm), tm, list_1.Nil];
     }
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
         const a = metas_1.freshMetaId();
         const b = metas_1.freshMetaId();
-        const pi = vals_1.VPi('_', vals_1.VNe(vals_1.HMeta(a), ty.args), () => vals_1.VNe(vals_1.HMeta(b), ty.args));
+        const pi = vals_1.VPi('_', impl, vals_1.VNe(vals_1.HMeta(a), ty.args), () => vals_1.VNe(vals_1.HMeta(b), ty.args));
         unify_1.unify(vs, ty, pi);
-        return synthapp(ts, vs, pi, arg);
+        return synthapp(ts, vs, pi, impl, arg);
     }
-    return util_1.terr(`unable to syntapp: ${syntax_1.showTerm(vals_1.quote(ty, vs))} @ ${syntax_1.showTerm(arg)}`);
+    return util_1.terr(`unable to syntapp: ${syntax_1.showTerm(vals_1.quote(ty, vs))} @ ${impl ? '{' : ''}${syntax_1.showTerm(arg)}${impl ? '}' : ''}`);
 };
 exports.elaborate = (tm, ts = list_1.Nil, vs = vals_1.emptyEnvV) => {
     metas_1.resetMetas();
@@ -638,7 +696,7 @@ const expr = (t) => {
         const s = syntax_1.Var('S');
         let c = syntax_1.Var('Z');
         for (let i = 0; i < n; i++)
-            c = syntax_1.App(s, c);
+            c = syntax_1.App(s, false, c);
         return c;
     }
     return t;
@@ -669,7 +727,7 @@ const exprs = (ts) => {
         if (!found)
             return util_1.serr(`. not found after \\`);
         const body = exprs(ts.slice(i + 1));
-        return args.reduceRight((x, [name, ty]) => syntax_1.Abs(name, ty, x), body);
+        return args.reduceRight((x, [name, ty]) => syntax_1.Abs(name, false, ty, x), body);
     }
     if (isName(ts[0], '/')) {
         const args = [];
@@ -686,7 +744,7 @@ const exprs = (ts) => {
         if (!found)
             return util_1.serr(`. not found after /`);
         const body = exprs(ts.slice(i + 1));
-        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, ty, x), body);
+        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, false, ty, x), body);
     }
     if (isName(ts[0], 'open')) {
         const args = [];
@@ -736,7 +794,7 @@ const exprs = (ts) => {
             return util_1.serr(`empty val in let`);
         const val = exprs(vals);
         const body = exprs(ts.slice(i + 1));
-        return syntax_1.Let(x.name, val, body);
+        return syntax_1.Let(x.name, false, val, body);
     }
     const j = ts.findIndex(x => isName(x, '->'));
     if (j >= 0) {
@@ -747,15 +805,15 @@ const exprs = (ts) => {
             .map(p => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
             .reduce((x, y) => x.concat(y), []);
         const body = exprs(s[s.length - 1]);
-        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, ty, x), body);
+        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, false, ty, x), body);
     }
     const l = ts.findIndex(x => isName(x, '\\'));
     if (l >= 0) {
         const first = ts.slice(0, l).map(expr);
         const rest = exprs(ts.slice(l));
-        return first.concat([rest]).reduce(syntax_1.App);
+        return first.concat([rest]).reduce((x, y) => syntax_1.App(x, false, y));
     }
-    return ts.map(expr).reduce(syntax_1.App);
+    return ts.map(expr).reduce((x, y) => syntax_1.App(x, false, y));
 };
 exports.parse = (s) => {
     const ts = tokenize(s);
@@ -824,10 +882,10 @@ exports.parseDefs = (s) => {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Var = (name) => ({ tag: 'Var', name });
-exports.App = (left, right) => ({ tag: 'App', left, right });
-exports.Abs = (name, type, body) => ({ tag: 'Abs', name, type, body });
-exports.Pi = (name, type, body) => ({ tag: 'Pi', name, type, body });
-exports.Let = (name, val, body) => ({ tag: 'Let', name, val, body });
+exports.App = (left, impl, right) => ({ tag: 'App', left, impl, right });
+exports.Abs = (name, impl, type, body) => ({ tag: 'Abs', name, impl, type, body });
+exports.Pi = (name, impl, type, body) => ({ tag: 'Pi', name, impl, type, body });
+exports.Let = (name, impl, val, body) => ({ tag: 'Let', name, impl, val, body });
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Type = { tag: 'Type' };
 exports.Hole = { tag: 'Hole' };
@@ -837,15 +895,15 @@ exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
         return t.name;
     if (t.tag === 'App')
-        return `(${exports.showTermSimple(t.left)} ${exports.showTermSimple(t.right)})`;
+        return `(${exports.showTermSimple(t.left)} ${t.impl ? '{' : ''}${exports.showTermSimple(t.right)}${t.impl ? '}' : ''})`;
     if (t.tag === 'Abs')
         return t.type ?
-            `(\\(${t.name} : ${exports.showTermSimple(t.type)}). ${exports.showTermSimple(t.body)})` :
-            `(\\${t.name}. ${exports.showTermSimple(t.body)})`;
+            `(\\${t.impl ? '{' : '('}${t.name} : ${exports.showTermSimple(t.type)}${t.impl ? '}' : ')'}. ${exports.showTermSimple(t.body)})` :
+            `(\\${t.impl ? '{' : ''}${t.name}${t.impl ? '}' : ''}. ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Pi')
-        return `((${t.name} : ${exports.showTermSimple(t.type)}) -> ${exports.showTermSimple(t.body)})`;
+        return `(${t.impl ? '{' : '('}${t.name} : ${exports.showTermSimple(t.type)}${t.impl ? '}' : ')'} -> ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Let')
-        return `(let ${t.name} = ${exports.showTermSimple(t.val)} in ${exports.showTermSimple(t.body)})`;
+        return `(let ${t.impl ? '{' : ''}${t.name}${t.impl ? '}' : ''} = ${exports.showTermSimple(t.val)} in ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Ann')
         return `(${exports.showTermSimple(t.term)} : ${exports.showTermSimple(t.type)})`;
     if (t.tag === 'Type')
@@ -861,7 +919,7 @@ exports.showTermSimple = (t) => {
 exports.flattenApp = (t) => {
     const r = [];
     while (t.tag === 'App') {
-        r.push(t.right);
+        r.push([t.impl, t.right]);
         t = t.left;
     }
     return [t, r.reverse()];
@@ -869,7 +927,7 @@ exports.flattenApp = (t) => {
 exports.flattenAbs = (t) => {
     const r = [];
     while (t.tag === 'Abs') {
-        r.push([t.name, t.type]);
+        r.push([t.name, t.impl, t.type]);
         t = t.body;
     }
     return [r, t];
@@ -877,7 +935,7 @@ exports.flattenAbs = (t) => {
 exports.flattenPi = (t) => {
     const r = [];
     while (t.tag === 'Pi') {
-        r.push([t.name, t.type]);
+        r.push([t.name, t.impl, t.type]);
         t = t.body;
     }
     return [r, t];
@@ -894,18 +952,19 @@ exports.showTerm = (t) => {
         return `?${t.id}`;
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
-        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Open', f)} ${as.map((t, i) => `${exports.showTermP(t.tag === 'App' || t.tag === 'Open' || t.tag === 'Ann' || (t.tag === 'Let' && i < as.length - 1) || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi', t)}`).join(' ')}`;
+        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Open', f)} ${as.map(([im, t], i) => im ? `{${exports.showTerm(t)}}` :
+            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Open' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi', t)}`).join(' ')}`;
     }
     if (t.tag === 'Abs') {
         const [as, b] = exports.flattenAbs(t);
-        return `\\${as.map(([x, t]) => !t ? x : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${exports.showTermP(b.tag === 'Ann', b)}`;
+        return `\\${as.map(([x, im, t]) => im ? `{${x}${t ? ` : ${exports.showTermP(t.tag === 'Ann', t)}` : ''}}` : !t ? x : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${exports.showTermP(b.tag === 'Ann', b)}`;
     }
     if (t.tag === 'Pi') {
         const [as, b] = exports.flattenPi(t);
-        return `${as.map(([x, t]) => x === '_' ? exports.showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Open', t) : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' -> ')} -> ${exports.showTermP(b.tag === 'Ann', b)}`;
+        return `${as.map(([x, im, t]) => x === '_' ? (im ? `${im ? '{' : ''}${exports.showTerm(t)}${im ? '}' : ''}` : `${exports.showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Open', t)}`) : `${im ? '{' : '('}${x} : ${exports.showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${exports.showTermP(b.tag === 'Ann', b)}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.name} = ${exports.showTermP(t.val.tag === 'Let' || t.val.tag === 'Open', t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
+        return `let ${t.impl ? `{${t.name}}` : t.name} = ${exports.showTermP(t.val.tag === 'Let' || t.val.tag === 'Open', t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
     if (t.tag === 'Ann')
         return `${exports.showTerm(t.term)} : ${exports.showTerm(t.type)}`;
     if (t.tag === 'Open')
@@ -995,7 +1054,10 @@ const solve = (vs, m, spine, val) => {
     const spinex = checkSpine(vs, spine);
     const rhs = vals_1.quote(val, vs);
     checkSolution(vs, m, spinex, rhs);
-    const solution = vals_1.evaluate(list_1.foldl((x, y) => syntax_1.Abs(y, syntax_1.Type, x), rhs, spinex), vals_1.emptyEnvV);
+    // Note: I'm solving with an abstraction that has * as type for all the parameters,
+    // with all parameters being explicit.
+    // I think this doesn't matter because this abstraction is applied immediately.
+    const solution = vals_1.evaluate(list_1.foldl((x, y) => syntax_1.Abs(y, false, syntax_1.Type, x), rhs, spinex), vals_1.emptyEnvV);
     metas_1.setMeta(m, solution);
 };
 exports.unify = (vs, a_, b_) => {
@@ -1004,14 +1066,14 @@ exports.unify = (vs, a_, b_) => {
     config_1.log(() => `unify ${syntax_1.showTerm(vals_1.quote(a, vs))} ~ ${syntax_1.showTerm(vals_1.quote(b, vs))} in ${vals_1.showEnvV(vs)}`);
     if (a.tag === 'VType' && b.tag === 'VType')
         return;
-    if (a.tag === 'VAbs' && b.tag === 'VAbs') {
+    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.impl === b.impl) {
         exports.unify(vs, a.type, b.type);
         const x = vals_1.freshName(vs, a.name);
         const vx = vals_1.VVar(x);
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), b.body(vx));
         return;
     }
-    if (a.tag === 'VPi' && b.tag === 'VPi') {
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.impl === b.impl) {
         exports.unify(vs, a.type, b.type);
         const x = vals_1.freshName(vs, a.name);
         const vx = vals_1.VVar(x);
@@ -1021,26 +1083,26 @@ exports.unify = (vs, a_, b_) => {
     if (a.tag === 'VAbs') {
         const x = vals_1.freshName(vs, a.name);
         const vx = vals_1.VVar(x);
-        exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), vals_1.vapp(b, vx));
+        exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), vals_1.vapp(b, a.impl, vx));
         return;
     }
     if (b.tag === 'VAbs') {
         const x = vals_1.freshName(vs, b.name);
         const vx = vals_1.VVar(x);
-        exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), vals_1.vapp(a, vx), b.body(vx));
+        exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), vals_1.vapp(a, b.impl, vx), b.body(vx));
         return;
     }
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
         b.head.tag === 'HVar' && a.head.name === b.head.name && list_1.length(a.args) === list_1.length(b.args))
-        return list_1.zipWith_((x, y) => exports.unify(vs, x, y), a.args, b.args);
+        return list_1.zipWith_(([i, x], [j, y]) => exports.unify(vs, x, y), a.args, b.args);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
         return list_1.length(a.args) > list_1.length(b.args) ?
-            solve(vs, a.head.id, a.args, b) :
-            solve(vs, b.head.id, b.args, a);
+            solve(vs, a.head.id, list_1.map(a.args, ([_, v]) => v), b) :
+            solve(vs, b.head.id, list_1.map(b.args, ([_, v]) => v), a);
     if (a.tag === 'VNe' && a.head.tag === 'HMeta')
-        return solve(vs, a.head.id, a.args, b);
+        return solve(vs, a.head.id, list_1.map(a.args, ([_, v]) => v), b);
     if (b.tag === 'VNe' && b.head.tag === 'HMeta')
-        return solve(vs, b.head.id, b.args, a);
+        return solve(vs, b.head.id, list_1.map(b.args, ([_, v]) => v), a);
     const ta = vals_1.quote(a, vs);
     const tb = vals_1.quote(b, vs);
     return util_1.terr(`cannot unify: ${syntax_1.showTerm(ta)} ~ ${syntax_1.showTerm(tb)}`);
@@ -1056,7 +1118,6 @@ const maybe_1 = require("../maybe");
 const syntax_1 = require("./syntax");
 const util_1 = require("../util");
 const env_1 = require("./env");
-const config_1 = require("../config");
 exports.emptyEnvV = { vals: list_1.Nil, opened: list_1.Nil };
 exports.extendV = (vs, name, val) => ({ vals: list_1.Cons([name, val], vs.vals), opened: vs.opened });
 exports.openV = (vs, names) => ({ vals: vs.vals, opened: list_1.consAll(names, vs.opened) });
@@ -1065,8 +1126,8 @@ exports.showEnvV = (l) => list_1.toString(l.vals, ([x, b]) => maybe_1.caseMaybe(
 exports.HVar = (name) => ({ tag: 'HVar', name });
 exports.HMeta = (id) => ({ tag: 'HMeta', id });
 exports.VNe = (head, args = list_1.Nil) => ({ tag: 'VNe', head, args });
-exports.VAbs = (name, type, body) => ({ tag: 'VAbs', name, type, body });
-exports.VPi = (name, type, body) => ({ tag: 'VPi', name, type, body });
+exports.VAbs = (name, impl, type, body) => ({ tag: 'VAbs', name, impl, type, body });
+exports.VPi = (name, impl, type, body) => ({ tag: 'VPi', name, impl, type, body });
 exports.VType = { tag: 'VType' };
 exports.VVar = (name) => exports.VNe(exports.HVar(name));
 exports.VMeta = (id) => exports.VNe(exports.HMeta(id));
@@ -1075,12 +1136,12 @@ exports.force = (vs, v) => {
         const val = metas_1.getMeta(v.head.id);
         if (val.tag === 'Unsolved')
             return v;
-        return exports.force(vs, list_1.foldr((x, y) => exports.vapp(y, x), val.val, v.args));
+        return exports.force(vs, list_1.foldr(([i, x], y) => exports.vapp(y, i, x), val.val, v.args));
     }
     if (v.tag === 'VNe' && v.head.tag === 'HVar' && list_1.lookup(vs.vals, v.head.name) === null) {
         const r = env_1.getEnv(v.head.name);
         if (r && r.opaque && list_1.contains(vs.opened, v.head.name))
-            return exports.force(vs, list_1.foldr((x, y) => exports.vapp(y, x), r.val, v.args));
+            return exports.force(vs, list_1.foldr(([i, x], y) => exports.vapp(y, i, x), r.val, v.args));
     }
     return v;
 };
@@ -1090,14 +1151,14 @@ exports.freshName = (vs, name_) => {
     let name = name_;
     while (list_1.lookup(vs.vals, name) !== null || env_1.getEnv(name))
         name = names_1.nextName(name);
-    config_1.log(() => `freshName ${name_} -> ${name} in ${exports.showEnvV(vs)}`);
+    // log(() => `freshName ${name_} -> ${name} in ${showEnvV(vs)}`);
     return name;
 };
-exports.vapp = (a, b) => {
+exports.vapp = (a, impl, b) => {
     if (a.tag === 'VAbs')
         return a.body(b);
     if (a.tag === 'VNe')
-        return exports.VNe(a.head, list_1.Cons(b, a.args));
+        return exports.VNe(a.head, list_1.Cons([impl, b], a.args));
     return util_1.impossible('vapp');
 };
 exports.evaluate = (t, vs = exports.emptyEnvV) => {
@@ -1114,11 +1175,11 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
         return maybe_1.caseMaybe(v, v => v, () => exports.VVar(t.name));
     }
     if (t.tag === 'App')
-        return exports.vapp(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
+        return exports.vapp(exports.evaluate(t.left, vs), t.impl, exports.evaluate(t.right, vs));
     if (t.tag === 'Abs' && t.type)
-        return exports.VAbs(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
+        return exports.VAbs(t.name, t.impl, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
     if (t.tag === 'Pi')
-        return exports.VPi(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
+        return exports.VPi(t.name, t.impl, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
     if (t.tag === 'Let')
         return exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(exports.evaluate(t.val, vs))));
     if (t.tag === 'Meta') {
@@ -1135,15 +1196,15 @@ exports.quote = (v_, vs = exports.emptyEnvV) => {
         return syntax_1.Type;
     if (v.tag === 'VNe') {
         const h = v.head;
-        return list_1.foldr((x, y) => syntax_1.App(y, exports.quote(x, vs)), h.tag === 'HVar' ? syntax_1.Var(h.name) : syntax_1.Meta(h.id), v.args);
+        return list_1.foldr(([i, x], y) => syntax_1.App(y, i, exports.quote(x, vs)), h.tag === 'HVar' ? syntax_1.Var(h.name) : syntax_1.Meta(h.id), v.args);
     }
     if (v.tag === 'VAbs') {
         const x = exports.freshName(vs, v.name);
-        return syntax_1.Abs(x, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
+        return syntax_1.Abs(x, v.impl, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
     }
     if (v.tag === 'VPi') {
         const x = exports.freshName(vs, v.name);
-        return syntax_1.Pi(x, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
+        return syntax_1.Pi(x, v.impl, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
     }
     return v;
 };
@@ -1157,8 +1218,8 @@ const zonkSpine = (vs, tm) => {
     if (tm.tag === 'App') {
         const spine = zonkSpine(vs, tm.left);
         return spine[0] ?
-            [true, syntax_1.App(spine[1], exports.zonk(vs, tm.right))] :
-            [false, exports.vapp(spine[1], exports.evaluate(tm.right, vs))];
+            [true, syntax_1.App(spine[1], tm.impl, exports.zonk(vs, tm.right))] :
+            [false, exports.vapp(spine[1], tm.impl, exports.evaluate(tm.right, vs))];
     }
     return [true, exports.zonk(vs, tm)];
 };
@@ -1168,18 +1229,18 @@ exports.zonk = (vs, tm) => {
         return s.tag === 'Solved' ? exports.quote(s.val, vs) : tm;
     }
     if (tm.tag === 'Pi')
-        return syntax_1.Pi(tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
+        return syntax_1.Pi(tm.name, tm.impl, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Abs')
-        return syntax_1.Abs(tm.name, tm.type ? exports.zonk(vs, tm.type) : null, exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
+        return syntax_1.Abs(tm.name, tm.impl, tm.type ? exports.zonk(vs, tm.type) : null, exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Let')
-        return syntax_1.Let(tm.name, exports.zonk(vs, tm.val), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
+        return syntax_1.Let(tm.name, tm.impl, exports.zonk(vs, tm.val), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Ann')
         return syntax_1.Ann(exports.zonk(vs, tm.term), tm.type);
     if (tm.tag === 'App') {
         const spine = zonkSpine(vs, tm.left);
         return spine[0] ?
-            syntax_1.App(spine[1], exports.zonk(vs, tm.right)) :
-            exports.quote(exports.vapp(spine[1], exports.evaluate(tm.right, vs)), vs);
+            syntax_1.App(spine[1], tm.impl, exports.zonk(vs, tm.right)) :
+            exports.quote(exports.vapp(spine[1], tm.impl, exports.evaluate(tm.right, vs)), vs);
     }
     if (tm.tag === 'Open')
         return syntax_1.Open(tm.names, exports.zonk(exports.openV(vs, tm.names), tm.body));
@@ -1189,7 +1250,7 @@ exports.zonk = (vs, tm) => {
 exports.normalize = (t, vs = exports.emptyEnvV) => exports.quote(exports.evaluate(t, vs), vs);
 exports.revaluate = (vs, v) => exports.evaluate(exports.quote(v, vs), vs);
 
-},{"../config":1,"../list":2,"../maybe":3,"../names":4,"../util":14,"./env":8,"./metas":9,"./syntax":11}],14:[function(require,module,exports){
+},{"../list":2,"../maybe":3,"../names":4,"../util":14,"./env":8,"./metas":9,"./syntax":11}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {

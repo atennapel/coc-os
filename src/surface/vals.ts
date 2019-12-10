@@ -5,16 +5,15 @@ import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
 import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
-import { log } from '../config';
 
 export type Head
   = { tag: 'HVar', name: Name }
   | { tag: 'HMeta', id: TMetaId };
 export type Clos = (val: Val) => Val;
 export type Val
-  = { tag: 'VNe', head: Head, args: List<Val> }
-  | { tag: 'VAbs', name: Name, type: Val, body: Clos }
-  | { tag: 'VPi', name: Name, type: Val, body: Clos }
+  = { tag: 'VNe', head: Head, args: List<[boolean, Val]> }
+  | { tag: 'VAbs', name: Name, impl: boolean, type: Val, body: Clos }
+  | { tag: 'VPi', name: Name, impl: boolean, type: Val, body: Clos }
   | { tag: 'VType' };
 
 export type EnvV = {
@@ -33,12 +32,12 @@ export const showEnvV = (l: EnvV): string =>
 export const HVar = (name: Name): Head => ({ tag: 'HVar', name });
 export const HMeta = (id: TMetaId): Head => ({ tag: 'HMeta', id });
 
-export const VNe = (head: Head, args: List<Val> = Nil): Val =>
+export const VNe = (head: Head, args: List<[boolean, Val]> = Nil): Val =>
   ({ tag: 'VNe', head, args });
-export const VAbs = (name: Name, type: Val, body: Clos): Val =>
-  ({ tag: 'VAbs', name, type, body});
-export const VPi = (name: Name, type: Val, body: Clos): Val =>
-  ({ tag: 'VPi', name, type, body});
+export const VAbs = (name: Name, impl: boolean, type: Val, body: Clos): Val =>
+  ({ tag: 'VAbs', name, impl, type, body});
+export const VPi = (name: Name, impl: boolean, type: Val, body: Clos): Val =>
+  ({ tag: 'VPi', name, impl, type, body});
 export const VType: Val = { tag: 'VType' };
 
 export const VVar = (name: Name): Val => VNe(HVar(name));
@@ -48,12 +47,12 @@ export const force = (vs: EnvV, v: Val): Val => {
   if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
     const val = getMeta(v.head.id);
     if (val.tag === 'Unsolved') return v;
-    return force(vs, foldr((x, y) => vapp(y, x), val.val, v.args));
+    return force(vs, foldr(([i, x], y) => vapp(y, i, x), val.val, v.args));
   }
   if (v.tag === 'VNe' && v.head.tag === 'HVar' && lookup(vs.vals, v.head.name) === null) {
     const r = getEnv(v.head.name);
     if (r && r.opaque && contains(vs.opened, v.head.name))
-      return force(vs, foldr((x, y) => vapp(y, x), r.val, v.args));
+      return force(vs, foldr(([i, x], y) => vapp(y, i, x), r.val, v.args));
   }
   return v;
 };
@@ -63,13 +62,13 @@ export const freshName = (vs: EnvV, name_: Name): Name => {
   let name = name_;
   while (lookup(vs.vals, name) !== null || getEnv(name))
     name = nextName(name);
-  log(() => `freshName ${name_} -> ${name} in ${showEnvV(vs)}`);
+  // log(() => `freshName ${name_} -> ${name} in ${showEnvV(vs)}`);
   return name;
 };
 
-export const vapp = (a: Val, b: Val): Val => {
+export const vapp = (a: Val, impl: boolean, b: Val): Val => {
   if (a.tag === 'VAbs') return a.body(b);
-  if (a.tag === 'VNe') return VNe(a.head, Cons(b, a.args));
+  if (a.tag === 'VNe') return VNe(a.head, Cons([impl, b], a.args));
   return impossible('vapp');
 };
 
@@ -85,11 +84,11 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
     return caseMaybe(v, v => v, () => VVar(t.name));
   }
   if (t.tag === 'App')
-    return vapp(evaluate(t.left, vs), evaluate(t.right, vs));
+    return vapp(evaluate(t.left, vs), t.impl, evaluate(t.right, vs));
   if (t.tag === 'Abs' && t.type)
-    return VAbs(t.name, evaluate(t.type, vs),  v => evaluate(t.body, extendV(vs, t.name, Just(v))));
+    return VAbs(t.name, t.impl, evaluate(t.type, vs),  v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   if (t.tag === 'Pi')
-    return VPi(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
+    return VPi(t.name, t.impl, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   if (t.tag === 'Let')
     return evaluate(t.body, extendV(vs, t.name, Just(evaluate(t.val, vs))));
   if (t.tag === 'Meta') {
@@ -107,18 +106,18 @@ export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
   if (v.tag === 'VNe') {
     const h = v.head;
     return foldr(
-      (x, y) => App(y, quote(x, vs)),
+      ([i, x], y) => App(y, i, quote(x, vs)),
       h.tag === 'HVar' ? Var(h.name) : Meta(h.id),
       v.args,
     );
   }
   if (v.tag === 'VAbs') {
     const x = freshName(vs, v.name);
-    return Abs(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
+    return Abs(x, v.impl, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
   if (v.tag === 'VPi') {
     const x = freshName(vs, v.name);
-    return Pi(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
+    return Pi(x, v.impl, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
   return v;
 };
@@ -133,8 +132,8 @@ const zonkSpine = (vs: EnvV, tm: Term): S => {
   if (tm.tag === 'App') {
     const spine = zonkSpine(vs, tm.left);
     return spine[0] ?
-      [true, App(spine[1], zonk(vs, tm.right))] :
-      [false, vapp(spine[1], evaluate(tm.right, vs))];
+      [true, App(spine[1], tm.impl, zonk(vs, tm.right))] :
+      [false, vapp(spine[1], tm.impl, evaluate(tm.right, vs))];
   }
   return [true, zonk(vs, tm)];
 };
@@ -144,17 +143,17 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return s.tag === 'Solved' ? quote(s.val, vs) : tm;
   }
   if (tm.tag === 'Pi')
-    return Pi(tm.name, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
+    return Pi(tm.name, tm.impl, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Abs')
-    return Abs(tm.name, tm.type ? zonk(vs, tm.type) : null, zonk(extendV(vs, tm.name, Nothing), tm.body));
+    return Abs(tm.name, tm.impl, tm.type ? zonk(vs, tm.type) : null, zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Let')
-    return Let(tm.name, zonk(vs, tm.val), zonk(extendV(vs, tm.name, Nothing), tm.body));
+    return Let(tm.name, tm.impl, zonk(vs, tm.val), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Ann') return Ann(zonk(vs, tm.term), tm.type);
   if (tm.tag === 'App') {
     const spine = zonkSpine(vs, tm.left);
     return spine[0] ?
-      App(spine[1], zonk(vs, tm.right)) :
-      quote(vapp(spine[1], evaluate(tm.right, vs)), vs);
+      App(spine[1], tm.impl, zonk(vs, tm.right)) :
+      quote(vapp(spine[1], tm.impl, evaluate(tm.right, vs)), vs);
   }
   if (tm.tag === 'Open')
     return Open(tm.names, zonk(openV(vs, tm.names), tm.body));

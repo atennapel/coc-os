@@ -141,7 +141,7 @@ const expr = (t: Token): Term => {
     if (isNaN(n)) return serr(`invalid number: ${t.num}`);
     const s = Var('S');
     let c = Var('Z');
-    for (let i = 0; i < n; i++) c = App(s, c);
+    for (let i = 0; i < n; i++) c = App(s, false, c);
     return c;
   }
   return t;
@@ -170,7 +170,7 @@ const exprs = (ts: Token[]): Term => {
     }
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1));
-    return args.reduceRight((x, [name, ty]) => Abs(name, ty, x), body);
+    return args.reduceRight((x, [name, ty]) => Abs(name, false, ty, x), body);
   }
   if (isName(ts[0], '/')) {
     const args: [Name, Term][] = [];
@@ -186,7 +186,7 @@ const exprs = (ts: Token[]): Term => {
     }
     if (!found) return serr(`. not found after /`);
     const body = exprs(ts.slice(i + 1));
-    return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
+    return args.reduceRight((x, [name, ty]) => Pi(name, false, ty, x), body);
   }
   if (isName(ts[0], 'open')) {
     const args: Name[] = [];
@@ -229,7 +229,7 @@ const exprs = (ts: Token[]): Term => {
     if (vals.length === 0) return serr(`empty val in let`);
     const val = exprs(vals);
     const body = exprs(ts.slice(i + 1));
-    return Let(x.name, val, body);
+    return Let(x.name, false, val, body);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {
@@ -239,15 +239,15 @@ const exprs = (ts: Token[]): Term => {
       .map(p => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)] as [Name, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1]);
-    return args.reduceRight((x, [name, ty]) => Pi(name, ty, x), body);
+    return args.reduceRight((x, [name, ty]) => Pi(name, false, ty, x), body);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   if (l >= 0) {
     const first = ts.slice(0, l).map(expr);
     const rest = exprs(ts.slice(l));
-    return first.concat([rest]).reduce(App);
+    return first.concat([rest]).reduce((x, y) => App(x, false, y));
   }
-  return ts.map(expr).reduce(App);
+  return ts.map(expr).reduce((x, y) => App(x, false, y));
 };
 
 export const parse = (s: string): Term => {

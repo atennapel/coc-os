@@ -2,6 +2,8 @@ console.log(42);
 
 /**
 TODO:
-- cli import
-- implicit functions
+- parser for implicit lambdas
+- parser for implicit pis
+- parser for implicit app
+- improve type inference, n-ary
 */
