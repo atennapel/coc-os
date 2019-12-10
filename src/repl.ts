@@ -15,6 +15,9 @@ COMMANDS
 [:debug or :d] toggle debug log messages
 [:def definitions] define names
 [:defs] show all defs
+[:import]
+[:view]
+[:t] or [:type]
 [:del name] delete a name
 `.trim();
 
@@ -70,6 +73,13 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
           lxs.forEach(x => xs.push(x));
         });
         return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
+      }).catch(err => _cb(''+err, true));
+      return;
+    }
+    if (_s.startsWith(':view')) {
+      const files = _s.slice(7).trim().split(/\s+/g);
+      Promise.all(files.map(loadFile)).then(ds => {
+        return _cb(ds.join('\n\n'));
       }).catch(err => _cb(''+err, true));
       return;
     }
