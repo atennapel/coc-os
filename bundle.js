@@ -1071,6 +1071,7 @@ const solve = (vs, m, spine, val) => {
     // Note: I'm solving with an abstraction that has * as type for all the parameters,
     // with all parameters being explicit.
     // I think this doesn't matter because this abstraction is applied immediately.
+    // TODO: I think it might actually matter.
     const solution = vals_1.evaluate(list_1.foldl((x, y) => syntax_1.Abs(y, false, syntax_1.Type, x), rhs, spinex), vals_1.emptyEnvV);
     metas_1.setMeta(m, solution);
 };
@@ -1094,13 +1095,13 @@ exports.unify = (vs, a_, b_) => {
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), b.body(vx));
         return;
     }
-    if (a.tag === 'VAbs') {
+    if (a.tag === 'VAbs' && b.tag !== 'VAbs') {
         const x = vals_1.freshName(vs, a.name);
         const vx = vals_1.VVar(x);
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), vals_1.vapp(b, a.impl, vx));
         return;
     }
-    if (b.tag === 'VAbs') {
+    if (b.tag === 'VAbs' && a.tag !== 'VAbs') {
         const x = vals_1.freshName(vs, b.name);
         const vx = vals_1.VVar(x);
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), vals_1.vapp(a, b.impl, vx), b.body(vx));
@@ -1108,6 +1109,7 @@ exports.unify = (vs, a_, b_) => {
     }
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
         b.head.tag === 'HVar' && a.head.name === b.head.name && list_1.length(a.args) === list_1.length(b.args))
+        // TODO: unify in reverse
         return list_1.zipWith_(([i, x], [j, y]) => exports.unify(vs, x, y), a.args, b.args);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
         return list_1.length(a.args) > list_1.length(b.args) ?

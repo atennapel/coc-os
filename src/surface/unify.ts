@@ -57,6 +57,7 @@ const solve = (vs: EnvV, m: TMetaId, spine: List<Val>, val: Val): void => {
   // Note: I'm solving with an abstraction that has * as type for all the parameters,
   // with all parameters being explicit.
   // I think this doesn't matter because this abstraction is applied immediately.
+  // TODO: I think it might actually matter.
   const solution = evaluate(foldl((x, y) => Abs(y, false, Type, x), rhs, spinex), emptyEnvV);
   setMeta(m, solution);
 };
@@ -80,13 +81,13 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
     unify(extendV(vs, x, Nothing), a.body(vx), b.body(vx));
     return;
   }
-  if (a.tag === 'VAbs') {
+  if (a.tag === 'VAbs' && b.tag !== 'VAbs') {
     const x = freshName(vs, a.name);
     const vx = VVar(x);
     unify(extendV(vs, x, Nothing), a.body(vx), vapp(b, a.impl, vx));
     return;
   }
-  if (b.tag === 'VAbs') {
+  if (b.tag === 'VAbs' && a.tag !== 'VAbs') {
     const x = freshName(vs, b.name);
     const vx = VVar(x);
     unify(extendV(vs, x, Nothing), vapp(a, b.impl, vx), b.body(vx));
@@ -94,6 +95,7 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
     b.head.tag === 'HVar' && a.head.name === b.head.name && length(a.args) === length(b.args))
+    // TODO: unify in reverse
     return zipWith_(([i, x], [j, y]) => unify(vs, x, y), a.args, b.args);
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
     return length(a.args) > length(b.args) ?
