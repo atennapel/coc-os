@@ -207,7 +207,7 @@ exports.runREPL = (_s, _cb) => {
             return;
         }
         if (_s.startsWith(':view')) {
-            const files = _s.slice(7).trim().split(/\s+/g);
+            const files = _s.slice(5).trim().split(/\s+/g);
             Promise.all(files.map(loadFile)).then(ds => {
                 return _cb(ds.join('\n\n'));
             }).catch(err => _cb('' + err, true));
