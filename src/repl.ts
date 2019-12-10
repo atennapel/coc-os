@@ -27,7 +27,7 @@ const loadFile = (fn: string): Promise<string> => {
       });
     });
   } else {
-    return fetch(fn).then(r => r.json());
+    return fetch(fn).then(r => r.text());
   }
 };
 

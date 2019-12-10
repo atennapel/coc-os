@@ -159,7 +159,7 @@ const loadFile = (fn) => {
         });
     }
     else {
-        return fetch(fn).then(r => r.json());
+        return fetch(fn).then(r => r.text());
     }
 };
 exports.initREPL = () => {
