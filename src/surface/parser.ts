@@ -117,13 +117,13 @@ const lambdaParams = (t: Token): [Name, boolean, Term | null][] => {
   return serr(`invalid lambda param`);
 };
 const piParams = (t: Token): [Name, boolean, Term][] => {
-  if (t.tag === 'Name') return [['_', false, expr(t)]];
+  if (t.tag === 'Name') return [['_', false, expr(t)[0]]];
   if (t.tag === 'List') {
     const impl = t.bracket === '{';
     const a = t.list;
     if (a.length === 0) return [['_', impl, tunit]];
     const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
-    if (i === -1) return [['_', impl, expr(t)]];
+    if (i === -1) return [['_', impl, expr(t)[0]]];
     const ns = a.slice(0, i);
     const rest = a.slice(i + 1);
     const ty = exprs(rest, '(');
@@ -132,13 +132,14 @@ const piParams = (t: Token): [Name, boolean, Term][] => {
   return serr(`invalid pi param`);
 };
 
-const expr = (t: Token): Term => {
-  if (t.tag === 'List') return exprs(t.list, t.bracket);
+const expr = (t: Token): [Term, boolean] => {
+  if (t.tag === 'List')
+    return [exprs(t.list, '('), t.bracket === '{'];
   if (t.tag === 'Name') {
     const x = t.name;
-    if (x === '*') return Type;
-    if (x === '_') return Hole;
-    if (/[a-z]/i.test(x[0])) return Var(x);
+    if (x === '*') return [Type, false];
+    if (x === '_') return [Hole, false];
+    if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
   }
   if (t.tag === 'Num') {
@@ -147,21 +148,15 @@ const expr = (t: Token): Term => {
     const s = Var('S');
     let c = Var('Z');
     for (let i = 0; i < n; i++) c = App(s, false, c);
-    return c;
+    return [c, false];
   }
   return t;
 };
 
 const exprs = (ts: Token[], br: BracketO): Term => {
-  if (br === '{') return serr(`{} is unimplemented`);
-  if (ts.length === 0) {
-    if (br === '(') return unit;
-    return serr(`{} has no meaning`);
-  }
-  if (ts.length === 1) {
-    if (br === '(') return expr(ts[0]);
-    return serr(`{} has no meaning`);
-  }
+  if (br === '{') return serr(`{} cannot be used here`);
+  if (ts.length === 0) return unit;
+  if (ts.length === 1) return expr(ts[0])[0];
   const i = ts.findIndex(x => isName(x, ':'));
   if (i >= 0) {
     const a = ts.slice(0, i);
@@ -249,12 +244,17 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     return args.reduceRight((x, [name, impl, ty]) => Pi(name, impl, ty, x), body);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
+  let all = [];
   if (l >= 0) {
     const first = ts.slice(0, l).map(expr);
     const rest = exprs(ts.slice(l), '(');
-    return first.concat([rest]).reduce((x, y) => App(x, false, y));
+    all = first.concat([[rest, false]]);
+  } else {
+    all = ts.map(expr);
   }
-  return ts.map(expr).reduce((x, y) => App(x, false, y));
+  if (all.length === 0) return serr(`empty application`);
+  if (all[0] && all[0][1]) return serr(`in application function cannot be between {}`);
+  return all.slice(1).reduce((x, [y, impl]) => App(x, impl, y), all[0][0]);
 };
 
 export const parse = (s: string): Term => {
