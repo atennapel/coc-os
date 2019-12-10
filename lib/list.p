@@ -1,14 +1,16 @@
-def opaque List = \(t : *). (r : *) -> r -> (t -> r -> r) -> r
+; not working at the moment
 
-def foldList = \(t : *) (l : List t). open List in l
+def opaque List = \(t : *). {r : *} -> r -> (t -> r -> r) -> r
+
+def foldList = \{t : *} {r : *} (l : List t). open List in l {r}
 
 def Nil
-  : (t : *) -> List t
-  = \t. open List in \r nil cons. nil
+  : {t : *} -> List t
+  = open List in \nil cons. nil
 def Cons
-  : (t : *) -> t -> List t -> List t
-  = \t head tail. open List in \r nil cons. cons head (tail r nil cons)
+  : {t : *} -> t -> List t -> List t
+  = \head tail. open List in \nil cons. cons head (tail nil cons)
 
 def map
-  : (a b : *) -> (a -> b) -> List a -> List b
-  = \a b f l. foldList a l (List b) (Nil b) (\head tail. Cons b (f head) tail)
+  : {a b : *} -> (a -> b) -> List a -> List b
+  = \f l. foldList a l Nil (\head tail. Cons (f head) tail)
