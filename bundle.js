@@ -537,16 +537,20 @@ const util_1 = require("../util");
 const syntax_1 = require("./syntax");
 const config_1 = require("../config");
 const definitions_1 = require("./definitions");
-const TName = (name) => ({ tag: 'Name', name });
-const TNum = (num) => ({ tag: 'Num', num });
-const TList = (list) => ({ tag: 'List', list });
 const matchingBracket = (c) => {
     if (c === '(')
         return ')';
     if (c === ')')
         return '(';
+    if (c === '{')
+        return '}';
+    if (c === '}')
+        return '{';
     return util_1.serr(`invalid bracket: ${c}`);
 };
+const TName = (name) => ({ tag: 'Name', name });
+const TNum = (num) => ({ tag: 'Num', num });
+const TList = (list, bracket) => ({ tag: 'List', list, bracket });
 const SYM1 = ['\\', ':', '/', '.', '*', '='];
 const SYM2 = ['->'];
 const START = 0;
@@ -573,16 +577,16 @@ const tokenize = (sc) => {
                 t += c, state = NAME;
             else if (/[0-9]/.test(c))
                 t += c, state = NUMBER;
-            else if (c === '(')
+            else if (c === '(' || c === '{')
                 b.push(c), p.push(r), r = [];
-            else if (c === ')') {
+            else if (c === ')' || c === '}') {
                 if (b.length === 0)
                     return util_1.serr(`unmatched bracket: ${c}`);
                 const br = b.pop();
                 if (matchingBracket(br) !== c)
                     return util_1.serr(`unmatched bracket: ${br} and ${c}`);
                 const a = p.pop();
-                a.push(TList(r));
+                a.push(TList(r, br));
                 r = a;
             }
             else if (/\s/.test(c))
@@ -644,41 +648,43 @@ const splitTokens = (a, fn) => {
 };
 const lambdaParams = (t) => {
     if (t.tag === 'Name')
-        return [[t.name, null]];
+        return [[t.name, false, null]];
     if (t.tag === 'List') {
+        const impl = t.bracket === '{';
         const a = t.list;
         if (a.length === 0)
-            return [['_', tunit]];
+            return [['_', impl, tunit]];
         const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
         if (i === -1)
-            return isNames(a).map(x => [x, null]);
+            return isNames(a).map(x => [x, impl, null]);
         const ns = a.slice(0, i);
         const rest = a.slice(i + 1);
-        const ty = exprs(rest);
-        return isNames(ns).map(x => [x, ty]);
+        const ty = exprs(rest, '(');
+        return isNames(ns).map(x => [x, impl, ty]);
     }
     return util_1.serr(`invalid lambda param`);
 };
 const piParams = (t) => {
     if (t.tag === 'Name')
-        return [['_', expr(t)]];
+        return [['_', false, expr(t)]];
     if (t.tag === 'List') {
+        const impl = t.bracket === '{';
         const a = t.list;
         if (a.length === 0)
-            return [['_', tunit]];
+            return [['_', impl, tunit]];
         const i = a.findIndex(v => v.tag === 'Name' && v.name === ':');
         if (i === -1)
-            return [['_', expr(t)]];
+            return [['_', impl, expr(t)]];
         const ns = a.slice(0, i);
         const rest = a.slice(i + 1);
-        const ty = exprs(rest);
-        return isNames(ns).map(x => [x, ty]);
+        const ty = exprs(rest, '(');
+        return isNames(ns).map(x => [x, impl, ty]);
     }
     return util_1.serr(`invalid pi param`);
 };
 const expr = (t) => {
     if (t.tag === 'List')
-        return exprs(t.list);
+        return exprs(t.list, t.bracket);
     if (t.tag === 'Name') {
         const x = t.name;
         if (x === '*')
@@ -701,16 +707,24 @@ const expr = (t) => {
     }
     return t;
 };
-const exprs = (ts) => {
-    if (ts.length === 0)
-        return unit;
-    if (ts.length === 1)
-        return expr(ts[0]);
+const exprs = (ts, br) => {
+    if (br === '{')
+        return util_1.serr(`{} is unimplemented`);
+    if (ts.length === 0) {
+        if (br === '(')
+            return unit;
+        return util_1.serr(`{} has no meaning`);
+    }
+    if (ts.length === 1) {
+        if (br === '(')
+            return expr(ts[0]);
+        return util_1.serr(`{} has no meaning`);
+    }
     const i = ts.findIndex(x => isName(x, ':'));
     if (i >= 0) {
         const a = ts.slice(0, i);
         const b = ts.slice(i + 1);
-        return syntax_1.Ann(exprs(a), exprs(b));
+        return syntax_1.Ann(exprs(a, '('), exprs(b, '('));
     }
     if (isName(ts[0], '\\')) {
         const args = [];
@@ -726,25 +740,8 @@ const exprs = (ts) => {
         }
         if (!found)
             return util_1.serr(`. not found after \\`);
-        const body = exprs(ts.slice(i + 1));
-        return args.reduceRight((x, [name, ty]) => syntax_1.Abs(name, false, ty, x), body);
-    }
-    if (isName(ts[0], '/')) {
-        const args = [];
-        let found = false;
-        let i = 1;
-        for (; i < ts.length; i++) {
-            const c = ts[i];
-            if (isName(c, '.')) {
-                found = true;
-                break;
-            }
-            piParams(c).forEach(a => args.push(a));
-        }
-        if (!found)
-            return util_1.serr(`. not found after /`);
-        const body = exprs(ts.slice(i + 1));
-        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, false, ty, x), body);
+        const body = exprs(ts.slice(i + 1), '(');
+        return args.reduceRight((x, [name, impl, ty]) => syntax_1.Abs(name, impl, ty, x), body);
     }
     if (isName(ts[0], 'open')) {
         const args = [];
@@ -768,12 +765,27 @@ const exprs = (ts) => {
             return util_1.serr(`in not found after open`);
         if (args.length === 0)
             return util_1.serr(`empty open`);
-        const body = exprs(ts.slice(i + 1));
+        const body = exprs(ts.slice(i + 1), '(');
         return syntax_1.Open(args, body);
     }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
-        if (x.tag !== 'Name')
+        let impl = false;
+        let name = 'ERROR';
+        if (x.tag === 'Name') {
+            name = x.name;
+        }
+        else if (x.tag === 'List' && x.bracket === '{') {
+            const a = x.list;
+            if (a.length !== 1)
+                return util_1.serr(`invalid name for let`);
+            const h = a[0];
+            if (h.tag !== 'Name')
+                return util_1.serr(`invalid name for let`);
+            name = h.name;
+            impl = true;
+        }
+        else
             return util_1.serr(`invalid name for let`);
         if (!isName(ts[2], '='))
             return util_1.serr(`no = after name in let`);
@@ -792,9 +804,9 @@ const exprs = (ts) => {
             return util_1.serr(`no in after let`);
         if (vals.length === 0)
             return util_1.serr(`empty val in let`);
-        const val = exprs(vals);
-        const body = exprs(ts.slice(i + 1));
-        return syntax_1.Let(x.name, false, val, body);
+        const val = exprs(vals, '(');
+        const body = exprs(ts.slice(i + 1), '(');
+        return syntax_1.Let(name, impl, val, body);
     }
     const j = ts.findIndex(x => isName(x, '->'));
     if (j >= 0) {
@@ -802,15 +814,15 @@ const exprs = (ts) => {
         if (s.length < 2)
             return util_1.serr(`parsing failed with ->`);
         const args = s.slice(0, -1)
-            .map(p => p.length === 1 ? piParams(p[0]) : [['_', exprs(p)]])
+            .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')]])
             .reduce((x, y) => x.concat(y), []);
-        const body = exprs(s[s.length - 1]);
-        return args.reduceRight((x, [name, ty]) => syntax_1.Pi(name, false, ty, x), body);
+        const body = exprs(s[s.length - 1], '(');
+        return args.reduceRight((x, [name, impl, ty]) => syntax_1.Pi(name, impl, ty, x), body);
     }
     const l = ts.findIndex(x => isName(x, '\\'));
     if (l >= 0) {
         const first = ts.slice(0, l).map(expr);
-        const rest = exprs(ts.slice(l));
+        const rest = exprs(ts.slice(l), '(');
         return first.concat([rest]).reduce((x, y) => syntax_1.App(x, false, y));
     }
     return ts.map(expr).reduce((x, y) => syntax_1.App(x, false, y));
@@ -818,7 +830,7 @@ const exprs = (ts) => {
 exports.parse = (s) => {
     const ts = tokenize(s);
     config_1.log(() => ts);
-    const ex = exprs(ts);
+    const ex = exprs(ts, '(');
     config_1.log(() => ex);
     return ex;
 };
@@ -851,7 +863,7 @@ exports.parseDefs = (s) => {
             if (sym.tag !== 'Name')
                 return util_1.serr(`def: after name should be : or =`);
             if (sym.name === '=') {
-                ds.push(definitions_1.DDef(name, exprs(c.slice(fst + 1)), opq));
+                ds.push(definitions_1.DDef(name, exprs(c.slice(fst + 1), '('), opq));
                 continue;
             }
             else if (sym.name === ':') {
@@ -864,8 +876,8 @@ exports.parseDefs = (s) => {
                     else
                         tyts.push(v);
                 }
-                const ety = exprs(tyts);
-                const body = exprs(c.slice(j + 1));
+                const ety = exprs(tyts, '(');
+                const body = exprs(c.slice(j + 1), '(');
                 ds.push(definitions_1.DDef(name, syntax_1.Ann(body, ety), opq));
                 continue;
             }
