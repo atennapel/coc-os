@@ -62,7 +62,11 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       }).catch(err => _cb(''+err, true));
       return;
     }
-    if (_s.startsWith(':')) return _cb('invalid command', true);
+    let typeOnly = false;
+    if (_s.startsWith(':t')) {
+      _s = _s.slice(_s.startsWith(':type') ? 5 : 2);
+      typeOnly = true;
+    } else if (_s.startsWith(':')) return _cb('invalid command', true);
     let msg = '';
     let tm_;
     try {
@@ -73,6 +77,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       log(() => showTerm(ty));
       log(() => showTerm(tm));
       msg += `type: ${showTerm(ty)}\nterm: ${showTerm(tm)}`;
+      if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);
       return _cb(''+err, true);

@@ -190,7 +190,12 @@ exports.runREPL = (_s, _cb) => {
             }).catch(err => _cb('' + err, true));
             return;
         }
-        if (_s.startsWith(':'))
+        let typeOnly = false;
+        if (_s.startsWith(':t')) {
+            _s = _s.slice(_s.startsWith(':type') ? 5 : 2);
+            typeOnly = true;
+        }
+        else if (_s.startsWith(':'))
             return _cb('invalid command', true);
         let msg = '';
         let tm_;
@@ -202,6 +207,8 @@ exports.runREPL = (_s, _cb) => {
             config_1.log(() => syntax_1.showTerm(ty));
             config_1.log(() => syntax_1.showTerm(tm));
             msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}`;
+            if (typeOnly)
+                return _cb(msg);
         }
         catch (err) {
             config_1.log(() => '' + err);

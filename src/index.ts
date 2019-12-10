@@ -2,6 +2,8 @@ console.log(42);
 
 /**
 TODO:
+- cli import
+- opaque Nat, Eq, List
 - implicit functions
 
 PROBLEMS:
