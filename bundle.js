@@ -148,7 +148,20 @@ COMMANDS
 [:defs] show all defs
 [:del name] delete a name
 `.trim();
-const loadFile = (fn) => Promise.reject(new Error('unimplemented'));
+const loadFile = (fn) => {
+    if (typeof window === 'undefined') {
+        return new Promise((resolve, reject) => {
+            require('fs').readFile(fn, 'utf8', (err, data) => {
+                if (err)
+                    return reject(err);
+                return resolve(data);
+            });
+        });
+    }
+    else {
+        return fetch(fn).then(r => r.json());
+    }
+};
 exports.initREPL = () => {
     env_1.resetEnv();
 };
@@ -232,7 +245,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./surface/elaborate":7,"./surface/env":8,"./surface/parser":10,"./surface/syntax":11,"./surface/vals":13}],6:[function(require,module,exports){
+},{"./config":1,"./surface/elaborate":7,"./surface/env":8,"./surface/parser":10,"./surface/syntax":11,"./surface/vals":13,"fs":16}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -1235,4 +1248,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":5}]},{},[15]);
+},{"./repl":5}],16:[function(require,module,exports){
+
+},{}]},{},[15]);

@@ -18,7 +18,18 @@ COMMANDS
 [:del name] delete a name
 `.trim();
 
-const loadFile = (fn: string): Promise<string> => Promise.reject(new Error('unimplemented'));
+const loadFile = (fn: string): Promise<string> => {
+  if (typeof window === 'undefined') {
+    return new Promise((resolve, reject) => {
+      require('fs').readFile(fn, 'utf8', (err: Error, data: string) => {
+        if (err) return reject(err);
+        return resolve(data);
+      });
+    });
+  } else {
+    return fetch(fn).then(r => r.json());
+  }
+};
 
 export const initREPL = () => {
   resetEnv();

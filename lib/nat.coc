@@ -1,12 +1,12 @@
-def Nat = (t : *) -> t -> (t -> t) -> t
+def opaque Nat = (t : *) -> t -> (t -> t) -> t
 
-def Z : Nat = \t z s. z
+def foldNat = \(n : Nat). open Nat in n
+
+def Z : Nat = open Nat in \t z s. z
 def S
   : Nat -> Nat
-  = \n t z s. s (n t z s)
+  = \n. open Nat in \t z s. s (n t z s)
 
 def add
   : Nat -> Nat -> Nat
-  = \a b. a _ b S
-
-def main = add 1 2
+  = \a b. foldNat a _ b S
