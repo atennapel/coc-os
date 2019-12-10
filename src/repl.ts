@@ -15,9 +15,9 @@ COMMANDS
 [:debug or :d] toggle debug log messages
 [:def definitions] define names
 [:defs] show all defs
-[:import]
-[:view]
-[:t] or [:type]
+[:import files] import a file
+[:view files] view a file
+[:t term] or [:type term] show the type of an expressions
 [:del name] delete a name
 `.trim();
 
