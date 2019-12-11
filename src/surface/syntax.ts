@@ -123,3 +123,20 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Open') return isUnsolved(t.body);
   return t;
 };
+
+export const erase = (t: Term): Term => {
+  if (t.tag === 'Meta') return t;
+  if (t.tag === 'Hole') return t;
+  if (t.tag === 'Type') return t;
+  if (t.tag === 'Var') return t;
+  if (t.tag === 'App')
+    return t.impl ? erase(t.left) : App(erase(t.left), false, erase(t.right));
+  if (t.tag === 'Abs')
+    return t.impl ? erase(t.body) : Abs(t.name, t.impl, null, erase(t.body));
+  if (t.tag === 'Pi') return Type;
+  if (t.tag === 'Let')
+    return t.impl ? erase(t.body) : Let(t.name, t.impl, erase(t.val), erase(t.body));
+  if (t.tag === 'Ann') return erase(t.term);
+  if (t.tag === 'Open') return Open(t.names, erase(t.body));
+  return t;
+};

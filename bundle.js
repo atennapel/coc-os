@@ -235,7 +235,9 @@ exports.runREPL = (_s, _cb) => {
             tm_ = tm;
             config_1.log(() => syntax_1.showTerm(ty));
             config_1.log(() => syntax_1.showTerm(tm));
-            msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}`;
+            const eras = syntax_1.erase(tm);
+            config_1.log(() => syntax_1.showTerm(eras));
+            msg += `type: ${syntax_1.showTerm(ty)}\nterm: ${syntax_1.showTerm(tm)}\neras: ${syntax_1.showTerm(eras)}`;
             if (typeOnly)
                 return _cb(msg);
         }
@@ -246,7 +248,9 @@ exports.runREPL = (_s, _cb) => {
         try {
             const n = vals_1.normalize(tm_);
             config_1.log(() => syntax_1.showTerm(n));
-            msg += '\nnorm: ' + syntax_1.showTerm(n);
+            const er = syntax_1.erase(n);
+            config_1.log(() => syntax_1.showTerm(er));
+            msg += `\nnorm: ${syntax_1.showTerm(n)}\neran: ${syntax_1.showTerm(er)}`;
             return _cb(msg);
         }
         catch (err) {
@@ -1015,6 +1019,29 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
     if (t.tag === 'Open')
         return exports.isUnsolved(t.body);
+    return t;
+};
+exports.erase = (t) => {
+    if (t.tag === 'Meta')
+        return t;
+    if (t.tag === 'Hole')
+        return t;
+    if (t.tag === 'Type')
+        return t;
+    if (t.tag === 'Var')
+        return t;
+    if (t.tag === 'App')
+        return t.impl ? exports.erase(t.left) : exports.App(exports.erase(t.left), false, exports.erase(t.right));
+    if (t.tag === 'Abs')
+        return t.impl ? exports.erase(t.body) : exports.Abs(t.name, t.impl, null, exports.erase(t.body));
+    if (t.tag === 'Pi')
+        return exports.Type;
+    if (t.tag === 'Let')
+        return t.impl ? exports.erase(t.body) : exports.Let(t.name, t.impl, exports.erase(t.val), exports.erase(t.body));
+    if (t.tag === 'Ann')
+        return exports.erase(t.term);
+    if (t.tag === 'Open')
+        return exports.Open(t.names, exports.erase(t.body));
     return t;
 };
 

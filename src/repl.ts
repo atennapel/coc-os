@@ -1,6 +1,6 @@
 import { parse, parseDefs } from './surface/parser';
 import { log, setConfig, config } from './config';
-import { showTerm } from './surface/syntax';
+import { showTerm, erase } from './surface/syntax';
 import { elaborate, elaborateDefs } from './surface/elaborate';
 import { normalize, quote } from './surface/vals';
 import { resetEnv, getEnvMap, delEnv } from './surface/env';
@@ -97,7 +97,9 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       tm_ = tm;
       log(() => showTerm(ty));
       log(() => showTerm(tm));
-      msg += `type: ${showTerm(ty)}\nterm: ${showTerm(tm)}`;
+      const eras = erase(tm);
+      log(() => showTerm(eras));
+      msg += `type: ${showTerm(ty)}\nterm: ${showTerm(tm)}\neras: ${showTerm(eras)}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);
@@ -106,7 +108,9 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     try {
       const n = normalize(tm_);
       log(() => showTerm(n));
-      msg += '\nnorm: ' + showTerm(n);
+      const er = erase(n);
+      log(() => showTerm(er));
+      msg += `\nnorm: ${showTerm(n)}\neran: ${showTerm(er)}`;
       return _cb(msg);
     } catch (err) {
       log(() => ''+err);
