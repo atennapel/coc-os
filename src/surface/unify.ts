@@ -1,5 +1,5 @@
 import { Name } from '../names';
-import { List, map, contains, Cons, foldl, length, zipWith_, lookup } from '../list';
+import { List, map, contains, Cons, foldl, length, zipWithR_, lookup } from '../list';
 import { Val, force, EnvV, quote, evaluate, showEnvV, VVar, vapp, freshName, emptyEnvV, extendV } from './vals';
 import { terr, impossible } from '../util';
 import { Term, showTerm, Type, Abs } from './syntax';
@@ -60,6 +60,12 @@ const solve = (vs: EnvV, m: TMetaId, spine: List<[boolean, Val]>, val: Val): voi
   setMeta(m, solution);
 };
 
+const unifyFail = (vs: EnvV, a: Val, b: Val) => {
+  const ta = quote(a, vs);
+  const tb = quote(b, vs);
+  return terr(`cannot unify: ${showTerm(ta)} ~ ${showTerm(tb)}`);
+};
+
 export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
   const a = force(vs, a_);
   const b = force(vs, b_);
@@ -95,8 +101,10 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
     b.head.tag === 'HVar' && a.head.name === b.head.name && length(a.args) === length(b.args))
-    // TODO: Should unify in reverse?
-    return zipWith_(([i, x], [j, y]) => unify(vs, x, y), a.args, b.args);
+    return zipWithR_(([i, x], [j, y]) => {
+      if (i !== j) return unifyFail(vs, a, b);
+      return unify(vs, x, y)
+    }, a.args, b.args);
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
     return length(a.args) > length(b.args) ?
       solve(vs, a.head.id, a.args, b) :
@@ -105,7 +113,5 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
     return solve(vs, a.head.id, a.args, b);
   if (b.tag === 'VNe' && b.head.tag === 'HMeta')
     return solve(vs, b.head.id, b.args, a);
-  const ta = quote(a, vs);
-  const tb = quote(b, vs);
-  return terr(`cannot unify: ${showTerm(ta)} ~ ${showTerm(tb)}`);
+  return unifyFail(vs, a, b);
 };

@@ -118,6 +118,12 @@ export const zipWith_ = <A, B>(f: (a: A, b: B) => void, la: List<A>, lb: List<B>
     zipWith_(f, la.tail, lb.tail);
   }
 };
+export const zipWithR_ = <A, B>(f: (a: A, b: B) => void, la: List<A>, lb: List<B>): void => {
+  if (la.tag === 'Cons' && lb.tag === 'Cons') {
+    zipWith_(f, la.tail, lb.tail);
+    f(la.head, lb.head);
+  }
+};
 export const and = (l: List<boolean>): boolean =>
   l.tag === 'Nil' ? true : l.head && and(l.tail);
 

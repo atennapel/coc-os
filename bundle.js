@@ -105,6 +105,12 @@ exports.zipWith_ = (f, la, lb) => {
         exports.zipWith_(f, la.tail, lb.tail);
     }
 };
+exports.zipWithR_ = (f, la, lb) => {
+    if (la.tag === 'Cons' && lb.tag === 'Cons') {
+        exports.zipWith_(f, la.tail, lb.tail);
+        f(la.head, lb.head);
+    }
+};
 exports.and = (l) => l.tag === 'Nil' ? true : l.head && exports.and(l.tail);
 exports.range = (n) => n <= 0 ? exports.Nil : exports.Cons(n - 1, exports.range(n - 1));
 exports.contains = (l, v) => l.tag === 'Cons' ? (l.head === v || exports.contains(l.tail, v)) : false;
@@ -1073,6 +1079,11 @@ const solve = (vs, m, spine, val) => {
     const solution = vals_1.evaluate(list_1.foldl((x, [i, y]) => syntax_1.Abs(y, i, syntax_1.Type, x), rhs, spinex), vals_1.emptyEnvV);
     metas_1.setMeta(m, solution);
 };
+const unifyFail = (vs, a, b) => {
+    const ta = vals_1.quote(a, vs);
+    const tb = vals_1.quote(b, vs);
+    return util_1.terr(`cannot unify: ${syntax_1.showTerm(ta)} ~ ${syntax_1.showTerm(tb)}`);
+};
 exports.unify = (vs, a_, b_) => {
     const a = vals_1.force(vs, a_);
     const b = vals_1.force(vs, b_);
@@ -1109,8 +1120,11 @@ exports.unify = (vs, a_, b_) => {
     }
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
         b.head.tag === 'HVar' && a.head.name === b.head.name && list_1.length(a.args) === list_1.length(b.args))
-        // TODO: Should unify in reverse?
-        return list_1.zipWith_(([i, x], [j, y]) => exports.unify(vs, x, y), a.args, b.args);
+        return list_1.zipWithR_(([i, x], [j, y]) => {
+            if (i !== j)
+                return unifyFail(vs, a, b);
+            return exports.unify(vs, x, y);
+        }, a.args, b.args);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
         return list_1.length(a.args) > list_1.length(b.args) ?
             solve(vs, a.head.id, a.args, b) :
@@ -1119,9 +1133,7 @@ exports.unify = (vs, a_, b_) => {
         return solve(vs, a.head.id, a.args, b);
     if (b.tag === 'VNe' && b.head.tag === 'HMeta')
         return solve(vs, b.head.id, b.args, a);
-    const ta = vals_1.quote(a, vs);
-    const tb = vals_1.quote(b, vs);
-    return util_1.terr(`cannot unify: ${syntax_1.showTerm(ta)} ~ ${syntax_1.showTerm(tb)}`);
+    return unifyFail(vs, a, b);
 };
 
 },{"../config":1,"../list":2,"../maybe":3,"../util":14,"./env":8,"./metas":9,"./syntax":11,"./vals":13}],13:[function(require,module,exports){
