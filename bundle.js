@@ -1023,10 +1023,10 @@ const config_1 = require("../config");
 const maybe_1 = require("../maybe");
 const metas_1 = require("./metas");
 const env_1 = require("./env");
-const checkSpine = (vs, spine) => list_1.map(spine, v_ => {
+const checkSpine = (vs, spine) => list_1.map(spine, ([i, v_]) => {
     const v = vals_1.force(vs, v_);
-    if (v.tag === 'VNe' && v.head.tag === 'HVar')
-        return v.head.name;
+    if (v.tag === 'VNe' && v.head.tag === 'HVar' && list_1.length(v.args) === 0)
+        return [i, v.head.name];
     return util_1.terr(`not a var in spine`);
 });
 const checkSolution = (vs, m, spine, tm) => {
@@ -1067,12 +1067,10 @@ const checkSolution = (vs, m, spine, tm) => {
 const solve = (vs, m, spine, val) => {
     const spinex = checkSpine(vs, spine);
     const rhs = vals_1.quote(val, vs);
-    checkSolution(vs, m, spinex, rhs);
-    // Note: I'm solving with an abstraction that has * as type for all the parameters,
-    // with all parameters being explicit.
-    // I think this doesn't matter because this abstraction is applied immediately.
-    // TODO: I think it might actually matter.
-    const solution = vals_1.evaluate(list_1.foldl((x, y) => syntax_1.Abs(y, false, syntax_1.Type, x), rhs, spinex), vals_1.emptyEnvV);
+    checkSolution(vs, m, list_1.map(spinex, ([_, v]) => v), rhs);
+    // Note: I'm solving with an abstraction that has * as type for all the parameters
+    // TODO: I think it might actually matter
+    const solution = vals_1.evaluate(list_1.foldl((x, [i, y]) => syntax_1.Abs(y, i, syntax_1.Type, x), rhs, spinex), vals_1.emptyEnvV);
     metas_1.setMeta(m, solution);
 };
 exports.unify = (vs, a_, b_) => {
@@ -1082,7 +1080,9 @@ exports.unify = (vs, a_, b_) => {
     if (a.tag === 'VType' && b.tag === 'VType')
         return;
     if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.impl === b.impl) {
-        exports.unify(vs, a.type, b.type);
+        // TODO: type should probably be unified too, we might gain more information
+        // but then meta should also be solved with the correct type
+        // unify(vs, a.type, b.type);
         const x = vals_1.freshName(vs, a.name);
         const vx = vals_1.VVar(x);
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), b.body(vx));
@@ -1109,16 +1109,16 @@ exports.unify = (vs, a_, b_) => {
     }
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HVar' &&
         b.head.tag === 'HVar' && a.head.name === b.head.name && list_1.length(a.args) === list_1.length(b.args))
-        // TODO: unify in reverse
+        // TODO: Should unify in reverse?
         return list_1.zipWith_(([i, x], [j, y]) => exports.unify(vs, x, y), a.args, b.args);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
         return list_1.length(a.args) > list_1.length(b.args) ?
-            solve(vs, a.head.id, list_1.map(a.args, ([_, v]) => v), b) :
-            solve(vs, b.head.id, list_1.map(b.args, ([_, v]) => v), a);
+            solve(vs, a.head.id, a.args, b) :
+            solve(vs, b.head.id, b.args, a);
     if (a.tag === 'VNe' && a.head.tag === 'HMeta')
-        return solve(vs, a.head.id, list_1.map(a.args, ([_, v]) => v), b);
+        return solve(vs, a.head.id, a.args, b);
     if (b.tag === 'VNe' && b.head.tag === 'HMeta')
-        return solve(vs, b.head.id, list_1.map(b.args, ([_, v]) => v), a);
+        return solve(vs, b.head.id, b.args, a);
     const ta = vals_1.quote(a, vs);
     const tb = vals_1.quote(b, vs);
     return util_1.terr(`cannot unify: ${syntax_1.showTerm(ta)} ~ ${syntax_1.showTerm(tb)}`);
