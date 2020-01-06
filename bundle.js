@@ -363,10 +363,12 @@ const check = (ts, vs, tm, ty_) => {
         const term = check(list_1.Cons([x, exports.BoundT(ty.type)], ts), vals_1.extendV(vs, x, maybe_1.Nothing), tm, ty.body(vx));
         return syntax_1.Abs(x, true, vals_1.quote(ty.type, vs), term);
     }
+    /*
     if (ty.tag === 'VFix' && tm.tag !== 'Roll') {
-        const term = check(ts, vs, tm, ty.body(ty));
-        return syntax_1.Roll(vals_1.quote(ty, vs), term);
+      const term = check(ts, vs, tm, ty.body(ty));
+      return Roll(quote(ty, vs), term);
     }
+    */
     if (tm.tag === 'Hole')
         return newMeta(ts);
     if (tm.tag === 'Open') {
