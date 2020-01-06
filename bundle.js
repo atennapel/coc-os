@@ -321,6 +321,10 @@ const isImplicitUsed = (x, t) => {
         return false;
     if (t.tag === 'Fix')
         return false;
+    if (t.tag === 'Roll')
+        return isImplicitUsed(x, t.body);
+    if (t.tag === 'Unroll')
+        return isImplicitUsed(x, t.body);
     return t;
 };
 const checkOpenNames = (ns) => {
@@ -461,6 +465,21 @@ const synth = (ts, vs, tm) => {
         checkOpenNames(tm.names);
         const [ty, tme] = synth(ts, vals_1.openV(vs, tm.names), tm.body);
         return [ty, syntax_1.Open(tm.names, tme)];
+    }
+    if (tm.tag === 'Unroll') {
+        const [ty, tme] = synth(ts, vs, tm.body);
+        const fty = vals_1.force(vs, ty);
+        if (fty.tag !== 'VFix')
+            return util_1.terr(`cannot unroll ${vals_1.quote(fty, vs)} in ${syntax_1.showTerm(tm)}`);
+        return [fty.body(fty), syntax_1.Unroll(tme)];
+    }
+    if (tm.tag === 'Roll') {
+        const type = check(ts, vs, tm.type, vals_1.VType);
+        const vt = vals_1.evaluate(type, vs);
+        if (vt.tag !== 'VFix')
+            return util_1.terr(`cannot roll ${vals_1.quote(vt, vs)} in ${syntax_1.showTerm(tm)}`);
+        const tme = check(ts, vs, tm.body, vt.body(vt));
+        return [vt, syntax_1.Roll(type, tme)];
     }
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
 };
@@ -782,6 +801,15 @@ const exprs = (ts, br) => {
         const body = exprs(ts.slice(i + 1), '(');
         return syntax_1.Open(args, body);
     }
+    if (isName(ts[0], 'unroll')) {
+        const body = exprs(ts.slice(1), '(');
+        return syntax_1.Unroll(body);
+    }
+    if (isName(ts[0], 'roll')) {
+        const [ty] = expr(ts[1]);
+        const body = exprs(ts.slice(2), '(');
+        return syntax_1.Roll(ty, body);
+    }
     if (isName(ts[0], 'fix')) {
         const args = [];
         let found = false;
@@ -940,7 +968,6 @@ exports.parseDefs = (s) => {
 },{"../config":1,"../util":14,"./definitions":6,"./syntax":11}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// TODO roll and unroll
 exports.Var = (name) => ({ tag: 'Var', name });
 exports.App = (left, impl, right) => ({ tag: 'App', left, impl, right });
 exports.Abs = (name, impl, type, body) => ({ tag: 'Abs', name, impl, type, body });
@@ -951,6 +978,8 @@ exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Type = { tag: 'Type' };
 exports.Hole = { tag: 'Hole' };
 exports.Open = (names, body) => ({ tag: 'Open', names, body });
+exports.Unroll = (body) => ({ tag: 'Unroll', body });
+exports.Roll = (type, body) => ({ tag: 'Roll', type, body });
 exports.Meta = (id) => ({ tag: 'Meta', id });
 exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
@@ -975,6 +1004,10 @@ exports.showTermSimple = (t) => {
         return `_`;
     if (t.tag === 'Open')
         return `(open ${t.names.join(' ')} in ${exports.showTermSimple(t.body)})`;
+    if (t.tag === 'Unroll')
+        return `(unroll ${exports.showTermSimple(t.body)})`;
+    if (t.tag === 'Roll')
+        return `(roll ${exports.showTermSimple(t.type)} in ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Meta')
         return `?${t.id}`;
     return t;
@@ -1034,6 +1067,10 @@ exports.showTerm = (t) => {
         return `${exports.showTerm(t.term)} : ${exports.showTerm(t.type)}`;
     if (t.tag === 'Open')
         return `open ${t.names.join(' ')} in ${exports.showTerm(t.body)}`;
+    if (t.tag === 'Unroll')
+        return `(unroll ${exports.showTerm(t.body)})`;
+    if (t.tag === 'Roll')
+        return `(roll ${exports.showTerm(t.type)} in ${exports.showTerm(t.body)})`;
     return t;
 };
 exports.isUnsolved = (t) => {
@@ -1062,6 +1099,10 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
     if (t.tag === 'Open')
         return exports.isUnsolved(t.body);
+    if (t.tag === 'Unroll')
+        return exports.isUnsolved(t.body);
+    if (t.tag === 'Roll')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     return t;
 };
 exports.erase = (t) => {
@@ -1087,6 +1128,10 @@ exports.erase = (t) => {
         return exports.erase(t.term);
     if (t.tag === 'Open')
         return exports.Open(t.names, exports.erase(t.body));
+    if (t.tag === 'Unroll')
+        return exports.erase(t.body);
+    if (t.tag === 'Roll')
+        return exports.erase(t.body);
     return t;
 };
 
@@ -1298,6 +1343,10 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
     }
     if (t.tag === 'Open')
         return exports.evaluate(t.body, exports.openV(vs, t.names));
+    if (t.tag === 'Unroll')
+        return exports.evaluate(t.body, vs);
+    if (t.tag === 'Roll')
+        return exports.evaluate(t.body, vs);
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = exports.emptyEnvV) => {
@@ -1360,6 +1409,10 @@ exports.zonk = (vs, tm) => {
     }
     if (tm.tag === 'Open')
         return syntax_1.Open(tm.names, exports.zonk(exports.openV(vs, tm.names), tm.body));
+    if (tm.tag === 'Unroll')
+        return syntax_1.Unroll(exports.zonk(vs, tm.body));
+    if (tm.tag === 'Roll')
+        return syntax_1.Roll(exports.zonk(vs, tm.type), exports.zonk(vs, tm.body));
     return tm;
 };
 // only use this with elaborated terms

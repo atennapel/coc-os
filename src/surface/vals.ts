@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 
@@ -102,6 +102,8 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
   }
   if (t.tag === 'Open')
     return evaluate(t.body, openV(vs, t.names));
+  if (t.tag === 'Unroll') return evaluate(t.body, vs);
+  if (t.tag === 'Roll') return evaluate(t.body, vs);
   return impossible('evaluate');
 };
 
@@ -168,6 +170,10 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
   }
   if (tm.tag === 'Open')
     return Open(tm.names, zonk(openV(vs, tm.names), tm.body));
+  if (tm.tag === 'Unroll')
+    return Unroll(zonk(vs, tm.body));
+  if (tm.tag === 'Roll')
+    return Roll(zonk(vs, tm.type), zonk(vs, tm.body));
   return tm;
 };
 

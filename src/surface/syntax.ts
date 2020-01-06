@@ -12,8 +12,9 @@ export type Term
   | { tag: 'Type' }
   | { tag: 'Hole' }
   | { tag: 'Open', names: Name[], body: Term }
+  | { tag: 'Unroll', body: Term }
+  | { tag: 'Roll', type: Term, body: Term }
   | { tag: 'Meta', id: TMetaId };
-  // TODO roll and unroll
 
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const App = (left: Term, impl: boolean, right: Term): Term =>
@@ -32,6 +33,10 @@ export const Type: Term = { tag: 'Type' };
 export const Hole: Term = { tag: 'Hole' };
 export const Open = (names: Name[], body: Term): Term =>
   ({ tag: 'Open', names, body });
+export const Unroll = (body: Term): Term =>
+  ({ tag: 'Unroll', body });
+export const Roll = (type: Term, body: Term): Term =>
+  ({ tag: 'Roll', type, body });
 export const Meta = (id: TMetaId): Term => ({ tag: 'Meta', id });
 
 export const showTermSimple = (t: Term): string => {
@@ -54,6 +59,10 @@ export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Hole') return `_`;
   if (t.tag === 'Open')
     return `(open ${t.names.join(' ')} in ${showTermSimple(t.body)})`;
+  if (t.tag === 'Unroll')
+    return `(unroll ${showTermSimple(t.body)})`;
+  if (t.tag === 'Roll')
+    return `(roll ${showTermSimple(t.type)} in ${showTermSimple(t.body)})`;
   if (t.tag === 'Meta') return `?${t.id}`;
   return t;
 };
@@ -112,6 +121,10 @@ export const showTerm = (t: Term): string => {
     return `${showTerm(t.term)} : ${showTerm(t.type)}`;
   if (t.tag === 'Open')
     return `open ${t.names.join(' ')} in ${showTerm(t.body)}`;
+  if (t.tag === 'Unroll')
+    return `(unroll ${showTerm(t.body)})`;
+  if (t.tag === 'Roll')
+    return `(roll ${showTerm(t.type)} in ${showTerm(t.body)})`;
   return t;
 };
 
@@ -130,6 +143,8 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
   if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
   if (t.tag === 'Open') return isUnsolved(t.body);
+  if (t.tag === 'Unroll') return isUnsolved(t.body);
+  if (t.tag === 'Roll') return isUnsolved(t.type) || isUnsolved(t.body);
   return t;
 };
 
@@ -148,5 +163,7 @@ export const erase = (t: Term): Term => {
     return t.impl ? erase(t.body) : Let(t.name, t.impl, erase(t.val), erase(t.body));
   if (t.tag === 'Ann') return erase(t.term);
   if (t.tag === 'Open') return Open(t.names, erase(t.body));
+  if (t.tag === 'Unroll') return erase(t.body);
+  if (t.tag === 'Roll') return erase(t.body);
   return t;
 };

@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil, foldl } from '../list';
 import { Name } from '../names';
 import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix } from './syntax';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -38,6 +38,8 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
   if (t.tag === 'Type') return false;
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
+  if (t.tag === 'Roll') return isImplicitUsed(x, t.body);
+  if (t.tag === 'Unroll') return isImplicitUsed(x, t.body);
   return t;
 };
 
@@ -177,6 +179,19 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     checkOpenNames(tm.names);
     const [ty, tme] = synth(ts, openV(vs, tm.names), tm.body);
     return [ty, Open(tm.names, tme)];
+  }
+  if (tm.tag === 'Unroll') {
+    const [ty, tme] = synth(ts, vs, tm.body);
+    const fty = force(vs, ty);
+    if (fty.tag !== 'VFix') return terr(`cannot unroll ${quote(fty, vs)} in ${showTerm(tm)}`);
+    return [fty.body(fty), Unroll(tme)];
+  }
+  if (tm.tag === 'Roll') {
+    const type = check(ts, vs, tm.type, VType);
+    const vt = evaluate(type, vs);
+    if (vt.tag !== 'VFix') return terr(`cannot roll ${quote(vt, vs)} in ${showTerm(tm)}`);
+    const tme = check(ts, vs, tm.body, vt.body(vt));
+    return [vt, Roll(type, tme)];
   }
   return terr(`cannot synth ${showTerm(tm)}`);
 };
