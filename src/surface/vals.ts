@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 
@@ -14,6 +14,7 @@ export type Val
   = { tag: 'VNe', head: Head, args: List<[boolean, Val]> }
   | { tag: 'VAbs', name: Name, impl: boolean, type: Val, body: Clos }
   | { tag: 'VPi', name: Name, impl: boolean, type: Val, body: Clos }
+  | { tag: 'VFix', name: Name, type: Val, body: Clos }
   | { tag: 'VType' };
 
 export type EnvV = {
@@ -38,6 +39,8 @@ export const VAbs = (name: Name, impl: boolean, type: Val, body: Clos): Val =>
   ({ tag: 'VAbs', name, impl, type, body});
 export const VPi = (name: Name, impl: boolean, type: Val, body: Clos): Val =>
   ({ tag: 'VPi', name, impl, type, body});
+export const VFix = (name: Name, type: Val, body: Clos): Val =>
+  ({ tag: 'VFix', name, type, body});
 export const VType: Val = { tag: 'VType' };
 
 export const VVar = (name: Name): Val => VNe(HVar(name));
@@ -89,6 +92,8 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
     return VAbs(t.name, t.impl, evaluate(t.type, vs),  v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   if (t.tag === 'Pi')
     return VPi(t.name, t.impl, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
+  if (t.tag === 'Fix')
+    return VFix(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   if (t.tag === 'Let')
     return evaluate(t.body, extendV(vs, t.name, Just(evaluate(t.val, vs))));
   if (t.tag === 'Meta') {
@@ -119,6 +124,10 @@ export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
     const x = freshName(vs, v.name);
     return Pi(x, v.impl, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
+  if (v.tag === 'VFix') {
+    const x = freshName(vs, v.name);
+    return Fix(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
+  }
   return v;
 };
 
@@ -144,6 +153,8 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
   }
   if (tm.tag === 'Pi')
     return Pi(tm.name, tm.impl, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
+  if (tm.tag === 'Fix')
+    return Fix(tm.name, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Abs')
     return Abs(tm.name, tm.impl, tm.type ? zonk(vs, tm.type) : null, zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Let')

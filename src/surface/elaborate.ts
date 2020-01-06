@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil, foldl } from '../list';
 import { Name } from '../names';
 import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open } from './syntax';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -37,6 +37,7 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
   if (t.tag === 'Meta') return false;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Pi') return false;
+  if (t.tag === 'Fix') return false;
   return t;
 };
 
@@ -76,6 +77,7 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
     const term = check(Cons([x, BoundT(ty.type)], ts), extendV(vs, x, Nothing), tm, ty.body(vx));
     return Abs(x, true, quote(ty.type, vs), term);
   }
+  // TODO fix
   if (tm.tag === 'Hole')
     return newMeta(ts);
   if (tm.tag === 'Open') {
@@ -165,6 +167,12 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     const body = check(Cons([tm.name, BoundT(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, VType);
     return [VType, Pi(tm.name, tm.impl, type, body)];
   }
+  if (tm.tag === 'Fix') {
+    const type = check(ts, vs, tm.type, VType);
+    const vt = evaluate(type, vs);
+    const body = check(Cons([tm.name, BoundT(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, vt);
+    return [vt, Fix(tm.name, type, body)];
+  }
   if (tm.tag === 'Open') {
     checkOpenNames(tm.names);
     const [ty, tme] = synth(ts, openV(vs, tm.names), tm.body);
@@ -188,6 +196,7 @@ const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, impl: boolean, arg: Term): [Val,
     const vm = evaluate(tm, vs);
     return [ty.body(vm), tm, Nil];
   }
+  // TODO fix
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
     const a = freshMetaId();
     const b = freshMetaId();

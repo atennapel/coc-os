@@ -87,6 +87,13 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
     unify(extendV(vs, x, Nothing), a.body(vx), b.body(vx));
     return;
   }
+  if (a.tag === 'VFix' && b.tag === 'VFix') {
+    unify(vs, a.type, b.type);
+    const x = freshName(vs, a.name);
+    const vx = VVar(x);
+    unify(extendV(vs, x, Nothing), a.body(vx), b.body(vx));
+    return;
+  }
   if (a.tag === 'VAbs' && b.tag !== 'VAbs') {
     const x = freshName(vs, a.name);
     const vx = VVar(x);
