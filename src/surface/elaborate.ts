@@ -79,7 +79,10 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
     const term = check(Cons([x, BoundT(ty.type)], ts), extendV(vs, x, Nothing), tm, ty.body(vx));
     return Abs(x, true, quote(ty.type, vs), term);
   }
-  // TODO fix
+  if (ty.tag === 'VFix' && tm.tag !== 'Roll') {
+    const term = check(ts, vs, tm, ty.body(ty));
+    return Roll(quote(ty, vs), term);
+  }
   if (tm.tag === 'Hole')
     return newMeta(ts);
   if (tm.tag === 'Open') {
