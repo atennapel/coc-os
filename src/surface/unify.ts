@@ -47,6 +47,11 @@ const checkSolution = (vs: EnvV, m: TMetaId, spine: List<Name>, tm: Term): void 
     checkSolution(vs, m, Cons(tm.name, spine), tm.body);
     return;
   }
+  if (tm.tag === 'Fix') {
+    checkSolution(vs, m, spine, tm.type);
+    checkSolution(vs, m, Cons(tm.name, spine), tm.body);
+    return;
+  }
   return impossible(`checkSolution (?${m}): non-normal term: ${showTerm(tm)}`);
 };
 

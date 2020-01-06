@@ -183,13 +183,13 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   if (tm.tag === 'Unroll') {
     const [ty, tme] = synth(ts, vs, tm.body);
     const fty = force(vs, ty);
-    if (fty.tag !== 'VFix') return terr(`cannot unroll ${quote(fty, vs)} in ${showTerm(tm)}`);
+    if (fty.tag !== 'VFix') return terr(`cannot unroll ${showTerm(quote(fty, vs))} in ${showTerm(tm)}`);
     return [fty.body(fty), Unroll(tme)];
   }
   if (tm.tag === 'Roll') {
     const type = check(ts, vs, tm.type, VType);
     const vt = evaluate(type, vs);
-    if (vt.tag !== 'VFix') return terr(`cannot roll ${quote(vt, vs)} in ${showTerm(tm)}`);
+    if (vt.tag !== 'VFix') return terr(`cannot roll ${showTerm(quote(vt, vs))} in ${showTerm(tm)}`);
     const tme = check(ts, vs, tm.body, vt.body(vt));
     return [vt, Roll(type, tme)];
   }

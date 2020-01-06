@@ -470,14 +470,14 @@ const synth = (ts, vs, tm) => {
         const [ty, tme] = synth(ts, vs, tm.body);
         const fty = vals_1.force(vs, ty);
         if (fty.tag !== 'VFix')
-            return util_1.terr(`cannot unroll ${vals_1.quote(fty, vs)} in ${syntax_1.showTerm(tm)}`);
+            return util_1.terr(`cannot unroll ${syntax_1.showTerm(vals_1.quote(fty, vs))} in ${syntax_1.showTerm(tm)}`);
         return [fty.body(fty), syntax_1.Unroll(tme)];
     }
     if (tm.tag === 'Roll') {
         const type = check(ts, vs, tm.type, vals_1.VType);
         const vt = vals_1.evaluate(type, vs);
         if (vt.tag !== 'VFix')
-            return util_1.terr(`cannot roll ${vals_1.quote(vt, vs)} in ${syntax_1.showTerm(tm)}`);
+            return util_1.terr(`cannot roll ${syntax_1.showTerm(vals_1.quote(vt, vs))} in ${syntax_1.showTerm(tm)}`);
         const tme = check(ts, vs, tm.body, vt.body(vt));
         return [vt, syntax_1.Roll(type, tme)];
     }
@@ -1181,6 +1181,11 @@ const checkSolution = (vs, m, spine, tm) => {
         return;
     }
     if (tm.tag === 'Pi') {
+        checkSolution(vs, m, spine, tm.type);
+        checkSolution(vs, m, list_1.Cons(tm.name, spine), tm.body);
+        return;
+    }
+    if (tm.tag === 'Fix') {
         checkSolution(vs, m, spine, tm.type);
         checkSolution(vs, m, list_1.Cons(tm.name, spine), tm.body);
         return;
