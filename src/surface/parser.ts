@@ -1,5 +1,5 @@
 import { serr } from '../util'
-import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let, Fix, Unroll, Roll } from './syntax';
+import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let, Fix, Unroll, Roll, Rec } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
 import { Def, DDef } from './definitions';
@@ -231,6 +231,28 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     })
     const body = exprs(ts.slice(i + 1), '(');
     return rargs.reduceRight((x, [name, ty]) => Fix(name, ty, x), body);
+  }
+  if (isName(ts[0], 'rec')) {
+    const args: [Name, boolean, Term | null][] = [];
+    let found = false;
+    let i = 1;
+    for (; i < ts.length; i++) {
+      const c = ts[i];
+      if (isName(c, '.')) {
+        found = true;
+        break;
+      }
+      lambdaParams(c).forEach(x => args.push(x));
+    }
+    if (!found) return serr(`. not found after \\`);
+    const rargs: [Name, Term][] = [];
+    args.forEach(([x, i, t]) => {
+      if (i) return serr(`rec arg cannot be implicit`);
+      if (!t) return serr(`rec arg must have a type annotation`);
+      return rargs.push([x, t]);
+    })
+    const body = exprs(ts.slice(i + 1), '(');
+    return rargs.reduceRight((x, [name, ty]) => Rec(name, ty, x), body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

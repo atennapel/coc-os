@@ -325,6 +325,8 @@ const isImplicitUsed = (x, t) => {
         return isImplicitUsed(x, t.body);
     if (t.tag === 'Unroll')
         return isImplicitUsed(x, t.body);
+    if (t.tag === 'Rec')
+        return t.name !== x && isImplicitUsed(x, t.body);
     return t;
 };
 const checkOpenNames = (ns) => {
@@ -465,6 +467,12 @@ const synth = (ts, vs, tm) => {
         const vt = vals_1.evaluate(type, vs);
         const body = check(list_1.Cons([tm.name, exports.BoundT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.body, vt);
         return [vt, syntax_1.Fix(tm.name, type, body)];
+    }
+    if (tm.tag === 'Rec') {
+        const type = check(ts, vs, tm.type, vals_1.VType);
+        const vt = vals_1.evaluate(type, vs);
+        const body = check(list_1.Cons([tm.name, exports.BoundT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.body, vt);
+        return [vt, syntax_1.Rec(tm.name, type, body)];
     }
     if (tm.tag === 'Open') {
         checkOpenNames(tm.names);
@@ -840,6 +848,31 @@ const exprs = (ts, br) => {
         const body = exprs(ts.slice(i + 1), '(');
         return rargs.reduceRight((x, [name, ty]) => syntax_1.Fix(name, ty, x), body);
     }
+    if (isName(ts[0], 'rec')) {
+        const args = [];
+        let found = false;
+        let i = 1;
+        for (; i < ts.length; i++) {
+            const c = ts[i];
+            if (isName(c, '.')) {
+                found = true;
+                break;
+            }
+            lambdaParams(c).forEach(x => args.push(x));
+        }
+        if (!found)
+            return util_1.serr(`. not found after \\`);
+        const rargs = [];
+        args.forEach(([x, i, t]) => {
+            if (i)
+                return util_1.serr(`rec arg cannot be implicit`);
+            if (!t)
+                return util_1.serr(`rec arg must have a type annotation`);
+            return rargs.push([x, t]);
+        });
+        const body = exprs(ts.slice(i + 1), '(');
+        return rargs.reduceRight((x, [name, ty]) => syntax_1.Rec(name, ty, x), body);
+    }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
         let impl = false;
@@ -978,6 +1011,7 @@ exports.App = (left, impl, right) => ({ tag: 'App', left, impl, right });
 exports.Abs = (name, impl, type, body) => ({ tag: 'Abs', name, impl, type, body });
 exports.Pi = (name, impl, type, body) => ({ tag: 'Pi', name, impl, type, body });
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
+exports.Rec = (name, type, body) => ({ tag: 'Rec', name, type, body });
 exports.Let = (name, impl, val, body) => ({ tag: 'Let', name, impl, val, body });
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Type = { tag: 'Type' };
@@ -999,6 +1033,8 @@ exports.showTermSimple = (t) => {
         return `(${t.impl ? '{' : '('}${t.name} : ${exports.showTermSimple(t.type)}${t.impl ? '}' : ')'} -> ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Fix')
         return `(fix (${t.name} : ${exports.showTermSimple(t.type)}). ${exports.showTermSimple(t.body)})`;
+    if (t.tag === 'Rec')
+        return `(rec (${t.name} : ${exports.showTermSimple(t.type)}). ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Let')
         return `(let ${t.impl ? '{' : ''}${t.name}${t.impl ? '}' : ''} = ${exports.showTermSimple(t.val)} in ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Ann')
@@ -1066,6 +1102,8 @@ exports.showTerm = (t) => {
     }
     if (t.tag === 'Fix')
         return `(fix (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
+    if (t.tag === 'Rec')
+        return `(rec (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
     if (t.tag === 'Let')
         return `let ${t.impl ? `{${t.name}}` : t.name} = ${exports.showTermP(t.val.tag === 'Let' || t.val.tag === 'Open', t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
     if (t.tag === 'Ann')
@@ -1097,6 +1135,8 @@ exports.isUnsolved = (t) => {
     if (t.tag === 'Pi')
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Fix')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
+    if (t.tag === 'Rec')
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Let')
         return exports.isUnsolved(t.val) || exports.isUnsolved(t.body);
@@ -1137,6 +1177,8 @@ exports.erase = (t) => {
         return exports.erase(t.body);
     if (t.tag === 'Roll')
         return exports.erase(t.body);
+    if (t.tag === 'Rec')
+        return exports.Rec(t.name, exports.Type, exports.erase(t.body));
     return t;
 };
 
@@ -1240,6 +1282,13 @@ exports.unify = (vs, a_, b_) => {
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), b.body(vx));
         return;
     }
+    if (a.tag === 'VRec' && b.tag === 'VRec') {
+        exports.unify(vs, a.type, b.type);
+        const x = vals_1.freshName(vs, a.name);
+        const vx = vals_1.VVar(x);
+        exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), b.body(vx));
+        return;
+    }
     if (a.tag === 'VAbs' && b.tag !== 'VAbs') {
         const x = vals_1.freshName(vs, a.name);
         const vx = vals_1.VVar(x);
@@ -1298,6 +1347,7 @@ exports.VNe = (head, args = list_1.Nil) => ({ tag: 'VNe', head, args });
 exports.VAbs = (name, impl, type, body) => ({ tag: 'VAbs', name, impl, type, body });
 exports.VPi = (name, impl, type, body) => ({ tag: 'VPi', name, impl, type, body });
 exports.VFix = (name, type, body) => ({ tag: 'VFix', name, type, body });
+exports.VRec = (name, type, body) => ({ tag: 'VRec', name, type, body });
 exports.VType = { tag: 'VType' };
 exports.VVar = (name) => exports.VNe(exports.HVar(name));
 exports.VMeta = (id) => exports.VNe(exports.HMeta(id));
@@ -1327,6 +1377,8 @@ exports.freshName = (vs, name_) => {
 exports.vapp = (a, impl, b) => {
     if (a.tag === 'VAbs')
         return a.body(b);
+    if (a.tag === 'VRec')
+        return exports.vapp(a.body(a), impl, b);
     if (a.tag === 'VNe')
         return exports.VNe(a.head, list_1.Cons([impl, b], a.args));
     return util_1.impossible('vapp');
@@ -1352,6 +1404,8 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
         return exports.VPi(t.name, t.impl, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
     if (t.tag === 'Fix')
         return exports.VFix(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
+    if (t.tag === 'Rec')
+        return exports.VRec(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
     if (t.tag === 'Let')
         return exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(exports.evaluate(t.val, vs))));
     if (t.tag === 'Meta') {
@@ -1386,6 +1440,10 @@ exports.quote = (v_, vs = exports.emptyEnvV) => {
         const x = exports.freshName(vs, v.name);
         return syntax_1.Fix(x, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
     }
+    if (v.tag === 'VRec') {
+        const x = exports.freshName(vs, v.name);
+        return syntax_1.Rec(x, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
+    }
     return v;
 };
 const zonkSpine = (vs, tm) => {
@@ -1412,6 +1470,8 @@ exports.zonk = (vs, tm) => {
         return syntax_1.Pi(tm.name, tm.impl, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Fix')
         return syntax_1.Fix(tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
+    if (tm.tag === 'Rec')
+        return syntax_1.Rec(tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Abs')
         return syntax_1.Abs(tm.name, tm.impl, tm.type ? exports.zonk(vs, tm.type) : null, exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Let')

@@ -7,6 +7,7 @@ export type Term
   | { tag: 'Abs', name: Name, impl: boolean, type: Term | null, body: Term }
   | { tag: 'Pi', name: Name, impl: boolean, type: Term, body: Term }
   | { tag: 'Fix', name: Name, type: Term, body: Term }
+  | { tag: 'Rec', name: Name, type: Term, body: Term }
   | { tag: 'Let', name: Name, impl: boolean, val: Term, body: Term }
   | { tag: 'Ann', term: Term, type: Term }
   | { tag: 'Type' }
@@ -25,6 +26,8 @@ export const Pi = (name: Name, impl: boolean, type: Term, body: Term): Term =>
   ({ tag: 'Pi', name, impl, type, body });
 export const Fix = (name: Name, type: Term, body: Term): Term =>
   ({ tag: 'Fix', name, type, body });
+export const Rec = (name: Name, type: Term, body: Term): Term =>
+  ({ tag: 'Rec', name, type, body });
 export const Let = (name: Name, impl: boolean, val: Term, body: Term): Term =>
   ({ tag: 'Let', name, impl, val, body });
 export const Ann = (term: Term, type: Term): Term =>
@@ -51,6 +54,8 @@ export const showTermSimple = (t: Term): string => {
     return `(${t.impl ? '{' : '('}${t.name} : ${showTermSimple(t.type)}${t.impl ? '}' : ')'} -> ${showTermSimple(t.body)})`;
   if (t.tag === 'Fix')
     return `(fix (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
+  if (t.tag === 'Rec')
+    return `(rec (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
   if (t.tag === 'Let')
     return `(let ${t.impl ? '{' : ''}${t.name}${t.impl ? '}' : ''} = ${showTermSimple(t.val)} in ${showTermSimple(t.body)})`;
   if (t.tag === 'Ann')
@@ -114,7 +119,9 @@ export const showTerm = (t: Term): string => {
     return `${as.map(([x, im, t]) => x === '_' ? (im ? `${im ? '{' : ''}${showTerm(t)}${im ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Open', t)}`) : `${im ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Fix')
-    return `(fix (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
+    return `(fix (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`; 
+  if (t.tag === 'Rec')
+    return `(rec (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Let')
     return `let ${t.impl ? `{${t.name}}` : t.name} = ${showTermP(t.val.tag === 'Let' || t.val.tag === 'Open', t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
   if (t.tag === 'Ann')
@@ -140,6 +147,7 @@ export const isUnsolved = (t: Term): boolean => {
   }
   if (t.tag === 'Pi') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Fix') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Rec') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
   if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
   if (t.tag === 'Open') return isUnsolved(t.body);
@@ -165,5 +173,6 @@ export const erase = (t: Term): Term => {
   if (t.tag === 'Open') return Open(t.names, erase(t.body));
   if (t.tag === 'Unroll') return erase(t.body);
   if (t.tag === 'Roll') return erase(t.body);
+  if (t.tag === 'Rec') return Rec(t.name, Type, erase(t.body));
   return t;
 };
