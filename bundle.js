@@ -1259,6 +1259,13 @@ exports.unify = (vs, a_, b_) => {
                 return unifyFail(vs, a, b);
             return exports.unify(vs, x, y);
         }, a.args, b.args);
+    if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' &&
+        b.head.tag === 'HMeta' && a.head.id === b.head.id && list_1.length(a.args) === list_1.length(b.args))
+        return list_1.zipWithR_(([i, x], [j, y]) => {
+            if (i !== j)
+                return unifyFail(vs, a, b);
+            return exports.unify(vs, x, y);
+        }, a.args, b.args);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
         return list_1.length(a.args) > list_1.length(b.args) ?
             solve(vs, a.head.id, a.args, b) :

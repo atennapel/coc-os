@@ -117,6 +117,12 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
       if (i !== j) return unifyFail(vs, a, b);
       return unify(vs, x, y)
     }, a.args, b.args);
+  if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' &&
+    b.head.tag === 'HMeta' && a.head.id === b.head.id && length(a.args) === length(b.args))
+    return zipWithR_(([i, x], [j, y]) => {
+      if (i !== j) return unifyFail(vs, a, b);
+      return unify(vs, x, y)
+    }, a.args, b.args);
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
     return length(a.args) > length(b.args) ?
       solve(vs, a.head.id, a.args, b) :
