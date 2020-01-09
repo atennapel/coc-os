@@ -1,12 +1,13 @@
 import { parseDefs } from './surface/parser';
 import { elaborateDefs } from './surface/elaborate';
 import { initREPL, runREPL } from './repl';
-import { getEnvMap } from './surface/env';
+import { getEnvMap, resetEnv } from './surface/env';
 import { showTerm } from './surface/syntax';
 import { quote } from './surface/vals';
 
 if (process.argv[2]) {
   try {
+    resetEnv();
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
     const ds = parseDefs(sc);
     const ns = elaborateDefs(ds);
