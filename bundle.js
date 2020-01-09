@@ -555,9 +555,10 @@ exports.resetEnv = () => {
     env = {};
     // ({x : *} -> ({r : *} -> (r -> x) -> f r -> x) -> x)
     // {f : * -> *} -> tmp -> f tmp
+    // \{_} x. x {*} \{_} _ x. x
     const tmp = syntax_1.Pi('x', true, syntax_1.Type, syntax_1.Pi('_', false, syntax_1.Pi('r', true, syntax_1.Type, syntax_1.Pi('_', false, syntax_1.Pi('_', false, syntax_1.Var('r'), syntax_1.Var('x')), syntax_1.Pi('_', false, syntax_1.App(syntax_1.Var('f'), false, syntax_1.Var('r')), syntax_1.Var('x')))), syntax_1.Var('x')));
     env['outM'] = {
-        val: vals_1.evaluate(syntax_1.Abs('f', false, syntax_1.Type, syntax_1.App(syntax_1.Var('f'), false, syntax_1.Abs('x', false, syntax_1.Type, syntax_1.Abs('y', false, syntax_1.Type, syntax_1.Var('y')))))),
+        val: vals_1.evaluate(syntax_1.Abs('_', true, syntax_1.Type, syntax_1.Abs('f', false, syntax_1.Type, syntax_1.App(syntax_1.App(syntax_1.Var('f'), true, syntax_1.Type), false, syntax_1.Abs('_', true, syntax_1.Type, syntax_1.Abs('_', false, syntax_1.Type, syntax_1.Abs('x', false, syntax_1.Type, syntax_1.Var('x')))))))),
         type: vals_1.evaluate(syntax_1.Pi('f', true, syntax_1.Pi('_', false, syntax_1.Type, syntax_1.Type), syntax_1.Pi('_', false, tmp, syntax_1.App(syntax_1.Var('f'), false, tmp)))),
         opaque: false,
     };
