@@ -548,8 +548,20 @@ exports.elaborateDefs = (ds, ts = list_1.Nil, vs = vals_1.emptyEnvV) => {
 },{"../config":1,"../list":2,"../maybe":3,"../util":14,"./env":8,"./metas":9,"./syntax":11,"./unify":12,"./vals":13}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const vals_1 = require("./vals");
+const syntax_1 = require("./syntax");
 let env = {};
-exports.resetEnv = () => { env = {}; };
+exports.resetEnv = () => {
+    env = {};
+    // ({x : *} -> ({r : *} -> (r -> x) -> f r -> x) -> x)
+    // {f : * -> *} -> tmp -> f tmp
+    const tmp = syntax_1.Pi('x', true, syntax_1.Type, syntax_1.Pi('_', false, syntax_1.Pi('r', true, syntax_1.Type, syntax_1.Pi('_', false, syntax_1.Pi('_', false, syntax_1.Var('r'), syntax_1.Var('x')), syntax_1.Pi('_', false, syntax_1.App(syntax_1.Var('f'), false, syntax_1.Var('r')), syntax_1.Var('x')))), syntax_1.Var('x')));
+    env['outM'] = {
+        val: vals_1.evaluate(syntax_1.Abs('f', false, syntax_1.Type, syntax_1.App(syntax_1.Var('f'), false, syntax_1.Abs('x', false, syntax_1.Type, syntax_1.Abs('y', false, syntax_1.Type, syntax_1.Var('y')))))),
+        type: vals_1.evaluate(syntax_1.Pi('f', true, syntax_1.Pi('_', false, syntax_1.Type, syntax_1.Type), syntax_1.Pi('_', false, tmp, syntax_1.App(syntax_1.Var('f'), false, tmp)))),
+        opaque: false,
+    };
+};
 exports.getEnvMap = () => env;
 exports.getEnv = (name) => env[name] || null;
 exports.setEnv = (name, val, type, opaque = false) => {
@@ -559,7 +571,7 @@ exports.delEnv = (name) => {
     delete env[name];
 };
 
-},{}],9:[function(require,module,exports){
+},{"./syntax":11,"./vals":13}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
