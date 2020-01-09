@@ -23,3 +23,7 @@ def caseNat
 def recNat
   : {t : *} -> Nat -> t -> (t -> t) -> t
   = \{t} n z s. fold {NatF} {t} (\rc m. m z (\x. s (rc x))) n
+
+def pred : Nat -> Nat = \n. caseNat {Nat} n Z \x. x
+
+def add : Nat -> Nat -> Nat = \n m. recNat {Nat} n m S
