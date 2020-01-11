@@ -1,4 +1,5 @@
 export type Name = string;
+export type Ix = number;
 
 export const nextName = (x: Name): Name => {
   const s = x.split('$');
