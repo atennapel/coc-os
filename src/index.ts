@@ -17,6 +17,8 @@ const tm = App(App(Ann(Abs('t', Type, Abs('r', Type, Abs('nil', Var(0), Abs('con
 console.log(showTerm(tm));
 const ty = elaborate(tm);
 console.log(showTerm(ty));
+const tnorm2 = normalize(ty, Nil, 0, true);
+console.log(showTerm(tnorm2));
 const norm1 = normalize(tm, Nil, 0, false);
 console.log(showTerm(norm1));
 const norm2 = normalize(tm, Nil, 0, true);

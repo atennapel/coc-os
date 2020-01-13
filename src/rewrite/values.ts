@@ -49,7 +49,7 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var') {
     const v = index(vs, t.index) || impossible(`evaluate ${t.index}`);
-    return VGlued(HVar(t.index), Nil, Lazy(() => v));
+    return v;
   }
   if (t.tag === 'Global') {
     const v = getEnv(t.name) || impossible(`evaluate ${t.name}`);
