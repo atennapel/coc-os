@@ -96,7 +96,9 @@ export const unify = (vs: EnvV, a_: Val, b_: Val): void => {
     unify(vs, a.type, b.type);
     const x = freshName(vs, a.name);
     const vx = VVar(x);
-    unify(extendV(vs, x, Nothing), a.body(vx), b.body(vx));
+    const self = freshName(extendV(vs, x, Nothing), a.self);
+    const vself = VVar(self);
+    unify(extendV(extendV(vs, self, Nothing), x, Nothing), a.body(vself, vx), b.body(vself, vx));
     return;
   }
   if (a.tag === 'VRec' && b.tag === 'VRec') {

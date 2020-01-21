@@ -6,7 +6,7 @@ export type Term
   | { tag: 'App', left: Term, impl: boolean, right: Term }
   | { tag: 'Abs', name: Name, impl: boolean, type: Term | null, body: Term }
   | { tag: 'Pi', name: Name, impl: boolean, type: Term, body: Term }
-  | { tag: 'Fix', name: Name, type: Term, body: Term }
+  | { tag: 'Fix', self: Name, name: Name, type: Term, body: Term }
   | { tag: 'Rec', name: Name, type: Term, body: Term }
   | { tag: 'Let', name: Name, impl: boolean, val: Term, body: Term }
   | { tag: 'Ann', term: Term, type: Term }
@@ -24,8 +24,8 @@ export const Abs = (name: Name, impl: boolean, type: Term | null, body: Term): T
   ({ tag: 'Abs', name, impl, type, body });
 export const Pi = (name: Name, impl: boolean, type: Term, body: Term): Term =>
   ({ tag: 'Pi', name, impl, type, body });
-export const Fix = (name: Name, type: Term, body: Term): Term =>
-  ({ tag: 'Fix', name, type, body });
+export const Fix = (self: Name, name: Name, type: Term, body: Term): Term =>
+  ({ tag: 'Fix', self, name, type, body });
 export const Rec = (name: Name, type: Term, body: Term): Term =>
   ({ tag: 'Rec', name, type, body });
 export const Let = (name: Name, impl: boolean, val: Term, body: Term): Term =>
@@ -53,7 +53,7 @@ export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Pi')
     return `(${t.impl ? '{' : '('}${t.name} : ${showTermSimple(t.type)}${t.impl ? '}' : ')'} -> ${showTermSimple(t.body)})`;
   if (t.tag === 'Fix')
-    return `(fix (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
+    return `(fix (${t.self} @ ${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
   if (t.tag === 'Rec')
     return `(rec (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
   if (t.tag === 'Let')
@@ -119,7 +119,7 @@ export const showTerm = (t: Term): string => {
     return `${as.map(([x, im, t]) => x === '_' ? (im ? `${im ? '{' : ''}${showTerm(t)}${im ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Open', t)}`) : `${im ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Fix')
-    return `(fix (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`; 
+    return `(fix (${t.self} @ ${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`; 
   if (t.tag === 'Rec')
     return `(rec (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Let')

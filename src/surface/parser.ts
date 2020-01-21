@@ -56,7 +56,7 @@ const tokenize = (sc: string): Token[] => {
       else if (/\s/.test(c)) continue;
       else return serr(`invalid char ${c} in tokenize`);
     } else if (state === NAME) {
-      if (!/[a-z0-9\_]/i.test(c)) {
+      if (!/[\@a-z0-9\_]/i.test(c)) {
         r.push(TName(t));
         t = '', i--, state = START;
       } else t += c;
@@ -139,6 +139,7 @@ const expr = (t: Token): [Term, boolean] => {
     const x = t.name;
     if (x === '*') return [Type, false];
     if (x === '_') return [Hole, false];
+    if (x.includes('@')) return serr(`invalid name: ${x}`);
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
   }
@@ -223,14 +224,16 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       lambdaParams(c).forEach(x => args.push(x));
     }
     if (!found) return serr(`. not found after \\`);
-    const rargs: [Name, Term][] = [];
+    const rargs: [Name, Name, Term][] = [];
     args.forEach(([x, i, t]) => {
       if (i) return serr(`fix arg cannot be implicit`);
       if (!t) return serr(`fix arg must have a type annotation`);
-      return rargs.push([x, t]);
+      const self = x.includes('@') ? x.split('@')[0] : '_';
+      const y = x.includes('@') ? x.split('@')[1] : x;
+      return rargs.push([self, y, t]);
     })
     const body = exprs(ts.slice(i + 1), '(');
-    return rargs.reduceRight((x, [name, ty]) => Fix(name, ty, x), body);
+    return rargs.reduceRight((x, [self, name, ty]) => Fix(self, name, ty, x), body);
   }
   if (isName(ts[0], 'rec')) {
     const args: [Name, boolean, Term | null][] = [];

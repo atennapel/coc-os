@@ -179,8 +179,8 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   if (tm.tag === 'Fix') {
     const type = check(ts, vs, tm.type, VType);
     const vt = evaluate(type, vs);
-    const body = check(Cons([tm.name, BoundT(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, vt);
-    return [vt, Fix(tm.name, type, body)];
+    const body = check(Cons([tm.self, BoundT(evaluate(Var(tm.name), vs))], Cons([tm.name, BoundT(vt)], ts)), extendV(extendV(vs, tm.name, Nothing), tm.self, Nothing), tm.body, vt);
+    return [vt, Fix(tm.self, tm.name, type, body)];
   }
   if (tm.tag === 'Rec') {
     const type = check(ts, vs, tm.type, VType);
@@ -197,13 +197,13 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     const [ty, tme] = synth(ts, vs, tm.body);
     const fty = force(vs, ty);
     if (fty.tag !== 'VFix') return terr(`cannot unroll ${showTerm(quote(fty, vs))} in ${showTerm(tm)}`);
-    return [fty.body(fty), Unroll(tme)];
+    return [fty.body(evaluate(tme, vs), fty), Unroll(tme)];
   }
   if (tm.tag === 'Roll') {
     const type = check(ts, vs, tm.type, VType);
     const vt = evaluate(type, vs);
     if (vt.tag !== 'VFix') return terr(`cannot roll ${showTerm(quote(vt, vs))} in ${showTerm(tm)}`);
-    const tme = check(ts, vs, tm.body, vt.body(vt));
+    const tme = check(ts, vs, tm.body, vt.body(evaluate(tm.body, vs), vt));
     return [vt, Roll(type, tme)];
   }
   return terr(`cannot synth ${showTerm(tm)}`);
