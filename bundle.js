@@ -465,7 +465,7 @@ const synth = (ts, vs, tm) => {
     if (tm.tag === 'Fix') {
         const type = check(ts, vs, tm.type, vals_1.VType);
         const vt = vals_1.evaluate(type, vs);
-        const body = check(list_1.Cons([tm.self, exports.BoundT(vals_1.evaluate(syntax_1.Var(tm.name), vs))], list_1.Cons([tm.name, exports.BoundT(vt)], ts)), vals_1.extendV(vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.self, maybe_1.Nothing), tm.body, vt);
+        const body = check(list_1.Cons([tm.self, exports.BoundT(vals_1.VVar(tm.name))], list_1.Cons([tm.name, exports.BoundT(vt)], ts)), vals_1.extendV(vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.self, maybe_1.Nothing), tm.body, vt);
         return [vt, syntax_1.Fix(tm.self, tm.name, type, body)];
     }
     if (tm.tag === 'Rec') {

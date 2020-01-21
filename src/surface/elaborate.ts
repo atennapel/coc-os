@@ -179,7 +179,7 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   if (tm.tag === 'Fix') {
     const type = check(ts, vs, tm.type, VType);
     const vt = evaluate(type, vs);
-    const body = check(Cons([tm.self, BoundT(evaluate(Var(tm.name), vs))], Cons([tm.name, BoundT(vt)], ts)), extendV(extendV(vs, tm.name, Nothing), tm.self, Nothing), tm.body, vt);
+    const body = check(Cons([tm.self, BoundT(VVar(tm.name))], Cons([tm.name, BoundT(vt)], ts)), extendV(extendV(vs, tm.name, Nothing), tm.self, Nothing), tm.body, vt);
     return [vt, Fix(tm.self, tm.name, type, body)];
   }
   if (tm.tag === 'Rec') {
