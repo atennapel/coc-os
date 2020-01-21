@@ -491,7 +491,7 @@ const synth = (ts, vs, tm) => {
         const vt = vals_1.evaluate(type, vs);
         if (vt.tag !== 'VFix')
             return util_1.terr(`cannot roll ${syntax_1.showTerm(vals_1.quote(vt, vs))} in ${syntax_1.showTerm(tm)}`);
-        const tme = check(ts, vs, tm.body, vt.body(vals_1.evaluate(tm.body, vs), vt));
+        const tme = check(ts, vs, tm.body, vt.body(vt.self === '_' ? vals_1.VType : vals_1.evaluate(tm.body, vs), vt));
         return [vt, syntax_1.Roll(type, tme)];
     }
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
