@@ -201,7 +201,7 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
   }
   if (tm.tag === 'Roll') {
     const type = check(ts, vs, tm.type, VType);
-    const vt = evaluate(type, vs);
+    const vt = force(vs, evaluate(type, vs));
     if (vt.tag !== 'VFix') return terr(`cannot roll ${showTerm(quote(vt, vs))} in ${showTerm(tm)}`);
     const tme = check(ts, vs, tm.body, vt.body(vt.self === '_' ? VType : evaluate(tm.body, vs), vt));
     return [vt, Roll(type, tme)];
