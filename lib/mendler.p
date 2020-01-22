@@ -18,7 +18,7 @@ def S : Nat -> Nat = \n. inM {NatF} \z s. s n
 
 def caseNat
   : {t : *} -> Nat -> t -> (Nat -> t) -> t
-  = \n z s. outM n z s
+  = \n z s. unsafeOutM n z s
 
 def recNat
   : {t : *} -> Nat -> t -> (t -> t) -> t
