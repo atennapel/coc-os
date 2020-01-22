@@ -484,7 +484,7 @@ const synth = (ts, vs, tm) => {
         const fty = vals_1.force(vs, ty);
         if (fty.tag !== 'VFix')
             return util_1.terr(`cannot unroll ${syntax_1.showTerm(vals_1.quote(fty, vs))} in ${syntax_1.showTerm(tm)}`);
-        return [fty.body(vals_1.evaluate(tme, vs), fty), syntax_1.Unroll(tme)];
+        return [fty.body(fty.self === '_' ? vals_1.VType : vals_1.evaluate(tme, vs), fty), syntax_1.Unroll(tme)];
     }
     if (tm.tag === 'Roll') {
         const type = check(ts, vs, tm.type, vals_1.VType);
