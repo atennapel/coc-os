@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec, Iota } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec, Iota, Both } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 
@@ -18,6 +18,7 @@ export type Val
   | { tag: 'VFix', self: Name, name: Name, type: Val, body: Clos2 }
   | { tag: 'VRec', name: Name, type: Val, body: Clos }
   | { tag: 'VIota', name: Name, type: Val, body: Clos }
+  | { tag: 'VBoth', left: Val, right: Val }
   | { tag: 'VType' };
 
 export type EnvV = {
@@ -48,6 +49,8 @@ export const VRec = (name: Name, type: Val, body: Clos): Val =>
   ({ tag: 'VRec', name, type, body});
 export const VIota = (name: Name, type: Val, body: Clos): Val =>
   ({ tag: 'VIota', name, type, body});
+export const VBoth = (left: Val, right: Val): Val =>
+  ({ tag: 'VBoth', left, right});
 export const VType: Val = { tag: 'VType' };
 
 export const VVar = (name: Name): Val => VNe(HVar(name));
@@ -116,6 +119,8 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
   if (t.tag === 'Roll') return evaluate(t.body, vs);
   if (t.tag === 'Iota')
     return VIota(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
+  if (t.tag === 'Both')
+    return VBoth(evaluate(t.left, vs), evaluate(t.right, vs));
   return impossible('evaluate');
 };
 
@@ -151,6 +156,8 @@ export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
     const x = freshName(vs, v.name);
     return Iota(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
+  if (v.tag === 'VBoth')
+    return Both(quote(v.left, vs), quote(v.right, vs));
   return v;
 };
 
@@ -199,6 +206,8 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return Unroll(zonk(vs, tm.body));
   if (tm.tag === 'Roll')
     return Roll(zonk(vs, tm.type), zonk(vs, tm.body));
+  if (tm.tag === 'Both')
+    return Roll(zonk(vs, tm.left), zonk(vs, tm.right));
   return tm;
 };
 

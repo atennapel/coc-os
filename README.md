@@ -17,4 +17,5 @@ TODO:
 - Figure out self types
 - Improve type inference of annotated lambdas
 - Improve impredicative type inference
+- Solve issue with unnecessary eta-abstractions
 ```

@@ -16,7 +16,8 @@ export type Term
   | { tag: 'Unroll', body: Term }
   | { tag: 'Roll', type: Term, body: Term }
   | { tag: 'Meta', id: TMetaId }
-  | { tag: 'Iota', name: Name, type: Term, body: Term };
+  | { tag: 'Iota', name: Name, type: Term, body: Term }
+  | { tag: 'Both', left: Term, right: Term };
 
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const App = (left: Term, impl: boolean, right: Term): Term =>
@@ -44,6 +45,8 @@ export const Roll = (type: Term, body: Term): Term =>
 export const Meta = (id: TMetaId): Term => ({ tag: 'Meta', id });
 export const Iota = (name: Name, type: Term, body: Term): Term =>
   ({ tag: 'Iota', name, type, body });
+export const Both = (left: Term, right: Term): Term =>
+  ({ tag: 'Both', left, right });
 
 export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -74,6 +77,8 @@ export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'Iota')
     return `(iota (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
+  if (t.tag === 'Both')
+    return `[${showTermSimple(t.left)}, ${showTermSimple(t.right)}]`;
   return t;
 };
 
@@ -138,7 +143,9 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Roll')
     return `(roll ${showTerm(t.type)} in ${showTerm(t.body)})`;
   if (t.tag === 'Iota')
-    return `(iota (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`; 
+    return `(iota (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
+  if (t.tag === 'Both')
+    return `[${showTermSimple(t.left)}, ${showTermSimple(t.right)}]`;
   return t;
 };
 
@@ -161,6 +168,7 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Unroll') return isUnsolved(t.body);
   if (t.tag === 'Roll') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Iota') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Both') return isUnsolved(t.left) || isUnsolved(t.right);
   return t;
 };
 
@@ -183,5 +191,6 @@ export const erase = (t: Term): Term => {
   if (t.tag === 'Unroll') return erase(t.body);
   if (t.tag === 'Roll') return erase(t.body);
   if (t.tag === 'Rec') return Rec(t.name, Type, erase(t.body));
+  if (t.tag === 'Both') return erase(t.left);
   return t;
 };

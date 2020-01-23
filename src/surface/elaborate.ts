@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil, foldl } from '../list';
 import { Name } from '../names';
 import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota } from './syntax';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota, Both } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -43,6 +43,8 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
   if (t.tag === 'Unroll') return isImplicitUsed(x, t.body);
   if (t.tag === 'Rec')
     return t.name !== x && isImplicitUsed(x, t.body);
+  if (t.tag === 'Both')
+    return isImplicitUsed(x, t.left) || isImplicitUsed(x, t.right);
   return t;
 };
 
@@ -88,6 +90,12 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
     return Roll(quote(ty, vs), term);
   }
   */
+  if (ty.tag === 'VIota' && tm.tag === 'Both') {
+    const left = check(ts, vs, tm.left, ty.type);
+    const vv = evaluate(left, vs);
+    const right = check(ts, vs, tm.right, ty.body(vv));
+    return Both(left, right);
+  }
   if (tm.tag === 'Hole')
     return newMeta(ts);
   if (tm.tag === 'Open') {

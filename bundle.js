@@ -329,6 +329,8 @@ const isImplicitUsed = (x, t) => {
         return isImplicitUsed(x, t.body);
     if (t.tag === 'Rec')
         return t.name !== x && isImplicitUsed(x, t.body);
+    if (t.tag === 'Both')
+        return isImplicitUsed(x, t.left) || isImplicitUsed(x, t.right);
     return t;
 };
 const checkOpenNames = (ns) => {
@@ -373,6 +375,12 @@ const check = (ts, vs, tm, ty_) => {
       return Roll(quote(ty, vs), term);
     }
     */
+    if (ty.tag === 'VIota' && tm.tag === 'Both') {
+        const left = check(ts, vs, tm.left, ty.type);
+        const vv = vals_1.evaluate(left, vs);
+        const right = check(ts, vs, tm.right, ty.body(vv));
+        return syntax_1.Both(left, right);
+    }
     if (tm.tag === 'Hole')
         return newMeta(ts);
     if (tm.tag === 'Open') {
@@ -851,6 +859,11 @@ const exprs = (ts, br) => {
         const body = exprs(ts.slice(2), '(');
         return syntax_1.Roll(ty, body);
     }
+    if (isName(ts[0], 'both')) {
+        const [ty] = expr(ts[1]);
+        const body = exprs(ts.slice(2), '(');
+        return syntax_1.Both(ty, body);
+    }
     if (isName(ts[0], 'fix')) {
         const args = [];
         let found = false;
@@ -1076,6 +1089,7 @@ exports.Unroll = (body) => ({ tag: 'Unroll', body });
 exports.Roll = (type, body) => ({ tag: 'Roll', type, body });
 exports.Meta = (id) => ({ tag: 'Meta', id });
 exports.Iota = (name, type, body) => ({ tag: 'Iota', name, type, body });
+exports.Both = (left, right) => ({ tag: 'Both', left, right });
 exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1109,6 +1123,8 @@ exports.showTermSimple = (t) => {
         return `?${t.id}`;
     if (t.tag === 'Iota')
         return `(iota (${t.name} : ${exports.showTermSimple(t.type)}). ${exports.showTermSimple(t.body)})`;
+    if (t.tag === 'Both')
+        return `[${exports.showTermSimple(t.left)}, ${exports.showTermSimple(t.right)}]`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1174,6 +1190,8 @@ exports.showTerm = (t) => {
         return `(roll ${exports.showTerm(t.type)} in ${exports.showTerm(t.body)})`;
     if (t.tag === 'Iota')
         return `(iota (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
+    if (t.tag === 'Both')
+        return `[${exports.showTermSimple(t.left)}, ${exports.showTermSimple(t.right)}]`;
     return t;
 };
 exports.isUnsolved = (t) => {
@@ -1210,6 +1228,8 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Iota')
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
+    if (t.tag === 'Both')
+        return exports.isUnsolved(t.left) || exports.isUnsolved(t.right);
     return t;
 };
 exports.erase = (t) => {
@@ -1243,6 +1263,8 @@ exports.erase = (t) => {
         return exports.erase(t.body);
     if (t.tag === 'Rec')
         return exports.Rec(t.name, exports.Type, exports.erase(t.body));
+    if (t.tag === 'Both')
+        return exports.erase(t.left);
     return t;
 };
 
@@ -1297,6 +1319,11 @@ const checkSolution = (vs, m, spine, tm) => {
         return;
     }
     if (tm.tag === 'Fix') {
+        checkSolution(vs, m, spine, tm.type);
+        checkSolution(vs, m, list_1.Cons(tm.self, list_1.Cons(tm.name, spine)), tm.body);
+        return;
+    }
+    if (tm.tag === 'Iota') {
         checkSolution(vs, m, spine, tm.type);
         checkSolution(vs, m, list_1.Cons(tm.name, spine), tm.body);
         return;
@@ -1422,6 +1449,7 @@ exports.VPi = (name, impl, type, body) => ({ tag: 'VPi', name, impl, type, body 
 exports.VFix = (self, name, type, body) => ({ tag: 'VFix', self, name, type, body });
 exports.VRec = (name, type, body) => ({ tag: 'VRec', name, type, body });
 exports.VIota = (name, type, body) => ({ tag: 'VIota', name, type, body });
+exports.VBoth = (left, right) => ({ tag: 'VBoth', left, right });
 exports.VType = { tag: 'VType' };
 exports.VVar = (name) => exports.VNe(exports.HVar(name));
 exports.VMeta = (id) => exports.VNe(exports.HMeta(id));
@@ -1494,6 +1522,8 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
         return exports.evaluate(t.body, vs);
     if (t.tag === 'Iota')
         return exports.VIota(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
+    if (t.tag === 'Both')
+        return exports.VBoth(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = exports.emptyEnvV) => {
@@ -1525,6 +1555,8 @@ exports.quote = (v_, vs = exports.emptyEnvV) => {
         const x = exports.freshName(vs, v.name);
         return syntax_1.Iota(x, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
     }
+    if (v.tag === 'VBoth')
+        return syntax_1.Both(exports.quote(v.left, vs), exports.quote(v.right, vs));
     return v;
 };
 const zonkSpine = (vs, tm) => {
@@ -1573,6 +1605,8 @@ exports.zonk = (vs, tm) => {
         return syntax_1.Unroll(exports.zonk(vs, tm.body));
     if (tm.tag === 'Roll')
         return syntax_1.Roll(exports.zonk(vs, tm.type), exports.zonk(vs, tm.body));
+    if (tm.tag === 'Both')
+        return syntax_1.Roll(exports.zonk(vs, tm.left), exports.zonk(vs, tm.right));
     return tm;
 };
 // only use this with elaborated terms

@@ -1,5 +1,5 @@
 import { serr } from '../util'
-import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let, Fix, Unroll, Roll, Rec, Iota } from './syntax';
+import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let, Fix, Unroll, Roll, Rec, Iota, Both } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
 import { Def, DDef } from './definitions';
@@ -210,6 +210,11 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     const [ty] = expr(ts[1]);
     const body = exprs(ts.slice(2), '(');
     return Roll(ty, body);
+  }
+  if (isName(ts[0], 'both')) {
+    const [ty] = expr(ts[1]);
+    const body = exprs(ts.slice(2), '(');
+    return Both(ty, body);
   }
   if (isName(ts[0], 'fix')) {
     const args: [Name, boolean, Term | null][] = [];

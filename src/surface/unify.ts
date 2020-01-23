@@ -49,6 +49,11 @@ const checkSolution = (vs: EnvV, m: TMetaId, spine: List<Name>, tm: Term): void 
   }
   if (tm.tag === 'Fix') {
     checkSolution(vs, m, spine, tm.type);
+    checkSolution(vs, m, Cons(tm.self, Cons(tm.name, spine)), tm.body);
+    return;
+  }
+  if (tm.tag === 'Iota') {
+    checkSolution(vs, m, spine, tm.type);
     checkSolution(vs, m, Cons(tm.name, spine), tm.body);
     return;
   }
