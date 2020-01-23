@@ -14,6 +14,8 @@ yarn start lib/nat.coc
 
 ```
 TODO:
+- fst/snd for Both/Iota
+- alpha equivalence in Both/Iota
 - Figure out self types
 - Improve type inference of annotated lambdas
 - Improve impredicative type inference

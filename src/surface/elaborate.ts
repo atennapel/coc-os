@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil, foldl } from '../list';
 import { Name } from '../names';
-import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota, Both } from './syntax';
+import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV, normalize } from './vals';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota, Both, erase, eraseEq } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -94,6 +94,10 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
     const left = check(ts, vs, tm.left, ty.type);
     const vv = evaluate(left, vs);
     const right = check(ts, vs, tm.right, ty.body(vv));
+    const eleft = erase(normalize(left, vs));
+    const eright = erase(normalize(right, vs));
+    if (!eraseEq(eleft, eright))
+      return terr(`erased terms not equal in ${showTerm(tm)}: ${showTerm(eleft)} ~ ${showTerm(eright)}`);
     return Both(left, right);
   }
   if (tm.tag === 'Hole')

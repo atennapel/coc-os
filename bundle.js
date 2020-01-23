@@ -379,6 +379,10 @@ const check = (ts, vs, tm, ty_) => {
         const left = check(ts, vs, tm.left, ty.type);
         const vv = vals_1.evaluate(left, vs);
         const right = check(ts, vs, tm.right, ty.body(vv));
+        const eleft = syntax_1.erase(vals_1.normalize(left, vs));
+        const eright = syntax_1.erase(vals_1.normalize(right, vs));
+        if (!syntax_1.eraseEq(eleft, eright))
+            return util_1.terr(`erased terms not equal in ${syntax_1.showTerm(tm)}: ${syntax_1.showTerm(eleft)} ~ ${syntax_1.showTerm(eright)}`);
         return syntax_1.Both(left, right);
     }
     if (tm.tag === 'Hole')
@@ -1266,6 +1270,19 @@ exports.erase = (t) => {
     if (t.tag === 'Both')
         return exports.erase(t.left);
     return t;
+};
+exports.eraseEq = (a, b) => {
+    if (a === b)
+        return true;
+    if (a.tag === 'Type')
+        return b.tag === 'Type';
+    if (a.tag === 'Abs')
+        return b.tag === 'Abs' && a.name === b.name && exports.eraseEq(a.body, b.body);
+    if (a.tag === 'App')
+        return b.tag === 'App' && exports.eraseEq(a.left, b.left) && exports.eraseEq(a.right, b.right);
+    if (a.tag === 'Rec')
+        return b.tag === 'Rec' && a.name === b.name && exports.eraseEq(a.body, b.body);
+    return false;
 };
 
 },{}],12:[function(require,module,exports){

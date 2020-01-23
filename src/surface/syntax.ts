@@ -194,3 +194,12 @@ export const erase = (t: Term): Term => {
   if (t.tag === 'Both') return erase(t.left);
   return t;
 };
+
+export const eraseEq = (a: Term, b: Term): boolean => {
+  if (a === b) return true;
+  if (a.tag === 'Type') return b.tag === 'Type';
+  if (a.tag === 'Abs') return b.tag === 'Abs' && a.name === b.name && eraseEq(a.body, b.body);
+  if (a.tag === 'App') return b.tag === 'App' && eraseEq(a.left, b.left) && eraseEq(a.right, b.right);
+  if (a.tag === 'Rec') return b.tag === 'Rec' && a.name === b.name && eraseEq(a.body, b.body);
+  return false;
+};
