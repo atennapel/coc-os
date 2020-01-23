@@ -1276,6 +1276,12 @@ exports.eraseEq = (a, b) => {
         return true;
     if (a.tag === 'Type')
         return b.tag === 'Type';
+    if (a.tag === 'Hole')
+        return b.tag === 'Hole';
+    if (a.tag === 'Meta')
+        return b.tag === 'Meta' && a.id === b.id;
+    if (a.tag === 'Var')
+        return b.tag === 'Var' && a.name === b.name;
     if (a.tag === 'Abs')
         return b.tag === 'Abs' && a.name === b.name && exports.eraseEq(a.body, b.body);
     if (a.tag === 'App')
