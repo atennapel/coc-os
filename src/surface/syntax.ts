@@ -15,7 +15,8 @@ export type Term
   | { tag: 'Open', names: Name[], body: Term }
   | { tag: 'Unroll', body: Term }
   | { tag: 'Roll', type: Term, body: Term }
-  | { tag: 'Meta', id: TMetaId };
+  | { tag: 'Meta', id: TMetaId }
+  | { tag: 'Iota', name: Name, type: Term, body: Term };
 
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const App = (left: Term, impl: boolean, right: Term): Term =>
@@ -41,6 +42,8 @@ export const Unroll = (body: Term): Term =>
 export const Roll = (type: Term, body: Term): Term =>
   ({ tag: 'Roll', type, body });
 export const Meta = (id: TMetaId): Term => ({ tag: 'Meta', id });
+export const Iota = (name: Name, type: Term, body: Term): Term =>
+  ({ tag: 'Iota', name, type, body });
 
 export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -69,6 +72,8 @@ export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Roll')
     return `(roll ${showTermSimple(t.type)} in ${showTermSimple(t.body)})`;
   if (t.tag === 'Meta') return `?${t.id}`;
+  if (t.tag === 'Iota')
+    return `(iota (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
   return t;
 };
 
@@ -132,6 +137,8 @@ export const showTerm = (t: Term): string => {
     return `(unroll ${showTerm(t.body)})`;
   if (t.tag === 'Roll')
     return `(roll ${showTerm(t.type)} in ${showTerm(t.body)})`;
+  if (t.tag === 'Iota')
+    return `(iota (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`; 
   return t;
 };
 
@@ -153,6 +160,7 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Open') return isUnsolved(t.body);
   if (t.tag === 'Unroll') return isUnsolved(t.body);
   if (t.tag === 'Roll') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Iota') return isUnsolved(t.type) || isUnsolved(t.body);
   return t;
 };
 
@@ -167,6 +175,7 @@ export const erase = (t: Term): Term => {
     return t.impl ? erase(t.body) : Abs(t.name, t.impl, null, erase(t.body));
   if (t.tag === 'Pi') return Type;
   if (t.tag === 'Fix') return Type;
+  if (t.tag === 'Iota') return Type;
   if (t.tag === 'Let')
     return t.impl ? erase(t.body) : Let(t.name, t.impl, erase(t.val), erase(t.body));
   if (t.tag === 'Ann') return erase(t.term);

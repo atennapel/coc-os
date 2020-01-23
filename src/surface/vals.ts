@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec, Iota } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 
@@ -17,6 +17,7 @@ export type Val
   | { tag: 'VPi', name: Name, impl: boolean, type: Val, body: Clos }
   | { tag: 'VFix', self: Name, name: Name, type: Val, body: Clos2 }
   | { tag: 'VRec', name: Name, type: Val, body: Clos }
+  | { tag: 'VIota', name: Name, type: Val, body: Clos }
   | { tag: 'VType' };
 
 export type EnvV = {
@@ -45,6 +46,8 @@ export const VFix = (self: Name, name: Name, type: Val, body: Clos2): Val =>
   ({ tag: 'VFix', self, name, type, body});
 export const VRec = (name: Name, type: Val, body: Clos): Val =>
   ({ tag: 'VRec', name, type, body});
+export const VIota = (name: Name, type: Val, body: Clos): Val =>
+  ({ tag: 'VIota', name, type, body});
 export const VType: Val = { tag: 'VType' };
 
 export const VVar = (name: Name): Val => VNe(HVar(name));
@@ -111,6 +114,8 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
     return evaluate(t.body, openV(vs, t.names));
   if (t.tag === 'Unroll') return evaluate(t.body, vs);
   if (t.tag === 'Roll') return evaluate(t.body, vs);
+  if (t.tag === 'Iota')
+    return VIota(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   return impossible('evaluate');
 };
 
@@ -142,6 +147,10 @@ export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
     const x = freshName(vs, v.name);
     return Rec(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
   }
+  if (v.tag === 'VIota') {
+    const x = freshName(vs, v.name);
+    return Iota(x, quote(v.type, vs), quote(v.body(VVar(x)), extendV(vs, x, Nothing)));
+  }
   return v;
 };
 
@@ -171,6 +180,8 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return Fix(tm.self, tm.name, zonk(vs, tm.type), zonk(extendV(extendV(vs, tm.name, Nothing), tm.self, Nothing), tm.body));
   if (tm.tag === 'Rec')
     return Rec(tm.name, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
+  if (tm.tag === 'Iota')
+    return Iota(tm.name, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Abs')
     return Abs(tm.name, tm.impl, tm.type ? zonk(vs, tm.type) : null, zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Let')

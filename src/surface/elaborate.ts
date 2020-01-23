@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil, foldl } from '../list';
 import { Name } from '../names';
 import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec } from './syntax';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -38,6 +38,7 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
   if (t.tag === 'Type') return false;
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
+  if (t.tag === 'Iota') return false;
   if (t.tag === 'Roll') return isImplicitUsed(x, t.body);
   if (t.tag === 'Unroll') return isImplicitUsed(x, t.body);
   if (t.tag === 'Rec')
@@ -187,6 +188,12 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     const vt = evaluate(type, vs);
     const body = check(Cons([tm.name, BoundT(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, vt);
     return [vt, Rec(tm.name, type, body)];
+  }
+  if (tm.tag === 'Iota') {
+    const type = check(ts, vs, tm.type, VType);
+    const vt = evaluate(type, vs);
+    const body = check(Cons([tm.name, BoundT(vt)], ts), extendV(vs, tm.name, Nothing), tm.body, VType);
+    return [VType, Iota(tm.name, type, body)];
   }
   if (tm.tag === 'Open') {
     checkOpenNames(tm.names);

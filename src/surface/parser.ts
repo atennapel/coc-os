@@ -1,5 +1,5 @@
 import { serr } from '../util'
-import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let, Fix, Unroll, Roll, Rec } from './syntax';
+import { Term, Var, App, Hole, Type, Abs, Pi, Ann, Open, Let, Fix, Unroll, Roll, Rec, Iota } from './syntax';
 import { log } from '../config';
 import { Name } from '../names';
 import { Def, DDef } from './definitions';
@@ -223,7 +223,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       }
       lambdaParams(c).forEach(x => args.push(x));
     }
-    if (!found) return serr(`. not found after \\`);
+    if (!found) return serr(`. not found after fix`);
     const rargs: [Name, Name, Term][] = [];
     args.forEach(([x, i, t]) => {
       if (i) return serr(`fix arg cannot be implicit`);
@@ -247,7 +247,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       }
       lambdaParams(c).forEach(x => args.push(x));
     }
-    if (!found) return serr(`. not found after \\`);
+    if (!found) return serr(`. not found after rec`);
     const rargs: [Name, Term][] = [];
     args.forEach(([x, i, t]) => {
       if (i) return serr(`rec arg cannot be implicit`);
@@ -256,6 +256,28 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     })
     const body = exprs(ts.slice(i + 1), '(');
     return rargs.reduceRight((x, [name, ty]) => Rec(name, ty, x), body);
+  }
+  if (isName(ts[0], 'iota')) {
+    const args: [Name, boolean, Term | null][] = [];
+    let found = false;
+    let i = 1;
+    for (; i < ts.length; i++) {
+      const c = ts[i];
+      if (isName(c, '.')) {
+        found = true;
+        break;
+      }
+      lambdaParams(c).forEach(x => args.push(x));
+    }
+    if (!found) return serr(`. not found after iota`);
+    const rargs: [Name, Term][] = [];
+    args.forEach(([x, i, t]) => {
+      if (i) return serr(`iota arg cannot be implicit`);
+      if (!t) return serr(`iota arg must have a type annotation`);
+      return rargs.push([x, t]);
+    })
+    const body = exprs(ts.slice(i + 1), '(');
+    return rargs.reduceRight((x, [name, ty]) => Iota(name, ty, x), body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

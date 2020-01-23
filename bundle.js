@@ -321,6 +321,8 @@ const isImplicitUsed = (x, t) => {
         return false;
     if (t.tag === 'Fix')
         return false;
+    if (t.tag === 'Iota')
+        return false;
     if (t.tag === 'Roll')
         return isImplicitUsed(x, t.body);
     if (t.tag === 'Unroll')
@@ -473,6 +475,12 @@ const synth = (ts, vs, tm) => {
         const vt = vals_1.evaluate(type, vs);
         const body = check(list_1.Cons([tm.name, exports.BoundT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.body, vt);
         return [vt, syntax_1.Rec(tm.name, type, body)];
+    }
+    if (tm.tag === 'Iota') {
+        const type = check(ts, vs, tm.type, vals_1.VType);
+        const vt = vals_1.evaluate(type, vs);
+        const body = check(list_1.Cons([tm.name, exports.BoundT(vt)], ts), vals_1.extendV(vs, tm.name, maybe_1.Nothing), tm.body, vals_1.VType);
+        return [vals_1.VType, syntax_1.Iota(tm.name, type, body)];
     }
     if (tm.tag === 'Open') {
         checkOpenNames(tm.names);
@@ -856,7 +864,7 @@ const exprs = (ts, br) => {
             lambdaParams(c).forEach(x => args.push(x));
         }
         if (!found)
-            return util_1.serr(`. not found after \\`);
+            return util_1.serr(`. not found after fix`);
         const rargs = [];
         args.forEach(([x, i, t]) => {
             if (i)
@@ -883,7 +891,7 @@ const exprs = (ts, br) => {
             lambdaParams(c).forEach(x => args.push(x));
         }
         if (!found)
-            return util_1.serr(`. not found after \\`);
+            return util_1.serr(`. not found after rec`);
         const rargs = [];
         args.forEach(([x, i, t]) => {
             if (i)
@@ -894,6 +902,31 @@ const exprs = (ts, br) => {
         });
         const body = exprs(ts.slice(i + 1), '(');
         return rargs.reduceRight((x, [name, ty]) => syntax_1.Rec(name, ty, x), body);
+    }
+    if (isName(ts[0], 'iota')) {
+        const args = [];
+        let found = false;
+        let i = 1;
+        for (; i < ts.length; i++) {
+            const c = ts[i];
+            if (isName(c, '.')) {
+                found = true;
+                break;
+            }
+            lambdaParams(c).forEach(x => args.push(x));
+        }
+        if (!found)
+            return util_1.serr(`. not found after iota`);
+        const rargs = [];
+        args.forEach(([x, i, t]) => {
+            if (i)
+                return util_1.serr(`iota arg cannot be implicit`);
+            if (!t)
+                return util_1.serr(`iota arg must have a type annotation`);
+            return rargs.push([x, t]);
+        });
+        const body = exprs(ts.slice(i + 1), '(');
+        return rargs.reduceRight((x, [name, ty]) => syntax_1.Iota(name, ty, x), body);
     }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
@@ -1042,6 +1075,7 @@ exports.Open = (names, body) => ({ tag: 'Open', names, body });
 exports.Unroll = (body) => ({ tag: 'Unroll', body });
 exports.Roll = (type, body) => ({ tag: 'Roll', type, body });
 exports.Meta = (id) => ({ tag: 'Meta', id });
+exports.Iota = (name, type, body) => ({ tag: 'Iota', name, type, body });
 exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1073,6 +1107,8 @@ exports.showTermSimple = (t) => {
         return `(roll ${exports.showTermSimple(t.type)} in ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Meta')
         return `?${t.id}`;
+    if (t.tag === 'Iota')
+        return `(iota (${t.name} : ${exports.showTermSimple(t.type)}). ${exports.showTermSimple(t.body)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1136,6 +1172,8 @@ exports.showTerm = (t) => {
         return `(unroll ${exports.showTerm(t.body)})`;
     if (t.tag === 'Roll')
         return `(roll ${exports.showTerm(t.type)} in ${exports.showTerm(t.body)})`;
+    if (t.tag === 'Iota')
+        return `(iota (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
     return t;
 };
 exports.isUnsolved = (t) => {
@@ -1170,6 +1208,8 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.body);
     if (t.tag === 'Roll')
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
+    if (t.tag === 'Iota')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     return t;
 };
 exports.erase = (t) => {
@@ -1188,6 +1228,8 @@ exports.erase = (t) => {
     if (t.tag === 'Pi')
         return exports.Type;
     if (t.tag === 'Fix')
+        return exports.Type;
+    if (t.tag === 'Iota')
         return exports.Type;
     if (t.tag === 'Let')
         return t.impl ? exports.erase(t.body) : exports.Let(t.name, t.impl, exports.erase(t.val), exports.erase(t.body));
@@ -1313,6 +1355,13 @@ exports.unify = (vs, a_, b_) => {
         exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), b.body(vx));
         return;
     }
+    if (a.tag === 'VIota' && b.tag === 'VIota') {
+        exports.unify(vs, a.type, b.type);
+        const x = vals_1.freshName(vs, a.name);
+        const vx = vals_1.VVar(x);
+        exports.unify(vals_1.extendV(vs, x, maybe_1.Nothing), a.body(vx), b.body(vx));
+        return;
+    }
     if (a.tag === 'VAbs' && b.tag !== 'VAbs') {
         const x = vals_1.freshName(vs, a.name);
         const vx = vals_1.VVar(x);
@@ -1372,6 +1421,7 @@ exports.VAbs = (name, impl, type, body) => ({ tag: 'VAbs', name, impl, type, bod
 exports.VPi = (name, impl, type, body) => ({ tag: 'VPi', name, impl, type, body });
 exports.VFix = (self, name, type, body) => ({ tag: 'VFix', self, name, type, body });
 exports.VRec = (name, type, body) => ({ tag: 'VRec', name, type, body });
+exports.VIota = (name, type, body) => ({ tag: 'VIota', name, type, body });
 exports.VType = { tag: 'VType' };
 exports.VVar = (name) => exports.VNe(exports.HVar(name));
 exports.VMeta = (id) => exports.VNe(exports.HMeta(id));
@@ -1442,6 +1492,8 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
         return exports.evaluate(t.body, vs);
     if (t.tag === 'Roll')
         return exports.evaluate(t.body, vs);
+    if (t.tag === 'Iota')
+        return exports.VIota(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = exports.emptyEnvV) => {
@@ -1468,6 +1520,10 @@ exports.quote = (v_, vs = exports.emptyEnvV) => {
     if (v.tag === 'VRec') {
         const x = exports.freshName(vs, v.name);
         return syntax_1.Rec(x, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
+    }
+    if (v.tag === 'VIota') {
+        const x = exports.freshName(vs, v.name);
+        return syntax_1.Iota(x, exports.quote(v.type, vs), exports.quote(v.body(exports.VVar(x)), exports.extendV(vs, x, maybe_1.Nothing)));
     }
     return v;
 };
@@ -1497,6 +1553,8 @@ exports.zonk = (vs, tm) => {
         return syntax_1.Fix(tm.self, tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.self, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Rec')
         return syntax_1.Rec(tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
+    if (tm.tag === 'Iota')
+        return syntax_1.Iota(tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Abs')
         return syntax_1.Abs(tm.name, tm.impl, tm.type ? exports.zonk(vs, tm.type) : null, exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Let')
