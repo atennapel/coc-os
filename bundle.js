@@ -1610,8 +1610,11 @@ exports.zonk = (vs, tm) => {
         return syntax_1.Rec(tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Iota')
         return syntax_1.Iota(tm.name, exports.zonk(vs, tm.type), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
-    if (tm.tag === 'Abs')
-        return syntax_1.Abs(tm.name, tm.impl, tm.type ? exports.zonk(vs, tm.type) : null, exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
+    if (tm.tag === 'Abs') {
+        const term = exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body);
+        const abs = syntax_1.Abs(tm.name, tm.impl, tm.type ? exports.zonk(vs, tm.type) : null, term);
+        return tm.impl && term.tag === 'App' && term.impl && term.right.tag === 'Var' && term.right.name === tm.name ? term.left : abs;
+    }
     if (tm.tag === 'Let')
         return syntax_1.Let(tm.name, tm.impl, exports.zonk(vs, tm.val), exports.zonk(exports.extendV(vs, tm.name, maybe_1.Nothing), tm.body));
     if (tm.tag === 'Ann')

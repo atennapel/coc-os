@@ -189,8 +189,11 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return Rec(tm.name, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Iota')
     return Iota(tm.name, zonk(vs, tm.type), zonk(extendV(vs, tm.name, Nothing), tm.body));
-  if (tm.tag === 'Abs')
-    return Abs(tm.name, tm.impl, tm.type ? zonk(vs, tm.type) : null, zonk(extendV(vs, tm.name, Nothing), tm.body));
+  if (tm.tag === 'Abs') {
+    const term = zonk(extendV(vs, tm.name, Nothing), tm.body);
+    const abs = Abs(tm.name, tm.impl, tm.type ? zonk(vs, tm.type) : null, term);
+    return tm.impl && term.tag === 'App' && term.impl && term.right.tag === 'Var' && term.right.name === tm.name ? term.left : abs;
+  }
   if (tm.tag === 'Let')
     return Let(tm.name, tm.impl, zonk(vs, tm.val), zonk(extendV(vs, tm.name, Nothing), tm.body));
   if (tm.tag === 'Ann') return Ann(zonk(vs, tm.term), tm.type);
