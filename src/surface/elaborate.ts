@@ -47,6 +47,7 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
     return isImplicitUsed(x, t.left) || isImplicitUsed(x, t.right);
   if (t.tag === 'Fst') return isImplicitUsed(x, t.term);
   if (t.tag === 'Snd') return isImplicitUsed(x, t.term);
+  if (t.tag === 'Rigid') return isImplicitUsed(x, t.term);
   return t;
 };
 
@@ -71,6 +72,11 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
 const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
   const ty = force(vs, ty_);
   log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, vs))} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
+  if (tm.tag === 'Rigid') {
+    const [ty2, term] = synth(ts, vs, tm.term);
+    unify(vs, ty2, ty);
+    return term;
+  }
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
     if (tm.impl && isImplicitUsed(tm.name, tm.body))
@@ -239,6 +245,7 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     if (fty.tag !== 'VIota') return terr(`invalid ${showTerm(tm)}: ${showTerm(quote(fty, vs))}`);
     return [fty.body(evaluate(Fst(tme), vs)), Snd(tme)];
   }
+  if (tm.tag === 'Rigid') return synth(ts, vs, tm.term);
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 

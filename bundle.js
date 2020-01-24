@@ -335,6 +335,8 @@ const isImplicitUsed = (x, t) => {
         return isImplicitUsed(x, t.term);
     if (t.tag === 'Snd')
         return isImplicitUsed(x, t.term);
+    if (t.tag === 'Rigid')
+        return isImplicitUsed(x, t.term);
     return t;
 };
 const checkOpenNames = (ns) => {
@@ -357,6 +359,11 @@ const inst = (ts, vs, ty_) => {
 const check = (ts, vs, tm, ty_) => {
     const ty = vals_1.force(vs, ty_);
     config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(vals_1.quote(ty, vs))} in ${exports.showEnvT(ts, vs)} and ${vals_1.showEnvV(vs)}`);
+    if (tm.tag === 'Rigid') {
+        const [ty2, term] = synth(ts, vs, tm.term);
+        unify_1.unify(vs, ty2, ty);
+        return term;
+    }
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return syntax_1.Type;
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
@@ -532,6 +539,8 @@ const synth = (ts, vs, tm) => {
             return util_1.terr(`invalid ${syntax_1.showTerm(tm)}: ${syntax_1.showTerm(vals_1.quote(fty, vs))}`);
         return [fty.body(vals_1.evaluate(syntax_1.Fst(tme), vs)), syntax_1.Snd(tme)];
     }
+    if (tm.tag === 'Rigid')
+        return synth(ts, vs, tm.term);
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
 };
 const synthapp = (ts, vs, ty_, impl, arg) => {
@@ -894,6 +903,10 @@ const exprs = (ts, br) => {
         const body = exprs(ts.slice(1), '(');
         return syntax_1.Snd(body);
     }
+    if (isName(ts[0], 'rigid')) {
+        const body = exprs(ts.slice(1), '(');
+        return syntax_1.Rigid(body);
+    }
     if (isName(ts[0], 'fix')) {
         const args = [];
         let found = false;
@@ -1122,6 +1135,7 @@ exports.Iota = (name, type, body) => ({ tag: 'Iota', name, type, body });
 exports.Both = (left, right) => ({ tag: 'Both', left, right });
 exports.Fst = (term) => ({ tag: 'Fst', term });
 exports.Snd = (term) => ({ tag: 'Snd', term });
+exports.Rigid = (term) => ({ tag: 'Rigid', term });
 exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1161,6 +1175,8 @@ exports.showTermSimple = (t) => {
         return `(fst ${exports.showTermSimple(t.term)})`;
     if (t.tag === 'Snd')
         return `(snd ${exports.showTermSimple(t.term)})`;
+    if (t.tag === 'Rigid')
+        return `(rigid ${exports.showTermSimple(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1232,6 +1248,8 @@ exports.showTerm = (t) => {
         return `(fst ${exports.showTerm(t.term)})`;
     if (t.tag === 'Snd')
         return `(snd ${exports.showTerm(t.term)})`;
+    if (t.tag === 'Rigid')
+        return `(rigid ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.isUnsolved = (t) => {
@@ -1274,6 +1292,8 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.term);
     if (t.tag === 'Snd')
         return exports.isUnsolved(t.term);
+    if (t.tag === 'Rigid')
+        return exports.isUnsolved(t.term);
     return t;
 };
 exports.erase = (t) => {
@@ -1312,6 +1332,8 @@ exports.erase = (t) => {
     if (t.tag === 'Fst')
         return exports.erase(t.term);
     if (t.tag === 'Snd')
+        return exports.erase(t.term);
+    if (t.tag === 'Rigid')
         return exports.erase(t.term);
     return t;
 };
@@ -1607,6 +1629,8 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
         return exports.vfst(exports.evaluate(t.term, vs));
     if (t.tag === 'Snd')
         return exports.vsnd(exports.evaluate(t.term, vs));
+    if (t.tag === 'Rigid')
+        return exports.evaluate(t.term, vs);
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = exports.emptyEnvV) => {
@@ -1705,6 +1729,8 @@ exports.zonk = (vs, tm) => {
         const b = exports.zonk(vs, tm.term);
         return b.tag === 'Both' ? b.right : syntax_1.Snd(b);
     }
+    if (tm.tag === 'Rigid')
+        return syntax_1.Rigid(exports.zonk(vs, tm.term));
     return tm;
 };
 // only use this with elaborated terms

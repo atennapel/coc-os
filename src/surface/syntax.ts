@@ -19,7 +19,8 @@ export type Term
   | { tag: 'Iota', name: Name, type: Term, body: Term }
   | { tag: 'Both', left: Term, right: Term }
   | { tag: 'Fst', term: Term }
-  | { tag: 'Snd', term: Term };
+  | { tag: 'Snd', term: Term }
+  | { tag: 'Rigid', term: Term };
 
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const App = (left: Term, impl: boolean, right: Term): Term =>
@@ -53,6 +54,8 @@ export const Fst = (term: Term): Term =>
   ({ tag: 'Fst', term });
 export const Snd = (term: Term): Term =>
   ({ tag: 'Snd', term });
+export const Rigid = (term: Term): Term =>
+  ({ tag: 'Rigid', term });
 
 export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -87,6 +90,7 @@ export const showTermSimple = (t: Term): string => {
     return `[${showTermSimple(t.left)}, ${showTermSimple(t.right)}]`;
   if (t.tag === 'Fst') return `(fst ${showTermSimple(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTermSimple(t.term)})`;
+  if (t.tag === 'Rigid') return `(rigid ${showTermSimple(t.term)})`;
   return t;
 };
 
@@ -156,6 +160,7 @@ export const showTerm = (t: Term): string => {
     return `[${showTerm(t.left)}, ${showTerm(t.right)}]`;
   if (t.tag === 'Fst') return `(fst ${showTerm(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTerm(t.term)})`;
+  if (t.tag === 'Rigid') return `(rigid ${showTerm(t.term)})`;
   return t;
 };
 
@@ -181,6 +186,7 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Both') return isUnsolved(t.left) || isUnsolved(t.right);
   if (t.tag === 'Fst') return isUnsolved(t.term);
   if (t.tag === 'Snd') return isUnsolved(t.term);
+  if (t.tag === 'Rigid') return isUnsolved(t.term);
   return t;
 };
 
@@ -206,6 +212,7 @@ export const erase = (t: Term): Term => {
   if (t.tag === 'Both') return erase(t.left);
   if (t.tag === 'Fst') return erase(t.term);
   if (t.tag === 'Snd') return erase(t.term);
+  if (t.tag === 'Rigid') return erase(t.term);
   return t;
 };
 
