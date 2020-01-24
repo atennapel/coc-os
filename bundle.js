@@ -1720,7 +1720,7 @@ exports.zonk = (vs, tm) => {
     if (tm.tag === 'Roll')
         return syntax_1.Roll(exports.zonk(vs, tm.type), exports.zonk(vs, tm.body));
     if (tm.tag === 'Both')
-        return syntax_1.Roll(exports.zonk(vs, tm.left), exports.zonk(vs, tm.right));
+        return syntax_1.Both(exports.zonk(vs, tm.left), exports.zonk(vs, tm.right));
     if (tm.tag === 'Fst') {
         const b = exports.zonk(vs, tm.term);
         return b.tag === 'Both' ? b.left : syntax_1.Fst(b);

@@ -227,7 +227,7 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
   if (tm.tag === 'Roll')
     return Roll(zonk(vs, tm.type), zonk(vs, tm.body));
   if (tm.tag === 'Both')
-    return Roll(zonk(vs, tm.left), zonk(vs, tm.right));
+    return Both(zonk(vs, tm.left), zonk(vs, tm.right));
   if (tm.tag === 'Fst') {
     const b = zonk(vs, tm.term);
     return b.tag === 'Both' ? b.left : Fst(b);
