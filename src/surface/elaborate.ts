@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil, foldl } from '../list';
 import { Name } from '../names';
 import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV, normalize } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota, Both, erase, eraseEq } from './syntax';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota, Both, erase, eraseEq, Fst, Snd } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -45,6 +45,8 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
     return t.name !== x && isImplicitUsed(x, t.body);
   if (t.tag === 'Both')
     return isImplicitUsed(x, t.left) || isImplicitUsed(x, t.right);
+  if (t.tag === 'Fst') return isImplicitUsed(x, t.term);
+  if (t.tag === 'Snd') return isImplicitUsed(x, t.term);
   return t;
 };
 
@@ -224,6 +226,18 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     if (vt.tag !== 'VFix') return terr(`cannot roll ${showTerm(quote(vt, vs))} in ${showTerm(tm)}`);
     const tme = check(ts, vs, tm.body, vt.body(vt.self === '_' ? VType : evaluate(tm.body, vs), vt));
     return [vt, Roll(type, tme)];
+  }
+  if (tm.tag === 'Fst') {
+    const [ty, tme] = synth(ts, vs, tm.term);
+    const fty = force(vs, ty);
+    if (fty.tag !== 'VIota') return terr(`invalid ${showTerm(tm)}: ${showTerm(quote(fty, vs))}`);
+    return [fty.type, Fst(tme)];
+  }
+  if (tm.tag === 'Snd') {
+    const [ty, tme] = synth(ts, vs, tm.term);
+    const fty = force(vs, ty);
+    if (fty.tag !== 'VIota') return terr(`invalid ${showTerm(tm)}: ${showTerm(quote(fty, vs))}`);
+    return [fty.body(evaluate(Fst(tme), vs)), Snd(tme)];
   }
   return terr(`cannot synth ${showTerm(tm)}`);
 };

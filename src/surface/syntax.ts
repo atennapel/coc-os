@@ -17,7 +17,9 @@ export type Term
   | { tag: 'Roll', type: Term, body: Term }
   | { tag: 'Meta', id: TMetaId }
   | { tag: 'Iota', name: Name, type: Term, body: Term }
-  | { tag: 'Both', left: Term, right: Term };
+  | { tag: 'Both', left: Term, right: Term }
+  | { tag: 'Fst', term: Term }
+  | { tag: 'Snd', term: Term };
 
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const App = (left: Term, impl: boolean, right: Term): Term =>
@@ -47,6 +49,10 @@ export const Iota = (name: Name, type: Term, body: Term): Term =>
   ({ tag: 'Iota', name, type, body });
 export const Both = (left: Term, right: Term): Term =>
   ({ tag: 'Both', left, right });
+export const Fst = (term: Term): Term =>
+  ({ tag: 'Fst', term });
+export const Snd = (term: Term): Term =>
+  ({ tag: 'Snd', term });
 
 export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -79,6 +85,8 @@ export const showTermSimple = (t: Term): string => {
     return `(iota (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
   if (t.tag === 'Both')
     return `[${showTermSimple(t.left)}, ${showTermSimple(t.right)}]`;
+  if (t.tag === 'Fst') return `(fst ${showTermSimple(t.term)})`;
+  if (t.tag === 'Snd') return `(snd ${showTermSimple(t.term)})`;
   return t;
 };
 
@@ -145,7 +153,9 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Iota')
     return `(iota (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Both')
-    return `[${showTermSimple(t.left)}, ${showTermSimple(t.right)}]`;
+    return `[${showTerm(t.left)}, ${showTerm(t.right)}]`;
+  if (t.tag === 'Fst') return `(fst ${showTerm(t.term)})`;
+  if (t.tag === 'Snd') return `(snd ${showTerm(t.term)})`;
   return t;
 };
 
@@ -169,6 +179,8 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Roll') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Iota') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Both') return isUnsolved(t.left) || isUnsolved(t.right);
+  if (t.tag === 'Fst') return isUnsolved(t.term);
+  if (t.tag === 'Snd') return isUnsolved(t.term);
   return t;
 };
 
@@ -192,6 +204,8 @@ export const erase = (t: Term): Term => {
   if (t.tag === 'Roll') return erase(t.body);
   if (t.tag === 'Rec') return Rec(t.name, Type, erase(t.body));
   if (t.tag === 'Both') return erase(t.left);
+  if (t.tag === 'Fst') return erase(t.term);
+  if (t.tag === 'Snd') return erase(t.term);
   return t;
 };
 

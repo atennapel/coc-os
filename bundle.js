@@ -331,6 +331,10 @@ const isImplicitUsed = (x, t) => {
         return t.name !== x && isImplicitUsed(x, t.body);
     if (t.tag === 'Both')
         return isImplicitUsed(x, t.left) || isImplicitUsed(x, t.right);
+    if (t.tag === 'Fst')
+        return isImplicitUsed(x, t.term);
+    if (t.tag === 'Snd')
+        return isImplicitUsed(x, t.term);
     return t;
 };
 const checkOpenNames = (ns) => {
@@ -513,6 +517,20 @@ const synth = (ts, vs, tm) => {
             return util_1.terr(`cannot roll ${syntax_1.showTerm(vals_1.quote(vt, vs))} in ${syntax_1.showTerm(tm)}`);
         const tme = check(ts, vs, tm.body, vt.body(vt.self === '_' ? vals_1.VType : vals_1.evaluate(tm.body, vs), vt));
         return [vt, syntax_1.Roll(type, tme)];
+    }
+    if (tm.tag === 'Fst') {
+        const [ty, tme] = synth(ts, vs, tm.term);
+        const fty = vals_1.force(vs, ty);
+        if (fty.tag !== 'VIota')
+            return util_1.terr(`invalid ${syntax_1.showTerm(tm)}: ${syntax_1.showTerm(vals_1.quote(fty, vs))}`);
+        return [fty.type, syntax_1.Fst(tme)];
+    }
+    if (tm.tag === 'Snd') {
+        const [ty, tme] = synth(ts, vs, tm.term);
+        const fty = vals_1.force(vs, ty);
+        if (fty.tag !== 'VIota')
+            return util_1.terr(`invalid ${syntax_1.showTerm(tm)}: ${syntax_1.showTerm(vals_1.quote(fty, vs))}`);
+        return [fty.body(vals_1.evaluate(syntax_1.Fst(tme), vs)), syntax_1.Snd(tme)];
     }
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
 };
@@ -868,6 +886,14 @@ const exprs = (ts, br) => {
         const body = exprs(ts.slice(2), '(');
         return syntax_1.Both(ty, body);
     }
+    if (isName(ts[0], 'fst')) {
+        const body = exprs(ts.slice(1), '(');
+        return syntax_1.Fst(body);
+    }
+    if (isName(ts[0], 'snd')) {
+        const body = exprs(ts.slice(1), '(');
+        return syntax_1.Snd(body);
+    }
     if (isName(ts[0], 'fix')) {
         const args = [];
         let found = false;
@@ -1094,6 +1120,8 @@ exports.Roll = (type, body) => ({ tag: 'Roll', type, body });
 exports.Meta = (id) => ({ tag: 'Meta', id });
 exports.Iota = (name, type, body) => ({ tag: 'Iota', name, type, body });
 exports.Both = (left, right) => ({ tag: 'Both', left, right });
+exports.Fst = (term) => ({ tag: 'Fst', term });
+exports.Snd = (term) => ({ tag: 'Snd', term });
 exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1129,6 +1157,10 @@ exports.showTermSimple = (t) => {
         return `(iota (${t.name} : ${exports.showTermSimple(t.type)}). ${exports.showTermSimple(t.body)})`;
     if (t.tag === 'Both')
         return `[${exports.showTermSimple(t.left)}, ${exports.showTermSimple(t.right)}]`;
+    if (t.tag === 'Fst')
+        return `(fst ${exports.showTermSimple(t.term)})`;
+    if (t.tag === 'Snd')
+        return `(snd ${exports.showTermSimple(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1195,7 +1227,11 @@ exports.showTerm = (t) => {
     if (t.tag === 'Iota')
         return `(iota (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
     if (t.tag === 'Both')
-        return `[${exports.showTermSimple(t.left)}, ${exports.showTermSimple(t.right)}]`;
+        return `[${exports.showTerm(t.left)}, ${exports.showTerm(t.right)}]`;
+    if (t.tag === 'Fst')
+        return `(fst ${exports.showTerm(t.term)})`;
+    if (t.tag === 'Snd')
+        return `(snd ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.isUnsolved = (t) => {
@@ -1234,6 +1270,10 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Both')
         return exports.isUnsolved(t.left) || exports.isUnsolved(t.right);
+    if (t.tag === 'Fst')
+        return exports.isUnsolved(t.term);
+    if (t.tag === 'Snd')
+        return exports.isUnsolved(t.term);
     return t;
 };
 exports.erase = (t) => {
@@ -1269,6 +1309,10 @@ exports.erase = (t) => {
         return exports.Rec(t.name, exports.Type, exports.erase(t.body));
     if (t.tag === 'Both')
         return exports.erase(t.left);
+    if (t.tag === 'Fst')
+        return exports.erase(t.term);
+    if (t.tag === 'Snd')
+        return exports.erase(t.term);
     return t;
 };
 exports.eraseEq = (a, b) => {
@@ -1474,6 +1518,8 @@ exports.VRec = (name, type, body) => ({ tag: 'VRec', name, type, body });
 exports.VIota = (name, type, body) => ({ tag: 'VIota', name, type, body });
 exports.VBoth = (left, right) => ({ tag: 'VBoth', left, right });
 exports.VType = { tag: 'VType' };
+exports.VFst = (val) => ({ tag: 'VFst', val });
+exports.VSnd = (val) => ({ tag: 'VSnd', val });
 exports.VVar = (name) => exports.VNe(exports.HVar(name));
 exports.VMeta = (id) => exports.VNe(exports.HMeta(id));
 exports.force = (vs, v) => {
@@ -1507,6 +1553,16 @@ exports.vapp = (a, impl, b) => {
     if (a.tag === 'VNe')
         return exports.VNe(a.head, list_1.Cons([impl, b], a.args));
     return util_1.impossible('vapp');
+};
+exports.vfst = (a) => {
+    if (a.tag === 'VBoth')
+        return a.left;
+    return exports.VFst(a);
+};
+exports.vsnd = (a) => {
+    if (a.tag === 'VBoth')
+        return a.right;
+    return exports.VSnd(a);
 };
 exports.evaluate = (t, vs = exports.emptyEnvV) => {
     if (t.tag === 'Type')
@@ -1547,6 +1603,10 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
         return exports.VIota(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, t.name, maybe_1.Just(v))));
     if (t.tag === 'Both')
         return exports.VBoth(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
+    if (t.tag === 'Fst')
+        return exports.vfst(exports.evaluate(t.term, vs));
+    if (t.tag === 'Snd')
+        return exports.vsnd(exports.evaluate(t.term, vs));
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = exports.emptyEnvV) => {
@@ -1580,6 +1640,10 @@ exports.quote = (v_, vs = exports.emptyEnvV) => {
     }
     if (v.tag === 'VBoth')
         return syntax_1.Both(exports.quote(v.left, vs), exports.quote(v.right, vs));
+    if (v.tag === 'VFst')
+        return syntax_1.Fst(exports.quote(v.val, vs));
+    if (v.tag === 'VSnd')
+        return syntax_1.Snd(exports.quote(v.val, vs));
     return v;
 };
 const zonkSpine = (vs, tm) => {
@@ -1633,6 +1697,14 @@ exports.zonk = (vs, tm) => {
         return syntax_1.Roll(exports.zonk(vs, tm.type), exports.zonk(vs, tm.body));
     if (tm.tag === 'Both')
         return syntax_1.Roll(exports.zonk(vs, tm.left), exports.zonk(vs, tm.right));
+    if (tm.tag === 'Fst') {
+        const b = exports.zonk(vs, tm.term);
+        return b.tag === 'Both' ? b.left : syntax_1.Fst(b);
+    }
+    if (tm.tag === 'Snd') {
+        const b = exports.zonk(vs, tm.term);
+        return b.tag === 'Both' ? b.right : syntax_1.Snd(b);
+    }
     return tm;
 };
 // only use this with elaborated terms

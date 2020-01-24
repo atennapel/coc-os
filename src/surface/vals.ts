@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec, Iota, Both } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec, Iota, Both, Fst, Snd } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 
@@ -19,7 +19,9 @@ export type Val
   | { tag: 'VRec', name: Name, type: Val, body: Clos }
   | { tag: 'VIota', name: Name, type: Val, body: Clos }
   | { tag: 'VBoth', left: Val, right: Val }
-  | { tag: 'VType' };
+  | { tag: 'VType' }
+  | { tag: 'VFst', val: Val }
+  | { tag: 'VSnd', val: Val };
 
 export type EnvV = {
   vals: List<[Name, Maybe<Val>]>;
@@ -52,6 +54,8 @@ export const VIota = (name: Name, type: Val, body: Clos): Val =>
 export const VBoth = (left: Val, right: Val): Val =>
   ({ tag: 'VBoth', left, right});
 export const VType: Val = { tag: 'VType' };
+export const VFst = (val: Val): Val => ({ tag: 'VFst', val });
+export const VSnd = (val: Val): Val => ({ tag: 'VSnd', val });
 
 export const VVar = (name: Name): Val => VNe(HVar(name));
 export const VMeta = (id: TMetaId): Val => VNe(HMeta(id));
@@ -84,6 +88,14 @@ export const vapp = (a: Val, impl: boolean, b: Val): Val => {
   if (a.tag === 'VRec') return vapp(a.body(a), impl, b);
   if (a.tag === 'VNe') return VNe(a.head, Cons([impl, b], a.args));
   return impossible('vapp');
+};
+export const vfst = (a: Val): Val => {
+  if (a.tag === 'VBoth') return a.left;
+  return VFst(a);
+};
+export const vsnd = (a: Val): Val => {
+  if (a.tag === 'VBoth') return a.right;
+  return VSnd(a);
 };
 
 export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
@@ -121,6 +133,8 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
     return VIota(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, t.name, Just(v))));
   if (t.tag === 'Both')
     return VBoth(evaluate(t.left, vs), evaluate(t.right, vs));
+  if (t.tag === 'Fst') return vfst(evaluate(t.term, vs));
+  if (t.tag === 'Snd') return vsnd(evaluate(t.term, vs));
   return impossible('evaluate');
 };
 
@@ -158,6 +172,8 @@ export const quote = (v_: Val, vs: EnvV = emptyEnvV): Term => {
   }
   if (v.tag === 'VBoth')
     return Both(quote(v.left, vs), quote(v.right, vs));
+  if (v.tag === 'VFst') return Fst(quote(v.val, vs));
+  if (v.tag === 'VSnd') return Snd(quote(v.val, vs));
   return v;
 };
 
@@ -211,6 +227,14 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return Roll(zonk(vs, tm.type), zonk(vs, tm.body));
   if (tm.tag === 'Both')
     return Roll(zonk(vs, tm.left), zonk(vs, tm.right));
+  if (tm.tag === 'Fst') {
+    const b = zonk(vs, tm.term);
+    return b.tag === 'Both' ? b.left : Fst(b);
+  }
+  if (tm.tag === 'Snd') {
+    const b = zonk(vs, tm.term);
+    return b.tag === 'Both' ? b.right : Snd(b);
+  }
   return tm;
 };
 
