@@ -19,11 +19,13 @@ export const resetEnv = () => {
     type: evaluate(Pi('f', true, Pi('_', false, Type, Type), Pi('_', false, tmp, App(Var('f'), false, tmp)))),
     opaque: false,
   };
+  /*
   env['unsafeCast'] = {
     val: evaluate(Abs('a', true, Type, Abs('b', true, Type, Abs('x', false, Var('a'), Var('x'))))),
     type: evaluate(Pi('a', true, Type, Pi('b', true, Type, Pi('_', false, Var('a'), Var('b'))))),
     opaque: false,
   };
+  */
 };
 export const getEnvMap = (): Env => env;
 export const getEnv = (name: Name): EnvEntry | null =>

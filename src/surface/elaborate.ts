@@ -1,7 +1,7 @@
 import { List, toString, map, filter, foldr, Cons, lookup, Nil, foldl } from '../list';
 import { Name } from '../names';
 import { Val, EnvV, quote, force, VType, evaluate, VPi, showEnvV, zonk, VVar, VNe, HMeta, freshName, extendV, emptyEnvV, openV, normalize } from './vals';
-import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota, Both, erase, eraseEq, Fst, Snd } from './syntax';
+import { showTerm, Term, Var, App, Type, Let, Pi, Abs, isUnsolved, Open, Fix, Unroll, Roll, Rec, Iota, Both, erase, eraseEq, Fst, Snd, UnsafeCast } from './syntax';
 import { freshMeta, resetMetas, freshMetaId } from './metas';
 import { log } from '../config';
 import { Just, Nothing } from '../maybe';
@@ -48,6 +48,7 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
   if (t.tag === 'Fst') return isImplicitUsed(x, t.term);
   if (t.tag === 'Snd') return isImplicitUsed(x, t.term);
   if (t.tag === 'Rigid') return isImplicitUsed(x, t.term);
+  if (t.tag === 'UnsafeCast') return isImplicitUsed(x, t.type) || isImplicitUsed(x, t.term);
   return t;
 };
 
@@ -246,6 +247,11 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     return [fty.body(evaluate(Fst(tme), vs)), Snd(tme)];
   }
   if (tm.tag === 'Rigid') return synth(ts, vs, tm.term);
+  if (tm.tag === 'UnsafeCast') {
+    const type = check(ts, vs, tm.type, VType);
+    const res = synth(ts, vs, tm.term);
+    return [evaluate(type, vs), UnsafeCast(type, res[1])];
+  }
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 

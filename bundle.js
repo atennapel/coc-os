@@ -337,6 +337,8 @@ const isImplicitUsed = (x, t) => {
         return isImplicitUsed(x, t.term);
     if (t.tag === 'Rigid')
         return isImplicitUsed(x, t.term);
+    if (t.tag === 'UnsafeCast')
+        return isImplicitUsed(x, t.type) || isImplicitUsed(x, t.term);
     return t;
 };
 const checkOpenNames = (ns) => {
@@ -541,6 +543,11 @@ const synth = (ts, vs, tm) => {
     }
     if (tm.tag === 'Rigid')
         return synth(ts, vs, tm.term);
+    if (tm.tag === 'UnsafeCast') {
+        const type = check(ts, vs, tm.type, vals_1.VType);
+        const res = synth(ts, vs, tm.term);
+        return [vals_1.evaluate(type, vs), syntax_1.UnsafeCast(type, res[1])];
+    }
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
 };
 const synthapp = (ts, vs, ty_, impl, arg) => {
@@ -609,11 +616,13 @@ exports.resetEnv = () => {
         type: vals_1.evaluate(syntax_1.Pi('f', true, syntax_1.Pi('_', false, syntax_1.Type, syntax_1.Type), syntax_1.Pi('_', false, tmp, syntax_1.App(syntax_1.Var('f'), false, tmp)))),
         opaque: false,
     };
+    /*
     env['unsafeCast'] = {
-        val: vals_1.evaluate(syntax_1.Abs('a', true, syntax_1.Type, syntax_1.Abs('b', true, syntax_1.Type, syntax_1.Abs('x', false, syntax_1.Var('a'), syntax_1.Var('x'))))),
-        type: vals_1.evaluate(syntax_1.Pi('a', true, syntax_1.Type, syntax_1.Pi('b', true, syntax_1.Type, syntax_1.Pi('_', false, syntax_1.Var('a'), syntax_1.Var('b'))))),
-        opaque: false,
+      val: evaluate(Abs('a', true, Type, Abs('b', true, Type, Abs('x', false, Var('a'), Var('x'))))),
+      type: evaluate(Pi('a', true, Type, Pi('b', true, Type, Pi('_', false, Var('a'), Var('b'))))),
+      opaque: false,
     };
+    */
 };
 exports.getEnvMap = () => env;
 exports.getEnv = (name) => env[name] || null;
@@ -895,6 +904,11 @@ const exprs = (ts, br) => {
         const body = exprs(ts.slice(2), '(');
         return syntax_1.Both(ty, body);
     }
+    if (isName(ts[0], 'unsafeCast')) {
+        const [ty] = expr(ts[1]);
+        const body = exprs(ts.slice(2), '(');
+        return syntax_1.UnsafeCast(ty, body);
+    }
     if (isName(ts[0], 'fst')) {
         const body = exprs(ts.slice(1), '(');
         return syntax_1.Fst(body);
@@ -1136,6 +1150,7 @@ exports.Both = (left, right) => ({ tag: 'Both', left, right });
 exports.Fst = (term) => ({ tag: 'Fst', term });
 exports.Snd = (term) => ({ tag: 'Snd', term });
 exports.Rigid = (term) => ({ tag: 'Rigid', term });
+exports.UnsafeCast = (type, term) => ({ tag: 'UnsafeCast', type, term });
 exports.showTermSimple = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1177,6 +1192,8 @@ exports.showTermSimple = (t) => {
         return `(snd ${exports.showTermSimple(t.term)})`;
     if (t.tag === 'Rigid')
         return `(rigid ${exports.showTermSimple(t.term)})`;
+    if (t.tag === 'UnsafeCast')
+        return `(unsafeCast ${exports.showTermSimple(t.type)} ${exports.showTermSimple(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1250,6 +1267,8 @@ exports.showTerm = (t) => {
         return `(snd ${exports.showTerm(t.term)})`;
     if (t.tag === 'Rigid')
         return `(rigid ${exports.showTerm(t.term)})`;
+    if (t.tag === 'UnsafeCast')
+        return `(unsafeCast ${exports.showTerm(t.type)} ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.isUnsolved = (t) => {
@@ -1294,6 +1313,8 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.term);
     if (t.tag === 'Rigid')
         return exports.isUnsolved(t.term);
+    if (t.tag === 'UnsafeCast')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.term);
     return t;
 };
 exports.erase = (t) => {
@@ -1334,6 +1355,8 @@ exports.erase = (t) => {
     if (t.tag === 'Snd')
         return exports.erase(t.term);
     if (t.tag === 'Rigid')
+        return exports.erase(t.term);
+    if (t.tag === 'UnsafeCast')
         return exports.erase(t.term);
     return t;
 };
@@ -1631,6 +1654,8 @@ exports.evaluate = (t, vs = exports.emptyEnvV) => {
         return exports.vsnd(exports.evaluate(t.term, vs));
     if (t.tag === 'Rigid')
         return exports.evaluate(t.term, vs);
+    if (t.tag === 'UnsafeCast')
+        return exports.evaluate(t.term, vs);
     return util_1.impossible('evaluate');
 };
 exports.quote = (v_, vs = exports.emptyEnvV) => {
@@ -1731,6 +1756,8 @@ exports.zonk = (vs, tm) => {
     }
     if (tm.tag === 'Rigid')
         return syntax_1.Rigid(exports.zonk(vs, tm.term));
+    if (tm.tag === 'UnsafeCast')
+        return syntax_1.UnsafeCast(exports.zonk(vs, tm.type), exports.zonk(vs, tm.term));
     return tm;
 };
 // only use this with elaborated terms

@@ -2,7 +2,7 @@ import { List, Nil, toString, foldr, Cons, lookup, contains, consAll } from '../
 import { Name, nextName } from '../names';
 import { TMetaId, getMeta } from './metas';
 import { Maybe, caseMaybe, Just, Nothing } from '../maybe';
-import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec, Iota, Both, Fst, Snd, Rigid } from './syntax';
+import { showTerm, Term, Type, App, Abs, Pi, Var, Meta, Let, Ann, Open, Fix, Unroll, Roll, Rec, Iota, Both, Fst, Snd, Rigid, UnsafeCast } from './syntax';
 import { impossible } from '../util';
 import { getEnv } from './env';
 
@@ -136,6 +136,7 @@ export const evaluate = (t: Term, vs: EnvV = emptyEnvV): Val => {
   if (t.tag === 'Fst') return vfst(evaluate(t.term, vs));
   if (t.tag === 'Snd') return vsnd(evaluate(t.term, vs));
   if (t.tag === 'Rigid') return evaluate(t.term, vs);
+  if (t.tag === 'UnsafeCast') return evaluate(t.term, vs);
   return impossible('evaluate');
 };
 
@@ -237,6 +238,7 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return b.tag === 'Both' ? b.right : Snd(b);
   }
   if (tm.tag === 'Rigid') return Rigid(zonk(vs, tm.term));
+  if (tm.tag === 'UnsafeCast') return UnsafeCast(zonk(vs, tm.type), zonk(vs, tm.term));
   return tm;
 };
 
