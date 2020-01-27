@@ -7,4 +7,4 @@ def caseBool : {t : *} -> Bool -> t -> t -> t
   = \b. b
 
 def dcaseBool : {P : Bool -> *} -> (b : Bool) -> P True -> P False -> P b
-  = \{P} b t f. b {P b} (unsafeCast (P b) t) (unsafeCast (P b) f)
+  = \{P} b t f. b {P b} (unsafeCast t) (unsafeCast f)

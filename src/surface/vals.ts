@@ -238,7 +238,7 @@ export const zonk = (vs: EnvV, tm: Term): Term => {
     return b.tag === 'Both' ? b.right : Snd(b);
   }
   if (tm.tag === 'Rigid') return Rigid(zonk(vs, tm.term));
-  if (tm.tag === 'UnsafeCast') return UnsafeCast(zonk(vs, tm.type), zonk(vs, tm.term));
+  if (tm.tag === 'UnsafeCast') return UnsafeCast(tm.type && zonk(vs, tm.type), zonk(vs, tm.term));
   return tm;
 };
 

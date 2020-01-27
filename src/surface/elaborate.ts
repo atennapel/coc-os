@@ -78,6 +78,10 @@ const check = (ts: EnvT, vs: EnvV, tm: Term, ty_: Val): Term => {
     unify(vs, ty2, ty);
     return term;
   }
+  if (tm.tag === 'UnsafeCast' && !tm.type) {
+    const res = synth(ts, vs, tm.term);
+    return UnsafeCast(quote(ty, vs), res[1]);
+  }
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
   if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
     if (tm.impl && isImplicitUsed(tm.name, tm.body))
@@ -246,8 +250,7 @@ const synth = (ts: EnvT, vs: EnvV, tm: Term): [Val, Term] => {
     if (fty.tag !== 'VIota') return terr(`invalid ${showTerm(tm)}: ${showTerm(quote(fty, vs))}`);
     return [fty.body(evaluate(Fst(tme), vs)), Snd(tme)];
   }
-  if (tm.tag === 'Rigid') return synth(ts, vs, tm.term);
-  if (tm.tag === 'UnsafeCast') {
+  if (tm.tag === 'UnsafeCast' && tm.type) {
     const type = check(ts, vs, tm.type, VType);
     const res = synth(ts, vs, tm.term);
     return [evaluate(type, vs), UnsafeCast(type, res[1])];

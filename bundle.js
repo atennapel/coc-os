@@ -366,6 +366,10 @@ const check = (ts, vs, tm, ty_) => {
         unify_1.unify(vs, ty2, ty);
         return term;
     }
+    if (tm.tag === 'UnsafeCast' && !tm.type) {
+        const res = synth(ts, vs, tm.term);
+        return syntax_1.UnsafeCast(vals_1.quote(ty, vs), res[1]);
+    }
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return syntax_1.Type;
     if (tm.tag === 'Abs' && !tm.type && ty.tag === 'VPi' && tm.impl === ty.impl) {
@@ -541,9 +545,7 @@ const synth = (ts, vs, tm) => {
             return util_1.terr(`invalid ${syntax_1.showTerm(tm)}: ${syntax_1.showTerm(vals_1.quote(fty, vs))}`);
         return [fty.body(vals_1.evaluate(syntax_1.Fst(tme), vs)), syntax_1.Snd(tme)];
     }
-    if (tm.tag === 'Rigid')
-        return synth(ts, vs, tm.term);
-    if (tm.tag === 'UnsafeCast') {
+    if (tm.tag === 'UnsafeCast' && tm.type) {
         const type = check(ts, vs, tm.type, vals_1.VType);
         const res = synth(ts, vs, tm.term);
         return [vals_1.evaluate(type, vs), syntax_1.UnsafeCast(type, res[1])];
@@ -905,9 +907,8 @@ const exprs = (ts, br) => {
         return syntax_1.Both(ty, body);
     }
     if (isName(ts[0], 'unsafeCast')) {
-        const [ty] = expr(ts[1]);
-        const body = exprs(ts.slice(2), '(');
-        return syntax_1.UnsafeCast(ty, body);
+        const body = exprs(ts.slice(1), '(');
+        return syntax_1.UnsafeCast(null, body);
     }
     if (isName(ts[0], 'fst')) {
         const body = exprs(ts.slice(1), '(');
@@ -1193,7 +1194,7 @@ exports.showTermSimple = (t) => {
     if (t.tag === 'Rigid')
         return `(rigid ${exports.showTermSimple(t.term)})`;
     if (t.tag === 'UnsafeCast')
-        return `(unsafeCast ${exports.showTermSimple(t.type)} ${exports.showTermSimple(t.term)})`;
+        return t.type ? `(unsafeCast ${exports.showTermSimple(t.term)} : ${exports.showTermSimple(t.type)})` : `(unsafeCast ${exports.showTermSimple(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1268,7 +1269,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'Rigid')
         return `(rigid ${exports.showTerm(t.term)})`;
     if (t.tag === 'UnsafeCast')
-        return `(unsafeCast ${exports.showTermP(true, t.type)} ${exports.showTerm(t.term)})`;
+        return t.type ? `(unsafeCast ${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})` : `(unsafeCast ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.isUnsolved = (t) => {
@@ -1314,7 +1315,7 @@ exports.isUnsolved = (t) => {
     if (t.tag === 'Rigid')
         return exports.isUnsolved(t.term);
     if (t.tag === 'UnsafeCast')
-        return exports.isUnsolved(t.type) || exports.isUnsolved(t.term);
+        return (t.type ? exports.isUnsolved(t.type) : false) || exports.isUnsolved(t.term);
     return t;
 };
 exports.erase = (t) => {
@@ -1757,7 +1758,7 @@ exports.zonk = (vs, tm) => {
     if (tm.tag === 'Rigid')
         return syntax_1.Rigid(exports.zonk(vs, tm.term));
     if (tm.tag === 'UnsafeCast')
-        return syntax_1.UnsafeCast(exports.zonk(vs, tm.type), exports.zonk(vs, tm.term));
+        return syntax_1.UnsafeCast(tm.type && exports.zonk(vs, tm.type), exports.zonk(vs, tm.term));
     return tm;
 };
 // only use this with elaborated terms

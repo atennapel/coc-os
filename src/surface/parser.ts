@@ -217,9 +217,8 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     return Both(ty, body);
   }
   if (isName(ts[0], 'unsafeCast')) {
-    const [ty] = expr(ts[1]);
-    const body = exprs(ts.slice(2), '(');
-    return UnsafeCast(ty, body);
+    const body = exprs(ts.slice(1), '(');
+    return UnsafeCast(null, body);
   }
   if (isName(ts[0], 'fst')) {
     const body = exprs(ts.slice(1), '(');

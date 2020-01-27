@@ -21,7 +21,7 @@ export type Term
   | { tag: 'Fst', term: Term }
   | { tag: 'Snd', term: Term }
   | { tag: 'Rigid', term: Term }
-  | { tag: 'UnsafeCast', type: Term, term: Term };
+  | { tag: 'UnsafeCast', type: Term | null, term: Term };
 
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const App = (left: Term, impl: boolean, right: Term): Term =>
@@ -57,7 +57,7 @@ export const Snd = (term: Term): Term =>
   ({ tag: 'Snd', term });
 export const Rigid = (term: Term): Term =>
   ({ tag: 'Rigid', term });
-export const UnsafeCast = (type: Term, term: Term): Term =>
+export const UnsafeCast = (type: Term | null, term: Term): Term =>
   ({ tag: 'UnsafeCast', type, term });
 
 export const showTermSimple = (t: Term): string => {
@@ -94,7 +94,8 @@ export const showTermSimple = (t: Term): string => {
   if (t.tag === 'Fst') return `(fst ${showTermSimple(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTermSimple(t.term)})`;
   if (t.tag === 'Rigid') return `(rigid ${showTermSimple(t.term)})`;
-  if (t.tag === 'UnsafeCast') return `(unsafeCast ${showTermSimple(t.type)} ${showTermSimple(t.term)})`;
+  if (t.tag === 'UnsafeCast')
+    return t.type ? `(unsafeCast ${showTermSimple(t.term)} : ${showTermSimple(t.type)})` : `(unsafeCast ${showTermSimple(t.term)})`;
   return t;
 };
 
@@ -165,7 +166,8 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Fst') return `(fst ${showTerm(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTerm(t.term)})`;
   if (t.tag === 'Rigid') return `(rigid ${showTerm(t.term)})`;
-  if (t.tag === 'UnsafeCast') return `(unsafeCast ${showTermP(true, t.type)} ${showTerm(t.term)})`;
+  if (t.tag === 'UnsafeCast')
+    return t.type ? `(unsafeCast ${showTerm(t.term)} : ${showTerm(t.type)})` : `(unsafeCast ${showTerm(t.term)})`;
   return t;
 };
 
@@ -192,7 +194,7 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Fst') return isUnsolved(t.term);
   if (t.tag === 'Snd') return isUnsolved(t.term);
   if (t.tag === 'Rigid') return isUnsolved(t.term);
-  if (t.tag === 'UnsafeCast') return isUnsolved(t.type) || isUnsolved(t.term);
+  if (t.tag === 'UnsafeCast') return (t.type ? isUnsolved(t.type) : false) || isUnsolved(t.term);
   return t;
 };
 
