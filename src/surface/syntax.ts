@@ -165,7 +165,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Fst') return `(fst ${showTerm(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTerm(t.term)})`;
   if (t.tag === 'Rigid') return `(rigid ${showTerm(t.term)})`;
-  if (t.tag === 'UnsafeCast') return `(unsafeCast ${showTerm(t.type)} ${showTerm(t.term)})`;
+  if (t.tag === 'UnsafeCast') return `(unsafeCast ${showTermP(true, t.type)} ${showTerm(t.term)})`;
   return t;
 };
 

@@ -48,7 +48,7 @@ const isImplicitUsed = (x: Name, t: Term): boolean => {
   if (t.tag === 'Fst') return isImplicitUsed(x, t.term);
   if (t.tag === 'Snd') return isImplicitUsed(x, t.term);
   if (t.tag === 'Rigid') return isImplicitUsed(x, t.term);
-  if (t.tag === 'UnsafeCast') return isImplicitUsed(x, t.type) || isImplicitUsed(x, t.term);
+  if (t.tag === 'UnsafeCast') return isImplicitUsed(x, t.term);
   return t;
 };
 

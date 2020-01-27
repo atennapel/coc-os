@@ -338,7 +338,7 @@ const isImplicitUsed = (x, t) => {
     if (t.tag === 'Rigid')
         return isImplicitUsed(x, t.term);
     if (t.tag === 'UnsafeCast')
-        return isImplicitUsed(x, t.type) || isImplicitUsed(x, t.term);
+        return isImplicitUsed(x, t.term);
     return t;
 };
 const checkOpenNames = (ns) => {
@@ -1268,7 +1268,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'Rigid')
         return `(rigid ${exports.showTerm(t.term)})`;
     if (t.tag === 'UnsafeCast')
-        return `(unsafeCast ${exports.showTerm(t.type)} ${exports.showTerm(t.term)})`;
+        return `(unsafeCast ${exports.showTermP(true, t.type)} ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.isUnsolved = (t) => {
