@@ -1,25 +1,35 @@
-import { resetEnv, setEnv } from './rewrite/env';
-import { evaluate, normalize } from './rewrite/values';
-import { elaborate } from './rewrite/elaborate';
+// @ts-ignore
+import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase } from './rewrite/core/syntax';
+import * as U from './rewrite/untyped/syntax'
+import * as UD from './rewrite/untyped/domain'
+import { typecheck } from './rewrite/core/typecheck';
 import { Nil } from './list';
+import { normalize } from './rewrite/core/domain';
 
 // @ts-ignore
-import { Pi, Type, Abs, Var, App, Ann, Global, showTerm } from './rewrite/syntax';
+const tid = Pi(Type, Pi(Var(0), Var(1)));
+// @ts-ignore
+const id = Abs(Type, Abs(Var(0), Var(0)));
+// @ts-ignore
+const tnat = Pi(Type, Pi(Var(0), Pi(Pi(Var(1), Var(2)), Var(2))));
+// @ts-ignore
+const z = Abs(Type, Abs(Var(0), Abs(Pi(Var(1), Var(2)), Var(1))));
+// @ts-ignore
+const s = Abs(tnat, Abs(Type, Abs(Var(0), Abs(Pi(Var(1), Var(2)), App(Var(0), App(App(App(Var(3), Var(2)), Var(1)), Var(0)))))));
+// @ts-ignore
+const nats: Term[] = [z]; for (let i = 0; i <= 10; i++) nats.push(App(s, nats[i]));
+// @ts-ignore
+const tsnat = Fix(Type, Pi(Type, Pi(Var(0), Pi(Pi(Var(2), Var(2)), Var(2)))));
+// @ts-ignore
+const sz = Roll(tsnat, Abs(Type, Abs(Var(0), Abs(Pi(tsnat, Var(2)), Var(1)))));
 
-resetEnv();
-setEnv(
-  'List',
-  evaluate(Abs('t', Type, Pi('r', Type, Pi('nil', Var(0), Pi('cons', Pi('head', Var(2), Pi('tail', Var(2), Var(3))), Var(2)))))),
-  evaluate(Pi('_', Type, Type)),
-);
-
-const tm = App(App(Ann(Abs('t', Type, Abs('r', Type, Abs('nil', Var(0), Abs('cons', Pi('head', Var(2), Pi('tail', Var(2), Var(3))), Var(1))))), Pi('t', Type, App(Global('List'), Var(0)))), Type), Type);
+const tm = Abs(tsnat, App(Unroll(Var(0)), Type));
 console.log(showTerm(tm));
-const ty = elaborate(tm);
+const ty = typecheck(tm, Nil, Nil, 0);
 console.log(showTerm(ty));
-const tnorm2 = normalize(ty, Nil, 0, true);
-console.log(showTerm(tnorm2));
-const norm1 = normalize(tm, Nil, 0, false);
-console.log(showTerm(norm1));
-const norm2 = normalize(tm, Nil, 0, true);
-console.log(showTerm(norm2));
+const norm = normalize(tm, Nil, 0);
+console.log(showTerm(norm));
+const erased = erase(norm);
+console.log(U.showTerm(erased));
+const erasedn = UD.normalize(erased, Nil, 0);
+console.log(U.showTerm(erasedn));
