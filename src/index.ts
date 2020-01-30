@@ -29,7 +29,7 @@ const mul = Abs(tnat, Abs(tnat, App(App(App(Var(1), tnat), z), App(add, Var(0)))
 // @ts-ignore
 const pow = Abs(tnat, Abs(tnat, App(App(App(Var(0), tnat), App(s, z)), App(mul, Var(1)))));
 
-const tm = App(App(pow, nats[2]), nats[3]);
+const tm = App(Unroll(sz), Type);
 console.log(showTerm(tm));
 const ty = typecheck(tm, Nil, Nil, 0);
 console.log(showTerm(ty));

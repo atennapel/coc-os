@@ -6,7 +6,6 @@ import { index, length, zipWithR_ } from '../../list';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a.tag === 'HVar') return b.tag === 'HVar' && a.index === b.index;
-  // TODO: what about unroll?
   return false;
 };
 const unify = (k: Ix, a: Val, b: Val): void => {
@@ -38,6 +37,10 @@ const unify = (k: Ix, a: Val, b: Val): void => {
   if (b.tag === 'VAbs') {
     const v = VVar(k);
     return unify(k + 1, vapp(a, v), b.body(v));
+  }
+  if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HUnroll' && b.head.tag === 'HUnroll' && length(a.args) === length(b.args)) {
+    unify(k, a.head.term, b.head.term);
+    return zipWithR_((x, y) => unify(k, x, y), a.args, b.args);
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
     return zipWithR_((x, y) => unify(k, x, y), a.args, b.args);

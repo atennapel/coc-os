@@ -3,7 +3,6 @@ import { List, Cons, Nil, toString, index, foldr } from '../../list';
 import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll } from './syntax';
 import { impossible } from '../../util';
 
-// TODO: How to handle roll/unroll?
 export type Head = HVar | HUnroll;
 
 export type HVar = { tag: 'HVar', index: Ix };
@@ -36,8 +35,16 @@ export const showEnvV = (l: EnvV, k: Ix = 0): string => toString(l, v => showTer
 
 export const vapp = (a: Val, b: Val): Val => {
   if (a.tag === 'VAbs') return a.body(b);
-  if (a.tag === 'VNe') return VNe(a.head, Cons(b, a.args));
+  if (a.tag === 'VNe') {
+    if (a.head.tag === 'HUnroll' && a.args.tag === 'Nil')
+      return vapp(a.head.term, b);
+    return VNe(a.head, Cons(b, a.args));
+  }
   return impossible(`vapp: ${a.tag}`);
+};
+export const vunroll = (v: Val): Val => {
+  if (v.tag === 'VRoll') return v.term;
+  return VUnroll(v);
 };
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
@@ -53,7 +60,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Roll')
     return VRoll(evaluate(t.type, vs), evaluate(t.term, vs));
   if (t.tag === 'Unroll')
-    return VUnroll(evaluate(t.term, vs));
+    return vunroll(evaluate(t.term, vs));
   if (t.tag === 'Pi')
     return VPi(evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Fix')
