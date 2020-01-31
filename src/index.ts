@@ -31,7 +31,7 @@ globalSet('SNat', evaluate(Fix(Type, Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(2
 globalSet('SZ', evaluate(Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), Var(1)))))), evaluate(Global('SNat')));
 globalSet('SS', evaluate(Abs(R, Global('SNat'), Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), App(Var(0), R, Var(3)))))))), evaluate(Pi(R, Global('SNat'), Global('SNat'))));
 
-const tm = SN(10);
+const tm = Abs(R, Pi(R, Type, Type), Abs(R, Type, App(Var(1), R, Var(0))));
 console.log(showTerm(tm));
 console.log('types:');
 const ty = typecheck(tm, Nil, Nil, 0, false);
