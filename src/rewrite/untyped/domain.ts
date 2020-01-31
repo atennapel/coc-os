@@ -1,6 +1,6 @@
 import { Ix } from '../../names';
 import { List, Cons, Nil, toString, index, foldr } from '../../list';
-import { Term, showTerm, Var, App, Abs, shift } from './syntax';
+import { Term, showTerm, Var, App, Abs } from './syntax';
 import { impossible } from '../../util';
 
 export type Head = HVar;
@@ -45,11 +45,8 @@ export const quote = (v: Val, k: Ix): Term => {
       Var(k - (v.head.index + 1)) as Term,
       v.args,
     );
-  if (v.tag === 'VAbs') {
-    // TODO: is eta reduction useful here?
-    const body = quote(v.body(VVar(k)), k + 1);
-    return body.tag === 'App' && body.right.tag === 'Var' && body.right.index === 0 ? shift(-1, 0, body.left) : Abs(body);
-  }
+  if (v.tag === 'VAbs')
+    return Abs(quote(v.body(VVar(k)), k + 1));
   return v;
 };
 
