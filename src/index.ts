@@ -1,7 +1,9 @@
 // @ts-ignore
-import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, Meta, Term, Global } from './rewrite/core/syntax';
-import * as U from './rewrite/untyped/syntax'
-import * as UD from './rewrite/untyped/domain'
+import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, Meta, Term, Global, toCore } from './rewrite/core/syntax';
+import * as U from './rewrite/untyped/syntax';
+import * as UD from './rewrite/untyped/domain';
+import * as S from './rewrite/syntax';
+import * as SS from './rewrite/surface/syntax';
 import { typecheck } from './rewrite/core/typecheck';
 import { Nil } from './list';
 import { normalize, evaluate } from './rewrite/core/domain';
@@ -31,7 +33,11 @@ globalSet('SNat', evaluate(Fix(Type, Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(2
 globalSet('SZ', evaluate(Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), Var(1)))))), evaluate(Global('SNat')));
 globalSet('SS', evaluate(Abs(R, Global('SNat'), Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), App(Var(0), R, Var(3)))))))), evaluate(Pi(R, Global('SNat'), Global('SNat'))));
 
-const tm = Abs(R, Pi(R, Type, Type), Abs(R, Type, App(Var(1), R, Var(0))));
+const tm1 = S.Abs(R, 'x', S.Type, S.Var('x'));
+console.log(S.showTerm(tm1));
+const tm2 = SS.toSurface(tm1);
+console.log(SS.showTerm(tm2));
+const tm = toCore(tm2);
 console.log(showTerm(tm));
 console.log('types:');
 const ty = typecheck(tm, Nil, Nil, 0, false);

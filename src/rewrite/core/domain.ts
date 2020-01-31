@@ -1,9 +1,10 @@
 import { Ix, Name } from '../../names';
 import { List, Cons, Nil, toString, index, foldr } from '../../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Meta, eqMeta, Global } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global } from './syntax';
 import { impossible } from '../../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../../lazy';
+import { Meta, eqMeta } from '../syntax';
 
 export type Head = HVar | HGlobal;
 

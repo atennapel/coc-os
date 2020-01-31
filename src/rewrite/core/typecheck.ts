@@ -1,10 +1,11 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, Head, vapp, Elim } from './domain';
-import { Term, showTerm, Pi, eqMeta } from './syntax';
+import { Term, showTerm, Pi } from './syntax';
 import { terr, impossible } from '../../util';
 import { Ix } from '../../names';
 import { index, length, zipWithR_ } from '../../list';
 import { globalGet } from './globalenv';
 import { forceLazy } from '../../lazy';
+import { eqMeta } from '../syntax';
 
 const showTermQ = (v: Val, k: number = 0, full: boolean = false): string => showTerm(quote(v, k, full));
 
