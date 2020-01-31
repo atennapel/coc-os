@@ -3,18 +3,23 @@ import { List, Cons, Nil, toString, index, foldr } from '../../list';
 import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll } from './syntax';
 import { impossible } from '../../util';
 
-export type Head = HVar | HUnroll;
+export type Head = HVar;
 
 export type HVar = { tag: 'HVar', index: Ix };
 export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
-export type HUnroll = { tag: 'HUnroll', term: Val };
-export const HUnroll = (term: Val): HUnroll => ({ tag: 'HUnroll', term });
+
+export type Elim = EApp | EUnroll
+
+export type EApp = { tag: 'EApp', arg: Val };
+export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
+export type EUnroll = { tag: 'EUnroll' };
+export const EUnroll: EUnroll = { tag: 'EUnroll' };
 
 export type Clos = (val: Val) => Val;
 export type Val = VNe | VAbs | VRoll | VPi | VFix | VType;
 
-export type VNe = { tag: 'VNe', head: Head, args: List<Val> };
-export const VNe = (head: Head, args: List<Val>): VNe => ({ tag: 'VNe', head, args });
+export type VNe = { tag: 'VNe', head: Head, args: List<Elim> };
+export const VNe = (head: Head, args: List<Elim>): VNe => ({ tag: 'VNe', head, args });
 export type VAbs = { tag: 'VAbs', type: Val, body: Clos };
 export const VAbs = (type: Val, body: Clos): VAbs => ({ tag: 'VAbs', type, body});
 export type VRoll = { tag: 'VRoll', type: Val, term: Val };
@@ -27,7 +32,6 @@ export type VType = { tag: 'VType' };
 export const VType: VType = { tag: 'VType' };
 
 export const VVar = (index: Ix): VNe => VNe(HVar(index), Nil);
-export const VUnroll = (term: Val): VNe => VNe(HUnroll(term), Nil);
 
 export type EnvV = List<Val>;
 export const extendV = (vs: EnvV, val: Val): EnvV => Cons(val, vs);
@@ -35,18 +39,14 @@ export const showEnvV = (l: EnvV, k: Ix = 0): string => toString(l, v => showTer
 
 export const vapp = (a: Val, b: Val): Val => {
   if (a.tag === 'VAbs') return a.body(b);
-  if (a.tag === 'VNe') {
-    if (a.head.tag === 'HUnroll' && a.args.tag === 'Nil')
-      return vapp(a.head.term, b);
-    return VNe(a.head, Cons(b, a.args));
-  }
+  if (a.tag === 'VNe') return VNe(a.head, Cons(EApp(b), a.args));
   return impossible(`vapp: ${a.tag}`);
 };
 export const vunroll = (v: Val): Val => {
   if (v.tag === 'VRoll') return v.term;
-  return VUnroll(v);
+  if (v.tag === 'VNe') return VNe(v.head, Cons(EUnroll, v.args));
+  return impossible(`vunroll: ${v.tag}`);
 };
-
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var')
@@ -70,14 +70,18 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
 
 const quoteHead = (h: Head, k: Ix): Term => {
   if (h.tag === 'HVar') return Var(k - (h.index + 1));
-  if (h.tag === 'HUnroll') return Unroll(quote(h.term, k));
-  return h;
+  return h.tag;
+};
+const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
+  if (e.tag === 'EApp') return App(t, quote(e.arg, k));
+  if (e.tag === 'EUnroll') return Unroll(t);
+  return e;
 };
 export const quote = (v: Val, k: Ix): Term => {
   if (v.tag === 'VType') return Type;
   if (v.tag === 'VNe')
     return foldr(
-      (x, y) => App(y, quote(x, k)),
+      (x, y) => quoteElim(y, x, k),
       quoteHead(v.head, k),
       v.args,
     );
