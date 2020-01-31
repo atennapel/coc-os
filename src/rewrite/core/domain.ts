@@ -50,7 +50,7 @@ export const vunroll = (v: Val): Val => {
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var')
-    return index(vs, t.index) || impossible(`evaluate ${t.index}`);
+    return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.meta, evaluate(t.right, vs));
   if (t.tag === 'Abs')

@@ -51,6 +51,19 @@ const unify = (k: Ix, a: Val, b: Val): void => {
   return terr(`unify failed (${k}): ${showTerm(quote(a, k))} ~ ${showTerm(quote(b, k))}`);
 };
 
+const erasedUsed = (k: Ix, t: Term): boolean => {
+  if (t.tag === 'Var') return t.index === k;
+  if (t.tag === 'App') return erasedUsed(k, t.left) || (!t.meta.erased && erasedUsed(k, t.right));
+  if (t.tag === 'Abs') return erasedUsed(k + 1, t.body);
+  if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.meta.erased && erasedUsed(k, t.val));
+  if (t.tag === 'Roll') return erasedUsed(k, t.term);
+  if (t.tag === 'Unroll') return erasedUsed(k, t.term);
+  if (t.tag === 'Pi') return false;
+  if (t.tag === 'Fix') return false;
+  if (t.tag === 'Type') return false;
+  return t;
+};
+
 const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
   const ty2 = synth(ts, vs, k, tm);
   try {
@@ -74,20 +87,22 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
     return terr(`invalid type or meta mismatch in synthapp in ${showTerm(tm)}: ${showTerm(quote(ty, k))} ${tm.meta.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
   }
   if (tm.tag === 'Abs') {
-    // TODO: check erased arguments are not used
     check(ts, vs, k, tm.type, VType);
     const type = evaluate(tm.type, vs);
     const rt = synth(extendV(ts, type), extendV(vs, VVar(k)), k + 1, tm.body);
+    if (tm.meta.erased && erasedUsed(0, tm.body))
+      return terr(`erased argument used in ${showTerm(tm)}`);
     // TODO: avoid quote here
     return evaluate(Pi(tm.meta, tm.type, quote(rt, k + 1)), vs);
   }
   if (tm.tag === 'Let') {
-    // TODO: check erased arguments are not used
     const vty = synth(ts, vs, k, tm.val);
-    return synth(extendV(ts, vty), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.body);
+    const rt = synth(extendV(ts, vty), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.body);
+    if (tm.meta.erased && erasedUsed(0, tm.body))
+      return terr(`erased argument used in ${showTerm(tm)}`);
+    return rt;
   }
   if (tm.tag === 'Pi') {
-    // TODO: check erased arguments are not used
     check(ts, vs, k, tm.type, VType);
     check(extendV(ts, evaluate(tm.type, vs)), extendV(vs, VVar(k)), k + 1, tm.body, VType);
     return VType;

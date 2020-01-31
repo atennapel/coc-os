@@ -24,6 +24,5 @@ TODO:
 
 ```
 TODO core:
-- Implicits
 - Glued and globals
 ```
