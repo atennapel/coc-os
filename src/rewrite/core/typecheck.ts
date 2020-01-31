@@ -1,8 +1,9 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, Head, vapp, Elim } from './domain';
 import { Term, showTerm, Pi, eqMeta } from './syntax';
-import { terr } from '../../util';
+import { terr, impossible } from '../../util';
 import { Ix } from '../../names';
 import { index, length, zipWithR_ } from '../../list';
+import { globalGet } from './globalenv';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -53,6 +54,7 @@ const unify = (k: Ix, a: Val, b: Val): void => {
 
 const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Var') return t.index === k;
+  if (t.tag === 'Global') return false;
   if (t.tag === 'App') return erasedUsed(k, t.left) || (!t.meta.erased && erasedUsed(k, t.right));
   if (t.tag === 'Abs') return erasedUsed(k + 1, t.body);
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.meta.erased && erasedUsed(k, t.val));
@@ -78,6 +80,10 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
   if (tm.tag === 'Type') return VType;
   if (tm.tag === 'Var')
     return index(ts, tm.index) || terr(`var out of scope ${showTerm(tm)}`);
+  if (tm.tag === 'Global') {
+    const entry = globalGet(tm.name);
+    return entry ? entry.type : impossible(`global ${tm.name} not found`);
+  }
   if (tm.tag === 'App') {
     const ty = synth(ts, vs, k, tm.left);
     if (ty.tag === 'VPi' && eqMeta(ty.meta, tm.meta)) {

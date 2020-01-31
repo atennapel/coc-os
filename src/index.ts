@@ -1,10 +1,11 @@
 // @ts-ignore
-import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase, Meta, Term } from './rewrite/core/syntax';
+import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase, Meta, Term, Global } from './rewrite/core/syntax';
 import * as U from './rewrite/untyped/syntax'
 import * as UD from './rewrite/untyped/domain'
 import { typecheck } from './rewrite/core/typecheck';
 import { Nil } from './list';
-import { normalize } from './rewrite/core/domain';
+import { normalize, evaluate } from './rewrite/core/domain';
+import { globalSet, globalReset } from './rewrite/core/globalenv';
 
 const E: Meta = { erased: true };
 const R: Meta = { erased: false };
@@ -32,7 +33,12 @@ const mul = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(1), E, tnat), R, z), R, Ap
 // @ts-ignore
 const pow = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(0), E, tnat), R, nats[1]), R, App(mul, R, Var(1)))));
 
-const tm = App(App(add, R, nats[2]), R, nats[3]);
+globalReset();
+globalSet('Nat', evaluate(Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(1), Var(2)), Var(2))))), evaluate(Type));
+globalSet('Z', evaluate(Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), Var(1))))), evaluate(Global('Nat')));
+globalSet('S', evaluate(Abs(R, tnat, Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), App(Var(0), R, App(App(App(Var(3), E, Var(2)), R, Var(1)), R, Var(0)))))))), evaluate(Pi(R, Global('Nat'), Global('Nat'))));
+
+const tm = App(Global('S'), R, Global('Z'));
 console.log(showTerm(tm));
 const ty = typecheck(tm, Nil, Nil, 0);
 console.log(showTerm(ty));

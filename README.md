@@ -24,5 +24,5 @@ TODO:
 
 ```
 TODO core:
-- Glued and globals
+- Glued evaluation
 ```

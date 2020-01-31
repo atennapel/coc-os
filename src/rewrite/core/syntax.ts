@@ -1,13 +1,15 @@
-import { Ix } from '../../names';
+import { Ix, Name } from '../../names';
 import * as U from '../untyped/syntax';
 
 export type Meta = { erased: boolean };
 export const eqMeta = (a: Meta, b: Meta): boolean => a.erased === b.erased;
 
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
+export type Global = { tag: 'Global', name: Name };
+export const Global = (name: Name): Global => ({ tag: 'Global', name });
 export type App = { tag: 'App', left: Term, meta: Meta, right: Term };
 export const App = (left: Term, meta: Meta, right: Term): App => ({ tag: 'App', left, meta, right });
 export type Abs = { tag: 'Abs', meta: Meta, type: Term, body: Term };
@@ -27,6 +29,7 @@ export const Type: Type = { tag: 'Type' };
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'Global') return t.name;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${t.meta.erased ? '-' : ''}${showTerm(t.right)})`;
   if (t.tag === 'Abs') return `(\\${t.meta.erased ? '-' : ''}${showTerm(t.type)}. ${showTerm(t.body)})`;
   if (t.tag === 'Let') return `(let ${t.meta.erased ? '-' : ''}${showTerm(t.val)} in ${showTerm(t.body)})`;
@@ -48,5 +51,5 @@ export const erase = (t: Term): U.Term => {
   if (t.tag === 'Pi') return U.idTerm;
   if (t.tag === 'Fix') return U.idTerm;
   if (t.tag === 'Type') return U.idTerm;
-  return t;
+  throw new Error(`unable to erase: ${showTerm(t)}`);
 };

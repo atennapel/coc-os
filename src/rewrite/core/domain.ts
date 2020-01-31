@@ -2,6 +2,7 @@ import { Ix } from '../../names';
 import { List, Cons, Nil, toString, index, foldr } from '../../list';
 import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Meta, eqMeta } from './syntax';
 import { impossible } from '../../util';
+import { globalGet } from './globalenv';
 
 export type Head = HVar;
 
@@ -47,10 +48,14 @@ export const vunroll = (v: Val): Val => {
   if (v.tag === 'VNe') return VNe(v.head, Cons(EUnroll, v.args));
   return impossible(`vunroll: ${v.tag}`);
 };
-export const evaluate = (t: Term, vs: EnvV): Val => {
+export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var')
     return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
+  if (t.tag === 'Global') {
+    const entry = globalGet(t.name);
+    return entry ? entry.val : impossible(`evaluate: global ${t.name} has no value`);
+  }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.meta, evaluate(t.right, vs));
   if (t.tag === 'Abs')
