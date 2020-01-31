@@ -15,31 +15,21 @@ const tid = Pi(E, Type, Pi(R, Var(0), Var(1)));
 // @ts-ignore
 const id = Abs(E, Type, Abs(R, Var(0), Var(0)));
 // @ts-ignore
-const tnat = Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(1), Var(2)), Var(2))));
-// @ts-ignore
-const z = Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), Var(1))));
-// @ts-ignore
-const s = Abs(R, tnat, Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), App(Var(0), R, App(App(App(Var(3), E, Var(2)), R, Var(1)), R, Var(0)))))));
-// @ts-ignore
-const nats: Term[] = [z]; for (let i = 0; i <= 10; i++) nats.push(App(s, R, nats[i]));
-// @ts-ignore
 const tsnat = Fix(Type, Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(2), Var(2)), Var(2)))));
 // @ts-ignore
 const sz = Roll(tsnat, Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, tsnat, Var(2)), Var(1)))));
 // @ts-ignore
-const add = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(1), E, tnat), R, Var(0)), R, s)));
-// @ts-ignore
-const mul = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(1), E, tnat), R, z), R, App(add, R, Var(0)))));
-// @ts-ignore
-const pow = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(0), E, tnat), R, nats[1]), R, App(mul, R, Var(1)))));
+const N = (n: number): Term => { let x = Global('Z'); for (let i = 0; i < n; i++) x = App(Global('S'), R, x); return x };
 
 globalReset();
 globalSet('Nat', evaluate(Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(1), Var(2)), Var(2))))), evaluate(Type));
 globalSet('Z', evaluate(Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), Var(1))))), evaluate(Global('Nat')));
-globalSet('S', evaluate(Abs(R, tnat, Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), App(Var(0), R, App(App(App(Var(3), E, Var(2)), R, Var(1)), R, Var(0)))))))), evaluate(Pi(R, Global('Nat'), Global('Nat'))));
-globalSet('add', evaluate(Abs(R, tnat, Abs(R, tnat, App(App(App(Var(1), E, tnat), R, Var(0)), R, s)))), evaluate(Pi(R, Global('Nat'), Pi(R, Global('Nat'), Global('Nat')))));
+globalSet('S', evaluate(Abs(R, Global('Nat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), App(Var(0), R, App(App(App(Var(3), E, Var(2)), R, Var(1)), R, Var(0)))))))), evaluate(Pi(R, Global('Nat'), Global('Nat'))));
+globalSet('add', evaluate(Abs(R, Global('Nat'), Abs(R, Global('Nat'), App(App(App(Var(1), E, Global('Nat')), R, Var(0)), R, Global('S'))))), evaluate(Pi(R, Global('Nat'), Pi(R, Global('Nat'), Global('Nat')))));
+globalSet('mul', evaluate(Abs(R, Global('Nat'), Abs(R, Global('Nat'), App(App(App(Var(1), E, Global('Nat')), R, N(0)), R, App(Global('add'), R, Var(0)))))), evaluate(Pi(R, Global('Nat'), Pi(R, Global('Nat'), Global('Nat')))));
+globalSet('pow', evaluate(Abs(R, Global('Nat'), Abs(R, Global('Nat'), App(App(App(Var(0), E, Global('Nat')), R, N(1)), R, App(Global('mul'), R, Var(1)))))), evaluate(Pi(R, Global('Nat'), Pi(R, Global('Nat'), Global('Nat')))));
 
-const tm = App(Global('add'), R, App(Global('S'), R, Global('Z')));
+const tm = App(App(Global('pow'), R, N(2)), R, N(7));
 console.log(showTerm(tm));
 console.log('types:');
 const ty = typecheck(tm, Nil, Nil, 0, false);
