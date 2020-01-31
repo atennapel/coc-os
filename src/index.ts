@@ -1,10 +1,13 @@
 // @ts-ignore
-import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase } from './rewrite/core/syntax';
+import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase, Meta } from './rewrite/core/syntax';
 import * as U from './rewrite/untyped/syntax'
 import * as UD from './rewrite/untyped/domain'
 import { typecheck } from './rewrite/core/typecheck';
 import { Nil } from './list';
 import { normalize } from './rewrite/core/domain';
+
+const E: Meta = { erased: true };
+const U: Meta = { erased: false };
 
 // @ts-ignore
 const tid = Pi(Type, Pi(Var(0), Var(1)));
