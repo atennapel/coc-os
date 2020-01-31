@@ -46,6 +46,7 @@ export const quote = (v: Val, k: Ix): Term => {
       v.args,
     );
   if (v.tag === 'VAbs') {
+    // TODO: is eta reduction useful here?
     const body = quote(v.body(VVar(k)), k + 1);
     return body.tag === 'App' && body.right.tag === 'Var' && body.right.index === 0 ? shift(-1, 0, body.left) : Abs(body);
   }

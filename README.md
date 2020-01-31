@@ -24,6 +24,5 @@ TODO:
 
 ```
 TODO core:
-- eta reduction
 - pretty print syntax
 ```
