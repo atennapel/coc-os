@@ -1,10 +1,10 @@
 import { EnvV, Val, VType, quote, evaluate, extendV, VVar } from './values';
 import { Term, showTerm, Pi } from './syntax';
 import { unify } from './unification';
-import { index, length, Nil } from '../list';
-import { terr } from '../util';
-import { forceLazy } from '../lazy';
-import { getEnv } from '../rewrite/env';
+import { index, length, Nil } from '../../list';
+import { terr } from '../../util';
+import { forceLazy } from '../../lazy';
+import { getEnv } from './env';
 
 const check = (ts: EnvV, vs: EnvV, k: number, tm: Term, ty: Val): void => {
   const ty2 = synth(ts, vs, k, tm);

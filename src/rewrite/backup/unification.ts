@@ -1,9 +1,9 @@
-import { Ix } from '../names';
+import { Ix } from '../../names';
 import { Val, Head, quote, VVar, vapp } from './values';
-import { terr } from '../util';
+import { terr } from '../../util';
 import { showTerm } from './syntax';
-import { length, zipWithR_ } from '../list';
-import { forceLazy } from '../lazy';
+import { length, zipWithR_ } from '../../list';
+import { forceLazy } from '../../lazy';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a.tag === 'HVar') return b.tag === 'HVar' && a.index === b.index;

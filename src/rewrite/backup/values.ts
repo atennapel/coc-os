@@ -1,8 +1,8 @@
-import { Name, Ix } from '../names';
-import { List, Cons, toString, Nil, foldr, index } from '../list';
-import { Lazy, mapLazy, forceLazy } from '../lazy';
-import { showTerm, Pi, Abs, Term, Type, App, Var, Global } from '../rewrite/syntax';
-import { impossible } from '../util';
+import { Name, Ix } from '../../names';
+import { List, Cons, toString, Nil, foldr, index } from '../../list';
+import { Lazy, mapLazy, forceLazy } from '../../lazy';
+import { showTerm, Pi, Abs, Term, Type, App, Var, Global } from './syntax';
+import { impossible } from '../../util';
 import { getEnv } from './env';
 
 export type Head

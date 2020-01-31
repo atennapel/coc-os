@@ -1,7 +1,5 @@
 import { Ix, Name } from '../../names';
-
-export type Meta = { erased: boolean };
-export const eqMeta = (a: Meta, b: Meta): boolean => a.erased === b.erased;
+import { Meta } from '../syntax';
 
 export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
 
