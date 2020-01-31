@@ -1,5 +1,5 @@
 // @ts-ignore
-import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase, Meta } from './rewrite/core/syntax';
+import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase, Meta, Term } from './rewrite/core/syntax';
 import * as U from './rewrite/untyped/syntax'
 import * as UD from './rewrite/untyped/domain'
 import { typecheck } from './rewrite/core/typecheck';
@@ -7,32 +7,32 @@ import { Nil } from './list';
 import { normalize } from './rewrite/core/domain';
 
 const E: Meta = { erased: true };
-const U: Meta = { erased: false };
+const R: Meta = { erased: false };
 
 // @ts-ignore
-const tid = Pi(Type, Pi(Var(0), Var(1)));
+const tid = Pi(E, Type, Pi(R, Var(0), Var(1)));
 // @ts-ignore
-const id = Abs(Type, Abs(Var(0), Var(0)));
+const id = Abs(E, Type, Abs(R, Var(0), Var(0)));
 // @ts-ignore
-const tnat = Pi(Type, Pi(Var(0), Pi(Pi(Var(1), Var(2)), Var(2))));
+const tnat = Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(1), Var(2)), Var(2))));
 // @ts-ignore
-const z = Abs(Type, Abs(Var(0), Abs(Pi(Var(1), Var(2)), Var(1))));
+const z = Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), Var(1))));
 // @ts-ignore
-const s = Abs(tnat, Abs(Type, Abs(Var(0), Abs(Pi(Var(1), Var(2)), App(Var(0), App(App(App(Var(3), Var(2)), Var(1)), Var(0)))))));
+const s = Abs(R, tnat, Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), App(Var(0), R, App(App(App(Var(3), E, Var(2)), R, Var(1)), R, Var(0)))))));
 // @ts-ignore
-const nats: Term[] = [z]; for (let i = 0; i <= 10; i++) nats.push(App(s, nats[i]));
+const nats: Term[] = [z]; for (let i = 0; i <= 10; i++) nats.push(App(s, R, nats[i]));
 // @ts-ignore
-const tsnat = Fix(Type, Pi(Type, Pi(Var(0), Pi(Pi(Var(2), Var(2)), Var(2)))));
+const tsnat = Fix(Type, Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(2), Var(2)), Var(2)))));
 // @ts-ignore
-const sz = Roll(tsnat, Abs(Type, Abs(Var(0), Abs(Pi(tsnat, Var(2)), Var(1)))));
+const sz = Roll(tsnat, Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, tsnat, Var(2)), Var(1)))));
 // @ts-ignore
-const add = Abs(tnat, Abs(tnat, App(App(App(Var(1), tnat), Var(0)), s)));
+const add = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(1), E, tnat), R, Var(0)), R, s)));
 // @ts-ignore
-const mul = Abs(tnat, Abs(tnat, App(App(App(Var(1), tnat), z), App(add, Var(0)))));
+const mul = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(1), E, tnat), R, z), R, App(add, R, Var(0)))));
 // @ts-ignore
-const pow = Abs(tnat, Abs(tnat, App(App(App(Var(0), tnat), App(s, z)), App(mul, Var(1)))));
+const pow = Abs(R, tnat, Abs(R, tnat, App(App(App(Var(0), E, tnat), R, nats[1]), R, App(mul, R, Var(1)))));
 
-const tm = Abs(Pi(Type, tsnat), Unroll(App(Var(0), Type)));
+const tm = App(nats[2], R, Type);
 console.log(showTerm(tm));
 const ty = typecheck(tm, Nil, Nil, 0);
 console.log(showTerm(ty));

@@ -1,5 +1,5 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, Head, vapp, Elim } from './domain';
-import { Term, showTerm, Pi } from './syntax';
+import { Term, showTerm, Pi, eqMeta } from './syntax';
 import { terr } from '../../util';
 import { Ix } from '../../names';
 import { index, length, zipWithR_ } from '../../list';
@@ -12,7 +12,8 @@ const eqHead = (a: Head, b: Head): boolean => {
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
   if (a.tag === 'EUnroll' && b.tag === 'EUnroll') return;
-  if (a.tag === 'EApp' && b.tag === 'EApp') return unify(k, a.arg, b.arg);
+  if (a.tag === 'EApp' && b.tag === 'EApp' && eqMeta(a.meta, b.meta))
+    return unify(k, a.arg, b.arg);
   return terr(`unify failed (${k}): ${showTerm(quote(x, k))} ~ ${showTerm(quote(y, k))}`);
 };
 const unify = (k: Ix, a: Val, b: Val): void => {
@@ -22,7 +23,7 @@ const unify = (k: Ix, a: Val, b: Val): void => {
     unify(k, a.type, b.type);
     return unify(k, a.term, b.term);
   }
-  if (a.tag === 'VPi' && b.tag === 'VPi') {
+  if (a.tag === 'VPi' && b.tag === 'VPi' && eqMeta(a.meta, b.meta)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, a.body(v), a.body(v));
@@ -32,18 +33,18 @@ const unify = (k: Ix, a: Val, b: Val): void => {
     const v = VVar(k);
     return unify(k + 1, a.body(v), a.body(v));
   }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs') {
+  if (a.tag === 'VAbs' && b.tag === 'VAbs' && eqMeta(a.meta, b.meta)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, a.body(v), a.body(v));
   }
   if (a.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(k + 1, a.body(v), vapp(b, v));
+    return unify(k + 1, a.body(v), vapp(b, a.meta, v));
   }
   if (b.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(k + 1, vapp(a, v), b.body(v));
+    return unify(k + 1, vapp(a, b.meta, v), b.body(v));
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
     return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
@@ -66,19 +67,27 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
     return index(ts, tm.index) || terr(`var out of scope ${showTerm(tm)}`);
   if (tm.tag === 'App') {
     const ty = synth(ts, vs, k, tm.left);
-    return synthapp(ts, vs, k, ty, tm.right);
+    if (ty.tag === 'VPi' && eqMeta(ty.meta, tm.meta)) {
+      check(ts, vs, k, tm.right, ty.type);
+      return ty.body(evaluate(tm.right, vs));
+    }
+    return terr(`invalid type or meta mismatch in synthapp in ${showTerm(tm)}: ${showTerm(quote(ty, k))} ${tm.meta.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
   }
   if (tm.tag === 'Abs') {
+    // TODO: check erased arguments are not used
     check(ts, vs, k, tm.type, VType);
     const type = evaluate(tm.type, vs);
     const rt = synth(extendV(ts, type), extendV(vs, VVar(k)), k + 1, tm.body);
-    return evaluate(Pi(tm.type, quote(rt, k + 1)), vs);
+    // TODO: avoid quote here
+    return evaluate(Pi(tm.meta, tm.type, quote(rt, k + 1)), vs);
   }
   if (tm.tag === 'Let') {
+    // TODO: check erased arguments are not used
     const vty = synth(ts, vs, k, tm.val);
     return synth(extendV(ts, vty), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.body);
   }
   if (tm.tag === 'Pi') {
+    // TODO: check erased arguments are not used
     check(ts, vs, k, tm.type, VType);
     check(extendV(ts, evaluate(tm.type, vs)), extendV(vs, VVar(k)), k + 1, tm.body, VType);
     return VType;
@@ -92,26 +101,18 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
   if (tm.tag === 'Roll') {
     check(ts, vs, k, tm.type, VType);
     const vt = evaluate(tm.type, vs);
-    if (vt.tag !== 'VFix')
-      return terr(`fix type expected in ${showTerm(tm)}: ${showTerm(quote(vt, k))}`);
-    check(ts, vs, k, tm.term, vt.body(vt));
-    return vt;
+    if (vt.tag === 'VFix') {
+      check(ts, vs, k, tm.term, vt.body(vt));
+      return vt;
+    }
+    return terr(`fix type expected in ${showTerm(tm)}: ${showTerm(quote(vt, k))}`);
   }
   if (tm.tag === 'Unroll') {
     const vt = synth(ts, vs, k, tm.term);
-    if (vt.tag !== 'VFix')
-      return terr(`fix type expected in ${showTerm(tm)}: ${showTerm(quote(vt, k))}`);
-    return vt.body(vt);
+    if (vt.tag === 'VFix') return vt.body(vt);
+    return terr(`fix type expected in ${showTerm(tm)}: ${showTerm(quote(vt, k))}`);
   }
   return terr(`cannot synth ${showTerm(tm)}`);
-};
-
-const synthapp = (ts: EnvV, vs: EnvV, k: Ix, ty: Val, tm: Term): Val => {
-  if (ty.tag === 'VPi') {
-    check(ts, vs, k, tm, ty.type);
-    return ty.body(evaluate(tm, vs));
-  }
-  return terr(`invalid type in synthapp: ${showTerm(quote(ty, k))} @ ${showTerm(tm)}`);
 };
 
 export const typecheck = (tm: Term, ts: EnvV, vs: EnvV, k: Ix): Term =>

@@ -2,6 +2,7 @@ import { Ix } from '../../names';
 import * as U from '../untyped/syntax';
 
 export type Meta = { erased: boolean };
+export const eqMeta = (a: Meta, b: Meta): boolean => a.erased === b.erased;
 
 export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
 

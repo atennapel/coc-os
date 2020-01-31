@@ -1,6 +1,6 @@
 import { Ix } from '../../names';
 import { List, Cons, Nil, toString, index, foldr } from '../../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Meta, eqMeta } from './syntax';
 import { impossible } from '../../util';
 
 export type Head = HVar;
@@ -10,8 +10,8 @@ export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
 
 export type Elim = EApp | EUnroll
 
-export type EApp = { tag: 'EApp', arg: Val };
-export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
+export type EApp = { tag: 'EApp', meta: Meta, arg: Val };
+export const EApp = (meta: Meta, arg: Val): EApp => ({ tag: 'EApp', meta, arg });
 export type EUnroll = { tag: 'EUnroll' };
 export const EUnroll: EUnroll = { tag: 'EUnroll' };
 
@@ -20,12 +20,12 @@ export type Val = VNe | VAbs | VRoll | VPi | VFix | VType;
 
 export type VNe = { tag: 'VNe', head: Head, args: List<Elim> };
 export const VNe = (head: Head, args: List<Elim>): VNe => ({ tag: 'VNe', head, args });
-export type VAbs = { tag: 'VAbs', type: Val, body: Clos };
-export const VAbs = (type: Val, body: Clos): VAbs => ({ tag: 'VAbs', type, body});
+export type VAbs = { tag: 'VAbs', meta: Meta, type: Val, body: Clos };
+export const VAbs = (meta: Meta, type: Val, body: Clos): VAbs => ({ tag: 'VAbs', meta, type, body});
 export type VRoll = { tag: 'VRoll', type: Val, term: Val };
 export const VRoll = (type: Val, term: Val): VRoll => ({ tag: 'VRoll', type, term });
-export type VPi = { tag: 'VPi', type: Val, body: Clos };
-export const VPi = (type: Val, body: Clos): VPi => ({ tag: 'VPi', type, body});
+export type VPi = { tag: 'VPi', meta: Meta, type: Val, body: Clos };
+export const VPi = (meta: Meta, type: Val, body: Clos): VPi => ({ tag: 'VPi', meta, type, body});
 export type VFix = { tag: 'VFix', type: Val, body: Clos };
 export const VFix = (type: Val, body: Clos): VFix => ({ tag: 'VFix', type, body});
 export type VType = { tag: 'VType' };
@@ -37,9 +37,9 @@ export type EnvV = List<Val>;
 export const extendV = (vs: EnvV, val: Val): EnvV => Cons(val, vs);
 export const showEnvV = (l: EnvV, k: Ix = 0): string => toString(l, v => showTerm(quote(v, k)));
 
-export const vapp = (a: Val, b: Val): Val => {
-  if (a.tag === 'VAbs') return a.body(b);
-  if (a.tag === 'VNe') return VNe(a.head, Cons(EApp(b), a.args));
+export const vapp = (a: Val, meta: Meta, b: Val): Val => {
+  if (a.tag === 'VAbs' && eqMeta(a.meta, meta)) return a.body(b);
+  if (a.tag === 'VNe') return VNe(a.head, Cons(EApp(meta, b), a.args));
   return impossible(`vapp: ${a.tag}`);
 };
 export const vunroll = (v: Val): Val => {
@@ -52,9 +52,9 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Var')
     return index(vs, t.index) || impossible(`evaluate ${t.index}`);
   if (t.tag === 'App')
-    return vapp(evaluate(t.left, vs), evaluate(t.right, vs));
+    return vapp(evaluate(t.left, vs), t.meta, evaluate(t.right, vs));
   if (t.tag === 'Abs')
-    return VAbs(evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
+    return VAbs(t.meta, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Let')
     return evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
   if (t.tag === 'Roll')
@@ -62,7 +62,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Unroll')
     return vunroll(evaluate(t.term, vs));
   if (t.tag === 'Pi')
-    return VPi(evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
+    return VPi(t.meta, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Fix')
     return VFix(evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   return t;
@@ -73,7 +73,7 @@ const quoteHead = (h: Head, k: Ix): Term => {
   return h.tag;
 };
 const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
-  if (e.tag === 'EApp') return App(t, quote(e.arg, k));
+  if (e.tag === 'EApp') return App(t, e.meta, quote(e.arg, k));
   if (e.tag === 'EUnroll') return Unroll(t);
   return e;
 };
@@ -86,9 +86,9 @@ export const quote = (v: Val, k: Ix): Term => {
       v.args,
     );
   if (v.tag === 'VAbs')
-    return Abs(quote(v.type, k), quote(v.body(VVar(k)), k + 1));
+    return Abs(v.meta, quote(v.type, k), quote(v.body(VVar(k)), k + 1));
   if (v.tag === 'VPi')
-    return Pi(quote(v.type, k), quote(v.body(VVar(k)), k + 1));
+    return Pi(v.meta, quote(v.type, k), quote(v.body(VVar(k)), k + 1));
   if (v.tag === 'VFix')
     return Fix(quote(v.type, k), quote(v.body(VVar(k)), k + 1));
   if (v.tag === 'VRoll')
