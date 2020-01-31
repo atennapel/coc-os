@@ -12,10 +12,33 @@ export const Abs = (body: Term): Abs => ({ tag: 'Abs', body });
 
 export const idTerm = Abs(Var(0));
 
+export const showTermS = (t: Term): string => {
+  if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'App') return `(${showTermS(t.left)} ${showTermS(t.right)})`;
+  if (t.tag === 'Abs') return `(\\${showTermS(t.body)})`;
+  return t;
+};
+
+export const flattenApp = (t: Term): [Term, Term[]] => {
+  const r: Term[] = [];
+  while (t.tag === 'App') {
+    r.push(t.right);
+    t = t.left;
+  }
+  return [t, r.reverse()];
+};
+
+export const showTermP = (b: boolean, t: Term): string =>
+  b ? `(${showTerm(t)})` : showTerm(t);
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
-  if (t.tag === 'App') return `(${showTerm(t.left)} ${showTerm(t.right)})`;
-  if (t.tag === 'Abs') return `(\\${showTerm(t.body)})`;
+  if (t.tag === 'App') {
+    const [f, as] = flattenApp(t);
+    return `${showTermP(f.tag === 'Abs' || f.tag === 'App', f)} ${
+      as.map((t, i) =>
+          `${showTermP(t.tag === 'App' || (t.tag === 'Abs' && i < as.length - 1), t)}`).join(' ')}`;
+  }
+  if (t.tag === 'Abs') return `\\${showTerm(t.body)}`;
   return t;
 };
 
