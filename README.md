@@ -21,3 +21,9 @@ TODO:
 - Improve impredicative type inference
 - Solve issue with unnecessary eta-abstractions
 ```
+
+```
+TODO core:
+- Implicits
+- Glued and globals
+```
