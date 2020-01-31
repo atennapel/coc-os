@@ -24,5 +24,5 @@ TODO:
 
 ```
 TODO core:
-- Fix erasure (shift erased variables)
+- pretty print syntax
 ```

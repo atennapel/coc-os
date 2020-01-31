@@ -1,5 +1,4 @@
 import { Ix, Name } from '../../names';
-import * as U from '../untyped/syntax';
 
 export type Meta = { erased: boolean };
 export const eqMeta = (a: Meta, b: Meta): boolean => a.erased === b.erased;
@@ -39,17 +38,4 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Fix') return `(fix ${showTerm(t.type)}. ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
   return t;
-};
-
-export const erase = (t: Term): U.Term => {
-  if (t.tag === 'Var') return U.Var(t.index);
-  if (t.tag === 'App') return t.meta.erased ? erase(t.left) : U.App(erase(t.left), erase(t.right));
-  if (t.tag === 'Abs') return t.meta.erased ? erase(t.body) : U.Abs(erase(t.body));
-  if (t.tag === 'Let') return t.meta.erased ? erase(t.body) : U.App(U.Abs(erase(t.body)), erase(t.val));
-  if (t.tag === 'Roll') return erase(t.term);
-  if (t.tag === 'Unroll') return erase(t.term);
-  if (t.tag === 'Pi') return U.idTerm;
-  if (t.tag === 'Fix') return U.idTerm;
-  if (t.tag === 'Type') return U.idTerm;
-  throw new Error(`unable to erase: ${showTerm(t)}`);
 };

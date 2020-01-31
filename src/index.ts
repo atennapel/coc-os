@@ -1,5 +1,5 @@
 // @ts-ignore
-import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, erase, Meta, Term, Global } from './rewrite/core/syntax';
+import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, Meta, Term, Global } from './rewrite/core/syntax';
 import * as U from './rewrite/untyped/syntax'
 import * as UD from './rewrite/untyped/domain'
 import { typecheck } from './rewrite/core/typecheck';
@@ -52,7 +52,7 @@ console.log(showTerm(norm));
 const norm2 = normalize(tm, Nil, 0, true);
 console.log(showTerm(norm2));
 console.log('erased:');
-const erased = erase(norm2);
+const erased = U.erase(norm2);
 console.log(U.showTerm(erased));
 const erasedn = UD.normalize(erased, Nil, 0);
 console.log(U.showTerm(erasedn));
