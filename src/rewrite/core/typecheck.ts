@@ -4,18 +4,22 @@ import { terr, impossible } from '../../util';
 import { Ix } from '../../names';
 import { index, length, zipWithR_ } from '../../list';
 import { globalGet } from './globalenv';
+import { forceLazy } from '../../lazy';
+
+const showTermQ = (v: Val, k: number = 0, full: boolean = false): string => showTerm(quote(v, k, full));
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
   if (a.tag === 'HVar') return b.tag === 'HVar' && a.index === b.index;
-  return false;
+  if (a.tag === 'HGlobal') return b.tag === 'HGlobal' && a.name === b.name;
+  return a;
 };
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
   if (a.tag === 'EUnroll' && b.tag === 'EUnroll') return;
   if (a.tag === 'EApp' && b.tag === 'EApp' && eqMeta(a.meta, b.meta))
     return unify(k, a.arg, b.arg);
-  return terr(`unify failed (${k}): ${showTerm(quote(x, k))} ~ ${showTerm(quote(y, k))}`);
+  return terr(`unify failed (${k}): ${showTermQ(x, k)} ~ ${showTermQ(y, k)}`);
 };
 const unify = (k: Ix, a: Val, b: Val): void => {
   if (a === b) return;
@@ -49,7 +53,17 @@ const unify = (k: Ix, a: Val, b: Val): void => {
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
     return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
-  return terr(`unify failed (${k}): ${showTerm(quote(a, k))} ~ ${showTerm(quote(b, k))}`);
+  if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && length(a.args) === length(b.args)) {
+    try {
+      return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+    } catch(err) {
+      if (!(err instanceof TypeError)) throw err;
+      return unify(k, forceLazy(a.val), forceLazy(b.val));
+    }
+  }
+  if (a.tag === 'VGlued') return unify(k, forceLazy(a.val), b);
+  if (b.tag === 'VGlued') return unify(k, a, forceLazy(b.val));
+  return terr(`unify failed (${k}): ${showTermQ(a, k)} ~ ${showTermQ(b, k)}`);
 };
 
 const erasedUsed = (k: Ix, t: Term): boolean => {
@@ -72,7 +86,7 @@ const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
     unify(k, ty2, ty);
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
-    terr(`failed to unify ${showTerm(quote(ty2, k))} ~ ${showTerm(quote(ty, k))}: ${err.message}`);
+    terr(`failed to unify ${showTermQ(ty2, k)} ~ ${showTermQ(ty, k)}: ${err.message}`);
   }
 };
 
@@ -90,7 +104,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
       check(ts, vs, k, tm.right, ty.type);
       return ty.body(evaluate(tm.right, vs));
     }
-    return terr(`invalid type or meta mismatch in synthapp in ${showTerm(tm)}: ${showTerm(quote(ty, k))} ${tm.meta.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
+    return terr(`invalid type or meta mismatch in synthapp in ${showTerm(tm)}: ${showTermQ(ty, k)} ${tm.meta.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
   }
   if (tm.tag === 'Abs') {
     check(ts, vs, k, tm.type, VType);
@@ -99,7 +113,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
     if (tm.meta.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showTerm(tm)}`);
     // TODO: avoid quote here
-    return evaluate(Pi(tm.meta, tm.type, quote(rt, k + 1)), vs);
+    return evaluate(Pi(tm.meta, tm.type, quote(rt, k + 1, false)), vs);
   }
   if (tm.tag === 'Let') {
     const vty = synth(ts, vs, k, tm.val);
@@ -126,15 +140,15 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
       check(ts, vs, k, tm.term, vt.body(vt));
       return vt;
     }
-    return terr(`fix type expected in ${showTerm(tm)}: ${showTerm(quote(vt, k))}`);
+    return terr(`fix type expected in ${showTerm(tm)}: ${showTermQ(vt, k)}`);
   }
   if (tm.tag === 'Unroll') {
     const vt = synth(ts, vs, k, tm.term);
     if (vt.tag === 'VFix') return vt.body(vt);
-    return terr(`fix type expected in ${showTerm(tm)}: ${showTerm(quote(vt, k))}`);
+    return terr(`fix type expected in ${showTerm(tm)}: ${showTermQ(vt, k)}`);
   }
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 
-export const typecheck = (tm: Term, ts: EnvV, vs: EnvV, k: Ix): Term =>
-  quote(synth(ts, vs, k, tm), k);
+export const typecheck = (tm: Term, ts: EnvV, vs: EnvV, k: Ix, full: boolean): Term =>
+  quote(synth(ts, vs, k, tm), k, full);

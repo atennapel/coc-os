@@ -24,5 +24,5 @@ TODO:
 
 ```
 TODO core:
-- Glued evaluation
+- Fix erasure (shift erased variables)
 ```
