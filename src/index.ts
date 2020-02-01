@@ -8,9 +8,10 @@ import { typecheck } from './rewrite/core/typecheck';
 import { Nil } from './list';
 import { normalize, evaluate } from './rewrite/core/domain';
 import { globalSet, globalReset } from './rewrite/core/globalenv';
+import { parse } from './rewrite/parser';
 
-const E: Meta = { erased: true };
-const R: Meta = { erased: false };
+const E = S.MetaE;
+const R = S.MetaR;
 
 // @ts-ignore
 const tid = Pi(E, Type, Pi(R, Var(0), Var(1)));
@@ -33,7 +34,7 @@ globalSet('SNat', evaluate(Fix(Type, Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(2
 globalSet('SZ', evaluate(Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), Var(1)))))), evaluate(Global('SNat')));
 globalSet('SS', evaluate(Abs(R, Global('SNat'), Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), App(Var(0), R, Var(3)))))))), evaluate(Pi(R, Global('SNat'), Global('SNat'))));
 
-const tm1 = S.Abs(R, 'x', S.Type, S.Var('x'));
+const tm1 = parse('\\{t : *} (z : t) (s : t -> t). z');
 console.log(S.showTerm(tm1));
 const tm2 = SS.toSurface(tm1);
 console.log(SS.showTerm(tm2));

@@ -3,6 +3,9 @@ import { Name } from '../names';
 export type Meta = { erased: boolean };
 export const eqMeta = (a: Meta, b: Meta): boolean => a.erased === b.erased;
 
+export const MetaE: Meta = { erased: true };
+export const MetaR: Meta = { erased: false };
+
 export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
 
 export type Var = { tag: 'Var', name: Name };
