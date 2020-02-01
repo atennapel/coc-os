@@ -15,8 +15,8 @@ yarn start lib/nat.coc
 ```
 
 ```
-TODO core:
-- from surface to user-facing convertion
+TODO:
+- fix surface to user-facing conversion (shadowed names)
 - bidirectional typechecking
 - typecheck definitions
 - setup REPL

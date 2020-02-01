@@ -1,7 +1,8 @@
 import { Ix, Name } from '../../names';
 import * as S from '../syntax';
 import { Meta } from '../syntax';
-import { List, lookup, Cons, Nil } from '../../list';
+import { List, lookup, Cons, Nil, index } from '../../list';
+import { impossible } from '../../util';
 
 export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
 
@@ -53,5 +54,22 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
   if (t.tag === 'Pi') return Pi(t.meta, t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Fix') return Fix(t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Type') return Type;
+  return t;
+};
+
+export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
+  if (t.tag === 'Var') {
+    const l = index(ns, t.index);
+    return l ? S.Var(l) : impossible(`var index out of range in fromSurface: ${t.index}`);
+  }
+  if (t.tag === 'Type') return S.Type;
+  if (t.tag === 'Global') return S.Var(t.name);
+  if (t.tag === 'App') return S.App(fromSurface(t.left, ns), t.meta, fromSurface(t.right, ns));
+  if (t.tag === 'Roll') return S.Roll(fromSurface(t.type, ns), fromSurface(t.term, ns));
+  if (t.tag === 'Unroll') return S.Unroll(fromSurface(t.term, ns));
+  if (t.tag === 'Abs') return S.Abs(t.meta, t.name, fromSurface(t.type, ns), fromSurface(t.body, Cons(t.name, ns)));
+  if (t.tag === 'Let') return S.Let(t.meta, t.name, fromSurface(t.val, ns), fromSurface(t.body, Cons(t.name, ns)));
+  if (t.tag === 'Pi') return S.Pi(t.meta, t.name, fromSurface(t.type, ns), fromSurface(t.body, Cons(t.name, ns)));
+  if (t.tag === 'Fix') return S.Fix(t.name, fromSurface(t.type, ns), fromSurface(t.body, Cons(t.name, ns)));
   return t;
 };
