@@ -25,4 +25,8 @@ TODO:
 ```
 TODO core:
 - pretty print syntax
+- from surface to user-facing convertion
+- bidirectional typechecking
+- typecheck definitions
+- meta variables
 ```
