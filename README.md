@@ -16,8 +16,8 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- bidirectional typechecking
 - typecheck definitions
+- bidirectional typechecking
 - setup REPL
 - pretty print syntax
 - meta variables

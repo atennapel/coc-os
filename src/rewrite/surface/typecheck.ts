@@ -1,11 +1,12 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermQ } from './domain';
 import { Term, showTerm, Pi } from './syntax';
 import { terr, impossible } from '../../util';
-import { Ix } from '../../names';
-import { index } from '../../list';
-import { globalGet } from './globalenv';
+import { Ix, Name } from '../../names';
+import { index, Nil } from '../../list';
+import { globalGet, globalSet } from './globalenv';
 import { eqMeta } from '../syntax';
 import { unify } from './unify';
+import { Def } from './definitions';
 
 const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Var') return t.index === k;
@@ -93,3 +94,16 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
 
 export const typecheck = (tm: Term, ts: EnvV, vs: EnvV, k: Ix, full: boolean): Term =>
   quote(synth(ts, vs, k, tm), k, full);
+
+export const typecheckDefs = (ds: Def[]): Name[] => {
+  const xs: Name[] = [];
+  for (let i = 0; i < ds.length; i++) {
+    const d = ds[i];
+    if (d.tag === 'DDef') {
+      const ty = typecheck(d.value, Nil, Nil, 0, false);
+      globalSet(d.name, evaluate(d.value), evaluate(ty));
+      xs.push(d.name);
+    }
+  }
+  return xs;
+};
