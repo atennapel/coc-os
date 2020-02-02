@@ -693,7 +693,7 @@ exports.runREPL = (_s, _cb) => {
             tm_ = tt;
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(ty)));
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(tt)));
-            const eras = syntax_3.erase(tt);
+            const eras = syntax_3.erase(domain_1.normalize(tt, list_1.Nil, 0, true));
             config_1.log(() => syntax_3.showTerm(eras));
             msg += `type: ${syntax_1.showTerm(syntax_2.fromSurface(ty))}\nterm: ${syntax_1.showTerm(syntax_2.fromSurface(tt))}\neras: ${syntax_3.showTerm(eras)}`;
             if (typeOnly)
@@ -706,7 +706,7 @@ exports.runREPL = (_s, _cb) => {
         try {
             const n = domain_1.normalize(tm_, list_1.Nil, 0, true);
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(n)));
-            const er = syntax_3.erase(n);
+            const er = syntax_3.erase(domain_1.normalize(n, list_1.Nil, 0, true));
             config_1.log(() => syntax_3.showTerm(er));
             msg += `\nnorm: ${syntax_1.showTerm(syntax_2.fromSurface(n))}\neran: ${syntax_3.showTerm(er)}`;
             return _cb(msg);

@@ -104,7 +104,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       tm_ = tt;
       log(() => showTerm(fromSurface(ty)));
       log(() => showTerm(fromSurface(tt)));
-      const eras = erase(tt);
+      const eras = erase(normalize(tt, Nil, 0, true));
       log(() => showTermE(eras));
       msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(tt))}\neras: ${showTermE(eras)}`;
       if (typeOnly) return _cb(msg);
@@ -115,7 +115,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     try {
       const n = normalize(tm_, Nil, 0, true);
       log(() => showTerm(fromSurface(n)));
-      const er = erase(n);
+      const er = erase(normalize(n, Nil, 0, true));
       log(() => showTermE(er));
       msg += `\nnorm: ${showTerm(fromSurface(n))}\neran: ${showTermE(er)}`;
       return _cb(msg);
