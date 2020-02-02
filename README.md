@@ -16,9 +16,10 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- typecheck definitions
+- force glued before checking types
+- fix REPL "unable to erase" bug
+- fix error message, convert to readable syntax
 - bidirectional typechecking
-- setup REPL
 - pretty print syntax
 - meta variables
 - improve type inference of annotated lambdas
