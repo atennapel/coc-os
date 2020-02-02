@@ -17,7 +17,7 @@ yarn start lib/nat.coc
 ```
 TODO:
 - fix error message, convert to readable syntax
-- annotations and bidirectional typechecking
+- bidirectional typechecking
 - pretty print syntax
 - holes and meta variables
 - automatic insertion of meta variables

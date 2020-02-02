@@ -70,6 +70,8 @@ exports.toCore = (t) => {
         return exports.Fix(exports.toCore(t.type), exports.toCore(t.body));
     if (t.tag === 'Type')
         return exports.Type;
+    if (t.tag === 'Ann')
+        return exports.toCore(t.term);
     return t;
 };
 
@@ -406,14 +408,12 @@ const exprs = (ts, br) => {
         return unit;
     if (ts.length === 1)
         return expr(ts[0])[0];
-    /*
     const i = ts.findIndex(x => isName(x, ':'));
     if (i >= 0) {
-      const a = ts.slice(0, i);
-      const b = ts.slice(i + 1);
-      return Ann(exprs(a, '('), exprs(b, '('));
+        const a = ts.slice(0, i);
+        const b = ts.slice(i + 1);
+        return syntax_1.Ann(exprs(a, '('), exprs(b, '('));
     }
-    */
     if (isName(ts[0], '\\')) {
         const args = [];
         let found = false;
@@ -563,23 +563,26 @@ exports.parseDefs = (s) => {
                 ds.push(definitions_1.DDef(name, exprs(c.slice(fst + 1), '(')));
                 continue;
             }
+            else if (sym.name === ':') {
+                const tyts = [];
+                let j = fst + 1;
+                for (; j < c.length; j++) {
+                    const v = c[j];
+                    if (v.tag === 'Name' && v.name === '=')
+                        break;
+                    else
+                        tyts.push(v);
+                }
+                const ety = exprs(tyts, '(');
+                const body = exprs(c.slice(j + 1), '(');
+                ds.push(definitions_1.DDef(name, syntax_1.Ann(body, ety)));
+                continue;
+            }
             else
-                return util_1.serr(`def should start with a name`);
-            /* else if (sym.name === ':') {
-              const tyts: Token[] = [];
-              let j = fst + 1;
-              for (; j < c.length; j++) {
-                const v = c[j];
-                if (v.tag === 'Name' && v.name === '=')
-                  break;
-                else tyts.push(v);
-              }
-              const ety = exprs(tyts, '(');
-              const body = exprs(c.slice(j + 1), '(');
-              ds.push(DDef(name, Ann(body, ety), opq));
-              continue;
-            } else return serr(`def: : or = expected but got ${sym.name}`);*/
+                return util_1.serr(`def: : or = expected but got ${sym.name}`);
         }
+        else
+            return util_1.serr(`def should start with a name`);
     }
     return ds;
 };
@@ -597,6 +600,7 @@ const typecheck_1 = require("./surface/typecheck");
 const definitions_1 = require("./surface/definitions");
 const syntax_3 = require("./untyped/syntax");
 const list_1 = require("./list");
+const syntax_4 = require("./core/syntax");
 const help = `
 EXAMPLES
 identity = \\{t : *} (x : t). x
@@ -693,7 +697,7 @@ exports.runREPL = (_s, _cb) => {
             tm_ = tt;
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(ty)));
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(tt)));
-            const eras = syntax_3.erase(domain_1.normalize(tt, list_1.Nil, 0, true));
+            const eras = syntax_3.erase(syntax_4.toCore(domain_1.normalize(tt, list_1.Nil, 0, true)));
             config_1.log(() => syntax_3.showTerm(eras));
             msg += `type: ${syntax_1.showTerm(syntax_2.fromSurface(ty))}\nterm: ${syntax_1.showTerm(syntax_2.fromSurface(tt))}\neras: ${syntax_3.showTerm(eras)}`;
             if (typeOnly)
@@ -706,7 +710,7 @@ exports.runREPL = (_s, _cb) => {
         try {
             const n = domain_1.normalize(tm_, list_1.Nil, 0, true);
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(n)));
-            const er = syntax_3.erase(domain_1.normalize(n, list_1.Nil, 0, true));
+            const er = syntax_3.erase(syntax_4.toCore(domain_1.normalize(n, list_1.Nil, 0, true)));
             config_1.log(() => syntax_3.showTerm(er));
             msg += `\nnorm: ${syntax_1.showTerm(syntax_2.fromSurface(n))}\neran: ${syntax_3.showTerm(er)}`;
             return _cb(msg);
@@ -723,7 +727,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./list":5,"./parser":7,"./surface/definitions":9,"./surface/domain":10,"./surface/globalenv":11,"./surface/syntax":12,"./surface/typecheck":13,"./syntax":15,"./untyped/syntax":16,"fs":19}],9:[function(require,module,exports){
+},{"./config":1,"./core/syntax":2,"./list":5,"./parser":7,"./surface/definitions":9,"./surface/domain":10,"./surface/globalenv":11,"./surface/syntax":12,"./surface/typecheck":13,"./syntax":15,"./untyped/syntax":16,"fs":19}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -810,6 +814,8 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.VPi(t.meta, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Fix')
         return exports.VFix(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
+    if (t.tag === 'Ann')
+        return exports.evaluate(t.term, vs);
     return t;
 };
 const quoteHead = (h, k) => {
@@ -879,6 +885,7 @@ exports.Unroll = (term) => ({ tag: 'Unroll', term });
 exports.Pi = (meta, name, type, body) => ({ tag: 'Pi', meta, name, type, body });
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
+exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -900,6 +907,8 @@ exports.showTerm = (t) => {
         return `(fix (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
     if (t.tag === 'Type')
         return '*';
+    if (t.tag === 'Ann')
+        return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
@@ -923,6 +932,8 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return exports.Fix(t.name, exports.toSurface(t.type, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
     if (t.tag === 'Type')
         return exports.Type;
+    if (t.tag === 'Ann')
+        return exports.Ann(exports.toSurface(t.term, ns, k), exports.toSurface(t.type, ns, k));
     return t;
 };
 const globalUsed = (k, t) => {
@@ -940,6 +951,8 @@ const globalUsed = (k, t) => {
         return globalUsed(k, t.type) || globalUsed(k, t.body);
     if (t.tag === 'Fix')
         return globalUsed(k, t.type) || globalUsed(k, t.body);
+    if (t.tag === 'Ann')
+        return globalUsed(k, t.term) || globalUsed(k, t.type);
     if (t.tag === 'Global')
         return t.name === k;
     if (t.tag === 'Var')
@@ -965,6 +978,8 @@ const indexUsed = (k, t) => {
         return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
     if (t.tag === 'Fix')
         return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+    if (t.tag === 'Ann')
+        return indexUsed(k, t.term) || indexUsed(k, t.type);
     if (t.tag === 'Global')
         return false;
     if (t.tag === 'Type')
@@ -991,6 +1006,8 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         return S.Roll(exports.fromSurface(t.type, ns), exports.fromSurface(t.term, ns));
     if (t.tag === 'Unroll')
         return S.Unroll(exports.fromSurface(t.term, ns));
+    if (t.tag === 'Ann')
+        return S.Ann(exports.fromSurface(t.term, ns), exports.fromSurface(t.type, ns));
     if (t.tag === 'Abs') {
         const x = decideName(t.name, t.body, ns);
         return S.Abs(t.meta, x, exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
@@ -1034,6 +1051,8 @@ const erasedUsed = (k, t) => {
     if (t.tag === 'Roll')
         return erasedUsed(k, t.term);
     if (t.tag === 'Unroll')
+        return erasedUsed(k, t.term);
+    if (t.tag === 'Ann')
         return erasedUsed(k, t.term);
     if (t.tag === 'Pi')
         return false;
@@ -1112,6 +1131,12 @@ const synth = (ts, vs, k, tm) => {
         if (vt.tag === 'VFix')
             return vt.body(vt);
         return util_1.terr(`fix type expected in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(vt, k)}`);
+    }
+    if (tm.tag === 'Ann') {
+        check(ts, vs, k, tm.type, domain_1.VType);
+        const vt = domain_1.evaluate(tm.type, vs);
+        check(ts, vs, k, tm.term, vt);
+        return vt;
     }
     return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
 };
@@ -1221,6 +1246,7 @@ exports.Unroll = (term) => ({ tag: 'Unroll', term });
 exports.Pi = (meta, name, type, body) => ({ tag: 'Pi', meta, name, type, body });
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
+exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1240,6 +1266,8 @@ exports.showTerm = (t) => {
         return `(fix (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
     if (t.tag === 'Type')
         return '*';
+    if (t.tag === 'Ann')
+        return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
     return t;
 };
 

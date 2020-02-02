@@ -50,5 +50,6 @@ export const toCore = (t: S.Term): Term => {
   if (t.tag === 'Pi') return Pi(t.meta, toCore(t.type), toCore(t.body));
   if (t.tag === 'Fix') return Fix(toCore(t.type), toCore(t.body));
   if (t.tag === 'Type') return Type;
+  if (t.tag === 'Ann') return toCore(t.term);
   return t;
 };

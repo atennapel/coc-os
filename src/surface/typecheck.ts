@@ -16,6 +16,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.meta.erased && erasedUsed(k, t.val));
   if (t.tag === 'Roll') return erasedUsed(k, t.term);
   if (t.tag === 'Unroll') return erasedUsed(k, t.term);
+  if (t.tag === 'Ann') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;
@@ -88,6 +89,12 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
     const vt = force(synth(ts, vs, k, tm.term));
     if (vt.tag === 'VFix') return vt.body(vt);
     return terr(`fix type expected in ${showTerm(tm)}: ${showTermQ(vt, k)}`);
+  }
+  if (tm.tag === 'Ann') {
+    check(ts, vs, k, tm.type, VType);
+    const vt = evaluate(tm.type, vs);
+    check(ts, vs, k, tm.term, vt);
+    return vt;
   }
   return terr(`cannot synth ${showTerm(tm)}`);
 };

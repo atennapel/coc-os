@@ -8,6 +8,7 @@ import { typecheckDefs, typecheck } from './surface/typecheck';
 import { toSurfaceDefs } from './surface/definitions';
 import { erase, showTerm as showTermE } from './untyped/syntax';
 import { Nil } from './list';
+import { toCore } from './core/syntax';
 
 const help = `
 EXAMPLES
@@ -104,7 +105,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       tm_ = tt;
       log(() => showTerm(fromSurface(ty)));
       log(() => showTerm(fromSurface(tt)));
-      const eras = erase(normalize(tt, Nil, 0, true));
+      const eras = erase(toCore(normalize(tt, Nil, 0, true)));
       log(() => showTermE(eras));
       msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(tt))}\neras: ${showTermE(eras)}`;
       if (typeOnly) return _cb(msg);
@@ -115,7 +116,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     try {
       const n = normalize(tm_, Nil, 0, true);
       log(() => showTerm(fromSurface(n)));
-      const er = erase(normalize(n, Nil, 0, true));
+      const er = erase(toCore(normalize(n, Nil, 0, true)));
       log(() => showTermE(er));
       msg += `\nnorm: ${showTerm(fromSurface(n))}\neran: ${showTermE(er)}`;
       return _cb(msg);

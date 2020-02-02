@@ -64,7 +64,7 @@ export const vunroll = (v: Val): Val => {
     return VGlued(v.head, Cons(EUnroll, v.args), mapLazy(v.val, v => vunroll(v)));
   return impossible(`vunroll: ${v.tag}`);
 };
-export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
+export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var')
     return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
@@ -86,6 +86,8 @@ export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
     return VPi(t.meta, t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Fix')
     return VFix(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
+  if (t.tag === 'Ann')
+    return evaluate(t.term, vs);
   return t;
 };
 

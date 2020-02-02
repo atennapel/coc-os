@@ -6,7 +6,7 @@ export const eqMeta = (a: Meta, b: Meta): boolean => a.erased === b.erased;
 export const MetaE: Meta = { erased: true };
 export const MetaR: Meta = { erased: false };
 
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -26,6 +26,8 @@ export type Fix = { tag: 'Fix', name: Name, type: Term, body: Term };
 export const Fix = (name: Name, type: Term, body: Term): Fix => ({ tag: 'Fix', name, type, body });
 export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
+export type Ann = { tag: 'Ann', term: Term, type: Term };
+export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -37,5 +39,6 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Pi') return `(/(${t.meta.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Fix') return `(fix (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
+  if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
   return t;
 };

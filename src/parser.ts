@@ -1,5 +1,5 @@
 import { serr } from './util'
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, MetaR, MetaE } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, MetaR, MetaE, Ann } from './syntax';
 import { log } from './config';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
@@ -157,14 +157,12 @@ const exprs = (ts: Token[], br: BracketO): Term => {
   if (br === '{') return serr(`{} cannot be used here`);
   if (ts.length === 0) return unit;
   if (ts.length === 1) return expr(ts[0])[0];
-  /*
   const i = ts.findIndex(x => isName(x, ':'));
   if (i >= 0) {
     const a = ts.slice(0, i);
     const b = ts.slice(i + 1);
     return Ann(exprs(a, '('), exprs(b, '('));
   }
-  */
   if (isName(ts[0], '\\')) {
     const args: [Name, boolean, Term | null][] = [];
     let found = false;
@@ -296,8 +294,7 @@ export const parseDefs = (s: string): Def[] => {
       if (sym.name === '=') {
         ds.push(DDef(name, exprs(c.slice(fst + 1), '(')));
         continue;
-      } else return serr(`def should start with a name`);
-      /* else if (sym.name === ':') {
+      } else if (sym.name === ':') {
         const tyts: Token[] = [];
         let j = fst + 1;
         for (; j < c.length; j++) {
@@ -308,10 +305,10 @@ export const parseDefs = (s: string): Def[] => {
         }
         const ety = exprs(tyts, '(');
         const body = exprs(c.slice(j + 1), '(');
-        ds.push(DDef(name, Ann(body, ety), opq));
+        ds.push(DDef(name, Ann(body, ety)));
         continue;
-      } else return serr(`def: : or = expected but got ${sym.name}`);*/
-    }
+      } else return serr(`def: : or = expected but got ${sym.name}`);
+    } else return serr(`def should start with a name`);
   }
   return ds;
 };
