@@ -1,7 +1,7 @@
-import { Ix, Name } from '../../names';
+import { Ix, Name, nextName } from '../../names';
 import * as S from '../syntax';
 import { Meta } from '../syntax';
-import { List, lookup, Cons, Nil, index } from '../../list';
+import { List, lookup, Cons, Nil, index, indecesOf } from '../../list';
 import { impossible } from '../../util';
 
 export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
@@ -57,6 +57,40 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
   return t;
 };
 
+const globalUsed = (k: Name, t: Term): boolean => {
+  if (t.tag === 'App') return globalUsed(k, t.left) || globalUsed(k, t.right);
+  if (t.tag === 'Abs') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Let') return globalUsed(k, t.val) || globalUsed(k, t.body);
+  if (t.tag === 'Roll') return globalUsed(k, t.type) || globalUsed(k, t.term);
+  if (t.tag === 'Unroll') return globalUsed(k, t.term);
+  if (t.tag === 'Pi') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Fix') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Global') return t.name === k;
+  if (t.tag === 'Var') return false;
+  if (t.tag === 'Type') return false;
+  return t;
+};
+
+const indexUsed = (k: Ix, t: Term): boolean => {
+  if (t.tag === 'Var') return t.index === k;
+  if (t.tag === 'App') return indexUsed(k, t.left) || indexUsed(k, t.right);
+  if (t.tag === 'Abs') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Let') return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Roll') return indexUsed(k, t.type) || indexUsed(k, t.term);
+  if (t.tag === 'Unroll') return indexUsed(k, t.term);
+  if (t.tag === 'Pi') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Fix') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Global') return false;
+  if (t.tag === 'Type') return false;
+  return t;
+};
+
+const decideName = (x: Name, t: Term, ns: List<Name>): Name => {
+  const a = indecesOf(ns, x).map(i => indexUsed(i + 1, t)).reduce((x, y) => x || y, false);
+  const g = globalUsed(x, t);
+  return a || g ? decideName(nextName(x), t, ns) : x;
+};
+
 export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'Var') {
     const l = index(ns, t.index);
@@ -67,9 +101,21 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'App') return S.App(fromSurface(t.left, ns), t.meta, fromSurface(t.right, ns));
   if (t.tag === 'Roll') return S.Roll(fromSurface(t.type, ns), fromSurface(t.term, ns));
   if (t.tag === 'Unroll') return S.Unroll(fromSurface(t.term, ns));
-  if (t.tag === 'Abs') return S.Abs(t.meta, t.name, fromSurface(t.type, ns), fromSurface(t.body, Cons(t.name, ns)));
-  if (t.tag === 'Let') return S.Let(t.meta, t.name, fromSurface(t.val, ns), fromSurface(t.body, Cons(t.name, ns)));
-  if (t.tag === 'Pi') return S.Pi(t.meta, t.name, fromSurface(t.type, ns), fromSurface(t.body, Cons(t.name, ns)));
-  if (t.tag === 'Fix') return S.Fix(t.name, fromSurface(t.type, ns), fromSurface(t.body, Cons(t.name, ns)));
+  if (t.tag === 'Abs') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Abs(t.meta, x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
+  }
+  if (t.tag === 'Let') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Let(t.meta, x, fromSurface(t.val, ns), fromSurface(t.body, Cons(x, ns)));
+  }
+  if (t.tag === 'Pi') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Pi(t.meta, x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
+  }
+  if (t.tag === 'Fix') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Fix(x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
+  }
   return t;
 };

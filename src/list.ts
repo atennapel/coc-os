@@ -93,6 +93,17 @@ export const index = <T>(l: List<T>, i: number): T | null => {
   return null;
 };
 
+export const indecesOf = <T>(l: List<T>, val: T): number[] => {
+  const a: number[] = [];
+  let i = 0;
+  while (l.tag === 'Cons') {
+    if (l.head === val) a.push(i);
+    l = l.tail;
+    i++;
+  }
+  return a;
+};
+
 export const extend = <K, T>(name: K, val: T, rest: List<[K, T]>): List<[K, T]> =>
   Cons([name, val] as [K, T], rest);
 export const lookup = <K, T>(l: List<[K, T]>, name: K, eq: (a: K, b: K) => boolean = (x, y) => x === y): T | null => {
