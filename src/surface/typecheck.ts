@@ -1,4 +1,4 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermQ, force } from './domain';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermQ, force, showEnvV } from './domain';
 import { Term, showTerm, Pi } from './syntax';
 import { terr, impossible } from '../util';
 import { Ix, Name } from '../names';
@@ -7,6 +7,7 @@ import { globalGet, globalSet } from './globalenv';
 import { eqMeta } from '../syntax';
 import { unify } from './unify';
 import { Def } from './definitions';
+import { log } from '../config';
 
 const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Var') return t.index === k;
@@ -24,6 +25,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
 };
 
 const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
+  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, k, false))} in ${showEnvV(ts)} and ${showEnvV(vs)}`);
   const ty2 = synth(ts, vs, k, tm);
   try {
     unify(k, ty2, ty);
@@ -34,6 +36,7 @@ const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
 };
 
 const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
+  log(() => `synth ${showTerm(tm)} in ${showEnvV(ts)} and ${showEnvV(vs)}`);
   if (tm.tag === 'Type') return VType;
   if (tm.tag === 'Var')
     return index(ts, tm.index) || terr(`var out of scope ${showTerm(tm)}`);

@@ -1037,6 +1037,7 @@ const list_1 = require("../list");
 const globalenv_1 = require("./globalenv");
 const syntax_2 = require("../syntax");
 const unify_1 = require("./unify");
+const config_1 = require("../config");
 const erasedUsed = (k, t) => {
     if (t.tag === 'Var')
         return t.index === k;
@@ -1063,6 +1064,7 @@ const erasedUsed = (k, t) => {
     return t;
 };
 const check = (ts, vs, k, tm, ty) => {
+    config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(domain_1.quote(ty, k, false))} in ${domain_1.showEnvV(ts)} and ${domain_1.showEnvV(vs)}`);
     const ty2 = synth(ts, vs, k, tm);
     try {
         unify_1.unify(k, ty2, ty);
@@ -1074,6 +1076,7 @@ const check = (ts, vs, k, tm, ty) => {
     }
 };
 const synth = (ts, vs, k, tm) => {
+    config_1.log(() => `synth ${syntax_1.showTerm(tm)} in ${domain_1.showEnvV(ts)} and ${domain_1.showEnvV(vs)}`);
     if (tm.tag === 'Type')
         return domain_1.VType;
     if (tm.tag === 'Var')
@@ -1154,7 +1157,7 @@ exports.typecheckDefs = (ds) => {
     return xs;
 };
 
-},{"../list":5,"../syntax":15,"../util":17,"./domain":10,"./globalenv":11,"./syntax":12,"./unify":14}],14:[function(require,module,exports){
+},{"../config":1,"../list":5,"../syntax":15,"../util":17,"./domain":10,"./globalenv":11,"./syntax":12,"./unify":14}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const domain_1 = require("./domain");

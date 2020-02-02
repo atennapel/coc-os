@@ -16,6 +16,7 @@ yarn start lib/nat.coc
 
 ```
 TODO:
+- fix parsing of unroll
 - fix error message, convert to readable syntax
 - bidirectional typechecking
 - pretty print syntax
@@ -24,4 +25,8 @@ TODO:
 - improve type inference of annotated lambdas
 - improve impredicative type inference
 - solve issue with unnecessary eta-abstractions
+
+BUGS:
+- lib/parigot-nat.p Error: impossible: vapp: VRoll (sub 1 0)
+- lib/list.p Cons type error
 ```
