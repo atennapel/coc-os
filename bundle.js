@@ -644,7 +644,7 @@ exports.runREPL = (_s, _cb) => {
         }
         if (_s === ':defs') {
             const e = globalenv_1.globalMap();
-            const msg = Object.keys(e).map(k => `def ${k} : ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quote(e[k].type, 0, true)))} = ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quote(e[k].type, 0, true)))}`).join('\n');
+            const msg = Object.keys(e).map(k => `def ${k} : ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quote(e[k].type, 0, false)))} = ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quote(e[k].val, 0, false)))}`).join('\n');
             return _cb(msg || 'no definitions');
         }
         if (_s.startsWith(':del')) {

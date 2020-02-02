@@ -54,7 +54,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     }
     if (_s === ':defs') {
       const e = globalMap();
-      const msg = Object.keys(e).map(k => `def ${k} : ${showTerm(fromSurface(quote(e[k].type, 0, true)))} = ${showTerm(fromSurface(quote(e[k].type, 0, true)))}`).join('\n');
+      const msg = Object.keys(e).map(k => `def ${k} : ${showTerm(fromSurface(quote(e[k].type, 0, false)))} = ${showTerm(fromSurface(quote(e[k].val, 0, false)))}`).join('\n');
       return _cb(msg || 'no definitions');
     }
     if (_s.startsWith(':del')) {
