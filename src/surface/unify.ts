@@ -4,6 +4,7 @@ import { terr } from '../util';
 import { eqMeta } from '../syntax';
 import { zipWithR_, length } from '../list';
 import { forceLazy } from '../lazy';
+import { log } from '../config';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -21,6 +22,7 @@ const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
 };
 
 export const unify = (k: Ix, a: Val, b: Val): void => {
+  log(() => `unify ${showTermQ(a, k)} ~ ${showTermQ(b, k)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VRoll' && b.tag === 'VRoll') {
@@ -30,17 +32,17 @@ export const unify = (k: Ix, a: Val, b: Val): void => {
   if (a.tag === 'VPi' && b.tag === 'VPi' && eqMeta(a.meta, b.meta)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
+    return unify(k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VFix' && b.tag === 'VFix') {
     unify(k, a.type, b.type);
     const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
+    return unify(k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs' && b.tag === 'VAbs' && eqMeta(a.meta, b.meta)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
+    return unify(k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs') {
     const v = VVar(k);

@@ -55,7 +55,7 @@ export const vapp = (a: Val, meta: Meta, b: Val): Val => {
   if (a.tag === 'VNe') return VNe(a.head, Cons(EApp(meta, b), a.args));
   if (a.tag === 'VGlued')
     return VGlued(a.head, Cons(EApp(meta, b), a.args), mapLazy(a.val, v => vapp(v, meta, b)));
-  return impossible(`vapp: ${a.tag}`);
+  return impossible(`core vapp: ${a.tag}`);
 };
 export const vunroll = (v: Val): Val => {
   if (v.tag === 'VRoll') return v.term;

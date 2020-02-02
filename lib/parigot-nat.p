@@ -15,9 +15,9 @@ def recNat
 
 def pred : Nat -> Nat = \(n : Nat). caseNat {Nat} n Z (\(n : Nat). n)
 
-def add : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). recNat {Nat} n m S
-def mul : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). recNat {Nat} n Z (add m)
-def pow : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). recNat {Nat} m (S Z) (mul n)
+def add : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} n m S
+def mul : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} n Z (add m)
+def pow : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} m (S Z) (mul n)
 
-def sub : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). recNat {Nat} n Z pred
-def div : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). recNat {Nat} n Z (sub m)
+def sub : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} m n pred
+def div : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} n Z (sub m)

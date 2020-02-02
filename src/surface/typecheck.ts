@@ -6,7 +6,7 @@ import { index, Nil } from '../list';
 import { globalGet, globalSet } from './globalenv';
 import { eqMeta } from '../syntax';
 import { unify } from './unify';
-import { Def } from './definitions';
+import { Def, showDef } from './definitions';
 import { log } from '../config';
 
 const erasedUsed = (k: Ix, t: Term): boolean => {
@@ -25,7 +25,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
 };
 
 const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
-  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, k, false))} in ${showEnvV(ts)} and ${showEnvV(vs)}`);
+  log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, k, false))} in ${showEnvV(ts, k, false)} and ${showEnvV(vs, k, false)}`);
   const ty2 = synth(ts, vs, k, tm);
   try {
     unify(k, ty2, ty);
@@ -36,7 +36,7 @@ const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
 };
 
 const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
-  log(() => `synth ${showTerm(tm)} in ${showEnvV(ts)} and ${showEnvV(vs)}`);
+  log(() => `synth ${showTerm(tm)} in ${showEnvV(ts, k, false)} and ${showEnvV(vs, k, false)}`);
   if (tm.tag === 'Type') return VType;
   if (tm.tag === 'Var')
     return index(ts, tm.index) || terr(`var out of scope ${showTerm(tm)}`);
@@ -109,6 +109,7 @@ export const typecheckDefs = (ds: Def[]): Name[] => {
   const xs: Name[] = [];
   for (let i = 0; i < ds.length; i++) {
     const d = ds[i];
+    log(() => `typecheckDefs ${showDef(d)}`);
     if (d.tag === 'DDef') {
       const ty = typecheck(d.value, Nil, Nil, 0, false);
       globalSet(d.name, evaluate(d.value), evaluate(ty));

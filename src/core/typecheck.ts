@@ -31,17 +31,17 @@ const unify = (k: Ix, a: Val, b: Val): void => {
   if (a.tag === 'VPi' && b.tag === 'VPi' && eqMeta(a.meta, b.meta)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
+    return unify(k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VFix' && b.tag === 'VFix') {
     unify(k, a.type, b.type);
     const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
+    return unify(k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs' && b.tag === 'VAbs' && eqMeta(a.meta, b.meta)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
+    return unify(k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs') {
     const v = VVar(k);

@@ -774,8 +774,11 @@ exports.force = (v) => {
     return v;
 };
 exports.vapp = (a, meta, b) => {
-    if (a.tag === 'VAbs' && syntax_2.eqMeta(a.meta, meta))
+    if (a.tag === 'VAbs') {
+        if (!syntax_2.eqMeta(a.meta, meta))
+            return util_1.impossible(`vapp VAbs meta mismatch: ${exports.showTermQ(a, 0, false)} ${meta.erased ? '-' : ''}@ ${exports.showTermQ(b, 0, false)}`);
         return a.body(b);
+    }
     if (a.tag === 'VNe')
         return exports.VNe(a.head, list_1.Cons(exports.EApp(meta, b), a.args));
     if (a.tag === 'VGlued')
@@ -1037,6 +1040,7 @@ const list_1 = require("../list");
 const globalenv_1 = require("./globalenv");
 const syntax_2 = require("../syntax");
 const unify_1 = require("./unify");
+const definitions_1 = require("./definitions");
 const config_1 = require("../config");
 const erasedUsed = (k, t) => {
     if (t.tag === 'Var')
@@ -1064,7 +1068,7 @@ const erasedUsed = (k, t) => {
     return t;
 };
 const check = (ts, vs, k, tm, ty) => {
-    config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(domain_1.quote(ty, k, false))} in ${domain_1.showEnvV(ts)} and ${domain_1.showEnvV(vs)}`);
+    config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(domain_1.quote(ty, k, false))} in ${domain_1.showEnvV(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     const ty2 = synth(ts, vs, k, tm);
     try {
         unify_1.unify(k, ty2, ty);
@@ -1076,7 +1080,7 @@ const check = (ts, vs, k, tm, ty) => {
     }
 };
 const synth = (ts, vs, k, tm) => {
-    config_1.log(() => `synth ${syntax_1.showTerm(tm)} in ${domain_1.showEnvV(ts)} and ${domain_1.showEnvV(vs)}`);
+    config_1.log(() => `synth ${syntax_1.showTerm(tm)} in ${domain_1.showEnvV(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (tm.tag === 'Type')
         return domain_1.VType;
     if (tm.tag === 'Var')
@@ -1148,6 +1152,7 @@ exports.typecheckDefs = (ds) => {
     const xs = [];
     for (let i = 0; i < ds.length; i++) {
         const d = ds[i];
+        config_1.log(() => `typecheckDefs ${definitions_1.showDef(d)}`);
         if (d.tag === 'DDef') {
             const ty = exports.typecheck(d.value, list_1.Nil, list_1.Nil, 0, false);
             globalenv_1.globalSet(d.name, domain_1.evaluate(d.value), domain_1.evaluate(ty));
@@ -1157,7 +1162,7 @@ exports.typecheckDefs = (ds) => {
     return xs;
 };
 
-},{"../config":1,"../list":5,"../syntax":15,"../util":17,"./domain":10,"./globalenv":11,"./syntax":12,"./unify":14}],14:[function(require,module,exports){
+},{"../config":1,"../list":5,"../syntax":15,"../util":17,"./definitions":9,"./domain":10,"./globalenv":11,"./syntax":12,"./unify":14}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const domain_1 = require("./domain");
@@ -1165,6 +1170,7 @@ const util_1 = require("../util");
 const syntax_1 = require("../syntax");
 const list_1 = require("../list");
 const lazy_1 = require("../lazy");
+const config_1 = require("../config");
 const eqHead = (a, b) => {
     if (a === b)
         return true;
@@ -1184,6 +1190,7 @@ const unifyElim = (k, a, b, x, y) => {
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(x, k)} ~ ${domain_1.showTermQ(y, k)}`);
 };
 exports.unify = (k, a, b) => {
+    config_1.log(() => `unify ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
     if (a === b)
         return;
     if (a.tag === 'VType' && b.tag === 'VType')
@@ -1195,17 +1202,17 @@ exports.unify = (k, a, b) => {
     if (a.tag === 'VPi' && b.tag === 'VPi' && syntax_1.eqMeta(a.meta, b.meta)) {
         exports.unify(k, a.type, b.type);
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, a.body(v), a.body(v));
+        return exports.unify(k + 1, a.body(v), b.body(v));
     }
     if (a.tag === 'VFix' && b.tag === 'VFix') {
         exports.unify(k, a.type, b.type);
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, a.body(v), a.body(v));
+        return exports.unify(k + 1, a.body(v), b.body(v));
     }
     if (a.tag === 'VAbs' && b.tag === 'VAbs' && syntax_1.eqMeta(a.meta, b.meta)) {
         exports.unify(k, a.type, b.type);
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, a.body(v), a.body(v));
+        return exports.unify(k + 1, a.body(v), b.body(v));
     }
     if (a.tag === 'VAbs') {
         const v = domain_1.VVar(k);
@@ -1234,7 +1241,7 @@ exports.unify = (k, a, b) => {
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
 };
 
-},{"../lazy":4,"../list":5,"../syntax":15,"../util":17,"./domain":10}],15:[function(require,module,exports){
+},{"../config":1,"../lazy":4,"../list":5,"../syntax":15,"../util":17,"./domain":10}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.eqMeta = (a, b) => a.erased === b.erased;

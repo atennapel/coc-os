@@ -51,7 +51,11 @@ export const force = (v: Val): Val => {
 };
 
 export const vapp = (a: Val, meta: Meta, b: Val): Val => {
-  if (a.tag === 'VAbs' && eqMeta(a.meta, meta)) return a.body(b);
+  if (a.tag === 'VAbs') {
+    if (!eqMeta(a.meta, meta))
+      return impossible(`vapp VAbs meta mismatch: ${showTermQ(a, 0, false)} ${meta.erased ? '-' : ''}@ ${showTermQ(b, 0, false)}`);
+    return a.body(b);
+  }
   if (a.tag === 'VNe') return VNe(a.head, Cons(EApp(meta, b), a.args));
   if (a.tag === 'VGlued')
     return VGlued(a.head, Cons(EApp(meta, b), a.args), mapLazy(a.val, v => vapp(v, meta, b)));
