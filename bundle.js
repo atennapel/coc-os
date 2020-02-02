@@ -764,6 +764,11 @@ exports.VVar = (index) => exports.VNe(exports.HVar(index), list_1.Nil);
 exports.VGlobal = (name) => exports.VNe(exports.HGlobal(name), list_1.Nil);
 exports.extendV = (vs, val) => list_1.Cons(val, vs);
 exports.showEnvV = (l, k = 0, full = false) => list_1.toString(l, v => syntax_1.showTerm(exports.quote(v, k, full)));
+exports.force = (v) => {
+    if (v.tag === 'VGlued')
+        return exports.force(lazy_1.forceLazy(v.val));
+    return v;
+};
 exports.vapp = (a, meta, b) => {
     if (a.tag === 'VAbs' && syntax_2.eqMeta(a.meta, meta))
         return a.body(b);
@@ -1059,7 +1064,7 @@ const synth = (ts, vs, k, tm) => {
         return entry ? entry.type : util_1.impossible(`global ${tm.name} not found`);
     }
     if (tm.tag === 'App') {
-        const ty = synth(ts, vs, k, tm.left);
+        const ty = domain_1.force(synth(ts, vs, k, tm.left));
         if (ty.tag === 'VPi' && syntax_2.eqMeta(ty.meta, tm.meta)) {
             check(ts, vs, k, tm.right, ty.type);
             return ty.body(domain_1.evaluate(tm.right, vs));
@@ -1095,7 +1100,7 @@ const synth = (ts, vs, k, tm) => {
     }
     if (tm.tag === 'Roll') {
         check(ts, vs, k, tm.type, domain_1.VType);
-        const vt = domain_1.evaluate(tm.type, vs);
+        const vt = domain_1.force(domain_1.evaluate(tm.type, vs));
         if (vt.tag === 'VFix') {
             check(ts, vs, k, tm.term, vt.body(vt));
             return vt;
@@ -1103,7 +1108,7 @@ const synth = (ts, vs, k, tm) => {
         return util_1.terr(`fix type expected in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(vt, k)}`);
     }
     if (tm.tag === 'Unroll') {
-        const vt = synth(ts, vs, k, tm.term);
+        const vt = domain_1.force(synth(ts, vs, k, tm.term));
         if (vt.tag === 'VFix')
             return vt.body(vt);
         return util_1.terr(`fix type expected in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(vt, k)}`);

@@ -1,4 +1,4 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermQ } from './domain';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermQ, force } from './domain';
 import { Term, showTerm, Pi } from './syntax';
 import { terr, impossible } from '../util';
 import { Ix, Name } from '../names';
@@ -41,7 +41,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
     return entry ? entry.type : impossible(`global ${tm.name} not found`);
   }
   if (tm.tag === 'App') {
-    const ty = synth(ts, vs, k, tm.left);
+    const ty = force(synth(ts, vs, k, tm.left));
     if (ty.tag === 'VPi' && eqMeta(ty.meta, tm.meta)) {
       check(ts, vs, k, tm.right, ty.type);
       return ty.body(evaluate(tm.right, vs));
@@ -77,7 +77,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
   }
   if (tm.tag === 'Roll') {
     check(ts, vs, k, tm.type, VType);
-    const vt = evaluate(tm.type, vs);
+    const vt = force(evaluate(tm.type, vs));
     if (vt.tag === 'VFix') {
       check(ts, vs, k, tm.term, vt.body(vt));
       return vt;
@@ -85,7 +85,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
     return terr(`fix type expected in ${showTerm(tm)}: ${showTermQ(vt, k)}`);
   }
   if (tm.tag === 'Unroll') {
-    const vt = synth(ts, vs, k, tm.term);
+    const vt = force(synth(ts, vs, k, tm.term));
     if (vt.tag === 'VFix') return vt.body(vt);
     return terr(`fix type expected in ${showTerm(tm)}: ${showTermQ(vt, k)}`);
   }

@@ -16,7 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- force glued before checking types
 - fix REPL "unable to erase" bug
 - fix error message, convert to readable syntax
 - bidirectional typechecking

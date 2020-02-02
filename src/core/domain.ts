@@ -45,6 +45,11 @@ export type EnvV = List<Val>;
 export const extendV = (vs: EnvV, val: Val): EnvV => Cons(val, vs);
 export const showEnvV = (l: EnvV, k: Ix = 0, full: boolean = false): string => toString(l, v => showTerm(quote(v, k, full)));
 
+export const force = (v: Val): Val => {
+  if (v.tag === 'VGlued') return force(forceLazy(v.val));
+  return v;
+};
+
 export const vapp = (a: Val, meta: Meta, b: Val): Val => {
   if (a.tag === 'VAbs' && eqMeta(a.meta, meta)) return a.body(b);
   if (a.tag === 'VNe') return VNe(a.head, Cons(EApp(meta, b), a.args));
