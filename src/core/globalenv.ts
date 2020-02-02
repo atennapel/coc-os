@@ -1,5 +1,5 @@
 import { Val } from './domain';
-import { Name } from '../../names';
+import { Name } from '../names';
 
 export type EnvGEntry = { val: Val, type: Val };
 export type EnvG = { [key: string]: EnvGEntry };

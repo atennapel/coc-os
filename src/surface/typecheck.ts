@@ -1,70 +1,12 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, Head, vapp, Elim, showTermQ } from './domain';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermQ } from './domain';
 import { Term, showTerm, Pi } from './syntax';
-import { terr, impossible } from '../../util';
-import { Ix, Name } from '../../names';
-import { index, length, zipWithR_, Nil } from '../../list';
+import { terr, impossible } from '../util';
+import { Ix, Name } from '../names';
+import { index, Nil } from '../list';
 import { globalGet, globalSet } from './globalenv';
-import { forceLazy } from '../../lazy';
 import { eqMeta } from '../syntax';
+import { unify } from './unify';
 import { Def } from './definitions';
-
-const eqHead = (a: Head, b: Head): boolean => {
-  if (a === b) return true;
-  if (a.tag === 'HVar') return b.tag === 'HVar' && a.index === b.index;
-  if (a.tag === 'HGlobal') return b.tag === 'HGlobal' && a.name === b.name;
-  return a;
-};
-const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
-  if (a === b) return;
-  if (a.tag === 'EUnroll' && b.tag === 'EUnroll') return;
-  if (a.tag === 'EApp' && b.tag === 'EApp' && eqMeta(a.meta, b.meta))
-    return unify(k, a.arg, b.arg);
-  return terr(`unify failed (${k}): ${showTermQ(x, k)} ~ ${showTermQ(y, k)}`);
-};
-const unify = (k: Ix, a: Val, b: Val): void => {
-  if (a === b) return;
-  if (a.tag === 'VType' && b.tag === 'VType') return;
-  if (a.tag === 'VRoll' && b.tag === 'VRoll') {
-    unify(k, a.type, b.type);
-    return unify(k, a.term, b.term);
-  }
-  if (a.tag === 'VPi' && b.tag === 'VPi' && eqMeta(a.meta, b.meta)) {
-    unify(k, a.type, b.type);
-    const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
-  }
-  if (a.tag === 'VFix' && b.tag === 'VFix') {
-    unify(k, a.type, b.type);
-    const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
-  }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs' && eqMeta(a.meta, b.meta)) {
-    unify(k, a.type, b.type);
-    const v = VVar(k);
-    return unify(k + 1, a.body(v), a.body(v));
-  }
-  if (a.tag === 'VAbs') {
-    const v = VVar(k);
-    return unify(k + 1, a.body(v), vapp(b, a.meta, v));
-  }
-  if (b.tag === 'VAbs') {
-    const v = VVar(k);
-    return unify(k + 1, vapp(a, b.meta, v), b.body(v));
-  }
-  if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
-    return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
-  if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && length(a.args) === length(b.args)) {
-    try {
-      return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
-    } catch(err) {
-      if (!(err instanceof TypeError)) throw err;
-      return unify(k, forceLazy(a.val), forceLazy(b.val));
-    }
-  }
-  if (a.tag === 'VGlued') return unify(k, forceLazy(a.val), b);
-  if (b.tag === 'VGlued') return unify(k, a, forceLazy(b.val));
-  return terr(`unify failed (${k}): ${showTermQ(a, k)} ~ ${showTermQ(b, k)}`);
-};
 
 const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Var') return t.index === k;
@@ -113,7 +55,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
     if (tm.meta.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showTerm(tm)}`);
     // TODO: avoid quote here
-    return evaluate(Pi(tm.meta, tm.type, quote(rt, k + 1, false)), vs);
+    return evaluate(Pi(tm.meta, tm.name, tm.type, quote(rt, k + 1, false)), vs);
   }
   if (tm.tag === 'Let') {
     const vty = synth(ts, vs, k, tm.val);
@@ -150,7 +92,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 
-export const typecheck = (tm: Term, ts: EnvV, vs: EnvV, k: Ix, full: boolean): Term =>
+export const typecheck = (tm: Term, ts: EnvV = Nil, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term =>
   quote(synth(ts, vs, k, tm), k, full);
 
 export const typecheckDefs = (ds: Def[]): Name[] => {

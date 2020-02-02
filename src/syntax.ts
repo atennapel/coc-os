@@ -1,4 +1,4 @@
-import { Name } from '../names';
+import { Name } from './names';
 
 export type Meta = { erased: boolean };
 export const eqMeta = (a: Meta, b: Meta): boolean => a.erased === b.erased;

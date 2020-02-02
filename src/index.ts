@@ -1,16 +1,15 @@
-// @ts-ignore
-import { Pi, Type, Abs, Var, App, Fix, Roll, Unroll, showTerm, Meta, Term, Global, toCore } from './rewrite/core/syntax';
-import * as U from './rewrite/untyped/syntax';
-import * as UD from './rewrite/untyped/domain';
-import * as S from './rewrite/syntax';
-import * as SS from './rewrite/surface/syntax';
-import { typecheck } from './rewrite/core/typecheck';
-import { typecheck as typecheckS } from './rewrite/surface/typecheck';
-import { normalize as normalizeS } from './rewrite/surface/domain';
+import { Pi, Type, Abs, Var, App, Fix, Roll, showTerm, Term, Global, toCore } from './core/syntax';
+import * as U from './untyped/syntax';
+import * as UD from './untyped/domain';
+import * as S from './syntax';
+import * as SS from './surface/syntax';
+import { typecheck } from './core/typecheck';
+import { typecheck as typecheckS } from './surface/typecheck';
+import { normalize as normalizeS } from './surface/domain';
 import { Nil } from './list';
-import { normalize, evaluate } from './rewrite/core/domain';
-import { globalSet, globalReset } from './rewrite/core/globalenv';
-import { parse } from './rewrite/parser';
+import { normalize, evaluate } from './core/domain';
+import { globalSet, globalReset } from './core/globalenv';
+import { parse } from './parser';
 
 const E = S.MetaE;
 const R = S.MetaR;

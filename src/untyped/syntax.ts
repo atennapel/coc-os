@@ -1,4 +1,4 @@
-import { Ix } from '../../names';
+import { Ix } from '../names';
 import { Term as TTerm, showTerm as showTTerm } from '../core/syntax';
 
 export type Term = Var | App | Abs;

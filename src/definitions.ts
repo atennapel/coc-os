@@ -1,6 +1,5 @@
-import { Name } from '../../names';
-import { Term, showTerm, toCore } from './syntax';
-import * as D from '../surface/definitions';
+import { Name } from './names';
+import { Term, showTerm } from './syntax';
 
 export type Def = DDef;
 
@@ -9,10 +8,5 @@ export const DDef = (name: Name, value: Term): DDef => ({ tag: 'DDef', name, val
 
 export const showDef = (d: Def): string => {
   if (d.tag === 'DDef') return `def ${d.name} = ${showTerm(d.value)}`;
-  return d.tag;
-};
-
-export const toCoreDef = (d: D.Def): Def => {
-  if (d.tag === 'DDef') return DDef(d.name, toCore(d.value));
   return d.tag;
 };

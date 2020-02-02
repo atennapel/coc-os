@@ -1,13 +1,9 @@
+import { parse, parseDefs } from './surface/parser';
 import { log, setConfig, config } from './config';
-import { globalReset, globalMap, globalDelete } from './surface/globalenv';
-import { showTerm } from './syntax';
-import { quote, normalize } from './surface/domain';
-import { fromSurface, toSurface } from './surface/syntax';
-import { parseDefs, parse } from './parser';
-import { typecheckDefs, typecheck } from './surface/typecheck';
-import { toSurfaceDefs } from './surface/definitions';
-import { erase, showTerm as showTermE } from './untyped/syntax';
-import { Nil } from './list';
+import { showTerm, erase } from './surface/syntax';
+import { elaborate, elaborateDefs } from './surface/elaborate';
+import { normalize, quote } from './surface/vals';
+import { resetEnv, getEnvMap, delEnv } from './surface/env';
 
 const help = `
 EXAMPLES
@@ -39,7 +35,7 @@ const loadFile = (fn: string): Promise<string> => {
 };
 
 export const initREPL = () => {
-  globalReset();
+  resetEnv();
 };
 
 export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) => {
@@ -52,20 +48,19 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       return _cb(`debug: ${config.debug}`);
     }
     if (_s === ':defs') {
-      const e = globalMap();
-      const msg = Object.keys(e).map(k => `def ${k} : ${showTerm(fromSurface(quote(e[k].type, 0, true)))} = ${showTerm(fromSurface(quote(e[k].type, 0, true)))}`).join('\n');
+      const e = getEnvMap();
+      const msg = Object.keys(e).map(k => `${e[k].opaque ? 'def opaque' : 'def'} ${k} : ${showTerm(quote(e[k].type))} = ${showTerm(quote(e[k].val))}`).join('\n');
       return _cb(msg || 'no definitions');
     }
     if (_s.startsWith(':del')) {
       const name = _s.slice(4).trim();
-      globalDelete(name);
+      delEnv(name);
       return _cb(`deleted ${name}`);
     }
     if (_s.startsWith(':def')) {
       const rest = _s.slice(1);
       const ds = parseDefs(rest);
-      const dsc = toSurfaceDefs(ds)
-      const xs = typecheckDefs(dsc);
+      const xs = elaborateDefs(ds);
       return _cb(`defined ${xs.join(' ')}`);
     }
     if (_s.startsWith(':import')) {
@@ -74,8 +69,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
         const xs: string[] = [];
         defs.forEach(rest => {
           const ds = parseDefs(rest);
-          const dsc = toSurfaceDefs(ds)
-          const lxs = typecheckDefs(dsc);
+          const lxs = elaborateDefs(ds);
           lxs.forEach(x => xs.push(x));
         });
         return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
@@ -99,25 +93,24 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     try {
       const t = parse(_s);
       log(() => showTerm(t));
-      const tt = toSurface(t);
-      const ty = typecheck(tt);
-      tm_ = tt;
-      log(() => showTerm(fromSurface(ty)));
-      log(() => showTerm(fromSurface(tt)));
-      const eras = erase(tt);
-      log(() => showTermE(eras));
-      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(tt))}\neras: ${showTermE(eras)}`;
+      const [ty, tm] = elaborate(t);
+      tm_ = tm;
+      log(() => showTerm(ty));
+      log(() => showTerm(tm));
+      const eras = erase(tm);
+      log(() => showTerm(eras));
+      msg += `type: ${showTerm(ty)}\nterm: ${showTerm(tm)}\neras: ${showTerm(eras)}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);
       return _cb(''+err, true);
     }
     try {
-      const n = normalize(tm_, Nil, 0, true);
-      log(() => showTerm(fromSurface(n)));
+      const n = normalize(tm_);
+      log(() => showTerm(n));
       const er = erase(n);
-      log(() => showTermE(er));
-      msg += `\nnorm: ${showTerm(fromSurface(n))}\neran: ${showTermE(er)}`;
+      log(() => showTerm(er));
+      msg += `\nnorm: ${showTerm(n)}\neran: ${showTerm(er)}`;
       return _cb(msg);
     } catch (err) {
       log(() => ''+err);

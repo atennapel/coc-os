@@ -1,4 +1,4 @@
-import { Ix, Name } from '../../names';
+import { Ix, Name } from '../names';
 import { Meta } from '../syntax';
 import * as S from '../surface/syntax';
 

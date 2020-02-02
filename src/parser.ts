@@ -1,7 +1,7 @@
-import { serr } from '../util'
+import { serr } from './util'
 import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, MetaR, MetaE } from './syntax';
-import { log } from '../config';
-import { Name } from '../names';
+import { log } from './config';
+import { Name } from './names';
 import { Def, DDef } from './definitions';
 
 type BracketO = '(' | '{'

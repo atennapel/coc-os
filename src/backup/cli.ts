@@ -1,24 +1,21 @@
-import { parseDefs } from './parser';
+import { parseDefs } from './surface/parser';
+import { elaborateDefs } from './surface/elaborate';
 import { initREPL, runREPL } from './repl';
-import { showTerm } from './syntax';
-import { toSurfaceDefs } from './surface/definitions';
-import { globalReset, globalMap } from './surface/globalenv';
-import { typecheckDefs } from './surface/typecheck';
-import { quote } from './surface/domain';
-import { fromSurface } from './surface/syntax';
+import { getEnvMap, resetEnv } from './surface/env';
+import { showTerm } from './surface/syntax';
+import { quote } from './surface/vals';
 
 if (process.argv[2]) {
   try {
-    globalReset();
+    resetEnv();
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
     const ds = parseDefs(sc);
-    const dsc = toSurfaceDefs(ds)
-    const ns = typecheckDefs(dsc);
-    const m = globalMap();
+    const ns = elaborateDefs(ds);
+    const m = getEnvMap();
     const main = m.main;
     if (!main) console.log(`defined ${ns.join(' ')}`);
     else {
-      console.log(`${showTerm(fromSurface(quote(main.val, 0, true)))} : ${showTerm(fromSurface(quote(main.type, 0, false)))}`);
+      console.log(`${showTerm(quote(main.val))} : ${showTerm(quote(main.type))}`);
     }
     process.exit();
   } catch(err) {

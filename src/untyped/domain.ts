@@ -1,7 +1,7 @@
-import { Ix } from '../../names';
-import { List, Cons, Nil, toString, index, foldr } from '../../list';
+import { Ix } from '../names';
+import { List, Cons, Nil, toString, index, foldr } from '../list';
 import { Term, showTerm, Var, App, Abs } from './syntax';
-import { impossible } from '../../util';
+import { impossible } from '../util';
 
 export type Head = HVar;
 

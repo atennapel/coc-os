@@ -1,238 +1,121 @@
-import { Name } from '../names';
-import { TMetaId } from './metas';
+import { Ix, Name, nextName } from '../names';
+import * as S from '../syntax';
+import { Meta } from '../syntax';
+import { List, lookup, Cons, Nil, index, indecesOf } from '../list';
+import { impossible } from '../util';
 
-export type Term
-  = { tag: 'Var', name: Name }
-  | { tag: 'App', left: Term, impl: boolean, right: Term }
-  | { tag: 'Abs', name: Name, impl: boolean, type: Term | null, body: Term }
-  | { tag: 'Pi', name: Name, impl: boolean, type: Term, body: Term }
-  | { tag: 'Fix', self: Name, name: Name, type: Term, body: Term }
-  | { tag: 'Rec', name: Name, type: Term, body: Term }
-  | { tag: 'Let', name: Name, impl: boolean, val: Term, body: Term }
-  | { tag: 'Ann', term: Term, type: Term }
-  | { tag: 'Type' }
-  | { tag: 'Hole' }
-  | { tag: 'Open', names: Name[], body: Term }
-  | { tag: 'Unroll', body: Term }
-  | { tag: 'Roll', type: Term, body: Term }
-  | { tag: 'Meta', id: TMetaId }
-  | { tag: 'Iota', name: Name, type: Term, body: Term }
-  | { tag: 'Both', left: Term, right: Term }
-  | { tag: 'Fst', term: Term }
-  | { tag: 'Snd', term: Term }
-  | { tag: 'Rigid', term: Term }
-  | { tag: 'UnsafeCast', type: Term | null, term: Term };
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
 
-export const Var = (name: Name): Term => ({ tag: 'Var', name });
-export const App = (left: Term, impl: boolean, right: Term): Term =>
-  ({ tag: 'App', left, impl, right });
-export const Abs = (name: Name, impl: boolean, type: Term | null, body: Term): Term =>
-  ({ tag: 'Abs', name, impl, type, body });
-export const Pi = (name: Name, impl: boolean, type: Term, body: Term): Term =>
-  ({ tag: 'Pi', name, impl, type, body });
-export const Fix = (self: Name, name: Name, type: Term, body: Term): Term =>
-  ({ tag: 'Fix', self, name, type, body });
-export const Rec = (name: Name, type: Term, body: Term): Term =>
-  ({ tag: 'Rec', name, type, body });
-export const Let = (name: Name, impl: boolean, val: Term, body: Term): Term =>
-  ({ tag: 'Let', name, impl, val, body });
-export const Ann = (term: Term, type: Term): Term =>
-  ({ tag: 'Ann', term, type });
-export const Type: Term = { tag: 'Type' };
-export const Hole: Term = { tag: 'Hole' };
-export const Open = (names: Name[], body: Term): Term =>
-  ({ tag: 'Open', names, body });
-export const Unroll = (body: Term): Term =>
-  ({ tag: 'Unroll', body });
-export const Roll = (type: Term, body: Term): Term =>
-  ({ tag: 'Roll', type, body });
-export const Meta = (id: TMetaId): Term => ({ tag: 'Meta', id });
-export const Iota = (name: Name, type: Term, body: Term): Term =>
-  ({ tag: 'Iota', name, type, body });
-export const Both = (left: Term, right: Term): Term =>
-  ({ tag: 'Both', left, right });
-export const Fst = (term: Term): Term =>
-  ({ tag: 'Fst', term });
-export const Snd = (term: Term): Term =>
-  ({ tag: 'Snd', term });
-export const Rigid = (term: Term): Term =>
-  ({ tag: 'Rigid', term });
-export const UnsafeCast = (type: Term | null, term: Term): Term =>
-  ({ tag: 'UnsafeCast', type, term });
+export type Var = { tag: 'Var', index: Ix };
+export const Var = (index: Ix): Var => ({ tag: 'Var', index });
+export type Global = { tag: 'Global', name: Name };
+export const Global = (name: Name): Global => ({ tag: 'Global', name });
+export type App = { tag: 'App', left: Term, meta: S.Meta, right: Term };
+export const App = (left: Term, meta: Meta, right: Term): App => ({ tag: 'App', left, meta, right });
+export type Abs = { tag: 'Abs', meta: Meta, name: Name, type: Term, body: Term };
+export const Abs = (meta: Meta, name: Name, type: Term, body: Term): Abs => ({ tag: 'Abs', meta, name, type, body });
+export type Let = { tag: 'Let', meta: Meta, name: Name, val: Term, body: Term };
+export const Let = (meta: Meta, name: Name, val: Term, body: Term): Let => ({ tag: 'Let', meta, name, val, body });
+export type Roll = { tag: 'Roll', type: Term, term: Term };
+export const Roll = (type: Term, term: Term): Roll => ({ tag: 'Roll', type, term });
+export type Unroll = { tag: 'Unroll', term: Term };
+export const Unroll = (term: Term): Unroll => ({ tag: 'Unroll', term });
+export type Pi = { tag: 'Pi', meta: Meta, name: Name, type: Term, body: Term };
+export const Pi = (meta: Meta, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', meta, name, type, body });
+export type Fix = { tag: 'Fix', name: Name, type: Term, body: Term };
+export const Fix = (name: Name, type: Term, body: Term): Fix => ({ tag: 'Fix', name, type, body });
+export type Type = { tag: 'Type' };
+export const Type: Type = { tag: 'Type' };
 
-export const showTermSimple = (t: Term): string => {
-  if (t.tag === 'Var') return t.name;
-  if (t.tag === 'App')
-    return `(${showTermSimple(t.left)} ${t.impl ? '{' : ''}${showTermSimple(t.right)}${t.impl ? '}' : ''})`;
-  if (t.tag === 'Abs')
-    return t.type ?
-      `(\\${t.impl ? '{' : '('}${t.name} : ${showTermSimple(t.type)}${t.impl ? '}' : ')'}. ${showTermSimple(t.body)})` :
-      `(\\${t.impl ? '{' : ''}${t.name}${t.impl ? '}' : ''}. ${showTermSimple(t.body)})`;
-  if (t.tag === 'Pi')
-    return `(${t.impl ? '{' : '('}${t.name} : ${showTermSimple(t.type)}${t.impl ? '}' : ')'} -> ${showTermSimple(t.body)})`;
-  if (t.tag === 'Fix')
-    return `(fix (${t.self} @ ${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
-  if (t.tag === 'Rec')
-    return `(rec (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
-  if (t.tag === 'Let')
-    return `(let ${t.impl ? '{' : ''}${t.name}${t.impl ? '}' : ''} = ${showTermSimple(t.val)} in ${showTermSimple(t.body)})`;
-  if (t.tag === 'Ann')
-    return `(${showTermSimple(t.term)} : ${showTermSimple(t.type)})`;
-  if (t.tag === 'Type') return `*`;
-  if (t.tag === 'Hole') return `_`;
-  if (t.tag === 'Open')
-    return `(open ${t.names.join(' ')} in ${showTermSimple(t.body)})`;
-  if (t.tag === 'Unroll')
-    return `(unroll ${showTermSimple(t.body)})`;
-  if (t.tag === 'Roll')
-    return `(roll ${showTermSimple(t.type)} in ${showTermSimple(t.body)})`;
-  if (t.tag === 'Meta') return `?${t.id}`;
-  if (t.tag === 'Iota')
-    return `(iota (${t.name} : ${showTermSimple(t.type)}). ${showTermSimple(t.body)})`;
-  if (t.tag === 'Both')
-    return `[${showTermSimple(t.left)}, ${showTermSimple(t.right)}]`;
-  if (t.tag === 'Fst') return `(fst ${showTermSimple(t.term)})`;
-  if (t.tag === 'Snd') return `(snd ${showTermSimple(t.term)})`;
-  if (t.tag === 'Rigid') return `(rigid ${showTermSimple(t.term)})`;
-  if (t.tag === 'UnsafeCast')
-    return t.type ? `(unsafeCast ${showTermSimple(t.term)} : ${showTermSimple(t.type)})` : `(unsafeCast ${showTermSimple(t.term)})`;
+export const showTerm = (t: Term): string => {
+  if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'Global') return t.name;
+  if (t.tag === 'App') return `(${showTerm(t.left)} ${t.meta.erased ? '-' : ''}${showTerm(t.right)})`;
+  if (t.tag === 'Abs') return `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
+  if (t.tag === 'Let') return `(let ${t.meta.erased ? '-' : ''}${t.name} = ${showTerm(t.val)} in ${showTerm(t.body)})`;
+  if (t.tag === 'Roll') return `(roll ${showTerm(t.type)} ${showTerm(t.term)})`;
+  if (t.tag === 'Unroll') return `(unroll ${showTerm(t.term)})`;
+  if (t.tag === 'Pi') return `(/(${t.meta.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
+  if (t.tag === 'Fix') return `(fix (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
+  if (t.tag === 'Type') return '*';
   return t;
 };
 
-export const flattenApp = (t: Term): [Term, [boolean, Term][]] => {
-  const r: [boolean, Term][] = [];
-  while (t.tag === 'App') {
-    r.push([t.impl, t.right]);
-    t = t.left;
+export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Term => {
+  if (t.tag === 'Var') {
+    const l = lookup(ns, t.name);
+    return l === null ? Global(t.name) : Var(k - l - 1);
   }
-  return [t, r.reverse()];
+  if (t.tag === 'App') return App(toSurface(t.left, ns, k), t.meta, toSurface(t.right, ns, k));
+  if (t.tag === 'Abs') return Abs(t.meta, t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Let') return Let(t.meta, t.name, toSurface(t.val, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Roll') return Roll(toSurface(t.type, ns, k), toSurface(t.term, ns, k));
+  if (t.tag === 'Unroll') return Unroll(toSurface(t.term, ns, k));
+  if (t.tag === 'Pi') return Pi(t.meta, t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Fix') return Fix(t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Type') return Type;
+  return t;
 };
-export const flattenAbs = (t: Term): [[Name, boolean, Term | null][], Term] => {
-  const r: [Name, boolean, Term | null][] = [];
-  while (t.tag === 'Abs') {
-    r.push([t.name, t.impl, t.type]);
-    t = t.body;
-  }
-  return [r, t];
+
+const globalUsed = (k: Name, t: Term): boolean => {
+  if (t.tag === 'App') return globalUsed(k, t.left) || globalUsed(k, t.right);
+  if (t.tag === 'Abs') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Let') return globalUsed(k, t.val) || globalUsed(k, t.body);
+  if (t.tag === 'Roll') return globalUsed(k, t.type) || globalUsed(k, t.term);
+  if (t.tag === 'Unroll') return globalUsed(k, t.term);
+  if (t.tag === 'Pi') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Fix') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Global') return t.name === k;
+  if (t.tag === 'Var') return false;
+  if (t.tag === 'Type') return false;
+  return t;
 };
-export const flattenPi = (t: Term): [[Name, boolean, Term][], Term] => {
-  const r: [Name, boolean, Term][] = [];
-  while (t.tag === 'Pi') {
-    r.push([t.name, t.impl, t.type]);
-    t = t.body;
-  }
-  return [r, t];
+
+const indexUsed = (k: Ix, t: Term): boolean => {
+  if (t.tag === 'Var') return t.index === k;
+  if (t.tag === 'App') return indexUsed(k, t.left) || indexUsed(k, t.right);
+  if (t.tag === 'Abs') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Let') return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Roll') return indexUsed(k, t.type) || indexUsed(k, t.term);
+  if (t.tag === 'Unroll') return indexUsed(k, t.term);
+  if (t.tag === 'Pi') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Fix') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Global') return false;
+  if (t.tag === 'Type') return false;
+  return t;
 };
-export const showTermP = (b: boolean, t: Term): string =>
-  b ? `(${showTerm(t)})` : showTerm(t);
-export const showTerm = (t: Term): string => {
-  if (t.tag === 'Type') return '*';
-  if (t.tag === 'Hole') return '_';
-  if (t.tag === 'Var') return `${t.name}`;
-  if (t.tag === 'Meta') return `?${t.id}`;
-  if (t.tag === 'App') {
-    const [f, as] = flattenApp(t);
-    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Open', f)} ${
-      as.map(([im, t], i) =>
-        im ? `{${showTerm(t)}}` :
-          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Open' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi', t)}`).join(' ')}`;
+
+const decideName = (x: Name, t: Term, ns: List<Name>): Name => {
+  const a = indecesOf(ns, x).map(i => indexUsed(i + 1, t)).reduce((x, y) => x || y, false);
+  const g = globalUsed(x, t);
+  return a || g ? decideName(nextName(x), t, ns) : x;
+};
+
+export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
+  if (t.tag === 'Var') {
+    const l = index(ns, t.index);
+    return l ? S.Var(l) : impossible(`var index out of range in fromSurface: ${t.index}`);
   }
+  if (t.tag === 'Type') return S.Type;
+  if (t.tag === 'Global') return S.Var(t.name);
+  if (t.tag === 'App') return S.App(fromSurface(t.left, ns), t.meta, fromSurface(t.right, ns));
+  if (t.tag === 'Roll') return S.Roll(fromSurface(t.type, ns), fromSurface(t.term, ns));
+  if (t.tag === 'Unroll') return S.Unroll(fromSurface(t.term, ns));
   if (t.tag === 'Abs') {
-    const [as, b] = flattenAbs(t);
-    return `\\${as.map(([x, im, t]) => im ? `{${x}${t ? ` : ${showTermP(t.tag === 'Ann', t)}` : ''}}` : !t ? x : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
+    const x = decideName(t.name, t.body, ns);
+    return S.Abs(t.meta, x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
+  }
+  if (t.tag === 'Let') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Let(t.meta, x, fromSurface(t.val, ns), fromSurface(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Pi') {
-    const [as, b] = flattenPi(t);
-    return `${as.map(([x, im, t]) => x === '_' ? (im ? `${im ? '{' : ''}${showTerm(t)}${im ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Open', t)}`) : `${im ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
+    const x = decideName(t.name, t.body, ns);
+    return S.Pi(t.meta, x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
   }
-  if (t.tag === 'Fix')
-    return `(fix (${t.self} @ ${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`; 
-  if (t.tag === 'Rec')
-    return `(rec (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
-  if (t.tag === 'Let')
-    return `let ${t.impl ? `{${t.name}}` : t.name} = ${showTermP(t.val.tag === 'Let' || t.val.tag === 'Open', t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
-  if (t.tag === 'Ann')
-    return `${showTerm(t.term)} : ${showTerm(t.type)}`;
-  if (t.tag === 'Open')
-    return `open ${t.names.join(' ')} in ${showTerm(t.body)}`;
-  if (t.tag === 'Unroll')
-    return `(unroll ${showTerm(t.body)})`;
-  if (t.tag === 'Roll')
-    return `(roll ${showTerm(t.type)} in ${showTerm(t.body)})`;
-  if (t.tag === 'Iota')
-    return `(iota (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
-  if (t.tag === 'Both')
-    return `[${showTerm(t.left)}, ${showTerm(t.right)}]`;
-  if (t.tag === 'Fst') return `(fst ${showTerm(t.term)})`;
-  if (t.tag === 'Snd') return `(snd ${showTerm(t.term)})`;
-  if (t.tag === 'Rigid') return `(rigid ${showTerm(t.term)})`;
-  if (t.tag === 'UnsafeCast')
-    return t.type ? `(unsafeCast ${showTerm(t.term)} : ${showTerm(t.type)})` : `(unsafeCast ${showTerm(t.term)})`;
-  return t;
-};
-
-export const isUnsolved = (t: Term): boolean => {
-  if (t.tag === 'Meta') return true;
-  if (t.tag === 'Hole') return true;
-  if (t.tag === 'Type') return false;
-  if (t.tag === 'Var') return false;
-  if (t.tag === 'App') return isUnsolved(t.left) || isUnsolved(t.right);
-  if (t.tag === 'Abs') {
-    if (t.type && isUnsolved(t.type)) return true;
-    return isUnsolved(t.body);
+  if (t.tag === 'Fix') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Fix(x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
   }
-  if (t.tag === 'Pi') return isUnsolved(t.type) || isUnsolved(t.body);
-  if (t.tag === 'Fix') return isUnsolved(t.type) || isUnsolved(t.body);
-  if (t.tag === 'Rec') return isUnsolved(t.type) || isUnsolved(t.body);
-  if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
-  if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
-  if (t.tag === 'Open') return isUnsolved(t.body);
-  if (t.tag === 'Unroll') return isUnsolved(t.body);
-  if (t.tag === 'Roll') return isUnsolved(t.type) || isUnsolved(t.body);
-  if (t.tag === 'Iota') return isUnsolved(t.type) || isUnsolved(t.body);
-  if (t.tag === 'Both') return isUnsolved(t.left) || isUnsolved(t.right);
-  if (t.tag === 'Fst') return isUnsolved(t.term);
-  if (t.tag === 'Snd') return isUnsolved(t.term);
-  if (t.tag === 'Rigid') return isUnsolved(t.term);
-  if (t.tag === 'UnsafeCast') return (t.type ? isUnsolved(t.type) : false) || isUnsolved(t.term);
   return t;
-};
-
-export const erase = (t: Term): Term => {
-  if (t.tag === 'Meta') return t;
-  if (t.tag === 'Hole') return t;
-  if (t.tag === 'Type') return t;
-  if (t.tag === 'Var') return t;
-  if (t.tag === 'App')
-    return t.impl ? erase(t.left) : App(erase(t.left), false, erase(t.right));
-  if (t.tag === 'Abs')
-    return t.impl ? erase(t.body) : Abs(t.name, t.impl, null, erase(t.body));
-  if (t.tag === 'Pi') return Type;
-  if (t.tag === 'Fix') return Type;
-  if (t.tag === 'Iota') return Type;
-  if (t.tag === 'Let')
-    return t.impl ? erase(t.body) : Let(t.name, t.impl, erase(t.val), erase(t.body));
-  if (t.tag === 'Ann') return erase(t.term);
-  if (t.tag === 'Open') return Open(t.names, erase(t.body));
-  if (t.tag === 'Unroll') return erase(t.body);
-  if (t.tag === 'Roll') return erase(t.body);
-  if (t.tag === 'Rec') return Rec(t.name, Type, erase(t.body));
-  if (t.tag === 'Both') return erase(t.left);
-  if (t.tag === 'Fst') return erase(t.term);
-  if (t.tag === 'Snd') return erase(t.term);
-  if (t.tag === 'Rigid') return erase(t.term);
-  if (t.tag === 'UnsafeCast') return erase(t.term);
-  return t;
-};
-
-export const eraseEq = (a: Term, b: Term): boolean => {
-  if (a === b) return true;
-  if (a.tag === 'Type') return b.tag === 'Type';
-  if (a.tag === 'Hole') return b.tag === 'Hole';
-  if (a.tag === 'Meta') return b.tag === 'Meta' && a.id === b.id;
-  if (a.tag === 'Var') return b.tag === 'Var' && a.name === b.name;
-  if (a.tag === 'Abs') return b.tag === 'Abs' && a.name === b.name && eraseEq(a.body, b.body);
-  if (a.tag === 'App') return b.tag === 'App' && eraseEq(a.left, b.left) && eraseEq(a.right, b.right);
-  if (a.tag === 'Rec') return b.tag === 'Rec' && a.name === b.name && eraseEq(a.body, b.body);
-  return false;
 };
