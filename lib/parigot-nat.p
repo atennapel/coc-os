@@ -20,4 +20,3 @@ def mul : Nat -> Nat -> Nat = \n m. foldNat {Nat} n Z (add m)
 def pow : Nat -> Nat -> Nat = \n m. foldNat {Nat} m (S Z) (mul n)
 
 def sub : Nat -> Nat -> Nat = \n m. foldNat {Nat} m n pred
-def div : Nat -> Nat -> Nat = \n m. foldNat {Nat} n Z (sub m)
