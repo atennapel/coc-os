@@ -177,10 +177,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     }
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1), '(');
-    return args.reduceRight((x, [name, impl, ty]) => {
-      if (!ty) return serr(`lambda required type`);
-      return Abs(impl ? MetaE : MetaR, name, ty, x)
-    }, body);
+    return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? MetaE : MetaR, name, ty, x), body);
   }
   if (isName(ts[0], 'unroll')) {
     const body = exprs(ts.slice(1), '(');

@@ -78,7 +78,7 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.meta, evaluate(t.right, vs));
-  if (t.tag === 'Abs')
+  if (t.tag === 'Abs' && t.type)
     return VAbs(t.meta, t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Let')
     return evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
@@ -92,7 +92,7 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return VFix(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Ann')
     return evaluate(t.term, vs);
-  return t;
+  return impossible(`cannot evaluate: ${showTerm(t)}`);
 };
 
 const quoteHead = (h: Head, k: Ix): Term => {

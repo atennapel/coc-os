@@ -1,3 +1,3 @@
 def UnitType = {t : *} -> t -> t
 
-def Unit : UnitType = \{t : *} (x : t). x
+def Unit : UnitType = \{t} x. x

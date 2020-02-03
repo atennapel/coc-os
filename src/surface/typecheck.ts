@@ -26,6 +26,14 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
 
 const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): Term => {
   log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, k, false))} in ${showEnvV(ts, k, false)} and ${showEnvV(vs, k, false)}`);
+  const tyf = force(ty);
+  if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && eqMeta(tm.meta, tyf.meta)) {
+    const v = VVar(k);
+    const body = check(extendV(ts, tyf.type), extendV(vs, v), k + 1, tm.body, tyf.body(v));
+    if (tm.meta.erased && erasedUsed(0, tm.body))
+      return terr(`erased argument used in ${showTerm(tm)}`);
+    return Abs(tm.meta, tm.name, quote(tyf.type, k, false), body);
+  }
   const [etm, ty2] = synth(ts, vs, k, tm);
   try {
     unify(k, ty2, ty);
@@ -58,7 +66,7 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): [Term, Val] => {
     }
     return terr(`invalid type or meta mismatch in synthapp in ${showTerm(tm)}: ${showTermQ(ty, k)} ${tm.meta.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
   }
-  if (tm.tag === 'Abs') {
+  if (tm.tag === 'Abs' && tm.type) {
     const type = check(ts, vs, k, tm.type, VType);
     const vtype = evaluate(type, vs);
     const [body, rt] = synth(extendV(ts, vtype), extendV(vs, VVar(k)), k + 1, tm.body);

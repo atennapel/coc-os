@@ -1,6 +1,7 @@
 import { Ix, Name } from '../names';
 import { Meta } from '../syntax';
 import * as S from '../surface/syntax';
+import { impossible } from '../util';
 
 export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
 
@@ -43,7 +44,7 @@ export const toCore = (t: S.Term): Term => {
   if (t.tag === 'Var') return Var(t.index);
   if (t.tag === 'Global') return Global(t.name);
   if (t.tag === 'App') return App(toCore(t.left), t.meta, toCore(t.right));
-  if (t.tag === 'Abs') return Abs(t.meta, toCore(t.type), toCore(t.body));
+  if (t.tag === 'Abs' && t.type) return Abs(t.meta, toCore(t.type), toCore(t.body));
   if (t.tag === 'Let') return Let(t.meta, toCore(t.val), toCore(t.body));
   if (t.tag === 'Roll') return Roll(toCore(t.type), toCore(t.term));
   if (t.tag === 'Unroll') return Unroll(toCore(t.term));
@@ -51,5 +52,5 @@ export const toCore = (t: S.Term): Term => {
   if (t.tag === 'Fix') return Fix(toCore(t.type), toCore(t.body));
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return toCore(t.term);
-  return t;
+  return impossible(`toCore failed on ${S.showTerm(t)}`);
 };

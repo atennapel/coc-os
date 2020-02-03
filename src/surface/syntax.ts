@@ -12,8 +12,8 @@ export type Global = { tag: 'Global', name: Name };
 export const Global = (name: Name): Global => ({ tag: 'Global', name });
 export type App = { tag: 'App', left: Term, meta: S.Meta, right: Term };
 export const App = (left: Term, meta: Meta, right: Term): App => ({ tag: 'App', left, meta, right });
-export type Abs = { tag: 'Abs', meta: Meta, name: Name, type: Term, body: Term };
-export const Abs = (meta: Meta, name: Name, type: Term, body: Term): Abs => ({ tag: 'Abs', meta, name, type, body });
+export type Abs = { tag: 'Abs', meta: Meta, name: Name, type: Term | null, body: Term };
+export const Abs = (meta: Meta, name: Name, type: Term | null, body: Term): Abs => ({ tag: 'Abs', meta, name, type, body });
 export type Let = { tag: 'Let', meta: Meta, name: Name, val: Term, body: Term };
 export const Let = (meta: Meta, name: Name, val: Term, body: Term): Let => ({ tag: 'Let', meta, name, val, body });
 export type Roll = { tag: 'Roll', type: Term, term: Term };
@@ -33,7 +33,8 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Global') return t.name;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${t.meta.erased ? '-' : ''}${showTerm(t.right)})`;
-  if (t.tag === 'Abs') return `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
+  if (t.tag === 'Abs')
+    return t.type ? `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})` : `(\\${t.meta.erased ? '-' : ''}${t.name}. ${showTerm(t.body)})`;
   if (t.tag === 'Let') return `(let ${t.meta.erased ? '-' : ''}${t.name} = ${showTerm(t.val)} in ${showTerm(t.body)})`;
   if (t.tag === 'Roll') return `(roll ${showTerm(t.type)} ${showTerm(t.term)})`;
   if (t.tag === 'Unroll') return `(unroll ${showTerm(t.term)})`;
@@ -50,7 +51,7 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
     return l === null ? Global(t.name) : Var(k - l - 1);
   }
   if (t.tag === 'App') return App(toSurface(t.left, ns, k), t.meta, toSurface(t.right, ns, k));
-  if (t.tag === 'Abs') return Abs(t.meta, t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Abs') return Abs(t.meta, t.name, t.type && toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Let') return Let(t.meta, t.name, toSurface(t.val, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Roll') return Roll(toSurface(t.type, ns, k), toSurface(t.term, ns, k));
   if (t.tag === 'Unroll') return Unroll(toSurface(t.term, ns, k));
@@ -63,7 +64,7 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
 
 const globalUsed = (k: Name, t: Term): boolean => {
   if (t.tag === 'App') return globalUsed(k, t.left) || globalUsed(k, t.right);
-  if (t.tag === 'Abs') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Abs') return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.body);
   if (t.tag === 'Let') return globalUsed(k, t.val) || globalUsed(k, t.body);
   if (t.tag === 'Roll') return globalUsed(k, t.type) || globalUsed(k, t.term);
   if (t.tag === 'Unroll') return globalUsed(k, t.term);
@@ -79,7 +80,7 @@ const globalUsed = (k: Name, t: Term): boolean => {
 const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Var') return t.index === k;
   if (t.tag === 'App') return indexUsed(k, t.left) || indexUsed(k, t.right);
-  if (t.tag === 'Abs') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Abs') return (t.type && indexUsed(k, t.type)) || indexUsed(k + 1, t.body);
   if (t.tag === 'Let') return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
   if (t.tag === 'Roll') return indexUsed(k, t.type) || indexUsed(k, t.term);
   if (t.tag === 'Unroll') return indexUsed(k, t.term);
@@ -110,7 +111,7 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'Ann') return S.Ann(fromSurface(t.term, ns), fromSurface(t.type, ns));
   if (t.tag === 'Abs') {
     const x = decideName(t.name, t.body, ns);
-    return S.Abs(t.meta, x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
+    return S.Abs(t.meta, x, t.type && fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Let') {
     const x = decideName(t.name, t.body, ns);

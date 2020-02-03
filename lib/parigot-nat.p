@@ -1,23 +1,23 @@
 def Nat = fix (Nat : *). {t : *} -> t -> (Nat -> t -> t) -> t
 
-def Z : Nat = roll Nat \{t : *} (z : t) (s : Nat -> t -> t). z
-def S : Nat -> Nat = \(n : Nat). roll Nat \{t : *} (z : t) (s : Nat -> t -> t). s n ((unroll n) {t} z s)
+def Z : Nat = roll Nat \{t} z s. z
+def S : Nat -> Nat = \n. roll Nat \{t} z s. s n ((unroll n) {t} z s)
 
 def caseNat
   : {t : *} -> Nat -> t -> (Nat -> t) -> t
-  = \{t : *} (n : Nat) (z : t) (s : Nat -> t). (unroll n) {t} z (\(n : Nat) (_ : t). s n) 
+  = \{t} n z s. (unroll n) {t} z (\n _. s n)
 def foldNat
   : {t : *} -> Nat -> t -> (t -> t) -> t
-  = \{t : *} (n : Nat) (z : t) (s : t -> t). (unroll n) {t} z (\(_ : Nat) (r : t). s r)
+  = \{t} n z s. (unroll n) {t} z (\_ r. s r)
 def recNat
   : {t : *} -> Nat -> t -> (Nat -> t -> t) -> t
-  = \{t : *} (n : Nat) (z : t) (s : Nat -> t -> t). (unroll n) {t} z s
+  = \{t} n z s. (unroll n) {t} z s
 
-def pred : Nat -> Nat = \(n : Nat). caseNat {Nat} n Z (\(n : Nat). n)
+def pred : Nat -> Nat = \n. caseNat {Nat} n Z (\n. n)
 
-def add : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} n m S
-def mul : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} n Z (add m)
-def pow : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} m (S Z) (mul n)
+def add : Nat -> Nat -> Nat = \n m. foldNat {Nat} n m S
+def mul : Nat -> Nat -> Nat = \n m. foldNat {Nat} n Z (add m)
+def pow : Nat -> Nat -> Nat = \n m. foldNat {Nat} m (S Z) (mul n)
 
-def sub : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} m n pred
-def div : Nat -> Nat -> Nat = \(n : Nat) (m : Nat). foldNat {Nat} n Z (sub m)
+def sub : Nat -> Nat -> Nat = \n m. foldNat {Nat} m n pred
+def div : Nat -> Nat -> Nat = \n m. foldNat {Nat} n Z (sub m)

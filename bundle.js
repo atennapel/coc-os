@@ -16,6 +16,8 @@ exports.log = (msg) => {
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const S = require("../surface/syntax");
+const util_1 = require("../util");
 exports.Var = (index) => ({ tag: 'Var', index });
 exports.Global = (name) => ({ tag: 'Global', name });
 exports.App = (left, meta, right) => ({ tag: 'App', left, meta, right });
@@ -56,7 +58,7 @@ exports.toCore = (t) => {
         return exports.Global(t.name);
     if (t.tag === 'App')
         return exports.App(exports.toCore(t.left), t.meta, exports.toCore(t.right));
-    if (t.tag === 'Abs')
+    if (t.tag === 'Abs' && t.type)
         return exports.Abs(t.meta, exports.toCore(t.type), exports.toCore(t.body));
     if (t.tag === 'Let')
         return exports.Let(t.meta, exports.toCore(t.val), exports.toCore(t.body));
@@ -72,10 +74,10 @@ exports.toCore = (t) => {
         return exports.Type;
     if (t.tag === 'Ann')
         return exports.toCore(t.term);
-    return t;
+    return util_1.impossible(`toCore failed on ${S.showTerm(t)}`);
 };
 
-},{}],3:[function(require,module,exports){
+},{"../surface/syntax":12,"../util":17}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -429,11 +431,7 @@ const exprs = (ts, br) => {
         if (!found)
             return util_1.serr(`. not found after \\`);
         const body = exprs(ts.slice(i + 1), '(');
-        return args.reduceRight((x, [name, impl, ty]) => {
-            if (!ty)
-                return util_1.serr(`lambda required type`);
-            return syntax_1.Abs(impl ? syntax_1.MetaE : syntax_1.MetaR, name, ty, x);
-        }, body);
+        return args.reduceRight((x, [name, impl, ty]) => syntax_1.Abs(impl ? syntax_1.MetaE : syntax_1.MetaR, name, ty, x), body);
     }
     if (isName(ts[0], 'unroll')) {
         const body = exprs(ts.slice(1), '(');
@@ -806,7 +804,7 @@ exports.evaluate = (t, vs = list_1.Nil) => {
     }
     if (t.tag === 'App')
         return exports.vapp(exports.evaluate(t.left, vs), t.meta, exports.evaluate(t.right, vs));
-    if (t.tag === 'Abs')
+    if (t.tag === 'Abs' && t.type)
         return exports.VAbs(t.meta, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Let')
         return exports.evaluate(t.body, exports.extendV(vs, exports.evaluate(t.val, vs)));
@@ -820,7 +818,7 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.VFix(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Ann')
         return exports.evaluate(t.term, vs);
-    return t;
+    return util_1.impossible(`cannot evaluate: ${syntax_1.showTerm(t)}`);
 };
 const quoteHead = (h, k) => {
     if (h.tag === 'HVar')
@@ -898,7 +896,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'App')
         return `(${exports.showTerm(t.left)} ${t.meta.erased ? '-' : ''}${exports.showTerm(t.right)})`;
     if (t.tag === 'Abs')
-        return `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
+        return t.type ? `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})` : `(\\${t.meta.erased ? '-' : ''}${t.name}. ${exports.showTerm(t.body)})`;
     if (t.tag === 'Let')
         return `(let ${t.meta.erased ? '-' : ''}${t.name} = ${exports.showTerm(t.val)} in ${exports.showTerm(t.body)})`;
     if (t.tag === 'Roll')
@@ -923,7 +921,7 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
     if (t.tag === 'App')
         return exports.App(exports.toSurface(t.left, ns, k), t.meta, exports.toSurface(t.right, ns, k));
     if (t.tag === 'Abs')
-        return exports.Abs(t.meta, t.name, exports.toSurface(t.type, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
+        return exports.Abs(t.meta, t.name, t.type && exports.toSurface(t.type, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
     if (t.tag === 'Let')
         return exports.Let(t.meta, t.name, exports.toSurface(t.val, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
     if (t.tag === 'Roll')
@@ -944,7 +942,7 @@ const globalUsed = (k, t) => {
     if (t.tag === 'App')
         return globalUsed(k, t.left) || globalUsed(k, t.right);
     if (t.tag === 'Abs')
-        return globalUsed(k, t.type) || globalUsed(k, t.body);
+        return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.body);
     if (t.tag === 'Let')
         return globalUsed(k, t.val) || globalUsed(k, t.body);
     if (t.tag === 'Roll')
@@ -971,7 +969,7 @@ const indexUsed = (k, t) => {
     if (t.tag === 'App')
         return indexUsed(k, t.left) || indexUsed(k, t.right);
     if (t.tag === 'Abs')
-        return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+        return (t.type && indexUsed(k, t.type)) || indexUsed(k + 1, t.body);
     if (t.tag === 'Let')
         return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
     if (t.tag === 'Roll')
@@ -1014,7 +1012,7 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         return S.Ann(exports.fromSurface(t.term, ns), exports.fromSurface(t.type, ns));
     if (t.tag === 'Abs') {
         const x = decideName(t.name, t.body, ns);
-        return S.Abs(t.meta, x, exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
+        return S.Abs(t.meta, x, t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
     }
     if (t.tag === 'Let') {
         const x = decideName(t.name, t.body, ns);
@@ -1070,6 +1068,14 @@ const erasedUsed = (k, t) => {
 };
 const check = (ts, vs, k, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(domain_1.quote(ty, k, false))} in ${domain_1.showEnvV(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
+    const tyf = domain_1.force(ty);
+    if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && syntax_2.eqMeta(tm.meta, tyf.meta)) {
+        const v = domain_1.VVar(k);
+        const body = check(domain_1.extendV(ts, tyf.type), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
+        if (tm.meta.erased && erasedUsed(0, tm.body))
+            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+        return syntax_1.Abs(tm.meta, tm.name, domain_1.quote(tyf.type, k, false), body);
+    }
     const [etm, ty2] = synth(ts, vs, k, tm);
     try {
         unify_1.unify(k, ty2, ty);
@@ -1106,7 +1112,7 @@ const synth = (ts, vs, k, tm) => {
         }
         return util_1.terr(`invalid type or meta mismatch in synthapp in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(ty, k)} ${tm.meta.erased ? '-' : ''}@ ${syntax_1.showTerm(tm.right)}`);
     }
-    if (tm.tag === 'Abs') {
+    if (tm.tag === 'Abs' && tm.type) {
         const type = check(ts, vs, k, tm.type, domain_1.VType);
         const vtype = domain_1.evaluate(type, vs);
         const [body, rt] = synth(domain_1.extendV(ts, vtype), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body);
@@ -1275,7 +1281,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'App')
         return `(${exports.showTerm(t.left)} ${t.meta.erased ? '-' : ''}${exports.showTerm(t.right)})`;
     if (t.tag === 'Abs')
-        return `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
+        return t.type ? `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})` : `(\\${t.meta.erased ? '-' : ''}${t.name}. ${exports.showTerm(t.body)})`;
     if (t.tag === 'Let')
         return `(let ${t.meta.erased ? '-' : ''}${t.name} = ${exports.showTerm(t.val)} in ${exports.showTerm(t.body)})`;
     if (t.tag === 'Roll')
