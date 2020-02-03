@@ -1,6 +1,6 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermQ, force, showEnvV } from './domain';
-import { Term, showTerm, Pi } from './syntax';
-import { terr, impossible } from '../util';
+import { Term, showTerm, Pi, App, Abs, Let, Fix, Roll, Unroll } from './syntax';
+import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil } from '../list';
 import { globalGet, globalSet } from './globalenv';
@@ -24,86 +24,95 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   return t;
 };
 
-const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
+const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): Term => {
   log(() => `check ${showTerm(tm)} : ${showTerm(quote(ty, k, false))} in ${showEnvV(ts, k, false)} and ${showEnvV(vs, k, false)}`);
-  const ty2 = synth(ts, vs, k, tm);
+  const [etm, ty2] = synth(ts, vs, k, tm);
   try {
     unify(k, ty2, ty);
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
     terr(`failed to unify ${showTermQ(ty2, k)} ~ ${showTermQ(ty, k)}: ${err.message}`);
   }
+  return etm;
 };
 
-const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
+const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): [Term, Val] => {
   log(() => `synth ${showTerm(tm)} in ${showEnvV(ts, k, false)} and ${showEnvV(vs, k, false)}`);
-  if (tm.tag === 'Type') return VType;
-  if (tm.tag === 'Var')
-    return index(ts, tm.index) || terr(`var out of scope ${showTerm(tm)}`);
+  if (tm.tag === 'Type') return [tm, VType];
+  if (tm.tag === 'Var') {
+    const ty = index(ts, tm.index);
+    if (!ty) return terr(`var out of scope ${showTerm(tm)}`);
+    return [tm, ty];
+  }
   if (tm.tag === 'Global') {
     const entry = globalGet(tm.name);
-    return entry ? entry.type : impossible(`global ${tm.name} not found`);
+    if (!entry) return terr(`global ${tm.name} not found`);
+    return [tm, entry.type];
   }
   if (tm.tag === 'App') {
-    const ty = force(synth(ts, vs, k, tm.left));
+    const [left, ty_] = synth(ts, vs, k, tm.left);
+    const ty = force(ty_);
     if (ty.tag === 'VPi' && eqMeta(ty.meta, tm.meta)) {
-      check(ts, vs, k, tm.right, ty.type);
-      return ty.body(evaluate(tm.right, vs));
+      const right = check(ts, vs, k, tm.right, ty.type);
+      return [App(left, tm.meta, right), ty.body(evaluate(right, vs))];
     }
     return terr(`invalid type or meta mismatch in synthapp in ${showTerm(tm)}: ${showTermQ(ty, k)} ${tm.meta.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
   }
   if (tm.tag === 'Abs') {
-    check(ts, vs, k, tm.type, VType);
-    const type = evaluate(tm.type, vs);
-    const rt = synth(extendV(ts, type), extendV(vs, VVar(k)), k + 1, tm.body);
+    const type = check(ts, vs, k, tm.type, VType);
+    const vtype = evaluate(type, vs);
+    const [body, rt] = synth(extendV(ts, vtype), extendV(vs, VVar(k)), k + 1, tm.body);
     if (tm.meta.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showTerm(tm)}`);
     // TODO: avoid quote here
-    return evaluate(Pi(tm.meta, tm.name, tm.type, quote(rt, k + 1, false)), vs);
+    const pi = evaluate(Pi(tm.meta, tm.name, type, quote(rt, k + 1, false)), vs);
+    return [Abs(tm.meta, tm.name, type, body), pi];
   }
   if (tm.tag === 'Let') {
-    const vty = synth(ts, vs, k, tm.val);
-    const rt = synth(extendV(ts, vty), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.body);
+    const [val, vty] = synth(ts, vs, k, tm.val);
+    const [body, rt] = synth(extendV(ts, vty), extendV(vs, evaluate(val, vs)), k + 1, tm.body);
     if (tm.meta.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showTerm(tm)}`);
-    return rt;
+    return [Let(tm.meta, tm.name, val, body), rt];
   }
   if (tm.tag === 'Pi') {
-    check(ts, vs, k, tm.type, VType);
-    check(extendV(ts, evaluate(tm.type, vs)), extendV(vs, VVar(k)), k + 1, tm.body, VType);
-    return VType;
+    const type = check(ts, vs, k, tm.type, VType);
+    const body = check(extendV(ts, evaluate(type, vs)), extendV(vs, VVar(k)), k + 1, tm.body, VType);
+    return [Pi(tm.meta, tm.name, type, body), VType];
   }
   if (tm.tag === 'Fix') {
-    check(ts, vs, k, tm.type, VType);
-    const vt = evaluate(tm.type, vs);
-    check(extendV(ts, vt), extendV(vs, VVar(k)), k + 1, tm.body, vt);
-    return vt;
+    const type = check(ts, vs, k, tm.type, VType);
+    const vt = evaluate(type, vs);
+    const body = check(extendV(ts, vt), extendV(vs, VVar(k)), k + 1, tm.body, vt);
+    return [Fix(tm.name, type, body), vt];
   }
   if (tm.tag === 'Roll') {
-    check(ts, vs, k, tm.type, VType);
-    const vt = force(evaluate(tm.type, vs));
-    if (vt.tag === 'VFix') {
-      check(ts, vs, k, tm.term, vt.body(vt));
-      return vt;
+    const type = check(ts, vs, k, tm.type, VType);
+    const vt = evaluate(type, vs);
+    const vtf = force(vt);
+    if (vtf.tag === 'VFix') {
+      const term = check(ts, vs, k, tm.term, vtf.body(vt));
+      return [Roll(type, term), vt];
     }
     return terr(`fix type expected in ${showTerm(tm)}: ${showTermQ(vt, k)}`);
   }
   if (tm.tag === 'Unroll') {
-    const vt = force(synth(ts, vs, k, tm.term));
-    if (vt.tag === 'VFix') return vt.body(vt);
+    const [term, ty] = synth(ts, vs, k, tm.term);
+    const vt = force(ty);
+    if (vt.tag === 'VFix') return [Unroll(term), vt.body(ty)];
     return terr(`fix type expected in ${showTerm(tm)}: ${showTermQ(vt, k)}`);
   }
   if (tm.tag === 'Ann') {
-    check(ts, vs, k, tm.type, VType);
-    const vt = evaluate(tm.type, vs);
-    check(ts, vs, k, tm.term, vt);
-    return vt;
+    const type = check(ts, vs, k, tm.type, VType);
+    const vt = evaluate(type, vs);
+    const term = check(ts, vs, k, tm.term, vt);
+    return [term, vt];
   }
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 
-export const typecheck = (tm: Term, ts: EnvV = Nil, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term =>
-  quote(synth(ts, vs, k, tm), k, full);
+export const typecheck = (tm: Term, ts: EnvV = Nil, vs: EnvV = Nil, k: Ix = 0): [Term, Val] =>
+  synth(ts, vs, k, tm);
 
 export const typecheckDefs = (ds: Def[]): Name[] => {
   const xs: Name[] = [];
@@ -111,8 +120,8 @@ export const typecheckDefs = (ds: Def[]): Name[] => {
     const d = ds[i];
     log(() => `typecheckDefs ${showDef(d)}`);
     if (d.tag === 'DDef') {
-      const ty = typecheck(d.value, Nil, Nil, 0, false);
-      globalSet(d.name, evaluate(d.value), evaluate(ty));
+      const [tm, ty] = typecheck(d.value);
+      globalSet(d.name, evaluate(tm), ty);
       xs.push(d.name);
     }
   }

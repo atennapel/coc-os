@@ -101,13 +101,14 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const t = parse(_s);
       log(() => showTerm(t));
       const tt = toSurface(t);
-      const ty = typecheck(tt);
-      tm_ = tt;
+      const [etm, vty] = typecheck(tt);
+      const ty = quote(vty, 0, false);
+      tm_ = etm;
       log(() => showTerm(fromSurface(ty)));
-      log(() => showTerm(fromSurface(tt)));
-      const eras = erase(toCore(normalize(tt, Nil, 0, true)));
+      log(() => showTerm(fromSurface(etm)));
+      const eras = erase(toCore(normalize(etm, Nil, 0, true)));
       log(() => showTermE(eras));
-      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(tt))}\neras: ${showTermE(eras)}`;
+      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(etm))}\neras: ${showTermE(eras)}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);

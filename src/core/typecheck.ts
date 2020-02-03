@@ -150,16 +150,16 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 
-export const typecheck = (tm: Term, ts: EnvV, vs: EnvV, k: Ix, full: boolean): Term =>
-  quote(synth(ts, vs, k, tm), k, full);
+export const typecheck = (tm: Term, ts: EnvV = Nil, vs: EnvV = Nil, k: Ix = 0): Val =>
+  synth(ts, vs, k, tm);
 
 export const typecheckDefs = (ds: Def[]): Name[] => {
   const xs: Name[] = [];
   for (let i = 0; i < ds.length; i++) {
     const d = ds[i];
     if (d.tag === 'DDef') {
-      const ty = typecheck(d.value, Nil, Nil, 0, false);
-      globalSet(d.name, evaluate(d.value), evaluate(ty));
+      const ty = typecheck(d.value);
+      globalSet(d.name, evaluate(d.value), ty);
       xs.push(d.name);
     }
   }
