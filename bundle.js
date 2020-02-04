@@ -1093,6 +1093,13 @@ const check = (ts, vs, k, tm, ty) => {
             return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
         return syntax_1.Abs(tm.meta, tm.name, domain_1.quote(tyf.type, k, false), body);
     }
+    if (tm.tag === 'Let') {
+        const [val, vty] = synth(ts, vs, k, tm.val);
+        const body = check(domain_1.extendV(ts, vty), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body, ty);
+        if (tm.meta.erased && erasedUsed(0, tm.body))
+            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+        return syntax_1.Let(tm.meta, tm.name, val, body);
+    }
     const [etm, ty2] = synth(ts, vs, k, tm);
     try {
         unify_1.unify(k, ty2, ty);

@@ -34,6 +34,13 @@ const check = (ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): Term => {
       return terr(`erased argument used in ${showTerm(tm)}`);
     return Abs(tm.meta, tm.name, quote(tyf.type, k, false), body);
   }
+  if (tm.tag === 'Let') {
+    const [val, vty] = synth(ts, vs, k, tm.val);
+    const body = check(extendV(ts, vty), extendV(vs, evaluate(val, vs)), k + 1, tm.body, ty);
+    if (tm.meta.erased && erasedUsed(0, tm.body))
+      return terr(`erased argument used in ${showTerm(tm)}`);
+    return Let(tm.meta, tm.name, val, body);
+  }
   const [etm, ty2] = synth(ts, vs, k, tm);
   try {
     unify(k, ty2, ty);
