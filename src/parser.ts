@@ -61,7 +61,7 @@ const tokenize = (sc: string): Token[] => {
         t = '', i--, state = START;
       } else t += c;
     } else if (state === NUMBER) {
-      if (!/[0-9]/.test(c)) {
+      if (!/[0-9a-z]/i.test(c)) {
         r.push(TNum(t));
         t = '', i--, state = START;
       } else t += c;
@@ -143,12 +143,23 @@ const expr = (t: Token): [Term, boolean] => {
     return serr(`invalid name: ${x}`);
   }
   if (t.tag === 'Num') {
-    const n = +t.num;
-    if (isNaN(n)) return serr(`invalid number: ${t.num}`);
-    const s = Var('S');
-    let c: Term = Var('Z');
-    for (let i = 0; i < n; i++) c = App(s, MetaR, c);
-    return [c, false];
+    if (t.num.endsWith('b')) {
+      const n = +t.num.slice(0, -1);
+      if (isNaN(n)) return serr(`invalid number: ${t.num}`);
+      const s0 = Var('B0');
+      const s1 = Var('B1');
+      let c: Term = Var('BE');
+      const s = n.toString(2);
+      for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, MetaR, c);
+      return [c, false];
+    } else {
+      const n = +t.num;
+      if (isNaN(n)) return serr(`invalid number: ${t.num}`);
+      const s = Var('S');
+      let c: Term = Var('Z');
+      for (let i = 0; i < n; i++) c = App(s, MetaR, c);
+      return [c, false];
+    }
   }
   return t;
 };

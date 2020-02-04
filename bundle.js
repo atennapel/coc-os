@@ -299,7 +299,7 @@ const tokenize = (sc) => {
                 t += c;
         }
         else if (state === NUMBER) {
-            if (!/[0-9]/.test(c)) {
+            if (!/[0-9a-z]/i.test(c)) {
                 r.push(TNum(t));
                 t = '', i--, state = START;
             }
@@ -392,14 +392,28 @@ const expr = (t) => {
         return util_1.serr(`invalid name: ${x}`);
     }
     if (t.tag === 'Num') {
-        const n = +t.num;
-        if (isNaN(n))
-            return util_1.serr(`invalid number: ${t.num}`);
-        const s = syntax_1.Var('S');
-        let c = syntax_1.Var('Z');
-        for (let i = 0; i < n; i++)
-            c = syntax_1.App(s, syntax_1.MetaR, c);
-        return [c, false];
+        if (t.num.endsWith('b')) {
+            const n = +t.num.slice(0, -1);
+            if (isNaN(n))
+                return util_1.serr(`invalid number: ${t.num}`);
+            const s0 = syntax_1.Var('B0');
+            const s1 = syntax_1.Var('B1');
+            let c = syntax_1.Var('BE');
+            const s = n.toString(2);
+            for (let i = 0; i < s.length; i++)
+                c = syntax_1.App(s[i] === '0' ? s0 : s1, syntax_1.MetaR, c);
+            return [c, false];
+        }
+        else {
+            const n = +t.num;
+            if (isNaN(n))
+                return util_1.serr(`invalid number: ${t.num}`);
+            const s = syntax_1.Var('S');
+            let c = syntax_1.Var('Z');
+            for (let i = 0; i < n; i++)
+                c = syntax_1.App(s, syntax_1.MetaR, c);
+            return [c, false];
+        }
     }
     return t;
 };
