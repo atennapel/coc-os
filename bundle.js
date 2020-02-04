@@ -769,6 +769,7 @@ const util_1 = require("../util");
 const globalenv_1 = require("./globalenv");
 const lazy_1 = require("../lazy");
 const syntax_2 = require("../syntax");
+const syntax_3 = require("../syntax");
 exports.HVar = (index) => ({ tag: 'HVar', index });
 exports.HGlobal = (name) => ({ tag: 'HGlobal', name });
 exports.EApp = (meta, arg) => ({ tag: 'EApp', meta, arg });
@@ -870,6 +871,7 @@ exports.quote = (v, k, full) => {
 };
 exports.normalize = (t, vs, k, full) => exports.quote(exports.evaluate(t, vs), k, full);
 exports.showTermQ = (v, k = 0, full = false) => syntax_1.showTerm(exports.quote(v, k, full));
+exports.showTermU = (v, ns = list_1.Nil, k = 0, full = false) => syntax_3.showTerm(syntax_1.fromSurface(exports.quote(v, k, full), ns));
 
 },{"../lazy":4,"../list":5,"../syntax":15,"../util":17,"./globalenv":11,"./syntax":12}],11:[function(require,module,exports){
 "use strict";
@@ -1045,6 +1047,7 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
     }
     return t;
 };
+exports.showFromSurface = (t, ns = list_1.Nil) => S.showTerm(exports.fromSurface(t, ns));
 
 },{"../list":5,"../names":6,"../syntax":15,"../util":17}],13:[function(require,module,exports){
 "use strict";
@@ -1083,42 +1086,42 @@ const erasedUsed = (k, t) => {
         return false;
     return t;
 };
-const check = (ts, vs, k, tm, ty) => {
-    config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${syntax_1.showTerm(domain_1.quote(ty, k, false))} in ${domain_1.showEnvV(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
+const check = (ns, ts, vs, k, tm, ty) => {
+    config_1.log(() => `check ${syntax_1.showFromSurface(tm, ns)} : ${domain_1.showTermU(ty, ns, k)} in ${domain_1.showEnvV(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     const tyf = domain_1.force(ty);
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && syntax_2.eqMeta(tm.meta, tyf.meta)) {
         const v = domain_1.VVar(k);
-        const body = check(domain_1.extendV(ts, tyf.type), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
+        const body = check(list_1.Cons(tm.name, ns), domain_1.extendV(ts, tyf.type), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
         if (tm.meta.erased && erasedUsed(0, tm.body))
-            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+            return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
         return syntax_1.Abs(tm.meta, tm.name, domain_1.quote(tyf.type, k, false), body);
     }
     if (tm.tag === 'Let') {
-        const [val, vty] = synth(ts, vs, k, tm.val);
-        const body = check(domain_1.extendV(ts, vty), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body, ty);
+        const [val, vty] = synth(ns, ts, vs, k, tm.val);
+        const body = check(list_1.Cons(tm.name, ns), domain_1.extendV(ts, vty), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body, ty);
         if (tm.meta.erased && erasedUsed(0, tm.body))
-            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+            return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
         return syntax_1.Let(tm.meta, tm.name, val, body);
     }
-    const [etm, ty2] = synth(ts, vs, k, tm);
+    const [etm, ty2] = synth(ns, ts, vs, k, tm);
     try {
-        unify_1.unify(k, ty2, ty);
+        unify_1.unify(ns, k, ty2, ty);
     }
     catch (err) {
         if (!(err instanceof TypeError))
             throw err;
-        util_1.terr(`failed to unify ${domain_1.showTermQ(ty2, k)} ~ ${domain_1.showTermQ(ty, k)}: ${err.message}`);
+        util_1.terr(`failed to unify ${domain_1.showTermU(ty2, ns, k)} ~ ${domain_1.showTermU(ty, ns, k)}: ${err.message}`);
     }
     return etm;
 };
-const synth = (ts, vs, k, tm) => {
-    config_1.log(() => `synth ${syntax_1.showTerm(tm)} in ${domain_1.showEnvV(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
+const synth = (ns, ts, vs, k, tm) => {
+    config_1.log(() => `synth ${syntax_1.showFromSurface(tm, ns)} in ${domain_1.showEnvV(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (tm.tag === 'Type')
         return [tm, domain_1.VType];
     if (tm.tag === 'Var') {
         const ty = list_1.index(ts, tm.index);
         if (!ty)
-            return util_1.terr(`var out of scope ${syntax_1.showTerm(tm)}`);
+            return util_1.terr(`var out of scope ${syntax_1.showFromSurface(tm, ns)}`);
         return [tm, ty];
     }
     if (tm.tag === 'Global') {
@@ -1128,68 +1131,68 @@ const synth = (ts, vs, k, tm) => {
         return [tm, entry.type];
     }
     if (tm.tag === 'App') {
-        const [left, ty_] = synth(ts, vs, k, tm.left);
+        const [left, ty_] = synth(ns, ts, vs, k, tm.left);
         const ty = domain_1.force(ty_);
         if (ty.tag === 'VPi' && syntax_2.eqMeta(ty.meta, tm.meta)) {
-            const right = check(ts, vs, k, tm.right, ty.type);
+            const right = check(ns, ts, vs, k, tm.right, ty.type);
             return [syntax_1.App(left, tm.meta, right), ty.body(domain_1.evaluate(right, vs))];
         }
-        return util_1.terr(`invalid type or meta mismatch in synthapp in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(ty, k)} ${tm.meta.erased ? '-' : ''}@ ${syntax_1.showTerm(tm.right)}`);
+        return util_1.terr(`invalid type or meta mismatch in synthapp in ${syntax_1.showFromSurface(tm, ns)}: ${domain_1.showTermU(ty, ns, k)} ${tm.meta.erased ? '-' : ''}@ ${syntax_1.showFromSurface(tm.right, ns)}`);
     }
     if (tm.tag === 'Abs' && tm.type) {
-        const type = check(ts, vs, k, tm.type, domain_1.VType);
+        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
         const vtype = domain_1.evaluate(type, vs);
-        const [body, rt] = synth(domain_1.extendV(ts, vtype), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body);
+        const [body, rt] = synth(list_1.Cons(tm.name, ns), domain_1.extendV(ts, vtype), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body);
         if (tm.meta.erased && erasedUsed(0, tm.body))
-            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+            return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
         // TODO: avoid quote here
         const pi = domain_1.evaluate(syntax_1.Pi(tm.meta, tm.name, type, domain_1.quote(rt, k + 1, false)), vs);
         return [syntax_1.Abs(tm.meta, tm.name, type, body), pi];
     }
     if (tm.tag === 'Let') {
-        const [val, vty] = synth(ts, vs, k, tm.val);
-        const [body, rt] = synth(domain_1.extendV(ts, vty), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body);
+        const [val, vty] = synth(ns, ts, vs, k, tm.val);
+        const [body, rt] = synth(list_1.Cons(tm.name, ns), domain_1.extendV(ts, vty), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body);
         if (tm.meta.erased && erasedUsed(0, tm.body))
-            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+            return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
         return [syntax_1.Let(tm.meta, tm.name, val, body), rt];
     }
     if (tm.tag === 'Pi') {
-        const type = check(ts, vs, k, tm.type, domain_1.VType);
-        const body = check(domain_1.extendV(ts, domain_1.evaluate(type, vs)), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, domain_1.VType);
+        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
+        const body = check(list_1.Cons(tm.name, ns), domain_1.extendV(ts, domain_1.evaluate(type, vs)), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, domain_1.VType);
         return [syntax_1.Pi(tm.meta, tm.name, type, body), domain_1.VType];
     }
     if (tm.tag === 'Fix') {
-        const type = check(ts, vs, k, tm.type, domain_1.VType);
+        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
         const vt = domain_1.evaluate(type, vs);
-        const body = check(domain_1.extendV(ts, vt), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, vt);
+        const body = check(list_1.Cons(tm.name, ns), domain_1.extendV(ts, vt), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, vt);
         return [syntax_1.Fix(tm.name, type, body), vt];
     }
     if (tm.tag === 'Roll') {
-        const type = check(ts, vs, k, tm.type, domain_1.VType);
+        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
         const vt = domain_1.evaluate(type, vs);
         const vtf = domain_1.force(vt);
         if (vtf.tag === 'VFix') {
-            const term = check(ts, vs, k, tm.term, vtf.body(vt));
+            const term = check(ns, ts, vs, k, tm.term, vtf.body(vt));
             return [syntax_1.Roll(type, term), vt];
         }
-        return util_1.terr(`fix type expected in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(vt, k)}`);
+        return util_1.terr(`fix type expected in ${syntax_1.showFromSurface(tm, ns)}: ${domain_1.showTermU(vt, ns, k)}`);
     }
     if (tm.tag === 'Unroll') {
-        const [term, ty] = synth(ts, vs, k, tm.term);
+        const [term, ty] = synth(ns, ts, vs, k, tm.term);
         const vt = domain_1.force(ty);
         if (vt.tag === 'VFix')
             return [syntax_1.Unroll(term), vt.body(ty)];
-        return util_1.terr(`fix type expected in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(vt, k)}`);
+        return util_1.terr(`fix type expected in ${syntax_1.showFromSurface(tm, ns)}: ${domain_1.showTermU(vt, ns, k)}`);
     }
     if (tm.tag === 'Ann') {
-        const type = check(ts, vs, k, tm.type, domain_1.VType);
+        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
         const vt = domain_1.evaluate(type, vs);
-        const term = check(ts, vs, k, tm.term, vt);
+        const term = check(ns, ts, vs, k, tm.term, vt);
         return [term, vt];
     }
-    return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
+    return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
-exports.typecheck = (tm, ts = list_1.Nil, vs = list_1.Nil, k = 0) => synth(ts, vs, k, tm);
+exports.typecheck = (tm) => synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
 exports.typecheckDefs = (ds) => {
     const xs = [];
     for (let i = 0; i < ds.length; i++) {
@@ -1222,65 +1225,65 @@ const eqHead = (a, b) => {
         return b.tag === 'HGlobal' && a.name === b.name;
     return a;
 };
-const unifyElim = (k, a, b, x, y) => {
+const unifyElim = (ns, k, a, b, x, y) => {
     if (a === b)
         return;
     if (a.tag === 'EUnroll' && b.tag === 'EUnroll')
         return;
     if (a.tag === 'EApp' && b.tag === 'EApp' && syntax_1.eqMeta(a.meta, b.meta))
-        return exports.unify(k, a.arg, b.arg);
-    return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(x, k)} ~ ${domain_1.showTermQ(y, k)}`);
+        return exports.unify(ns, k, a.arg, b.arg);
+    return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(x, ns, k)} ~ ${domain_1.showTermU(y, ns, k)}`);
 };
-exports.unify = (k, a, b) => {
-    config_1.log(() => `unify ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
+exports.unify = (ns, k, a, b) => {
+    config_1.log(() => `unify ${domain_1.showTermU(a, ns, k)} ~ ${domain_1.showTermU(b, ns, k)}`);
     if (a === b)
         return;
     if (a.tag === 'VType' && b.tag === 'VType')
         return;
     if (a.tag === 'VRoll' && b.tag === 'VRoll') {
-        exports.unify(k, a.type, b.type);
-        return exports.unify(k, a.term, b.term);
+        exports.unify(ns, k, a.type, b.type);
+        return exports.unify(ns, k, a.term, b.term);
     }
     if (a.tag === 'VPi' && b.tag === 'VPi' && syntax_1.eqMeta(a.meta, b.meta)) {
-        exports.unify(k, a.type, b.type);
+        exports.unify(ns, k, a.type, b.type);
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, a.body(v), b.body(v));
+        return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
     }
     if (a.tag === 'VFix' && b.tag === 'VFix') {
-        exports.unify(k, a.type, b.type);
+        exports.unify(ns, k, a.type, b.type);
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, a.body(v), b.body(v));
+        return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
     }
     if (a.tag === 'VAbs' && b.tag === 'VAbs' && syntax_1.eqMeta(a.meta, b.meta)) {
-        exports.unify(k, a.type, b.type);
+        exports.unify(ns, k, a.type, b.type);
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, a.body(v), b.body(v));
+        return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
     }
     if (a.tag === 'VAbs') {
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, a.body(v), domain_1.vapp(b, a.meta, v));
+        return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), domain_1.vapp(b, a.meta, v));
     }
     if (b.tag === 'VAbs') {
         const v = domain_1.VVar(k);
-        return exports.unify(k + 1, domain_1.vapp(a, b.meta, v), b.body(v));
+        return exports.unify(list_1.Cons(b.name, ns), k + 1, domain_1.vapp(a, b.meta, v), b.body(v));
     }
     if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && list_1.length(a.args) === list_1.length(b.args))
-        return list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+        return list_1.zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
     if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && list_1.length(a.args) === list_1.length(b.args)) {
         try {
-            return list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+            return list_1.zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
         }
         catch (err) {
             if (!(err instanceof TypeError))
                 throw err;
-            return exports.unify(k, lazy_1.forceLazy(a.val), lazy_1.forceLazy(b.val));
+            return exports.unify(ns, k, lazy_1.forceLazy(a.val), lazy_1.forceLazy(b.val));
         }
     }
     if (a.tag === 'VGlued')
-        return exports.unify(k, lazy_1.forceLazy(a.val), b);
+        return exports.unify(ns, k, lazy_1.forceLazy(a.val), b);
     if (b.tag === 'VGlued')
-        return exports.unify(k, a, lazy_1.forceLazy(b.val));
-    return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
+        return exports.unify(ns, k, a, lazy_1.forceLazy(b.val));
+    return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(a, ns, k)} ~ ${domain_1.showTermU(b, ns, k)}`);
 };
 
 },{"../config":1,"../lazy":4,"../list":5,"../syntax":15,"../util":17,"./domain":10}],15:[function(require,module,exports){

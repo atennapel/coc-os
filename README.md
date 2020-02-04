@@ -16,9 +16,9 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- bidirectional typechecking for Roll
 - rename Meta to something else
-- fix error message, convert to readable syntax
+- update syntax for roll (roll {T} b)
+- bidirectional typechecking for Roll
 - holes and meta variables
 - automatic insertion of meta variables
 - improve type inference of annotated lambdas

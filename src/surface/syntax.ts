@@ -127,3 +127,6 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   }
   return t;
 };
+
+export const showFromSurface = (t: Term, ns: List<Name> = Nil): string =>
+  S.showTerm(fromSurface(t, ns));

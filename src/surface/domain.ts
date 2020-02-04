@@ -1,10 +1,11 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global, fromSurface } from './syntax';
 import { impossible } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
 import { Meta, eqMeta } from '../syntax';
+import { showTerm as showTermS } from '../syntax';
 
 export type Head = HVar | HGlobal;
 
@@ -134,3 +135,5 @@ export const normalize = (t: Term, vs: EnvV, k: Ix, full: boolean): Term =>
   quote(evaluate(t, vs), k, full);
 
 export const showTermQ = (v: Val, k: number = 0, full: boolean = false): string => showTerm(quote(v, k, full));
+export const showTermU = (v: Val, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string =>
+  showTermS(fromSurface(quote(v, k, full), ns));
