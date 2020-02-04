@@ -51,9 +51,9 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
 
 export const erase = (t: TTerm): Term => {
   if (t.tag === 'Var') return Var(t.index);
-  if (t.tag === 'App') return t.meta.erased ? erase(t.left) : App(erase(t.left), erase(t.right));
-  if (t.tag === 'Abs') return t.meta.erased ? shift(-1, 0, erase(t.body)) : Abs(erase(t.body));
-  if (t.tag === 'Let') return t.meta.erased ? shift(-1, 0, erase(t.body)) : App(Abs(erase(t.body)), erase(t.val));
+  if (t.tag === 'App') return t.plicity.erased ? erase(t.left) : App(erase(t.left), erase(t.right));
+  if (t.tag === 'Abs') return t.plicity.erased ? shift(-1, 0, erase(t.body)) : Abs(erase(t.body));
+  if (t.tag === 'Let') return t.plicity.erased ? shift(-1, 0, erase(t.body)) : App(Abs(erase(t.body)), erase(t.val));
   if (t.tag === 'Roll') return erase(t.term);
   if (t.tag === 'Unroll') return erase(t.term);
   if (t.tag === 'Pi') return idTerm;

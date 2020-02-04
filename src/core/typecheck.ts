@@ -5,7 +5,7 @@ import { Ix, Name } from '../names';
 import { index, length, zipWithR_, Nil } from '../list';
 import { globalGet, globalSet } from './globalenv';
 import { forceLazy } from '../lazy';
-import { eqMeta } from '../syntax';
+import { eqPlicity } from '../syntax';
 import { Def } from './definitions';
 
 const eqHead = (a: Head, b: Head): boolean => {
@@ -17,7 +17,7 @@ const eqHead = (a: Head, b: Head): boolean => {
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
   if (a.tag === 'EUnroll' && b.tag === 'EUnroll') return;
-  if (a.tag === 'EApp' && b.tag === 'EApp' && eqMeta(a.meta, b.meta))
+  if (a.tag === 'EApp' && b.tag === 'EApp' && eqPlicity(a.plicity, b.plicity))
     return unify(k, a.arg, b.arg);
   return terr(`unify failed (${k}): ${showTermQ(x, k)} ~ ${showTermQ(y, k)}`);
 };
@@ -28,7 +28,7 @@ const unify = (k: Ix, a: Val, b: Val): void => {
     unify(k, a.type, b.type);
     return unify(k, a.term, b.term);
   }
-  if (a.tag === 'VPi' && b.tag === 'VPi' && eqMeta(a.meta, b.meta)) {
+  if (a.tag === 'VPi' && b.tag === 'VPi' && eqPlicity(a.plicity, b.plicity)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, a.body(v), b.body(v));
@@ -38,18 +38,18 @@ const unify = (k: Ix, a: Val, b: Val): void => {
     const v = VVar(k);
     return unify(k + 1, a.body(v), b.body(v));
   }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs' && eqMeta(a.meta, b.meta)) {
+  if (a.tag === 'VAbs' && b.tag === 'VAbs' && eqPlicity(a.plicity, b.plicity)) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(k + 1, a.body(v), vapp(b, a.meta, v));
+    return unify(k + 1, a.body(v), vapp(b, a.plicity, v));
   }
   if (b.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(k + 1, vapp(a, b.meta, v), b.body(v));
+    return unify(k + 1, vapp(a, b.plicity, v), b.body(v));
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
     return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
@@ -69,9 +69,9 @@ const unify = (k: Ix, a: Val, b: Val): void => {
 const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Var') return t.index === k;
   if (t.tag === 'Global') return false;
-  if (t.tag === 'App') return erasedUsed(k, t.left) || (!t.meta.erased && erasedUsed(k, t.right));
+  if (t.tag === 'App') return erasedUsed(k, t.left) || (!t.plicity.erased && erasedUsed(k, t.right));
   if (t.tag === 'Abs') return erasedUsed(k + 1, t.body);
-  if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.meta.erased && erasedUsed(k, t.val));
+  if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity.erased && erasedUsed(k, t.val));
   if (t.tag === 'Roll') return erasedUsed(k, t.term);
   if (t.tag === 'Unroll') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
@@ -100,25 +100,25 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
   }
   if (tm.tag === 'App') {
     const ty = force(synth(ts, vs, k, tm.left));
-    if (ty.tag === 'VPi' && eqMeta(ty.meta, tm.meta)) {
+    if (ty.tag === 'VPi' && eqPlicity(ty.plicity, tm.plicity)) {
       check(ts, vs, k, tm.right, ty.type);
       return ty.body(evaluate(tm.right, vs));
     }
-    return terr(`invalid type or meta mismatch in synthapp in ${showTerm(tm)}: ${showTermQ(ty, k)} ${tm.meta.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
+    return terr(`invalid type or plicity mismatch in synthapp in ${showTerm(tm)}: ${showTermQ(ty, k)} ${tm.plicity.erased ? '-' : ''}@ ${showTerm(tm.right)}`);
   }
   if (tm.tag === 'Abs') {
     check(ts, vs, k, tm.type, VType);
     const type = evaluate(tm.type, vs);
     const rt = synth(extendV(ts, type), extendV(vs, VVar(k)), k + 1, tm.body);
-    if (tm.meta.erased && erasedUsed(0, tm.body))
+    if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showTerm(tm)}`);
     // TODO: avoid quote here
-    return evaluate(Pi(tm.meta, tm.type, quote(rt, k + 1, false)), vs);
+    return evaluate(Pi(tm.plicity, tm.type, quote(rt, k + 1, false)), vs);
   }
   if (tm.tag === 'Let') {
     const vty = synth(ts, vs, k, tm.val);
     const rt = synth(extendV(ts, vty), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.body);
-    if (tm.meta.erased && erasedUsed(0, tm.body))
+    if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showTerm(tm)}`);
     return rt;
   }

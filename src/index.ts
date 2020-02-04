@@ -11,8 +11,8 @@ import { normalize, evaluate, quote } from './core/domain';
 import { globalSet, globalReset } from './core/globalenv';
 import { parse } from './parser';
 
-const E = S.MetaE;
-const R = S.MetaR;
+const E = S.PlicityE;
+const R = S.PlicityR;
 
 // @ts-ignore
 const tid = Pi(E, Type, Pi(R, Var(0), Var(1)));

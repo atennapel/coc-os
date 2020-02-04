@@ -16,7 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- rename Meta to something else
 - update syntax for roll (roll {T} b)
 - bidirectional typechecking for Roll
 - holes and meta variables

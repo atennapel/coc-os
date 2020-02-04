@@ -1,5 +1,5 @@
 import { serr } from './util'
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, MetaR, MetaE, Ann, flattenApp } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, flattenApp } from './syntax';
 import { log } from './config';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
@@ -150,14 +150,14 @@ const expr = (t: Token): [Term, boolean] => {
       const s1 = Var('B1');
       let c: Term = Var('BE');
       const s = n.toString(2);
-      for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, MetaR, c);
+      for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, PlicityR, c);
       return [c, false];
     } else {
       const n = +t.num;
       if (isNaN(n)) return serr(`invalid number: ${t.num}`);
       const s = Var('S');
       let c: Term = Var('Z');
-      for (let i = 0; i < n; i++) c = App(s, MetaR, c);
+      for (let i = 0; i < n; i++) c = App(s, PlicityR, c);
       return [c, false];
     }
   }
@@ -188,7 +188,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     }
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1), '(');
-    return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? MetaE : MetaR, name, ty, x), body);
+    return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? PlicityE : PlicityR, name, ty, x), body);
   }
   if (isName(ts[0], 'unroll')) {
     const body = exprs(ts.slice(1), '(');
@@ -253,7 +253,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     if (vals.length === 0) return serr(`empty val in let`);
     const val = exprs(vals, '(');
     const body = exprs(ts.slice(i + 1), '(');
-    return Let(impl ? MetaE : MetaR, name, val, body);
+    return Let(impl ? PlicityE : PlicityR, name, val, body);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {
@@ -263,7 +263,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')] as [Name, boolean, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(');
-    return args.reduceRight((x, [name, impl, ty]) => Pi(impl ? MetaE : MetaR, name, ty, x), body);
+    return args.reduceRight((x, [name, impl, ty]) => Pi(impl ? PlicityE : PlicityR, name, ty, x), body);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];
@@ -276,7 +276,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
   }
   if (all.length === 0) return serr(`empty application`);
   if (all[0] && all[0][1]) return serr(`in application function cannot be between {}`);
-  return all.slice(1).reduce((x, [y, impl]) => App(x, impl ? MetaE : MetaR, y), all[0][0]);
+  return all.slice(1).reduce((x, [y, impl]) => App(x, impl ? PlicityE : PlicityR, y), all[0][0]);
 };
 
 export const parse = (s: string): Term => {
