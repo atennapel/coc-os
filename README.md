@@ -16,7 +16,11 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- holes and meta variables
+- check for redefinitions first before typechecking defs
+- meta variables
+- unification with meta variables
+- inference of holes
+- zonking
 - automatic insertion of meta variables
 - improve type inference of annotated lambdas
 - improve impredicative type inference

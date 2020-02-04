@@ -1,5 +1,5 @@
 import { serr } from './util'
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, flattenApp } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, flattenApp, Hole } from './syntax';
 import { log } from './config';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
@@ -138,6 +138,7 @@ const expr = (t: Token): [Term, boolean] => {
   if (t.tag === 'Name') {
     const x = t.name;
     if (x === '*') return [Type, false];
+    if (x === '_') return [Hole, false];
     if (x.includes('@')) return serr(`invalid name: ${x}`);
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);

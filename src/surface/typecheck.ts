@@ -21,6 +21,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;
+  if (t.tag === 'Hole') return false;
   return t;
 };
 
@@ -133,12 +134,14 @@ const synth = (ns: List<Name>, ts: EnvV, vs: EnvV, k: Ix, tm: Term): [Term, Val]
 export const typecheck = (tm: Term): [Term, Val] =>
   synth(Nil, Nil, Nil, 0, tm);
 
-export const typecheckDefs = (ds: Def[]): Name[] => {
+export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Name[] => {
   const xs: Name[] = [];
   for (let i = 0; i < ds.length; i++) {
     const d = ds[i];
     log(() => `typecheckDefs ${showDef(d)}`);
     if (d.tag === 'DDef') {
+      if (!allowRedefinition && globalGet(d.name))
+        return terr(`cannot redefine global ${d.name}`);
       const [tm, ty] = typecheck(d.value);
       globalSet(d.name, evaluate(tm), ty);
       xs.push(d.name);

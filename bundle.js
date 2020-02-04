@@ -385,6 +385,8 @@ const expr = (t) => {
         const x = t.name;
         if (x === '*')
             return [syntax_1.Type, false];
+        if (x === '_')
+            return [syntax_1.Hole, false];
         if (x.includes('@'))
             return util_1.serr(`invalid name: ${x}`);
         if (/[a-z]/i.test(x[0]))
@@ -679,7 +681,7 @@ exports.runREPL = (_s, _cb) => {
             const rest = _s.slice(1);
             const ds = parser_1.parseDefs(rest);
             const dsc = definitions_1.toSurfaceDefs(ds);
-            const xs = typecheck_1.typecheckDefs(dsc);
+            const xs = typecheck_1.typecheckDefs(dsc, true);
             return _cb(`defined ${xs.join(' ')}`);
         }
         if (_s.startsWith(':import')) {
@@ -689,7 +691,7 @@ exports.runREPL = (_s, _cb) => {
                 defs.forEach(rest => {
                     const ds = parser_1.parseDefs(rest);
                     const dsc = definitions_1.toSurfaceDefs(ds);
-                    const lxs = typecheck_1.typecheckDefs(dsc);
+                    const lxs = typecheck_1.typecheckDefs(dsc, true);
                     lxs.forEach(x => xs.push(x));
                 });
                 return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
@@ -915,11 +917,14 @@ exports.Pi = (plicity, name, type, body) => ({ tag: 'Pi', plicity, name, type, b
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
+exports.Hole = { tag: 'Hole' };
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
     if (t.tag === 'Global')
         return t.name;
+    if (t.tag === 'Hole')
+        return '_';
     if (t.tag === 'App')
         return `(${exports.showTerm(t.left)} ${t.plicity.erased ? '-' : ''}${exports.showTerm(t.right)})`;
     if (t.tag === 'Abs')
@@ -945,6 +950,8 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         const l = list_1.lookup(ns, t.name);
         return l === null ? exports.Global(t.name) : exports.Var(k - l - 1);
     }
+    if (t.tag === 'Hole')
+        return exports.Hole;
     if (t.tag === 'App')
         return exports.App(exports.toSurface(t.left, ns, k), t.plicity, exports.toSurface(t.right, ns, k));
     if (t.tag === 'Abs')
@@ -988,6 +995,8 @@ const globalUsed = (k, t) => {
         return false;
     if (t.tag === 'Type')
         return false;
+    if (t.tag === 'Hole')
+        return false;
     return t;
 };
 const indexUsed = (k, t) => {
@@ -1013,6 +1022,35 @@ const indexUsed = (k, t) => {
         return false;
     if (t.tag === 'Type')
         return false;
+    if (t.tag === 'Hole')
+        return false;
+    return t;
+};
+const isUnsolved = (t) => {
+    if (t.tag === 'Hole')
+        return true;
+    if (t.tag === 'App')
+        return isUnsolved(t.left) || isUnsolved(t.right);
+    if (t.tag === 'Abs')
+        return (t.type && isUnsolved(t.type)) || isUnsolved(t.body);
+    if (t.tag === 'Let')
+        return isUnsolved(t.val) || isUnsolved(t.body);
+    if (t.tag === 'Roll')
+        return (t.type && isUnsolved(t.type)) || isUnsolved(t.term);
+    if (t.tag === 'Unroll')
+        return isUnsolved(t.term);
+    if (t.tag === 'Pi')
+        return isUnsolved(t.type) || isUnsolved(t.body);
+    if (t.tag === 'Fix')
+        return isUnsolved(t.type) || isUnsolved(t.body);
+    if (t.tag === 'Ann')
+        return isUnsolved(t.term) || isUnsolved(t.type);
+    if (t.tag === 'Global')
+        return false;
+    if (t.tag === 'Type')
+        return false;
+    if (t.tag === 'Var')
+        return false;
     return t;
 };
 const decideName = (x, t, ns) => {
@@ -1027,6 +1065,8 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
     }
     if (t.tag === 'Type')
         return S.Type;
+    if (t.tag === 'Hole')
+        return S.Hole;
     if (t.tag === 'Global')
         return S.Var(t.name);
     if (t.tag === 'App')
@@ -1091,6 +1131,8 @@ const erasedUsed = (k, t) => {
     if (t.tag === 'Fix')
         return false;
     if (t.tag === 'Type')
+        return false;
+    if (t.tag === 'Hole')
         return false;
     return t;
 };
@@ -1205,12 +1247,14 @@ const synth = (ns, ts, vs, k, tm) => {
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
 exports.typecheck = (tm) => synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
-exports.typecheckDefs = (ds) => {
+exports.typecheckDefs = (ds, allowRedefinition = false) => {
     const xs = [];
     for (let i = 0; i < ds.length; i++) {
         const d = ds[i];
         config_1.log(() => `typecheckDefs ${definitions_1.showDef(d)}`);
         if (d.tag === 'DDef') {
+            if (!allowRedefinition && globalenv_1.globalGet(d.name))
+                return util_1.terr(`cannot redefine global ${d.name}`);
             const [tm, ty] = exports.typecheck(d.value);
             globalenv_1.globalSet(d.name, domain_1.evaluate(tm), ty);
             xs.push(d.name);
@@ -1314,9 +1358,12 @@ exports.Pi = (plicity, name, type, body) => ({ tag: 'Pi', plicity, name, type, b
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
+exports.Hole = { tag: 'Hole' };
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
+    if (t.tag === 'Hole')
+        return '_';
     if (t.tag === 'App')
         return `(${exports.showTermS(t.left)} ${t.plicity.erased ? '-' : ''}${exports.showTermS(t.right)})`;
     if (t.tag === 'Abs')
@@ -1367,6 +1414,8 @@ exports.showTerm = (t) => {
         return '*';
     if (t.tag === 'Var')
         return t.name;
+    if (t.tag === 'Hole')
+        return '_';
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
         return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${as.map(([im, t], i) => im.erased ? `{${exports.showTerm(t)}}` :

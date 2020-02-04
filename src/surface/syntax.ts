@@ -4,7 +4,7 @@ import { Plicity } from '../syntax';
 import { List, lookup, Cons, Nil, index, indecesOf } from '../list';
 import { impossible } from '../util';
 
-export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -28,10 +28,13 @@ export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
+export type Hole = { tag: 'Hole' };
+export const Hole: Hole = { tag: 'Hole' };
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Global') return t.name;
+  if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') return `(${showTerm(t.left)} ${t.plicity.erased ? '-' : ''}${showTerm(t.right)})`;
   if (t.tag === 'Abs')
     return t.type ? `(\\(${t.plicity.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})` : `(\\${t.plicity.erased ? '-' : ''}${t.name}. ${showTerm(t.body)})`;
@@ -50,6 +53,7 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
     const l = lookup(ns, t.name);
     return l === null ? Global(t.name) : Var(k - l - 1);
   }
+  if (t.tag === 'Hole') return Hole;
   if (t.tag === 'App') return App(toSurface(t.left, ns, k), t.plicity, toSurface(t.right, ns, k));
   if (t.tag === 'Abs') return Abs(t.plicity, t.name, t.type && toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Let') return Let(t.plicity, t.name, toSurface(t.val, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
@@ -74,6 +78,7 @@ const globalUsed = (k: Name, t: Term): boolean => {
   if (t.tag === 'Global') return t.name === k;
   if (t.tag === 'Var') return false;
   if (t.tag === 'Type') return false;
+  if (t.tag === 'Hole') return false;
   return t;
 };
 
@@ -89,6 +94,23 @@ const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
   if (t.tag === 'Global') return false;
   if (t.tag === 'Type') return false;
+  if (t.tag === 'Hole') return false;
+  return t;
+};
+
+const isUnsolved = (t: Term): boolean => {
+  if (t.tag === 'Hole') return true;
+  if (t.tag === 'App') return isUnsolved(t.left) || isUnsolved(t.right);
+  if (t.tag === 'Abs') return (t.type && isUnsolved(t.type)) || isUnsolved( t.body);
+  if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
+  if (t.tag === 'Roll') return (t.type && isUnsolved(t.type)) || isUnsolved(t.term);
+  if (t.tag === 'Unroll') return isUnsolved(t.term);
+  if (t.tag === 'Pi') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Fix') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
+  if (t.tag === 'Global') return false;
+  if (t.tag === 'Type') return false;
+  if (t.tag === 'Var') return false;
   return t;
 };
 
@@ -104,6 +126,7 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
     return l ? S.Var(l) : impossible(`var index out of range in fromSurface: ${t.index}`);
   }
   if (t.tag === 'Type') return S.Type;
+  if (t.tag === 'Hole') return S.Hole;
   if (t.tag === 'Global') return S.Var(t.name);
   if (t.tag === 'App') return S.App(fromSurface(t.left, ns), t.plicity, fromSurface(t.right, ns));
   if (t.tag === 'Roll') return S.Roll(t.type && fromSurface(t.type, ns), fromSurface(t.term, ns));

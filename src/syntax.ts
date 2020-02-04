@@ -6,7 +6,7 @@ export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.era
 export const PlicityE: Plicity = { erased: true };
 export const PlicityR: Plicity = { erased: false };
 
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -28,9 +28,12 @@ export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
+export type Hole = { tag: 'Hole' };
+export const Hole: Hole = { tag: 'Hole' };
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
+  if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') return `(${showTermS(t.left)} ${t.plicity.erased ? '-' : ''}${showTermS(t.right)})`;
   if (t.tag === 'Abs')
     return t.type ? `(\\(${t.plicity.erased ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})` : `(\\${t.plicity.erased ? '-' : ''}${t.name}. ${showTermS(t.body)})`;
@@ -74,6 +77,7 @@ export const showTermP = (b: boolean, t: Term): string =>
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Var') return t.name;
+  if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
     return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${

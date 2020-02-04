@@ -66,7 +66,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const rest = _s.slice(1);
       const ds = parseDefs(rest);
       const dsc = toSurfaceDefs(ds)
-      const xs = typecheckDefs(dsc);
+      const xs = typecheckDefs(dsc, true);
       return _cb(`defined ${xs.join(' ')}`);
     }
     if (_s.startsWith(':import')) {
@@ -76,7 +76,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
         defs.forEach(rest => {
           const ds = parseDefs(rest);
           const dsc = toSurfaceDefs(ds)
-          const lxs = typecheckDefs(dsc);
+          const lxs = typecheckDefs(dsc, true);
           lxs.forEach(x => xs.push(x));
         });
         return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
