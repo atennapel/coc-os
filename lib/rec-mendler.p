@@ -2,11 +2,11 @@
 def Fix = \(f : * -> *). fix (r : *). {x : *} -> ((r -> x) -> f r -> x) -> x
 
 def fold : {f : * -> *} -> {x : *} -> ((Fix f -> x) -> f (Fix f) -> x) -> Fix f -> x
-  = \{f} {x} alg r. (unroll r) {x} alg
+  = \{f} {x} alg r. unroll r {x} alg
 def inF : {f : * -> *} -> f (Fix f) -> Fix f
   = \{f} x. roll (Fix f) \{t} alg. alg (fold {f} {t} alg) x
 def outF : {f : * -> *} -> Fix f -> f (Fix f)
-  = \{f} x. (unroll x) {f (Fix f)} (\_ x. x)
+  = \{f} x. unroll x {f (Fix f)} (\_ x. x)
 
 ; nats
 def NatF = \(r : *). {t : *} -> t -> (r -> t) -> t

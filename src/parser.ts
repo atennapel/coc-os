@@ -1,5 +1,5 @@
 import { serr } from './util'
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, MetaR, MetaE, Ann } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, MetaR, MetaE, Ann, flattenApp } from './syntax';
 import { log } from './config';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
@@ -192,7 +192,9 @@ const exprs = (ts: Token[], br: BracketO): Term => {
   }
   if (isName(ts[0], 'unroll')) {
     const body = exprs(ts.slice(1), '(');
-    return Unroll(body);
+    if (body.tag !== 'App') return Unroll(body);
+    const fl = flattenApp(body);
+    return fl[1].reduce((x, [m, y]) => App(x, m, y), Unroll(fl[0]) as Term);
   }
   if (isName(ts[0], 'roll')) {
     const [ty] = expr(ts[1]);

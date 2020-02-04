@@ -1,17 +1,17 @@
 def Nat = fix (Nat : *). {t : *} -> t -> (Nat -> t -> t) -> t
 
 def Z : Nat = roll Nat \{t} z s. z
-def S : Nat -> Nat = \n. roll Nat \{t} z s. s n ((unroll n) {t} z s)
+def S : Nat -> Nat = \n. roll Nat \{t} z s. s n (unroll n {t} z s)
 
 def caseNat
   : {t : *} -> Nat -> t -> (Nat -> t) -> t
-  = \{t} n z s. (unroll n) {t} z (\n _. s n)
+  = \{t} n z s. unroll n {t} z (\n _. s n)
 def foldNat
   : {t : *} -> Nat -> t -> (t -> t) -> t
-  = \{t} n z s. (unroll n) {t} z (\_ r. s r)
+  = \{t} n z s. unroll n {t} z (\_ r. s r)
 def recNat
   : {t : *} -> Nat -> t -> (Nat -> t -> t) -> t
-  = \{t} n z s. (unroll n) {t} z s
+  = \{t} n z s. unroll n {t} z s
 
 def pred : Nat -> Nat = \n. caseNat {Nat} n Z (\n. n)
 

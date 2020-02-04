@@ -16,7 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- fix parsing of unroll
 - bidirectional typechecking
 - rename Meta to something else
 - fix error message, convert to readable syntax

@@ -449,7 +449,10 @@ const exprs = (ts, br) => {
     }
     if (isName(ts[0], 'unroll')) {
         const body = exprs(ts.slice(1), '(');
-        return syntax_1.Unroll(body);
+        if (body.tag !== 'App')
+            return syntax_1.Unroll(body);
+        const fl = syntax_1.flattenApp(body);
+        return fl[1].reduce((x, [m, y]) => syntax_1.App(x, m, y), syntax_1.Unroll(fl[0]));
     }
     if (isName(ts[0], 'roll')) {
         const [ty] = expr(ts[1]);
