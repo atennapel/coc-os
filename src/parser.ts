@@ -197,9 +197,15 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     return fl[1].reduce((x, [m, y]) => App(x, m, y), Unroll(fl[0]) as Term);
   }
   if (isName(ts[0], 'roll')) {
-    const [ty] = expr(ts[1]);
-    const body = exprs(ts.slice(2), '(');
-    return Roll(ty, body);
+    if (ts[1].tag === 'List' && ts[1].bracket === '{') {
+      const [ty, b] = expr(ts[1]);
+      if (!b) return serr(`something went wrong when parsing roll`);
+      const body = exprs(ts.slice(2), '(');
+      return Roll(ty, body);
+    } else {
+      const body = exprs(ts.slice(1), '(');
+      return Roll(null, body);
+    }
   }
   if (isName(ts[0], 'fix')) {
     const args: [Name, boolean, Term | null][] = [];

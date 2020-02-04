@@ -16,8 +16,8 @@ export type Abs = { tag: 'Abs', plicity: Plicity, name: Name, type: Term | null,
 export const Abs = (plicity: Plicity, name: Name, type: Term | null, body: Term): Abs => ({ tag: 'Abs', plicity, name, type, body });
 export type Let = { tag: 'Let', plicity: Plicity, name: Name, val: Term, body: Term };
 export const Let = (plicity: Plicity, name: Name, val: Term, body: Term): Let => ({ tag: 'Let', plicity, name, val, body });
-export type Roll = { tag: 'Roll', type: Term, term: Term };
-export const Roll = (type: Term, term: Term): Roll => ({ tag: 'Roll', type, term });
+export type Roll = { tag: 'Roll', type: Term | null, term: Term };
+export const Roll = (type: Term | null, term: Term): Roll => ({ tag: 'Roll', type, term });
 export type Unroll = { tag: 'Unroll', term: Term };
 export const Unroll = (term: Term): Unroll => ({ tag: 'Unroll', term });
 export type Pi = { tag: 'Pi', plicity: Plicity, name: Name, type: Term, body: Term };
@@ -35,7 +35,7 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Abs')
     return t.type ? `(\\(${t.plicity.erased ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})` : `(\\${t.plicity.erased ? '-' : ''}${t.name}. ${showTermS(t.body)})`;
   if (t.tag === 'Let') return `(let ${t.plicity.erased ? '-' : ''}${t.name} = ${showTermS(t.val)} in ${showTermS(t.body)})`;
-  if (t.tag === 'Roll') return `(roll ${showTermS(t.type)} ${showTermS(t.term)})`;
+  if (t.tag === 'Roll') return t.type ? `(roll {${showTermS(t.type)}} ${showTermS(t.term)})` : `(roll ${showTermS(t.term)})`;
   if (t.tag === 'Unroll') return `(unroll ${showTermS(t.term)})`;
   if (t.tag === 'Pi') return `(/(${t.plicity.erased ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
   if (t.tag === 'Fix') return `(fix (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
@@ -96,7 +96,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Unroll')
     return `unroll ${showTermP(t.term.tag === 'Ann', t.term)}`;
   if (t.tag === 'Roll')
-    return `roll ${showTermP(t.type.tag === 'App' || t.type.tag === 'Ann' || t.type.tag === 'Abs' || t.type.tag === 'Fix' || t.type.tag === 'Let' || t.type.tag === 'Pi' || t.type.tag === 'Roll' || t.type.tag === 'Unroll', t.type)} ${showTermP(t.term.tag === 'Ann', t.term)}`;
+    return !t.type ? `roll ${showTermP(t.term.tag === 'Ann', t.term)}` : `roll {${showTerm(t.type)}} ${showTermP(t.term.tag === 'Ann', t.term)}`;
   if (t.tag === 'Ann')
     return `${showTermP(t.term.tag === 'Ann', t.term)} : ${showTermP(t.term.tag === 'Ann', t.type)}`;
   return t;

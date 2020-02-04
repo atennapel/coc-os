@@ -46,7 +46,7 @@ export const toCore = (t: S.Term): Term => {
   if (t.tag === 'App') return App(toCore(t.left), t.plicity, toCore(t.right));
   if (t.tag === 'Abs' && t.type) return Abs(t.plicity, toCore(t.type), toCore(t.body));
   if (t.tag === 'Let') return Let(t.plicity, toCore(t.val), toCore(t.body));
-  if (t.tag === 'Roll') return Roll(toCore(t.type), toCore(t.term));
+  if (t.tag === 'Roll' && t.type) return Roll(toCore(t.type), toCore(t.term));
   if (t.tag === 'Unroll') return Unroll(toCore(t.term));
   if (t.tag === 'Pi') return Pi(t.plicity, toCore(t.type), toCore(t.body));
   if (t.tag === 'Fix') return Fix(toCore(t.type), toCore(t.body));

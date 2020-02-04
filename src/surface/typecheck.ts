@@ -34,6 +34,10 @@ const check = (ns: List<Name>, ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
     return Abs(tm.plicity, tm.name, quote(tyf.type, k, false), body);
   }
+  if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
+    const term = check(ns, ts, vs, k, tm.term, tyf.body(ty));
+    return Roll(quote(tyf.type, k, false), term);
+  }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(ns, ts, vs, k, tm.val);
     const body = check(Cons(tm.name, ns), extendV(ts, vty), extendV(vs, evaluate(val, vs)), k + 1, tm.body, ty);
@@ -101,7 +105,7 @@ const synth = (ns: List<Name>, ts: EnvV, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     const body = check(Cons(tm.name, ns), extendV(ts, vt), extendV(vs, VVar(k)), k + 1, tm.body, vt);
     return [Fix(tm.name, type, body), vt];
   }
-  if (tm.tag === 'Roll') {
+  if (tm.tag === 'Roll' && tm.type) {
     const type = check(ns, ts, vs, k, tm.type, VType);
     const vt = evaluate(type, vs);
     const vtf = force(vt);

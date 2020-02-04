@@ -62,7 +62,7 @@ exports.toCore = (t) => {
         return exports.Abs(t.plicity, exports.toCore(t.type), exports.toCore(t.body));
     if (t.tag === 'Let')
         return exports.Let(t.plicity, exports.toCore(t.val), exports.toCore(t.body));
-    if (t.tag === 'Roll')
+    if (t.tag === 'Roll' && t.type)
         return exports.Roll(exports.toCore(t.type), exports.toCore(t.term));
     if (t.tag === 'Unroll')
         return exports.Unroll(exports.toCore(t.term));
@@ -455,9 +455,17 @@ const exprs = (ts, br) => {
         return fl[1].reduce((x, [m, y]) => syntax_1.App(x, m, y), syntax_1.Unroll(fl[0]));
     }
     if (isName(ts[0], 'roll')) {
-        const [ty] = expr(ts[1]);
-        const body = exprs(ts.slice(2), '(');
-        return syntax_1.Roll(ty, body);
+        if (ts[1].tag === 'List' && ts[1].bracket === '{') {
+            const [ty, b] = expr(ts[1]);
+            if (!b)
+                return util_1.serr(`something went wrong when parsing roll`);
+            const body = exprs(ts.slice(2), '(');
+            return syntax_1.Roll(ty, body);
+        }
+        else {
+            const body = exprs(ts.slice(1), '(');
+            return syntax_1.Roll(null, body);
+        }
     }
     if (isName(ts[0], 'fix')) {
         const args = [];
@@ -826,7 +834,7 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.VAbs(t.plicity, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Let')
         return exports.evaluate(t.body, exports.extendV(vs, exports.evaluate(t.val, vs)));
-    if (t.tag === 'Roll')
+    if (t.tag === 'Roll' && t.type)
         return exports.VRoll(exports.evaluate(t.type, vs), exports.evaluate(t.term, vs));
     if (t.tag === 'Unroll')
         return exports.vunroll(exports.evaluate(t.term, vs));
@@ -919,7 +927,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'Let')
         return `(let ${t.plicity.erased ? '-' : ''}${t.name} = ${exports.showTerm(t.val)} in ${exports.showTerm(t.body)})`;
     if (t.tag === 'Roll')
-        return `(roll ${exports.showTerm(t.type)} ${exports.showTerm(t.term)})`;
+        return t.type ? `(roll {${exports.showTerm(t.type)}} ${exports.showTerm(t.term)})` : `(roll ${exports.showTerm(t.term)})`;
     if (t.tag === 'Unroll')
         return `(unroll ${exports.showTerm(t.term)})`;
     if (t.tag === 'Pi')
@@ -944,7 +952,7 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
     if (t.tag === 'Let')
         return exports.Let(t.plicity, t.name, exports.toSurface(t.val, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
     if (t.tag === 'Roll')
-        return exports.Roll(exports.toSurface(t.type, ns, k), exports.toSurface(t.term, ns, k));
+        return exports.Roll(t.type && exports.toSurface(t.type, ns, k), exports.toSurface(t.term, ns, k));
     if (t.tag === 'Unroll')
         return exports.Unroll(exports.toSurface(t.term, ns, k));
     if (t.tag === 'Pi')
@@ -965,7 +973,7 @@ const globalUsed = (k, t) => {
     if (t.tag === 'Let')
         return globalUsed(k, t.val) || globalUsed(k, t.body);
     if (t.tag === 'Roll')
-        return globalUsed(k, t.type) || globalUsed(k, t.term);
+        return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
     if (t.tag === 'Unroll')
         return globalUsed(k, t.term);
     if (t.tag === 'Pi')
@@ -992,7 +1000,7 @@ const indexUsed = (k, t) => {
     if (t.tag === 'Let')
         return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
     if (t.tag === 'Roll')
-        return indexUsed(k, t.type) || indexUsed(k, t.term);
+        return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
     if (t.tag === 'Unroll')
         return indexUsed(k, t.term);
     if (t.tag === 'Pi')
@@ -1024,7 +1032,7 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
     if (t.tag === 'App')
         return S.App(exports.fromSurface(t.left, ns), t.plicity, exports.fromSurface(t.right, ns));
     if (t.tag === 'Roll')
-        return S.Roll(exports.fromSurface(t.type, ns), exports.fromSurface(t.term, ns));
+        return S.Roll(t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.term, ns));
     if (t.tag === 'Unroll')
         return S.Unroll(exports.fromSurface(t.term, ns));
     if (t.tag === 'Ann')
@@ -1095,6 +1103,10 @@ const check = (ns, ts, vs, k, tm, ty) => {
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
         return syntax_1.Abs(tm.plicity, tm.name, domain_1.quote(tyf.type, k, false), body);
+    }
+    if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
+        const term = check(ns, ts, vs, k, tm.term, tyf.body(ty));
+        return syntax_1.Roll(domain_1.quote(tyf.type, k, false), term);
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(ns, ts, vs, k, tm.val);
@@ -1167,7 +1179,7 @@ const synth = (ns, ts, vs, k, tm) => {
         const body = check(list_1.Cons(tm.name, ns), domain_1.extendV(ts, vt), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, vt);
         return [syntax_1.Fix(tm.name, type, body), vt];
     }
-    if (tm.tag === 'Roll') {
+    if (tm.tag === 'Roll' && tm.type) {
         const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
         const vt = domain_1.evaluate(type, vs);
         const vtf = domain_1.force(vt);
@@ -1312,7 +1324,7 @@ exports.showTermS = (t) => {
     if (t.tag === 'Let')
         return `(let ${t.plicity.erased ? '-' : ''}${t.name} = ${exports.showTermS(t.val)} in ${exports.showTermS(t.body)})`;
     if (t.tag === 'Roll')
-        return `(roll ${exports.showTermS(t.type)} ${exports.showTermS(t.term)})`;
+        return t.type ? `(roll {${exports.showTermS(t.type)}} ${exports.showTermS(t.term)})` : `(roll ${exports.showTermS(t.term)})`;
     if (t.tag === 'Unroll')
         return `(unroll ${exports.showTermS(t.term)})`;
     if (t.tag === 'Pi')
@@ -1375,7 +1387,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'Unroll')
         return `unroll ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
     if (t.tag === 'Roll')
-        return `roll ${exports.showTermP(t.type.tag === 'App' || t.type.tag === 'Ann' || t.type.tag === 'Abs' || t.type.tag === 'Fix' || t.type.tag === 'Let' || t.type.tag === 'Pi' || t.type.tag === 'Roll' || t.type.tag === 'Unroll', t.type)} ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
+        return !t.type ? `roll ${exports.showTermP(t.term.tag === 'Ann', t.term)}` : `roll {${exports.showTerm(t.type)}} ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
     if (t.tag === 'Ann')
         return `${exports.showTermP(t.term.tag === 'Ann', t.term)} : ${exports.showTermP(t.term.tag === 'Ann', t.type)}`;
     return t;

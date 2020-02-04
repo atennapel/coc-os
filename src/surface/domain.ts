@@ -83,7 +83,7 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return VAbs(t.plicity, t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Let')
     return evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
-  if (t.tag === 'Roll')
+  if (t.tag === 'Roll' && t.type)
     return VRoll(evaluate(t.type, vs), evaluate(t.term, vs));
   if (t.tag === 'Unroll')
     return vunroll(evaluate(t.term, vs));

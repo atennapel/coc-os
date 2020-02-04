@@ -16,8 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- update syntax for roll (roll {T} b)
-- bidirectional typechecking for Roll
 - holes and meta variables
 - automatic insertion of meta variables
 - improve type inference of annotated lambdas

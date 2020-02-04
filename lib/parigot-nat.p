@@ -1,7 +1,7 @@
 def Nat = fix (Nat : *). {t : *} -> t -> (Nat -> t -> t) -> t
 
-def Z : Nat = roll Nat \{t} z s. z
-def S : Nat -> Nat = \n. roll Nat \{t} z s. s n (unroll n {t} z s)
+def Z : Nat = roll \{t} z s. z
+def S : Nat -> Nat = \n. roll \{t} z s. s n (unroll n {t} z s)
 
 def caseNat
   : {t : *} -> Nat -> t -> (Nat -> t) -> t
