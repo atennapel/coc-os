@@ -1275,27 +1275,82 @@ exports.Pi = (meta, name, type, body) => ({ tag: 'Pi', meta, name, type, body })
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
-exports.showTerm = (t) => {
+exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
     if (t.tag === 'App')
-        return `(${exports.showTerm(t.left)} ${t.meta.erased ? '-' : ''}${exports.showTerm(t.right)})`;
+        return `(${exports.showTermS(t.left)} ${t.meta.erased ? '-' : ''}${exports.showTermS(t.right)})`;
     if (t.tag === 'Abs')
-        return t.type ? `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})` : `(\\${t.meta.erased ? '-' : ''}${t.name}. ${exports.showTerm(t.body)})`;
+        return t.type ? `(\\(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTermS(t.type)}). ${exports.showTermS(t.body)})` : `(\\${t.meta.erased ? '-' : ''}${t.name}. ${exports.showTermS(t.body)})`;
     if (t.tag === 'Let')
-        return `(let ${t.meta.erased ? '-' : ''}${t.name} = ${exports.showTerm(t.val)} in ${exports.showTerm(t.body)})`;
+        return `(let ${t.meta.erased ? '-' : ''}${t.name} = ${exports.showTermS(t.val)} in ${exports.showTermS(t.body)})`;
     if (t.tag === 'Roll')
-        return `(roll ${exports.showTerm(t.type)} ${exports.showTerm(t.term)})`;
+        return `(roll ${exports.showTermS(t.type)} ${exports.showTermS(t.term)})`;
     if (t.tag === 'Unroll')
-        return `(unroll ${exports.showTerm(t.term)})`;
+        return `(unroll ${exports.showTermS(t.term)})`;
     if (t.tag === 'Pi')
-        return `(/(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
+        return `(/(${t.meta.erased ? '-' : ''}${t.name} : ${exports.showTermS(t.type)}). ${exports.showTermS(t.body)})`;
     if (t.tag === 'Fix')
-        return `(fix (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
+        return `(fix (${t.name} : ${exports.showTermS(t.type)}). ${exports.showTermS(t.body)})`;
     if (t.tag === 'Type')
         return '*';
     if (t.tag === 'Ann')
-        return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
+        return `(${exports.showTermS(t.term)} : ${exports.showTermS(t.type)})`;
+    return t;
+};
+exports.flattenApp = (t) => {
+    const r = [];
+    while (t.tag === 'App') {
+        r.push([t.meta, t.right]);
+        t = t.left;
+    }
+    return [t, r.reverse()];
+};
+exports.flattenAbs = (t) => {
+    const r = [];
+    while (t.tag === 'Abs') {
+        r.push([t.name, t.meta, t.type]);
+        t = t.body;
+    }
+    return [r, t];
+};
+exports.flattenPi = (t) => {
+    const r = [];
+    while (t.tag === 'Pi') {
+        r.push([t.name, t.meta, t.type]);
+        t = t.body;
+    }
+    return [r, t];
+};
+exports.showTermP = (b, t) => b ? `(${exports.showTerm(t)})` : exports.showTerm(t);
+exports.showTerm = (t) => {
+    if (t.tag === 'Type')
+        return '*';
+    if (t.tag === 'Var')
+        return t.name;
+    if (t.tag === 'App') {
+        const [f, as] = exports.flattenApp(t);
+        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${as.map(([im, t], i) => im.erased ? `{${exports.showTerm(t)}}` :
+            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || f.tag === 'Fix', t)}`).join(' ')}`;
+    }
+    if (t.tag === 'Abs') {
+        const [as, b] = exports.flattenAbs(t);
+        return `\\${as.map(([x, im, t]) => im.erased ? `{${x}${t ? ` : ${exports.showTermP(t.tag === 'Ann', t)}` : ''}}` : !t ? x : `(${x} : ${exports.showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${exports.showTermP(b.tag === 'Ann', b)}`;
+    }
+    if (t.tag === 'Pi') {
+        const [as, b] = exports.flattenPi(t);
+        return `${as.map(([x, im, t]) => x === '_' ? (im.erased ? `${im ? '{' : ''}${exports.showTerm(t)}${im.erased ? '}' : ''}` : `${exports.showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Fix', t)}`) : `${im ? '{' : '('}${x} : ${exports.showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${exports.showTermP(b.tag === 'Ann', b)}`;
+    }
+    if (t.tag === 'Let')
+        return `let ${t.meta.erased ? `{${t.name}}` : t.name} = ${exports.showTermP(t.val.tag === 'Let', t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
+    if (t.tag === 'Fix')
+        return `fix (${t.name} : ${exports.showTermP(t.type.tag === 'Ann', t.type)}). ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
+    if (t.tag === 'Unroll')
+        return `unroll ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
+    if (t.tag === 'Roll')
+        return `roll ${exports.showTermP(t.type.tag === 'App' || t.type.tag === 'Ann' || t.type.tag === 'Abs' || t.type.tag === 'Fix' || t.type.tag === 'Let' || t.type.tag === 'Pi' || t.type.tag === 'Roll' || t.type.tag === 'Unroll', t.type)} ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
+    if (t.tag === 'Ann')
+        return `${exports.showTermP(t.term.tag === 'Ann', t.term)} : ${exports.showTermP(t.term.tag === 'Ann', t.type)}`;
     return t;
 };
 

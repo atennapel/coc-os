@@ -17,10 +17,9 @@ yarn start lib/nat.coc
 ```
 TODO:
 - fix parsing of unroll
-- fix error message, convert to readable syntax
 - bidirectional typechecking
 - rename Meta to something else
-- pretty print syntax
+- fix error message, convert to readable syntax
 - holes and meta variables
 - automatic insertion of meta variables
 - improve type inference of annotated lambdas
