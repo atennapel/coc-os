@@ -16,10 +16,10 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- use meta variables in domain
 - unification with meta variables
 - inference of holes
 - zonking
+- check for unsolved metas/holes
 - automatic insertion of meta variables
 - improve type inference of annotated lambdas
 - improve impredicative type inference

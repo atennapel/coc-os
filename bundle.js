@@ -75,7 +75,7 @@ exports.toCore = (t) => {
     return util_1.impossible(`toCore failed on ${S.showTerm(t)}`);
 };
 
-},{"../surface/syntax":12,"../util":17}],3:[function(require,module,exports){
+},{"../surface/syntax":13,"../util":18}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -86,7 +86,7 @@ exports.showDef = (d) => {
     return d.tag;
 };
 
-},{"./syntax":15}],4:[function(require,module,exports){
+},{"./syntax":16}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Lazy = (fn) => ({ fn, val: null, forced: false });
@@ -610,7 +610,7 @@ exports.parseDefs = (s) => {
     return ds;
 };
 
-},{"./config":1,"./definitions":3,"./syntax":15,"./util":17}],8:[function(require,module,exports){
+},{"./config":1,"./definitions":3,"./syntax":16,"./util":18}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_1 = require("./config");
@@ -796,7 +796,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./core/syntax":2,"./list":5,"./parser":7,"./surface/definitions":9,"./surface/domain":10,"./surface/globalenv":11,"./surface/syntax":12,"./surface/typecheck":13,"./syntax":15,"./untyped/syntax":16,"fs":19}],9:[function(require,module,exports){
+},{"./config":1,"./core/syntax":2,"./list":5,"./parser":7,"./surface/definitions":9,"./surface/domain":10,"./surface/globalenv":11,"./surface/syntax":13,"./surface/typecheck":14,"./syntax":16,"./untyped/syntax":17,"fs":20}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -813,7 +813,7 @@ exports.toSurfaceDef = (d) => {
 };
 exports.toSurfaceDefs = (d) => d.map(exports.toSurfaceDef);
 
-},{"./syntax":12}],10:[function(require,module,exports){
+},{"./syntax":13}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("../list");
@@ -823,8 +823,10 @@ const globalenv_1 = require("./globalenv");
 const lazy_1 = require("../lazy");
 const syntax_2 = require("../syntax");
 const syntax_3 = require("../syntax");
+const metas_1 = require("./metas");
 exports.HVar = (index) => ({ tag: 'HVar', index });
 exports.HGlobal = (name) => ({ tag: 'HGlobal', name });
+exports.HMeta = (index) => ({ tag: 'HMeta', index });
 exports.EApp = (plicity, arg) => ({ tag: 'EApp', plicity, arg });
 exports.EUnroll = { tag: 'EUnroll' };
 exports.VNe = (head, args) => ({ tag: 'VNe', head, args });
@@ -836,11 +838,30 @@ exports.VFix = (name, type, body) => ({ tag: 'VFix', name, type, body });
 exports.VType = { tag: 'VType' };
 exports.VVar = (index) => exports.VNe(exports.HVar(index), list_1.Nil);
 exports.VGlobal = (name) => exports.VNe(exports.HGlobal(name), list_1.Nil);
+exports.VMeta = (index) => exports.VNe(exports.HMeta(index), list_1.Nil);
 exports.extendV = (vs, val) => list_1.Cons(val, vs);
 exports.showEnvV = (l, k = 0, full = false) => list_1.toString(l, v => syntax_1.showTerm(exports.quote(v, k, full)));
 exports.force = (v) => {
     if (v.tag === 'VGlued')
         return exports.force(lazy_1.forceLazy(v.val));
+    if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
+        const val = metas_1.metaGet(v.head.index);
+        if (val.tag === 'Unsolved')
+            return v;
+        return exports.force(list_1.foldr((elim, y) => elim.tag === 'EUnroll' ? exports.vunroll(y) : exports.vapp(y, elim.plicity, elim.arg), val.val, v.args));
+    }
+    return v;
+};
+exports.forceGlue = (v) => {
+    if (v.tag === 'VGlued')
+        return exports.VGlued(v.head, v.args, lazy_1.mapLazy(v.val, exports.forceGlue));
+    if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
+        const val = metas_1.metaGet(v.head.index);
+        if (val.tag === 'Unsolved')
+            return v;
+        const delayed = lazy_1.Lazy(() => exports.forceGlue(list_1.foldr((elim, y) => elim.tag === 'EUnroll' ? exports.vunroll(y) : exports.vapp(y, elim.plicity, elim.arg), val.val, v.args)));
+        return exports.VGlued(v.head, v.args, delayed);
+    }
     return v;
 };
 exports.vapp = (a, plicity, b) => {
@@ -873,6 +894,10 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         const entry = globalenv_1.globalGet(t.name) || util_1.impossible(`evaluate: global ${t.name} has no value`);
         return exports.VGlued(exports.HGlobal(t.name), list_1.Nil, lazy_1.Lazy(() => entry.val));
     }
+    if (t.tag === 'Meta') {
+        const s = metas_1.metaGet(t.index);
+        return s.tag === 'Solved' ? s.val : exports.VMeta(t.index);
+    }
     if (t.tag === 'App')
         return exports.vapp(exports.evaluate(t.left, vs), t.plicity, exports.evaluate(t.right, vs));
     if (t.tag === 'Abs' && t.type)
@@ -896,6 +921,8 @@ const quoteHead = (h, k) => {
         return syntax_1.Var(k - (h.index + 1));
     if (h.tag === 'HGlobal')
         return syntax_1.Global(h.name);
+    if (h.tag === 'HMeta')
+        return syntax_1.Meta(h.index);
     return h;
 };
 const quoteElim = (t, e, k, full) => {
@@ -905,7 +932,8 @@ const quoteElim = (t, e, k, full) => {
         return syntax_1.Unroll(t);
     return e;
 };
-exports.quote = (v, k, full) => {
+exports.quote = (v_, k, full) => {
+    const v = exports.forceGlue(v_);
     if (v.tag === 'VType')
         return syntax_1.Type;
     if (v.tag === 'VNe')
@@ -926,7 +954,7 @@ exports.normalize = (t, vs, k, full) => exports.quote(exports.evaluate(t, vs), k
 exports.showTermQ = (v, k = 0, full = false) => syntax_1.showTerm(exports.quote(v, k, full));
 exports.showTermU = (v, ns = list_1.Nil, k = 0, full = false) => syntax_3.showTerm(syntax_1.fromSurface(exports.quote(v, k, full), ns));
 
-},{"../lazy":4,"../list":5,"../syntax":15,"../util":17,"./globalenv":11,"./syntax":12}],11:[function(require,module,exports){
+},{"../lazy":4,"../list":5,"../syntax":16,"../util":18,"./globalenv":11,"./metas":12,"./syntax":13}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 let env = {};
@@ -943,6 +971,31 @@ exports.globalDelete = (name) => {
 };
 
 },{}],12:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const syntax_1 = require("./syntax");
+const util_1 = require("../util");
+const Unsolved = { tag: 'Unsolved' };
+const Solved = (val) => ({ tag: 'Solved', val });
+let metas = [];
+exports.metaReset = () => { metas = []; };
+exports.metaGet = (id) => {
+    const s = metas[id] || null;
+    if (!s)
+        return util_1.impossible(`undefined meta ?${id} in metaGet`);
+    return s;
+};
+exports.metaSet = (id, val) => {
+    metas[id] = Solved(val);
+};
+exports.freshMetaId = () => {
+    const id = metas.length;
+    metas[id] = Unsolved;
+    return id;
+};
+exports.freshMeta = () => syntax_1.Meta(exports.freshMetaId());
+
+},{"../util":18,"./syntax":13}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const names_1 = require("../names");
@@ -1153,7 +1206,7 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
 };
 exports.showFromSurface = (t, ns = list_1.Nil) => S.showTerm(exports.fromSurface(t, ns));
 
-},{"../list":5,"../names":6,"../syntax":15,"../util":17}],13:[function(require,module,exports){
+},{"../list":5,"../names":6,"../syntax":16,"../util":18}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const domain_1 = require("./domain");
@@ -1327,7 +1380,7 @@ exports.typecheckDefs = (ds, allowRedefinition = false) => {
     return xs;
 };
 
-},{"../config":1,"../list":5,"../syntax":15,"../util":17,"./definitions":9,"./domain":10,"./globalenv":11,"./syntax":12,"./unify":14}],14:[function(require,module,exports){
+},{"../config":1,"../list":5,"../syntax":16,"../util":18,"./definitions":9,"./domain":10,"./globalenv":11,"./syntax":13,"./unify":15}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const domain_1 = require("./domain");
@@ -1343,6 +1396,8 @@ const eqHead = (a, b) => {
         return b.tag === 'HVar' && a.index === b.index;
     if (a.tag === 'HGlobal')
         return b.tag === 'HGlobal' && a.name === b.name;
+    if (a.tag === 'HMeta')
+        return b.tag === 'HMeta' && a.index === b.index;
     return a;
 };
 const unifyElim = (ns, k, a, b, x, y) => {
@@ -1354,7 +1409,9 @@ const unifyElim = (ns, k, a, b, x, y) => {
         return exports.unify(ns, k, a.arg, b.arg);
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(x, ns, k)} ~ ${domain_1.showTermU(y, ns, k)}`);
 };
-exports.unify = (ns, k, a, b) => {
+exports.unify = (ns, k, a_, b_) => {
+    const a = domain_1.forceGlue(a_);
+    const b = domain_1.forceGlue(b_);
     config_1.log(() => `unify ${domain_1.showTermU(a, ns, k)} ~ ${domain_1.showTermU(b, ns, k)}`);
     if (a === b)
         return;
@@ -1406,7 +1463,7 @@ exports.unify = (ns, k, a, b) => {
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(a, ns, k)} ~ ${domain_1.showTermU(b, ns, k)}`);
 };
 
-},{"../config":1,"../lazy":4,"../list":5,"../syntax":15,"../util":17,"./domain":10}],15:[function(require,module,exports){
+},{"../config":1,"../lazy":4,"../list":5,"../syntax":16,"../util":18,"./domain":10}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.eqPlicity = (a, b) => a.erased === b.erased;
@@ -1538,7 +1595,7 @@ exports.eraseTypes = (t) => {
     return t;
 };
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("../core/syntax");
@@ -1606,7 +1663,7 @@ exports.erase = (t) => {
     throw new Error(`unable to erase: ${syntax_1.showTerm(t)}`);
 };
 
-},{"../core/syntax":2}],17:[function(require,module,exports){
+},{"../core/syntax":2}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -1619,7 +1676,7 @@ exports.serr = (msg) => {
     throw new SyntaxError(msg);
 };
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -1675,6 +1732,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":8}],19:[function(require,module,exports){
+},{"./repl":8}],20:[function(require,module,exports){
 
-},{}]},{},[18]);
+},{}]},{},[19]);

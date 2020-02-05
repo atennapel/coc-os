@@ -1,4 +1,4 @@
-import { Head, Elim, Val, VVar, vapp, showTermU } from './domain';
+import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue } from './domain';
 import { Ix, Name } from '../names';
 import { terr } from '../util';
 import { eqPlicity } from '../syntax';
@@ -10,6 +10,7 @@ const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
   if (a.tag === 'HVar') return b.tag === 'HVar' && a.index === b.index;
   if (a.tag === 'HGlobal') return b.tag === 'HGlobal' && a.name === b.name;
+  if (a.tag === 'HMeta') return b.tag === 'HMeta' && a.index === b.index;
   return a;
 };
 
@@ -21,7 +22,9 @@ const unifyElim = (ns: List<Name>, k: Ix, a: Elim, b: Elim, x: Val, y: Val): voi
   return terr(`unify failed (${k}): ${showTermU(x, ns, k)} ~ ${showTermU(y, ns, k)}`);
 };
 
-export const unify = (ns: List<Name>, k: Ix, a: Val, b: Val): void => {
+export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
+  const a = forceGlue(a_);
+  const b = forceGlue(b_);
   log(() => `unify ${showTermU(a, ns, k)} ~ ${showTermU(b, ns, k)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
