@@ -1206,7 +1206,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
     }
     if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
         const term = check(ns, ts, vs, k, tm.term, tyf.body(ty));
-        return syntax_1.Roll(domain_1.quote(tyf.type, k, false), term);
+        return syntax_1.Roll(domain_1.quote(ty, k, false), term);
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(ns, ts, vs, k, tm.val);

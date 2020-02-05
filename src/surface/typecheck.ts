@@ -38,7 +38,7 @@ const check = (ns: List<Name>, ts: EnvV, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
   }
   if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
     const term = check(ns, ts, vs, k, tm.term, tyf.body(ty));
-    return Roll(quote(tyf.type, k, false), term);
+    return Roll(quote(ty, k, false), term);
   }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(ns, ts, vs, k, tm.val);
