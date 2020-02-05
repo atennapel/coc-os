@@ -22,6 +22,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Hole') return false;
+  if (t.tag === 'Meta') return false;
   return t;
 };
 

@@ -1,4 +1,4 @@
-import { Name } from './names';
+import { Name, Ix } from './names';
 
 export type Plicity = { erased: boolean };
 export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.erased;
@@ -6,7 +6,7 @@ export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.era
 export const PlicityE: Plicity = { erased: true };
 export const PlicityR: Plicity = { erased: false };
 
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -30,9 +30,12 @@ export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
 export type Hole = { tag: 'Hole' };
 export const Hole: Hole = { tag: 'Hole' };
+export type Meta = { tag: 'Meta', index: Ix };
+export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
+  if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') return `(${showTermS(t.left)} ${t.plicity.erased ? '-' : ''}${showTermS(t.right)})`;
   if (t.tag === 'Abs')
@@ -77,6 +80,7 @@ export const showTermP = (b: boolean, t: Term): string =>
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Var') return t.name;
+  if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);

@@ -18,7 +18,7 @@ yarn start lib/nat.coc
 TODO:
 - print normal form with globals
 - check for redefinitions first before typechecking defs
-- meta variables
+- use meta variables in domain
 - unification with meta variables
 - inference of holes
 - zonking

@@ -72,8 +72,6 @@ exports.toCore = (t) => {
         return exports.Fix(exports.toCore(t.type), exports.toCore(t.body));
     if (t.tag === 'Type')
         return exports.Type;
-    if (t.tag === 'Ann')
-        return exports.toCore(t.term);
     return util_1.impossible(`toCore failed on ${S.showTerm(t)}`);
 };
 
@@ -918,9 +916,12 @@ exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = { tag: 'Hole' };
+exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
+    if (t.tag === 'Meta')
+        return `?${t.index}`;
     if (t.tag === 'Global')
         return t.name;
     if (t.tag === 'Hole')
@@ -952,6 +953,8 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
     }
     if (t.tag === 'Hole')
         return exports.Hole;
+    if (t.tag === 'Meta')
+        return exports.Meta(t.index);
     if (t.tag === 'App')
         return exports.App(exports.toSurface(t.left, ns, k), t.plicity, exports.toSurface(t.right, ns, k));
     if (t.tag === 'Abs')
@@ -997,6 +1000,8 @@ const globalUsed = (k, t) => {
         return false;
     if (t.tag === 'Hole')
         return false;
+    if (t.tag === 'Meta')
+        return false;
     return t;
 };
 const indexUsed = (k, t) => {
@@ -1024,10 +1029,14 @@ const indexUsed = (k, t) => {
         return false;
     if (t.tag === 'Hole')
         return false;
+    if (t.tag === 'Meta')
+        return false;
     return t;
 };
 const isUnsolved = (t) => {
     if (t.tag === 'Hole')
+        return true;
+    if (t.tag === 'Meta')
         return true;
     if (t.tag === 'App')
         return isUnsolved(t.left) || isUnsolved(t.right);
@@ -1063,6 +1072,8 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         const l = list_1.index(ns, t.index);
         return l ? S.Var(l) : util_1.impossible(`var index out of range in fromSurface: ${t.index}`);
     }
+    if (t.tag === 'Meta')
+        return S.Meta(t.index);
     if (t.tag === 'Type')
         return S.Type;
     if (t.tag === 'Hole')
@@ -1133,6 +1144,8 @@ const erasedUsed = (k, t) => {
     if (t.tag === 'Type')
         return false;
     if (t.tag === 'Hole')
+        return false;
+    if (t.tag === 'Meta')
         return false;
     return t;
 };
@@ -1359,9 +1372,12 @@ exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = { tag: 'Hole' };
+exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
+    if (t.tag === 'Meta')
+        return `?${t.index}`;
     if (t.tag === 'Hole')
         return '_';
     if (t.tag === 'App')
@@ -1414,6 +1430,8 @@ exports.showTerm = (t) => {
         return '*';
     if (t.tag === 'Var')
         return t.name;
+    if (t.tag === 'Meta')
+        return `?${t.index}`;
     if (t.tag === 'Hole')
         return '_';
     if (t.tag === 'App') {

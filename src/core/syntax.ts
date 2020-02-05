@@ -51,6 +51,5 @@ export const toCore = (t: S.Term): Term => {
   if (t.tag === 'Pi') return Pi(t.plicity, toCore(t.type), toCore(t.body));
   if (t.tag === 'Fix') return Fix(toCore(t.type), toCore(t.body));
   if (t.tag === 'Type') return Type;
-  if (t.tag === 'Ann') return toCore(t.term);
   return impossible(`toCore failed on ${S.showTerm(t)}`);
 };
