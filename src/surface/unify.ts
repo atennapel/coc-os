@@ -1,10 +1,11 @@
 import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue } from './domain';
 import { Ix, Name } from '../names';
-import { terr } from '../util';
+import { terr, impossible } from '../util';
 import { eqPlicity } from '../syntax';
 import { zipWithR_, length, List, Cons } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
+import { Term } from './syntax';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -57,6 +58,14 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
     return zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+  if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
+    return length(a.args) > length(b.args) ?
+      solve(ns, k, a.head.index, a.args, b) :
+      solve(ns, k, b.head.index, b.args, a);
+  if (a.tag === 'VNe' && a.head.tag === 'HMeta')
+    return solve(ns, k, a.head.index, a.args, b);
+  if (b.tag === 'VNe' && b.head.tag === 'HMeta')
+    return solve(ns, k, b.head.index, b.args, a);
   if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && length(a.args) === length(b.args)) {
     try {
       return zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
@@ -68,4 +77,18 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
   if (a.tag === 'VGlued') return unify(ns, k, forceLazy(a.val), b);
   if (b.tag === 'VGlued') return unify(ns, k, a, forceLazy(b.val));
   return terr(`unify failed (${k}): ${showTermU(a, ns, k)} ~ ${showTermU(b, ns, k)}`);
+};
+
+const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void => {
+  return impossible('unimplemented');
+};
+
+// @ts-ignore
+const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[boolean, Name]> => {
+  return impossible('unimplemented');
+};
+
+// @ts-ignore
+const checkSolution = (ns: List<Name>, k: Ix, m: Ix, spine: List<Name>, tm: Term): void => {
+  return impossible('unimplemented');
 };

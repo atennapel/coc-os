@@ -1446,6 +1446,14 @@ exports.unify = (ns, k, a_, b_) => {
     }
     if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && list_1.length(a.args) === list_1.length(b.args))
         return list_1.zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+    if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
+        return list_1.length(a.args) > list_1.length(b.args) ?
+            solve(ns, k, a.head.index, a.args, b) :
+            solve(ns, k, b.head.index, b.args, a);
+    if (a.tag === 'VNe' && a.head.tag === 'HMeta')
+        return solve(ns, k, a.head.index, a.args, b);
+    if (b.tag === 'VNe' && b.head.tag === 'HMeta')
+        return solve(ns, k, b.head.index, b.args, a);
     if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && list_1.length(a.args) === list_1.length(b.args)) {
         try {
             return list_1.zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
@@ -1461,6 +1469,17 @@ exports.unify = (ns, k, a_, b_) => {
     if (b.tag === 'VGlued')
         return exports.unify(ns, k, a, lazy_1.forceLazy(b.val));
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(a, ns, k)} ~ ${domain_1.showTermU(b, ns, k)}`);
+};
+const solve = (ns, k, m, spine, val) => {
+    return util_1.impossible('unimplemented');
+};
+// @ts-ignore
+const checkSpine = (ns, k, spine) => {
+    return util_1.impossible('unimplemented');
+};
+// @ts-ignore
+const checkSolution = (ns, k, m, spine, tm) => {
+    return util_1.impossible('unimplemented');
 };
 
 },{"../config":1,"../lazy":4,"../list":5,"../syntax":16,"../util":18,"./domain":10}],16:[function(require,module,exports){
