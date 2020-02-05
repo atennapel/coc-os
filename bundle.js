@@ -1524,9 +1524,9 @@ exports.eraseTypes = (t) => {
     if (t.tag === 'Let')
         return t.plicity.erased ? exports.eraseTypes(t.body) : exports.Let(t.plicity, t.name, exports.eraseTypes(t.val), exports.eraseTypes(t.body));
     if (t.tag === 'Roll')
-        return exports.Roll(null, exports.eraseTypes(t.term));
+        return exports.eraseTypes(t.term);
     if (t.tag === 'Unroll')
-        return exports.Unroll(exports.eraseTypes(t.term));
+        return exports.eraseTypes(t.term);
     if (t.tag === 'Pi')
         return exports.Type;
     if (t.tag === 'Fix')
