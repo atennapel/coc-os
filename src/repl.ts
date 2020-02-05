@@ -1,5 +1,5 @@
 import { log, setConfig, config } from './config';
-import { globalReset, globalMap, globalDelete } from './surface/globalenv';
+import { globalReset, globalMap, globalDelete, globalGet } from './surface/globalenv';
 import { showTerm } from './syntax';
 import { quote, normalize } from './surface/domain';
 import { fromSurface, toSurface } from './surface/syntax';
@@ -24,6 +24,9 @@ COMMANDS
 [:view files] view a file
 [:t term] or [:type term] show the type of an expressions
 [:del name] delete a name
+[:gtype name] view the fully normalized type of a name
+[:gterm name] view the term of a name
+[:gnorm name] view the fully normalized term of a name
 `.trim();
 
 const loadFile = (fn: string): Promise<string> => {
@@ -69,6 +72,27 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const xs = typecheckDefs(dsc, true);
       return _cb(`defined ${xs.join(' ')}`);
     }
+    if (_s.startsWith(':gtype')) {
+      const name = _s.slice(6).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      const type = quote(res.type, 0, true);
+      return _cb(showTerm(fromSurface(type)));
+    }
+    if (_s.startsWith(':gterm')) {
+      const name = _s.slice(6).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      const term = quote(res.val, 0, false);
+      return _cb(showTerm(fromSurface(term)));
+    }
+    if (_s.startsWith(':gnorm')) {
+      const name = _s.slice(6).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      const term = quote(res.val, 0, true);
+      return _cb(showTerm(fromSurface(term)));
+    }
     if (_s.startsWith(':import')) {
       const files = _s.slice(7).trim().split(/\s+/g);
       Promise.all(files.map(loadFile)).then(defs => {
@@ -108,18 +132,18 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       log(() => showTerm(fromSurface(etm)));
       const eras = erase(toCore(normalize(etm, Nil, 0, true)));
       log(() => showTermE(eras));
-      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(etm))}\neras: ${showTermE(eras)}`;
+      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(etm))}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);
       return _cb(''+err, true);
     }
     try {
-      const n = normalize(tm_, Nil, 0, true);
+      const n = normalize(tm_, Nil, 0, false);
       log(() => showTerm(fromSurface(n)));
       const er = erase(toCore(normalize(n, Nil, 0, true)));
       log(() => showTermE(er));
-      msg += `\nnorm: ${showTerm(fromSurface(n))}\neran: ${showTermE(er)}`;
+      msg += `\neras: ${showTermE(er)}`;
       return _cb(msg);
     } catch (err) {
       log(() => ''+err);

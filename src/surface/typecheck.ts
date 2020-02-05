@@ -1,5 +1,5 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll } from './syntax';
+import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, showTerm } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons } from '../list';
@@ -144,6 +144,7 @@ export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Na
       if (!allowRedefinition && globalGet(d.name))
         return terr(`cannot redefine global ${d.name}`);
       const [tm, ty] = typecheck(d.value);
+      log(() => `set ${d.name} = ${showTerm(tm)}`);
       globalSet(d.name, evaluate(tm), ty);
       xs.push(d.name);
     }
