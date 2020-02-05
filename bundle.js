@@ -641,6 +641,8 @@ COMMANDS
 [:gtype name] view the fully normalized type of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
+[:gterme name] view the term of a name with erased types
+[:gnorme name] view the fully normalized term of a name with erased types
 `.trim();
 const loadFile = (fn) => {
     if (typeof window === 'undefined') {
@@ -692,6 +694,22 @@ exports.runREPL = (_s, _cb) => {
                 return _cb(`undefined global: ${name}`, true);
             const type = domain_1.quote(res.type, 0, true);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(type)));
+        }
+        if (_s.startsWith(':gterme')) {
+            const name = _s.slice(7).trim();
+            const res = globalenv_1.globalGet(name);
+            if (!res)
+                return _cb(`undefined global: ${name}`, true);
+            const term = domain_1.quote(res.val, 0, false);
+            return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
+        }
+        if (_s.startsWith(':gnorme')) {
+            const name = _s.slice(7).trim();
+            const res = globalenv_1.globalGet(name);
+            if (!res)
+                return _cb(`undefined global: ${name}`, true);
+            const term = domain_1.quote(res.val, 0, true);
+            return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
         }
         if (_s.startsWith(':gterm')) {
             const name = _s.slice(6).trim();
@@ -1490,6 +1508,33 @@ exports.showTerm = (t) => {
         return !t.type ? `roll ${exports.showTermP(t.term.tag === 'Ann', t.term)}` : `roll {${exports.showTerm(t.type)}} ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
     if (t.tag === 'Ann')
         return `${exports.showTermP(t.term.tag === 'Ann', t.term)} : ${exports.showTermP(t.term.tag === 'Ann', t.type)}`;
+    return t;
+};
+exports.eraseTypes = (t) => {
+    if (t.tag === 'Var')
+        return t;
+    if (t.tag === 'Meta')
+        return t;
+    if (t.tag === 'Hole')
+        return t;
+    if (t.tag === 'App')
+        return t.plicity.erased ? exports.eraseTypes(t.left) : exports.App(exports.eraseTypes(t.left), t.plicity, exports.eraseTypes(t.right));
+    if (t.tag === 'Abs')
+        return t.plicity.erased ? exports.eraseTypes(t.body) : exports.Abs(t.plicity, t.name, null, exports.eraseTypes(t.body));
+    if (t.tag === 'Let')
+        return t.plicity.erased ? exports.eraseTypes(t.body) : exports.Let(t.plicity, t.name, exports.eraseTypes(t.val), exports.eraseTypes(t.body));
+    if (t.tag === 'Roll')
+        return exports.Roll(null, exports.eraseTypes(t.term));
+    if (t.tag === 'Unroll')
+        return exports.Unroll(exports.eraseTypes(t.term));
+    if (t.tag === 'Pi')
+        return exports.Type;
+    if (t.tag === 'Fix')
+        return exports.Type;
+    if (t.tag === 'Type')
+        return exports.Type;
+    if (t.tag === 'Ann')
+        return exports.eraseTypes(t.term);
     return t;
 };
 

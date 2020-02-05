@@ -1,6 +1,6 @@
 import { log, setConfig, config } from './config';
 import { globalReset, globalMap, globalDelete, globalGet } from './surface/globalenv';
-import { showTerm } from './syntax';
+import { showTerm, eraseTypes } from './syntax';
 import { quote, normalize } from './surface/domain';
 import { fromSurface, toSurface } from './surface/syntax';
 import { parseDefs, parse } from './parser';
@@ -27,6 +27,8 @@ COMMANDS
 [:gtype name] view the fully normalized type of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
+[:gterme name] view the term of a name with erased types
+[:gnorme name] view the fully normalized term of a name with erased types
 `.trim();
 
 const loadFile = (fn: string): Promise<string> => {
@@ -78,6 +80,20 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       if (!res) return _cb(`undefined global: ${name}`, true);
       const type = quote(res.type, 0, true);
       return _cb(showTerm(fromSurface(type)));
+    }
+    if (_s.startsWith(':gterme')) {
+      const name = _s.slice(7).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      const term = quote(res.val, 0, false);
+      return _cb(showTerm(eraseTypes(fromSurface(term))));
+    }
+    if (_s.startsWith(':gnorme')) {
+      const name = _s.slice(7).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      const term = quote(res.val, 0, true);
+      return _cb(showTerm(eraseTypes(fromSurface(term))));
     }
     if (_s.startsWith(':gterm')) {
       const name = _s.slice(6).trim();

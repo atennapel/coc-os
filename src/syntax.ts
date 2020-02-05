@@ -109,3 +109,19 @@ export const showTerm = (t: Term): string => {
     return `${showTermP(t.term.tag === 'Ann', t.term)} : ${showTermP(t.term.tag === 'Ann', t.type)}`;
   return t;
 };
+
+export const eraseTypes = (t: Term): Term => {
+  if (t.tag === 'Var') return t;
+  if (t.tag === 'Meta') return t;
+  if (t.tag === 'Hole') return t;
+  if (t.tag === 'App') return t.plicity.erased ? eraseTypes(t.left) : App(eraseTypes(t.left), t.plicity, eraseTypes(t.right));
+  if (t.tag === 'Abs') return t.plicity.erased ? eraseTypes(t.body) : Abs(t.plicity, t.name, null, eraseTypes(t.body));
+  if (t.tag === 'Let') return t.plicity.erased ? eraseTypes(t.body) : Let(t.plicity, t.name, eraseTypes(t.val), eraseTypes(t.body));
+  if (t.tag === 'Roll') return Roll(null, eraseTypes(t.term));
+  if (t.tag === 'Unroll') return Unroll(eraseTypes(t.term));
+  if (t.tag === 'Pi') return Type;
+  if (t.tag === 'Fix') return Type;
+  if (t.tag === 'Type') return Type;
+  if (t.tag === 'Ann') return eraseTypes(t.term);
+  return t;
+};

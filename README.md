@@ -16,7 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- print untyped lc with names
 - use meta variables in domain
 - unification with meta variables
 - inference of holes
