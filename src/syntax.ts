@@ -95,7 +95,7 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `${as.map(([x, im, t]) => x === '_' ? (im.erased ? `${im ? '{' : ''}${showTerm(t)}${im.erased ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Fix', t)}`) : `${im ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
+    return `${as.map(([x, im, t]) => x === '_' ? (im.erased ? `${im.erased ? '{' : ''}${showTerm(t)}${im.erased ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Fix', t)}`) : `${im.erased ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im.erased ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Let')
     return `let ${t.plicity.erased ? `{${t.name}}` : t.name} = ${showTermP(t.val.tag === 'Let', t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
