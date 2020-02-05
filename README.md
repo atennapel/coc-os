@@ -16,7 +16,7 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- check for redefinitions first before typechecking defs
+- print untyped lc with names
 - use meta variables in domain
 - unification with meta variables
 - inference of holes

@@ -1289,12 +1289,17 @@ const synth = (ns, ts, vs, k, tm) => {
 exports.typecheck = (tm) => synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
     const xs = [];
+    if (!allowRedefinition) {
+        for (let i = 0; i < ds.length; i++) {
+            const d = ds[i];
+            if (d.tag === 'DDef' && globalenv_1.globalGet(d.name))
+                return util_1.terr(`cannot redefine global ${d.name}`);
+        }
+    }
     for (let i = 0; i < ds.length; i++) {
         const d = ds[i];
         config_1.log(() => `typecheckDefs ${definitions_1.showDef(d)}`);
         if (d.tag === 'DDef') {
-            if (!allowRedefinition && globalenv_1.globalGet(d.name))
-                return util_1.terr(`cannot redefine global ${d.name}`);
             const [tm, ty] = exports.typecheck(d.value);
             config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(tm)}`);
             globalenv_1.globalSet(d.name, domain_1.evaluate(tm), ty);

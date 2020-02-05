@@ -137,12 +137,17 @@ export const typecheck = (tm: Term): [Term, Val] =>
 
 export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Name[] => {
   const xs: Name[] = [];
+  if (!allowRedefinition) {
+    for (let i = 0; i < ds.length; i++) {
+      const d = ds[i];
+      if (d.tag === 'DDef'&& globalGet(d.name))
+        return terr(`cannot redefine global ${d.name}`);
+    }
+  }
   for (let i = 0; i < ds.length; i++) {
     const d = ds[i];
     log(() => `typecheckDefs ${showDef(d)}`);
     if (d.tag === 'DDef') {
-      if (!allowRedefinition && globalGet(d.name))
-        return terr(`cannot redefine global ${d.name}`);
       const [tm, ty] = typecheck(d.value);
       log(() => `set ${d.name} = ${showTerm(tm)}`);
       globalSet(d.name, evaluate(tm), ty);

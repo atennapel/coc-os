@@ -1,12 +1,11 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, Head, vapp, Elim, showTermQ, force } from './domain';
 import { Term, showTerm, Pi } from './syntax';
 import { terr, impossible } from '../util';
-import { Ix, Name } from '../names';
+import { Ix } from '../names';
 import { index, length, zipWithR_, Nil } from '../list';
-import { globalGet, globalSet } from './globalenv';
+import { globalGet } from './globalenv';
 import { forceLazy } from '../lazy';
 import { eqPlicity } from '../syntax';
-import { Def } from './definitions';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -152,16 +151,3 @@ const synth = (ts: EnvV, vs: EnvV, k: Ix, tm: Term): Val => {
 
 export const typecheck = (tm: Term, ts: EnvV = Nil, vs: EnvV = Nil, k: Ix = 0): Val =>
   synth(ts, vs, k, tm);
-
-export const typecheckDefs = (ds: Def[]): Name[] => {
-  const xs: Name[] = [];
-  for (let i = 0; i < ds.length; i++) {
-    const d = ds[i];
-    if (d.tag === 'DDef') {
-      const ty = typecheck(d.value);
-      globalSet(d.name, evaluate(d.value), ty);
-      xs.push(d.name);
-    }
-  }
-  return xs;
-};
