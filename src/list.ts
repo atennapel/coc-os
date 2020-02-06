@@ -84,6 +84,8 @@ export const consAll = <T>(hs: T[], b: List<T>): List<T> =>
 
 export const map = <T, R>(l: List<T>, fn: (val: T) => R): List<R> =>
   l.tag === 'Cons' ? Cons(fn(l.head), map(l.tail, fn)) : l;
+export const mapIndex = <T, R>(l: List<T>, fn: (ix: number, val: T) => R, i: number = 0): List<R> =>
+  l.tag === 'Cons' ? Cons(fn(i, l.head), mapIndex(l.tail, fn, i + 1)) : l;
 
 export const index = <T>(l: List<T>, i: number): T | null => {
   while (l.tag === 'Cons') {

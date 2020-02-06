@@ -16,8 +16,9 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- inference of holes
+- fix type inference
 - zonking
+- improve application with metas
 - check for unsolved metas/holes
 - automatic insertion of meta variables
 - improve type inference of annotated lambdas
