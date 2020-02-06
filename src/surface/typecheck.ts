@@ -1,5 +1,5 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm } from './syntax';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk } from './domain';
+import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr } from '../list';
@@ -162,8 +162,14 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };
 
-export const typecheck = (tm: Term): [Term, Val] =>
-  synth(Nil, Nil, Nil, 0, tm);
+export const typecheck = (tm: Term): [Term, Val] => {
+  const [etm, ty] = synth(Nil, Nil, Nil, 0, tm);
+  const ztm = zonk(etm);
+  // TODO: should type be checked?
+  if (isUnsolved(ztm))
+    return terr(`elaborated term was unsolved: ${showFromSurface(ztm)}`);
+  return [ztm, ty];
+};
 
 export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Name[] => {
   const xs: Name[] = [];

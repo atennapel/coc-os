@@ -104,7 +104,7 @@ const indexUsed = (k: Ix, t: Term): boolean => {
   return t;
 };
 
-const isUnsolved = (t: Term): boolean => {
+export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Hole') return true;
   if (t.tag === 'Meta') return true;
   if (t.tag === 'App') return isUnsolved(t.left) || isUnsolved(t.right);

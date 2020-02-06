@@ -961,6 +961,48 @@ exports.showElimU = (e, ns = list_1.Nil, k = 0, full = false) => {
         return `${e.plicity.erased ? '{' : ''}${exports.showTermU(e.arg, ns, k, full)}${e.plicity.erased ? '}' : ''}`;
     return e;
 };
+const zonkSpine = (tm, k, full) => {
+    if (tm.tag === 'Meta') {
+        const s = metas_1.metaGet(tm.index);
+        if (s.tag === 'Unsolved')
+            return [true, exports.zonk(tm, k, full)];
+        return [false, s.val];
+    }
+    if (tm.tag === 'App') {
+        const spine = zonkSpine(tm.left, k, full);
+        return spine[0] ?
+            [true, syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, k, full))] :
+            [false, exports.vapp(spine[1], tm.plicity, exports.evaluate(tm.right))];
+    }
+    return [true, exports.zonk(tm, k, full)];
+};
+exports.zonk = (tm, k = 0, full = false) => {
+    if (tm.tag === 'Meta') {
+        const s = metas_1.metaGet(tm.index);
+        return s.tag === 'Solved' ? exports.quote(s.val, k, full) : tm;
+    }
+    if (tm.tag === 'Pi')
+        return syntax_1.Pi(tm.plicity, tm.name, exports.zonk(tm.type, k, full), exports.zonk(tm.body, k + 1, full));
+    if (tm.tag === 'Fix')
+        return syntax_1.Fix(tm.name, exports.zonk(tm.type, k, full), exports.zonk(tm.body, k + 1, full));
+    if (tm.tag === 'Let')
+        return syntax_1.Let(tm.plicity, tm.name, exports.zonk(tm.val, k, full), exports.zonk(tm.body, k + 1, full));
+    if (tm.tag === 'Ann')
+        return syntax_1.Ann(exports.zonk(tm.term, k, full), exports.zonk(tm.type, k, full));
+    if (tm.tag === 'Unroll')
+        return syntax_1.Unroll(exports.zonk(tm.term, k, full));
+    if (tm.tag === 'Roll')
+        return syntax_1.Roll(tm.type && exports.zonk(tm.type, k, full), exports.zonk(tm.term, k, full));
+    if (tm.tag === 'Abs')
+        return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, k, full), exports.zonk(tm.body, k + 1, full));
+    if (tm.tag === 'App') {
+        const spine = zonkSpine(tm.left, k, full);
+        return spine[0] ?
+            syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, k, full)) :
+            exports.quote(exports.vapp(spine[1], tm.plicity, exports.evaluate(tm.right)), k, full);
+    }
+    return tm;
+};
 
 },{"../lazy":4,"../list":5,"../syntax":16,"../util":18,"./globalenv":11,"./metas":12,"./syntax":13}],11:[function(require,module,exports){
 "use strict";
@@ -1139,27 +1181,27 @@ const indexUsed = (k, t) => {
         return false;
     return t;
 };
-const isUnsolved = (t) => {
+exports.isUnsolved = (t) => {
     if (t.tag === 'Hole')
         return true;
     if (t.tag === 'Meta')
         return true;
     if (t.tag === 'App')
-        return isUnsolved(t.left) || isUnsolved(t.right);
+        return exports.isUnsolved(t.left) || exports.isUnsolved(t.right);
     if (t.tag === 'Abs')
-        return (t.type && isUnsolved(t.type)) || isUnsolved(t.body);
+        return (t.type && exports.isUnsolved(t.type)) || exports.isUnsolved(t.body);
     if (t.tag === 'Let')
-        return isUnsolved(t.val) || isUnsolved(t.body);
+        return exports.isUnsolved(t.val) || exports.isUnsolved(t.body);
     if (t.tag === 'Roll')
-        return (t.type && isUnsolved(t.type)) || isUnsolved(t.term);
+        return (t.type && exports.isUnsolved(t.type)) || exports.isUnsolved(t.term);
     if (t.tag === 'Unroll')
-        return isUnsolved(t.term);
+        return exports.isUnsolved(t.term);
     if (t.tag === 'Pi')
-        return isUnsolved(t.type) || isUnsolved(t.body);
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Fix')
-        return isUnsolved(t.type) || isUnsolved(t.body);
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Ann')
-        return isUnsolved(t.term) || isUnsolved(t.type);
+        return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
     if (t.tag === 'Global')
         return false;
     if (t.tag === 'Type')
@@ -1392,7 +1434,14 @@ const synth = (ns, ts, vs, k, tm) => {
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
-exports.typecheck = (tm) => synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
+exports.typecheck = (tm) => {
+    const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
+    const ztm = domain_1.zonk(etm);
+    // TODO: should type be checked?
+    if (syntax_1.isUnsolved(ztm))
+        return util_1.terr(`elaborated term was unsolved: ${syntax_1.showFromSurface(ztm)}`);
+    return [ztm, ty];
+};
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
     const xs = [];
     if (!allowRedefinition) {

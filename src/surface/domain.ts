@@ -1,6 +1,6 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global, fromSurface, Meta } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global, fromSurface, Meta, Let, Ann } from './syntax';
 import { impossible } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
@@ -166,4 +166,46 @@ export const showElimU = (e: Elim, ns: List<Name> = Nil, k: number = 0, full: bo
   if (e.tag === 'EUnroll') return 'unroll';
   if (e.tag === 'EApp') return `${e.plicity.erased ? '{' : ''}${showTermU(e.arg, ns, k, full)}${e.plicity.erased ? '}' : ''}`;
   return e;
+};
+
+type S = [false, Val] | [true, Term];
+const zonkSpine = (tm: Term, k: Ix, full: boolean): S => {
+  if (tm.tag === 'Meta') {
+    const s = metaGet(tm.index);
+    if (s.tag === 'Unsolved') return [true, zonk(tm, k, full)];
+    return [false, s.val];
+  }
+  if (tm.tag === 'App') {
+    const spine = zonkSpine(tm.left, k, full);
+    return spine[0] ?
+      [true, App(spine[1], tm.plicity, zonk(tm.right, k, full))] :
+      [false, vapp(spine[1], tm.plicity, evaluate(tm.right))];
+  }
+  return [true, zonk(tm, k, full)];
+};
+export const zonk = (tm: Term, k: Ix = 0, full: boolean = false): Term => {
+  if (tm.tag === 'Meta') {
+    const s = metaGet(tm.index);
+    return s.tag === 'Solved' ? quote(s.val, k, full) : tm;
+  }
+  if (tm.tag === 'Pi')
+    return Pi(tm.plicity, tm.name, zonk(tm.type, k, full), zonk(tm.body, k + 1, full));
+  if (tm.tag === 'Fix')
+    return Fix(tm.name, zonk(tm.type, k, full), zonk(tm.body, k + 1, full));
+  if (tm.tag === 'Let')
+    return Let(tm.plicity, tm.name, zonk(tm.val, k, full), zonk(tm.body, k + 1, full));
+  if (tm.tag === 'Ann') return Ann(zonk(tm.term, k, full), zonk(tm.type, k, full));
+  if (tm.tag === 'Unroll')
+    return Unroll(zonk(tm.term, k, full));
+  if (tm.tag === 'Roll')
+    return Roll(tm.type && zonk(tm.type, k, full), zonk(tm.term, k, full));
+  if (tm.tag === 'Abs')
+    return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, k, full), zonk(tm.body, k + 1, full));
+  if (tm.tag === 'App') {
+    const spine = zonkSpine(tm.left, k, full);
+    return spine[0] ?
+      App(spine[1], tm.plicity, zonk(tm.right, k, full)) :
+      quote(vapp(spine[1], tm.plicity, evaluate(tm.right)), k, full);
+  }
+  return tm;
 };
