@@ -1,6 +1,5 @@
 import { serr } from './util'
 import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, flattenApp, Hole } from './syntax';
-import { log } from './config';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 
@@ -288,9 +287,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
 
 export const parse = (s: string): Term => {
   const ts = tokenize(s);
-  log(() => ts);
   const ex = exprs(ts, '(');
-  log(() => ex);
   return ex;
 };
 

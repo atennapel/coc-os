@@ -230,7 +230,6 @@ exports.nextName = (x) => {
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("./util");
 const syntax_1 = require("./syntax");
-const config_1 = require("./config");
 const definitions_1 = require("./definitions");
 const matchingBracket = (c) => {
     if (c === '(')
@@ -562,9 +561,7 @@ const exprs = (ts, br) => {
 };
 exports.parse = (s) => {
     const ts = tokenize(s);
-    config_1.log(() => ts);
     const ex = exprs(ts, '(');
-    config_1.log(() => ex);
     return ex;
 };
 exports.parseDefs = (s) => {
@@ -611,7 +608,7 @@ exports.parseDefs = (s) => {
     return ds;
 };
 
-},{"./config":1,"./definitions":3,"./syntax":16,"./util":18}],8:[function(require,module,exports){
+},{"./definitions":3,"./syntax":16,"./util":18}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_1 = require("./config");
