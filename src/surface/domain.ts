@@ -162,3 +162,8 @@ export const normalize = (t: Term, vs: EnvV, k: Ix, full: boolean): Term =>
 export const showTermQ = (v: Val, k: number = 0, full: boolean = false): string => showTerm(quote(v, k, full));
 export const showTermU = (v: Val, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string =>
   showTermS(fromSurface(quote(v, k, full), ns));
+export const showElimU = (e: Elim, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string => {
+  if (e.tag === 'EUnroll') return 'unroll';
+  if (e.tag === 'EApp') return `${e.plicity.erased ? '{' : ''}${showTermU(e.arg, ns, k, full)}${e.plicity.erased ? '}' : ''}`;
+  return e;
+};

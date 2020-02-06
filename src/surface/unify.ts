@@ -1,11 +1,12 @@
-import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue } from './domain';
+import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue, showElimU, force, quote, evaluate } from './domain';
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
-import { eqPlicity } from '../syntax';
-import { zipWithR_, length, List, Cons } from '../list';
+import { eqPlicity, Plicity } from '../syntax';
+import { zipWithR_, length, List, Cons, map, toArray, foldl, Nil, index, contains } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
-import { Term } from './syntax';
+import { Term, Abs, Type, showFromSurface } from './syntax';
+import { metaSet } from './metas';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -80,15 +81,77 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
 };
 
 const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void => {
-  return impossible('unimplemented');
+  try {
+    const spinex = checkSpine(ns, k, spine);
+    const rhs = quote(val, k, false);
+    checkSolution(ns, k, m, map(spinex, ([_, v]) => v), rhs);
+    // Note: I'm solving with an abstraction that has * as type for all the parameters
+    // TODO: I think it might actually matter
+    const solution = evaluate(foldl((body, [pl, y]) => {
+      const x = index(ns, y);
+      if (!x) return terr(`index ${y} out of range in meta spine`);
+      return Abs(pl, x, Type, body);
+    }, rhs, spinex), Nil);
+    metaSet(m, solution);
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    const a = toArray(spine, e => showElimU(e, ns, k));
+    terr(`failed to solve meta (?${m}${a.length > 0 ? ' ': ''}${a.join(' ')}) := ${showTermU(val, ns, k)}: ${err.message}`);
+  }
 };
 
-// @ts-ignore
-const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[boolean, Name]> => {
-  return impossible('unimplemented');
-};
+const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix]> =>
+  map(spine, elim => {
+    if (elim.tag === 'EUnroll') return terr(`unroll in meta spine`);
+    if (elim.tag === 'EApp') {
+      const v = force(elim.arg);
+      if (v.tag === 'VNe' && v.head.tag === 'HVar' && length(v.args) === 0)
+        return [elim.plicity, v.head.index];
+      return terr(`not a var in spine: ${showTermU(v, ns, k)}`);
+    }
+    return elim;
+  });
 
-// @ts-ignore
-const checkSolution = (ns: List<Name>, k: Ix, m: Ix, spine: List<Name>, tm: Term): void => {
-  return impossible('unimplemented');
+const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix>, t: Term): void => {
+  if (t.tag === 'Type') return;
+  if (t.tag === 'Global') return;
+  if (t.tag === 'Var') {
+    if (contains(is, t.index)) return;
+    return terr(`scope error ${t.index}`);
+  }
+  if (t.tag === 'Meta') {
+    if (m === t.index)
+      return terr(`occurs check failed: ${showFromSurface(t, ns)}`);
+    return;
+  }
+  if (t.tag === 'App') {
+    checkSolution(ns, k, m, is, t.left);
+    checkSolution(ns, k, m, is, t.right);
+    return;
+  }
+  if (t.tag === 'Roll' && t.type) {
+    checkSolution(ns, k, m, is, t.type);
+    checkSolution(ns, k, m, is, t.term);
+    return;
+  }
+  if (t.tag === 'Unroll') {
+    checkSolution(ns, k, m, is, t.term);
+    return;
+  }
+  if (t.tag === 'Abs' && t.type) {
+    checkSolution(ns, k, m, is, t.type);
+    checkSolution(ns, k + 1, m, Cons(k, is), t.body);
+    return;
+  }
+  if (t.tag === 'Pi') {
+    checkSolution(ns, k, m, is, t.type);
+    checkSolution(ns, k + 1, m, Cons(k, is), t.body);
+    return;
+  }
+  if (t.tag === 'Fix') {
+    checkSolution(ns, k, m, is, t.type);
+    checkSolution(ns, k + 1, m, Cons(k, is), t.body);
+    return;
+  }
+  return impossible(`checkSolution ?${m}: non-normal term: ${showFromSurface(t, ns)}`);
 };

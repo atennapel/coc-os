@@ -16,7 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- unification with meta variables
 - inference of holes
 - zonking
 - check for unsolved metas/holes

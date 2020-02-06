@@ -953,6 +953,13 @@ exports.quote = (v_, k, full) => {
 exports.normalize = (t, vs, k, full) => exports.quote(exports.evaluate(t, vs), k, full);
 exports.showTermQ = (v, k = 0, full = false) => syntax_1.showTerm(exports.quote(v, k, full));
 exports.showTermU = (v, ns = list_1.Nil, k = 0, full = false) => syntax_3.showTerm(syntax_1.fromSurface(exports.quote(v, k, full), ns));
+exports.showElimU = (e, ns = list_1.Nil, k = 0, full = false) => {
+    if (e.tag === 'EUnroll')
+        return 'unroll';
+    if (e.tag === 'EApp')
+        return `${e.plicity.erased ? '{' : ''}${exports.showTermU(e.arg, ns, k, full)}${e.plicity.erased ? '}' : ''}`;
+    return e;
+};
 
 },{"../lazy":4,"../list":5,"../syntax":16,"../util":18,"./globalenv":11,"./metas":12,"./syntax":13}],11:[function(require,module,exports){
 "use strict";
@@ -1389,6 +1396,8 @@ const syntax_1 = require("../syntax");
 const list_1 = require("../list");
 const lazy_1 = require("../lazy");
 const config_1 = require("../config");
+const syntax_2 = require("./syntax");
+const metas_1 = require("./metas");
 const eqHead = (a, b) => {
     if (a === b)
         return true;
@@ -1471,18 +1480,86 @@ exports.unify = (ns, k, a_, b_) => {
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(a, ns, k)} ~ ${domain_1.showTermU(b, ns, k)}`);
 };
 const solve = (ns, k, m, spine, val) => {
-    return util_1.impossible('unimplemented');
+    try {
+        const spinex = checkSpine(ns, k, spine);
+        const rhs = domain_1.quote(val, k, false);
+        checkSolution(ns, k, m, list_1.map(spinex, ([_, v]) => v), rhs);
+        // Note: I'm solving with an abstraction that has * as type for all the parameters
+        // TODO: I think it might actually matter
+        const solution = domain_1.evaluate(list_1.foldl((body, [pl, y]) => {
+            const x = list_1.index(ns, y);
+            if (!x)
+                return util_1.terr(`index ${y} out of range in meta spine`);
+            return syntax_2.Abs(pl, x, syntax_2.Type, body);
+        }, rhs, spinex), list_1.Nil);
+        metas_1.metaSet(m, solution);
+    }
+    catch (err) {
+        if (!(err instanceof TypeError))
+            throw err;
+        const a = list_1.toArray(spine, e => domain_1.showElimU(e, ns, k));
+        util_1.terr(`failed to solve meta (?${m}${a.length > 0 ? ' ' : ''}${a.join(' ')}) := ${domain_1.showTermU(val, ns, k)}: ${err.message}`);
+    }
 };
-// @ts-ignore
-const checkSpine = (ns, k, spine) => {
-    return util_1.impossible('unimplemented');
-};
-// @ts-ignore
-const checkSolution = (ns, k, m, spine, tm) => {
-    return util_1.impossible('unimplemented');
+const checkSpine = (ns, k, spine) => list_1.map(spine, elim => {
+    if (elim.tag === 'EUnroll')
+        return util_1.terr(`unroll in meta spine`);
+    if (elim.tag === 'EApp') {
+        const v = domain_1.force(elim.arg);
+        if (v.tag === 'VNe' && v.head.tag === 'HVar' && list_1.length(v.args) === 0)
+            return [elim.plicity, v.head.index];
+        return util_1.terr(`not a var in spine: ${domain_1.showTermU(v, ns, k)}`);
+    }
+    return elim;
+});
+const checkSolution = (ns, k, m, is, t) => {
+    if (t.tag === 'Type')
+        return;
+    if (t.tag === 'Global')
+        return;
+    if (t.tag === 'Var') {
+        if (list_1.contains(is, t.index))
+            return;
+        return util_1.terr(`scope error ${t.index}`);
+    }
+    if (t.tag === 'Meta') {
+        if (m === t.index)
+            return util_1.terr(`occurs check failed: ${syntax_2.showFromSurface(t, ns)}`);
+        return;
+    }
+    if (t.tag === 'App') {
+        checkSolution(ns, k, m, is, t.left);
+        checkSolution(ns, k, m, is, t.right);
+        return;
+    }
+    if (t.tag === 'Roll' && t.type) {
+        checkSolution(ns, k, m, is, t.type);
+        checkSolution(ns, k, m, is, t.term);
+        return;
+    }
+    if (t.tag === 'Unroll') {
+        checkSolution(ns, k, m, is, t.term);
+        return;
+    }
+    if (t.tag === 'Abs' && t.type) {
+        checkSolution(ns, k, m, is, t.type);
+        checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
+        return;
+    }
+    if (t.tag === 'Pi') {
+        checkSolution(ns, k, m, is, t.type);
+        checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
+        return;
+    }
+    if (t.tag === 'Fix') {
+        checkSolution(ns, k, m, is, t.type);
+        checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
+        return;
+    }
+    return util_1.impossible(`checkSolution ?${m}: non-normal term: ${syntax_2.showFromSurface(t, ns)}`);
 };
 
-},{"../config":1,"../lazy":4,"../list":5,"../syntax":16,"../util":18,"./domain":10}],16:[function(require,module,exports){
+},{"../config":1,"../lazy":4,"../list":5,"../syntax":16,"../util":18,"./domain":10,"./metas":12,"./syntax":13}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.eqPlicity = (a, b) => a.erased === b.erased;
