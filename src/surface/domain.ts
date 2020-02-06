@@ -155,6 +155,8 @@ export const quote = (v_: Val, k: Ix, full: boolean): Term => {
     return Roll(quote(v.type, k, full), quote(v.term, k, full));
   return v;
 };
+export const quoteZ = (v: Val, k: Ix, full: boolean): Term =>
+  zonk(quote(v, k, full), k, full);
 
 export const normalize = (t: Term, vs: EnvV, k: Ix, full: boolean): Term =>
   quote(evaluate(t, vs), k, full);

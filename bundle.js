@@ -670,7 +670,7 @@ exports.runREPL = (_s, _cb) => {
         }
         if (_s === ':defs') {
             const e = globalenv_1.globalMap();
-            const msg = Object.keys(e).map(k => `def ${k} : ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quote(e[k].type, 0, false)))} = ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quote(e[k].val, 0, false)))}`).join('\n');
+            const msg = Object.keys(e).map(k => `def ${k} : ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quoteZ(e[k].type, 0, false)))} = ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quoteZ(e[k].val, 0, false)))}`).join('\n');
             return _cb(msg || 'no definitions');
         }
         if (_s.startsWith(':del')) {
@@ -690,7 +690,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const type = domain_1.quote(res.type, 0, true);
+            const type = domain_1.quoteZ(res.type, 0, true);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(type)));
         }
         if (_s.startsWith(':gterme')) {
@@ -698,7 +698,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quote(res.val, 0, false);
+            const term = domain_1.quoteZ(res.val, 0, false);
             return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
         }
         if (_s.startsWith(':gnorme')) {
@@ -706,7 +706,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quote(res.val, 0, true);
+            const term = domain_1.quoteZ(res.val, 0, true);
             return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
         }
         if (_s.startsWith(':gterm')) {
@@ -714,7 +714,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quote(res.val, 0, false);
+            const term = domain_1.quoteZ(res.val, 0, false);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(term)));
         }
         if (_s.startsWith(':gnorm')) {
@@ -722,7 +722,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quote(res.val, 0, true);
+            const term = domain_1.quoteZ(res.val, 0, true);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(term)));
         }
         if (_s.startsWith(':import')) {
@@ -760,7 +760,7 @@ exports.runREPL = (_s, _cb) => {
             config_1.log(() => syntax_1.showTerm(t));
             const tt = syntax_2.toSurface(t);
             const [etm, vty] = typecheck_1.typecheck(tt);
-            const ty = domain_1.quote(vty, 0, false);
+            const ty = domain_1.quoteZ(vty, 0, false);
             tm_ = etm;
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(ty)));
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(etm)));
@@ -948,6 +948,7 @@ exports.quote = (v_, k, full) => {
         return syntax_1.Roll(exports.quote(v.type, k, full), exports.quote(v.term, k, full));
     return v;
 };
+exports.quoteZ = (v, k, full) => exports.zonk(exports.quote(v, k, full), k, full);
 exports.normalize = (t, vs, k, full) => exports.quote(exports.evaluate(t, vs), k, full);
 exports.showTermQ = (v, k = 0, full = false) => syntax_1.showTerm(exports.quote(v, k, full));
 exports.showTermU = (v, ns = list_1.Nil, k = 0, full = false) => syntax_3.showTerm(syntax_1.fromSurface(exports.quote(v, k, full), ns));

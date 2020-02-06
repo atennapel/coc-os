@@ -4,7 +4,7 @@ import { showTerm } from './syntax';
 import { toSurfaceDefs } from './surface/definitions';
 import { globalReset, globalMap } from './surface/globalenv';
 import { typecheckDefs } from './surface/typecheck';
-import { quote } from './surface/domain';
+import { quoteZ } from './surface/domain';
 import { fromSurface } from './surface/syntax';
 
 if (process.argv[2]) {
@@ -18,7 +18,7 @@ if (process.argv[2]) {
     const main = m.main;
     if (!main) console.log(`defined ${ns.join(' ')}`);
     else {
-      console.log(`${showTerm(fromSurface(quote(main.val, 0, true)))} : ${showTerm(fromSurface(quote(main.type, 0, false)))}`);
+      console.log(`${showTerm(fromSurface(quoteZ(main.val, 0, true)))} : ${showTerm(fromSurface(quoteZ(main.type, 0, false)))}`);
     }
     process.exit();
   } catch(err) {
