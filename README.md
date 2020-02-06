@@ -17,10 +17,7 @@ yarn start lib/nat.coc
 ```
 TODO:
 - fix type inference
-- test zonking
-- check that types are completely solved at end of typechecking
 - improve application with metas
-- check for unsolved metas/holes
 - automatic insertion of meta variables
 - improve type inference of annotated lambdas
 - improve impredicative type inference
