@@ -1,5 +1,5 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved } from './syntax';
+import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr } from '../list';
@@ -8,7 +8,7 @@ import { eqPlicity, PlicityR, Plicity } from '../syntax';
 import { unify } from './unify';
 import { Def, showDef } from './definitions';
 import { log } from '../config';
-import { freshMeta } from './metas';
+import { freshMeta, metaReset } from './metas';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -39,6 +39,7 @@ const newMeta = (ts: EnvT): Term => {
 
 const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Term => {
   log(() => `check ${showFromSurface(tm, ns)} : ${showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
+  if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
   const tyf = force(ty);
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && eqPlicity(tm.plicity, tyf.plicity)) {
     const v = VVar(k);
@@ -46,6 +47,11 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
     return Abs(tm.plicity, tm.name, quote(tyf.type, k, false), body);
+  }
+  if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
+    const v = VVar(k);
+    const body = check(Cons(tyf.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, tm, tyf.body(v));
+    return Abs(tyf.plicity, tyf.name, quote(tyf.type, k, false), body);
   }
   if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
     const term = check(ns, ts, vs, k, tm.term, tyf.body(ty));
@@ -163,6 +169,7 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
 };
 
 export const typecheck = (tm: Term): [Term, Val] => {
+  metaReset();
   const [etm, ty] = synth(Nil, Nil, Nil, 0, tm);
   const ztm = zonk(etm);
   // TODO: should type be checked?

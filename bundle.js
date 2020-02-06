@@ -1304,6 +1304,8 @@ const newMeta = (ts) => {
 };
 const check = (ns, ts, vs, k, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showFromSurface(tm, ns)} : ${domain_1.showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
+    if (ty.tag === 'VType' && tm.tag === 'Type')
+        return syntax_1.Type;
     const tyf = domain_1.force(ty);
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && syntax_2.eqPlicity(tm.plicity, tyf.plicity)) {
         const v = domain_1.VVar(k);
@@ -1311,6 +1313,11 @@ const check = (ns, ts, vs, k, tm, ty) => {
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
         return syntax_1.Abs(tm.plicity, tm.name, domain_1.quote(tyf.type, k, false), body);
+    }
+    if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
+        const v = domain_1.VVar(k);
+        const body = check(list_1.Cons(tyf.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, tm, tyf.body(v));
+        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, k, false), body);
     }
     if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
         const term = check(ns, ts, vs, k, tm.term, tyf.body(ty));
@@ -1433,6 +1440,7 @@ const synth = (ns, ts, vs, k, tm) => {
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
 exports.typecheck = (tm) => {
+    metas_1.metaReset();
     const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
     const ztm = domain_1.zonk(etm);
     // TODO: should type be checked?
