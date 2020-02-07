@@ -1253,6 +1253,27 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
     return t;
 };
 exports.showFromSurface = (t, ns = list_1.Nil) => S.showTerm(exports.fromSurface(t, ns));
+exports.shift = (d, c, t) => {
+    if (t.tag === 'Var')
+        return t.index < c ? t : exports.Var(t.index + d);
+    if (t.tag === 'Abs')
+        return exports.Abs(t.plicity, t.name, t.type && exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'App')
+        return exports.App(exports.shift(d, c, t.left), t.plicity, exports.shift(d, c, t.right));
+    if (t.tag === 'Let')
+        return exports.Let(t.plicity, t.name, exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Roll')
+        return exports.Roll(t.type && exports.shift(d, c, t.type), exports.shift(d, c, t.term));
+    if (t.tag === 'Unroll')
+        return exports.Unroll(exports.shift(d, c, t.term));
+    if (t.tag === 'Pi')
+        return exports.Pi(t.plicity, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Fix')
+        return exports.Fix(t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Ann')
+        return exports.Ann(exports.shift(d, c, t.term), exports.shift(d, c, t.type));
+    return t;
+};
 
 },{"../list":5,"../names":6,"../syntax":16,"../util":18}],14:[function(require,module,exports){
 "use strict";
@@ -1326,7 +1347,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
     }
     if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
         const v = domain_1.VVar(k);
-        const body = check(list_1.Cons(tyf.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, tm, tyf.body(v));
+        const body = check(list_1.Cons(tyf.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, syntax_1.shift(1, 0, tm), tyf.body(v));
         return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, k, false), body);
     }
     if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {

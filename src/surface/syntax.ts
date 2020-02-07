@@ -161,3 +161,16 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
 
 export const showFromSurface = (t: Term, ns: List<Name> = Nil): string =>
   S.showTerm(fromSurface(t, ns));
+
+export const shift = (d: Ix, c: Ix, t: Term): Term => {
+  if (t.tag === 'Var') return t.index < c ? t : Var(t.index + d);
+  if (t.tag === 'Abs') return Abs(t.plicity, t.name, t.type && shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'App') return App(shift(d, c, t.left), t.plicity, shift(d, c, t.right));
+  if (t.tag === 'Let') return Let(t.plicity, t.name, shift(d, c, t.val), shift(d, c + 1, t.body));
+  if (t.tag === 'Roll') return Roll(t.type && shift(d, c, t.type), shift(d, c, t.term));
+  if (t.tag === 'Unroll') return Unroll(shift(d, c, t.term));
+  if (t.tag === 'Pi') return Pi(t.plicity, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Fix') return Fix(t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Ann') return Ann(shift(d, c, t.term), shift(d, c, t.type));
+  return t;
+};
