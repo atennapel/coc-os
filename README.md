@@ -16,11 +16,12 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- fix lib/nat.p
+- clean up lib to use type inference (rec-mendler.p, nat.p, list.p)
+- solve meta with glued value
 - change comment syntax to "--"
 - fix synthapp of meta
 - add rigid
 - improve type inference of annotated lambdas
 - improve impredicative type inference
-- solve issue with unnecessary eta-abstractions
+- solve issue with unnecessary eta-abstractions (example: S Z)
 ```
