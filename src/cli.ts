@@ -18,7 +18,7 @@ if (process.argv[2]) {
     const main = m.main;
     if (!main) console.log(`defined ${ns.join(' ')}`);
     else {
-      console.log(`${showTerm(fromSurface(quoteZ(main.val, 0, true)))} : ${showTerm(fromSurface(quoteZ(main.type, 0, false)))}`);
+      console.log(`${showTerm(fromSurface(quoteZ(main.val)))} : ${showTerm(fromSurface(quoteZ(main.type)))}`);
     }
     process.exit();
   } catch(err) {

@@ -155,8 +155,8 @@ export const quote = (v_: Val, k: Ix, full: boolean): Term => {
     return Roll(quote(v.type, k, full), quote(v.term, k, full));
   return v;
 };
-export const quoteZ = (v: Val, k: Ix, full: boolean): Term =>
-  zonk(quote(v, k, full), k, full);
+export const quoteZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term =>
+  zonk(quote(v, k, full), vs, k, full);
 
 export const normalize = (t: Term, vs: EnvV, k: Ix, full: boolean): Term =>
   quote(evaluate(t, vs), k, full);
@@ -171,43 +171,43 @@ export const showElimU = (e: Elim, ns: List<Name> = Nil, k: number = 0, full: bo
 };
 
 type S = [false, Val] | [true, Term];
-const zonkSpine = (tm: Term, k: Ix, full: boolean): S => {
+const zonkSpine = (tm: Term, vs: EnvV, k: Ix, full: boolean): S => {
   if (tm.tag === 'Meta') {
     const s = metaGet(tm.index);
-    if (s.tag === 'Unsolved') return [true, zonk(tm, k, full)];
+    if (s.tag === 'Unsolved') return [true, zonk(tm, vs, k, full)];
     return [false, s.val];
   }
   if (tm.tag === 'App') {
-    const spine = zonkSpine(tm.left, k, full);
+    const spine = zonkSpine(tm.left, vs, k, full);
     return spine[0] ?
-      [true, App(spine[1], tm.plicity, zonk(tm.right, k, full))] :
-      [false, vapp(spine[1], tm.plicity, evaluate(tm.right))];
+      [true, App(spine[1], tm.plicity, zonk(tm.right, vs, k, full))] :
+      [false, vapp(spine[1], tm.plicity, evaluate(tm.right, vs))];
   }
-  return [true, zonk(tm, k, full)];
+  return [true, zonk(tm, vs, k, full)];
 };
-export const zonk = (tm: Term, k: Ix = 0, full: boolean = false): Term => {
+export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term => {
   if (tm.tag === 'Meta') {
     const s = metaGet(tm.index);
     return s.tag === 'Solved' ? quote(s.val, k, full) : tm;
   }
   if (tm.tag === 'Pi')
-    return Pi(tm.plicity, tm.name, zonk(tm.type, k, full), zonk(tm.body, k + 1, full));
+    return Pi(tm.plicity, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'Fix')
-    return Fix(tm.name, zonk(tm.type, k, full), zonk(tm.body, k + 1, full));
+    return Fix(tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'Let')
-    return Let(tm.plicity, tm.name, zonk(tm.val, k, full), zonk(tm.body, k + 1, full));
-  if (tm.tag === 'Ann') return Ann(zonk(tm.term, k, full), zonk(tm.type, k, full));
+    return Let(tm.plicity, tm.name, zonk(tm.val, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
+  if (tm.tag === 'Ann') return Ann(zonk(tm.term, vs, k, full), zonk(tm.type, vs, k, full));
   if (tm.tag === 'Unroll')
-    return Unroll(zonk(tm.term, k, full));
+    return Unroll(zonk(tm.term, vs, k, full));
   if (tm.tag === 'Roll')
-    return Roll(tm.type && zonk(tm.type, k, full), zonk(tm.term, k, full));
+    return Roll(tm.type && zonk(tm.type, vs, k, full), zonk(tm.term, vs, k, full));
   if (tm.tag === 'Abs')
-    return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, k, full), zonk(tm.body, k + 1, full));
+    return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'App') {
-    const spine = zonkSpine(tm.left, k, full);
+    const spine = zonkSpine(tm.left, vs, k, full);
     return spine[0] ?
-      App(spine[1], tm.plicity, zonk(tm.right, k, full)) :
-      quote(vapp(spine[1], tm.plicity, evaluate(tm.right)), k, full);
+      App(spine[1], tm.plicity, zonk(tm.right, vs, k, full)) :
+      quote(vapp(spine[1], tm.plicity, evaluate(tm.right, vs)), k, full);
   }
   return tm;
 };

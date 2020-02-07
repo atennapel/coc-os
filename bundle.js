@@ -670,7 +670,7 @@ exports.runREPL = (_s, _cb) => {
         }
         if (_s === ':defs') {
             const e = globalenv_1.globalMap();
-            const msg = Object.keys(e).map(k => `def ${k} : ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quoteZ(e[k].type, 0, false)))} = ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quoteZ(e[k].val, 0, false)))}`).join('\n');
+            const msg = Object.keys(e).map(k => `def ${k} : ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quoteZ(e[k].type, list_1.Nil, 0, false)))} = ${syntax_1.showTerm(syntax_2.fromSurface(domain_1.quoteZ(e[k].val, list_1.Nil, 0, false)))}`).join('\n');
             return _cb(msg || 'no definitions');
         }
         if (_s.startsWith(':del')) {
@@ -690,7 +690,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const type = domain_1.quoteZ(res.type, 0, true);
+            const type = domain_1.quoteZ(res.type, list_1.Nil, 0, true);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(type)));
         }
         if (_s.startsWith(':gterme')) {
@@ -698,7 +698,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quoteZ(res.val, 0, false);
+            const term = domain_1.quoteZ(res.val, list_1.Nil, 0, false);
             return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
         }
         if (_s.startsWith(':gnorme')) {
@@ -706,7 +706,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quoteZ(res.val, 0, true);
+            const term = domain_1.quoteZ(res.val, list_1.Nil, 0, true);
             return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
         }
         if (_s.startsWith(':gterm')) {
@@ -714,7 +714,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quoteZ(res.val, 0, false);
+            const term = domain_1.quoteZ(res.val, list_1.Nil, 0, false);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(term)));
         }
         if (_s.startsWith(':gnorm')) {
@@ -722,7 +722,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            const term = domain_1.quoteZ(res.val, 0, true);
+            const term = domain_1.quoteZ(res.val, list_1.Nil, 0, true);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(term)));
         }
         if (_s.startsWith(':import')) {
@@ -760,7 +760,7 @@ exports.runREPL = (_s, _cb) => {
             config_1.log(() => syntax_1.showTerm(t));
             const tt = syntax_2.toSurface(t);
             const [etm, vty] = typecheck_1.typecheck(tt);
-            const ty = domain_1.quoteZ(vty, 0, false);
+            const ty = domain_1.quoteZ(vty, list_1.Nil, 0, false);
             tm_ = etm;
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(ty)));
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(etm)));
@@ -948,7 +948,7 @@ exports.quote = (v_, k, full) => {
         return syntax_1.Roll(exports.quote(v.type, k, full), exports.quote(v.term, k, full));
     return v;
 };
-exports.quoteZ = (v, k, full) => exports.zonk(exports.quote(v, k, full), k, full);
+exports.quoteZ = (v, vs = list_1.Nil, k = 0, full = false) => exports.zonk(exports.quote(v, k, full), vs, k, full);
 exports.normalize = (t, vs, k, full) => exports.quote(exports.evaluate(t, vs), k, full);
 exports.showTermQ = (v, k = 0, full = false) => syntax_1.showTerm(exports.quote(v, k, full));
 exports.showTermU = (v, ns = list_1.Nil, k = 0, full = false) => syntax_3.showTerm(syntax_1.fromSurface(exports.quote(v, k, full), ns));
@@ -959,45 +959,45 @@ exports.showElimU = (e, ns = list_1.Nil, k = 0, full = false) => {
         return `${e.plicity.erased ? '{' : ''}${exports.showTermU(e.arg, ns, k, full)}${e.plicity.erased ? '}' : ''}`;
     return e;
 };
-const zonkSpine = (tm, k, full) => {
+const zonkSpine = (tm, vs, k, full) => {
     if (tm.tag === 'Meta') {
         const s = metas_1.metaGet(tm.index);
         if (s.tag === 'Unsolved')
-            return [true, exports.zonk(tm, k, full)];
+            return [true, exports.zonk(tm, vs, k, full)];
         return [false, s.val];
     }
     if (tm.tag === 'App') {
-        const spine = zonkSpine(tm.left, k, full);
+        const spine = zonkSpine(tm.left, vs, k, full);
         return spine[0] ?
-            [true, syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, k, full))] :
-            [false, exports.vapp(spine[1], tm.plicity, exports.evaluate(tm.right))];
+            [true, syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, vs, k, full))] :
+            [false, exports.vapp(spine[1], tm.plicity, exports.evaluate(tm.right, vs))];
     }
-    return [true, exports.zonk(tm, k, full)];
+    return [true, exports.zonk(tm, vs, k, full)];
 };
-exports.zonk = (tm, k = 0, full = false) => {
+exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
     if (tm.tag === 'Meta') {
         const s = metas_1.metaGet(tm.index);
         return s.tag === 'Solved' ? exports.quote(s.val, k, full) : tm;
     }
     if (tm.tag === 'Pi')
-        return syntax_1.Pi(tm.plicity, tm.name, exports.zonk(tm.type, k, full), exports.zonk(tm.body, k + 1, full));
+        return syntax_1.Pi(tm.plicity, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'Fix')
-        return syntax_1.Fix(tm.name, exports.zonk(tm.type, k, full), exports.zonk(tm.body, k + 1, full));
+        return syntax_1.Fix(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'Let')
-        return syntax_1.Let(tm.plicity, tm.name, exports.zonk(tm.val, k, full), exports.zonk(tm.body, k + 1, full));
+        return syntax_1.Let(tm.plicity, tm.name, exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'Ann')
-        return syntax_1.Ann(exports.zonk(tm.term, k, full), exports.zonk(tm.type, k, full));
+        return syntax_1.Ann(exports.zonk(tm.term, vs, k, full), exports.zonk(tm.type, vs, k, full));
     if (tm.tag === 'Unroll')
-        return syntax_1.Unroll(exports.zonk(tm.term, k, full));
+        return syntax_1.Unroll(exports.zonk(tm.term, vs, k, full));
     if (tm.tag === 'Roll')
-        return syntax_1.Roll(tm.type && exports.zonk(tm.type, k, full), exports.zonk(tm.term, k, full));
+        return syntax_1.Roll(tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.term, vs, k, full));
     if (tm.tag === 'Abs')
-        return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, k, full), exports.zonk(tm.body, k + 1, full));
+        return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'App') {
-        const spine = zonkSpine(tm.left, k, full);
+        const spine = zonkSpine(tm.left, vs, k, full);
         return spine[0] ?
-            syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, k, full)) :
-            exports.quote(exports.vapp(spine[1], tm.plicity, exports.evaluate(tm.right)), k, full);
+            syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, vs, k, full)) :
+            exports.quote(exports.vapp(spine[1], tm.plicity, exports.evaluate(tm.right, vs)), k, full);
     }
     return tm;
 };

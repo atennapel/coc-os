@@ -59,7 +59,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     }
     if (_s === ':defs') {
       const e = globalMap();
-      const msg = Object.keys(e).map(k => `def ${k} : ${showTerm(fromSurface(quoteZ(e[k].type, 0, false)))} = ${showTerm(fromSurface(quoteZ(e[k].val, 0, false)))}`).join('\n');
+      const msg = Object.keys(e).map(k => `def ${k} : ${showTerm(fromSurface(quoteZ(e[k].type, Nil, 0, false)))} = ${showTerm(fromSurface(quoteZ(e[k].val, Nil, 0, false)))}`).join('\n');
       return _cb(msg || 'no definitions');
     }
     if (_s.startsWith(':del')) {
@@ -78,35 +78,35 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const name = _s.slice(6).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const type = quoteZ(res.type, 0, true);
+      const type = quoteZ(res.type, Nil, 0, true);
       return _cb(showTerm(fromSurface(type)));
     }
     if (_s.startsWith(':gterme')) {
       const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, 0, false);
+      const term = quoteZ(res.val, Nil, 0, false);
       return _cb(showTerm(eraseTypes(fromSurface(term))));
     }
     if (_s.startsWith(':gnorme')) {
       const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, 0, true);
+      const term = quoteZ(res.val, Nil, 0, true);
       return _cb(showTerm(eraseTypes(fromSurface(term))));
     }
     if (_s.startsWith(':gterm')) {
       const name = _s.slice(6).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, 0, false);
+      const term = quoteZ(res.val, Nil, 0, false);
       return _cb(showTerm(fromSurface(term)));
     }
     if (_s.startsWith(':gnorm')) {
       const name = _s.slice(6).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, 0, true);
+      const term = quoteZ(res.val, Nil, 0, true);
       return _cb(showTerm(fromSurface(term)));
     }
     if (_s.startsWith(':import')) {
@@ -142,7 +142,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       log(() => showTerm(t));
       const tt = toSurface(t);
       const [etm, vty] = typecheck(tt);
-      const ty = quoteZ(vty, 0, false);
+      const ty = quoteZ(vty, Nil, 0, false);
       tm_ = etm;
       log(() => showTerm(fromSurface(ty)));
       log(() => showTerm(fromSurface(etm)));
