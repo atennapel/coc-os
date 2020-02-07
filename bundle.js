@@ -1382,13 +1382,9 @@ const synth = (ns, ts, vs, k, tm) => {
         return [t, vt];
     }
     if (tm.tag === 'App') {
-        const [left, ty_] = synth(ns, ts, vs, k, tm.left);
-        const ty = domain_1.force(ty_);
-        if (ty.tag === 'VPi' && syntax_2.eqPlicity(ty.plicity, tm.plicity)) {
-            const right = check(ns, ts, vs, k, tm.right, ty.type);
-            return [syntax_1.App(left, tm.plicity, right), ty.body(domain_1.evaluate(right, vs))];
-        }
-        return util_1.terr(`invalid type or plicity mismatch in synthapp in ${syntax_1.showFromSurface(tm, ns)}: ${domain_1.showTermU(ty, ns, k)} ${tm.plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(tm.right, ns)}`);
+        const [fntm, fn] = synth(ns, ts, vs, k, tm.left);
+        const [rt, res, ms] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
+        return [syntax_1.App(list_1.foldl((f, a) => syntax_1.App(f, syntax_2.PlicityE, a), fntm, ms), tm.plicity, res), rt];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
@@ -1450,33 +1446,31 @@ const synth = (ns, ts, vs, k, tm) => {
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
-/*
-const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, impl: boolean, arg: Term): [Val, Term, List<Term>] => {
-  const ty = force(vs, ty_);
-  log(() => `synthapp ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
-  if (ty.tag === 'VPi' && ty.impl && !impl) {
-    // {a} -> b @ c (instantiate with meta then b @ c)
-    const m = newMeta(ts);
-    const vm = evaluate(m, vs);
-    const [rt, ft, l] = synthapp(ts, vs, ty.body(vm), impl, arg);
-    return [rt, ft, Cons(m, l)];
-  }
-  if (ty.tag === 'VPi' && ty.impl === impl) {
-    const tm = check(ts, vs, arg, ty.type);
-    const vm = evaluate(tm, vs);
-    return [ty.body(vm), tm, Nil];
-  }
-  // TODO fix
-  if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-    const a = freshMetaId();
-    const b = freshMetaId();
-    const pi = VPi('_', impl, VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
-    unify(vs, ty, pi);
-    return synthapp(ts, vs, pi, impl, arg);
-  }
-  return terr(`unable to syntapp: ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''}`);
+const synthapp = (ns, ts, vs, k, ty_, plicity, arg) => {
+    const ty = domain_1.force(ty_);
+    config_1.log(() => `synthapp ${domain_1.showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(arg, ns)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs)}`);
+    if (ty.tag === 'VPi' && ty.plicity.erased && !plicity.erased) {
+        // {a} -> b @ c (instantiate with meta then b @ c)
+        const m = newMeta(ts);
+        const vm = domain_1.evaluate(m, vs);
+        const [rt, ft, l] = synthapp(ns, ts, vs, k, ty.body(vm), plicity, arg);
+        return [rt, ft, list_1.Cons(m, l)];
+    }
+    if (ty.tag === 'VPi' && syntax_2.eqPlicity(ty.plicity, plicity)) {
+        const tm = check(ns, ts, vs, k, arg, ty.type);
+        const vm = domain_1.evaluate(tm, vs);
+        return [ty.body(vm), tm, list_1.Nil];
+    }
+    // TODO fix the following
+    if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
+        const a = metas_1.freshMetaId();
+        const b = metas_1.freshMetaId();
+        const pi = domain_1.VPi(plicity, '_', domain_1.VNe(domain_1.HMeta(a), ty.args), () => domain_1.VNe(domain_1.HMeta(b), ty.args));
+        unify_1.unify(ns, k, ty, pi);
+        return synthapp(ns, ts, vs, k, pi, plicity, arg);
+    }
+    return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(arg, ns)}`);
 };
-*/
 exports.typecheck = (tm) => {
     metas_1.metaReset();
     const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);

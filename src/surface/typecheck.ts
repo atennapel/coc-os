@@ -1,4 +1,4 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk } from './domain';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta } from './domain';
 import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
@@ -8,7 +8,7 @@ import { eqPlicity, PlicityR, Plicity, PlicityE } from '../syntax';
 import { unify } from './unify';
 import { Def, showDef } from './definitions';
 import { log } from '../config';
-import { freshMeta, metaReset } from './metas';
+import { freshMeta, metaReset, freshMetaId } from './metas';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -113,13 +113,9 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     return [t, vt];
   }
   if (tm.tag === 'App') {
-    const [left, ty_] = synth(ns, ts, vs, k, tm.left);
-    const ty = force(ty_);
-    if (ty.tag === 'VPi' && eqPlicity(ty.plicity, tm.plicity)) {
-      const right = check(ns, ts, vs, k, tm.right, ty.type);
-      return [App(left, tm.plicity, right), ty.body(evaluate(right, vs))];
-    }
-    return terr(`invalid type or plicity mismatch in synthapp in ${showFromSurface(tm, ns)}: ${showTermU(ty, ns, k)} ${tm.plicity.erased ? '-' : ''}@ ${showFromSurface(tm.right, ns)}`);
+    const [fntm, fn] = synth(ns, ts, vs, k, tm.left);
+    const [rt, res, ms] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
+    return [App(foldl((f, a) => App(f, PlicityE, a), fntm, ms), tm.plicity, res), rt];
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
@@ -180,33 +176,31 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };
 
-/*
-const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, impl: boolean, arg: Term): [Val, Term, List<Term>] => {
-  const ty = force(vs, ty_);
-  log(() => `synthapp ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
-  if (ty.tag === 'VPi' && ty.impl && !impl) {
+const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: Plicity, arg: Term): [Val, Term, List<Term>] => {
+  const ty = force(ty_);
+  log(() => `synthapp ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs)}`);
+  if (ty.tag === 'VPi' && ty.plicity.erased && !plicity.erased) {
     // {a} -> b @ c (instantiate with meta then b @ c)
     const m = newMeta(ts);
     const vm = evaluate(m, vs);
-    const [rt, ft, l] = synthapp(ts, vs, ty.body(vm), impl, arg);
+    const [rt, ft, l] = synthapp(ns, ts, vs, k, ty.body(vm), plicity, arg);
     return [rt, ft, Cons(m, l)];
   }
-  if (ty.tag === 'VPi' && ty.impl === impl) {
-    const tm = check(ts, vs, arg, ty.type);
+  if (ty.tag === 'VPi' && eqPlicity(ty.plicity, plicity)) {
+    const tm = check(ns, ts, vs, k, arg, ty.type);
     const vm = evaluate(tm, vs);
     return [ty.body(vm), tm, Nil];
   }
-  // TODO fix
+  // TODO fix the following
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
     const a = freshMetaId();
     const b = freshMetaId();
-    const pi = VPi('_', impl, VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
-    unify(vs, ty, pi);
-    return synthapp(ts, vs, pi, impl, arg);
+    const pi = VPi(plicity, '_', VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
+    unify(ns, k, ty, pi);
+    return synthapp(ns, ts, vs, k, pi, plicity, arg);
   }
-  return terr(`unable to syntapp: ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''}`);
+  return terr(`invalid type or plicity mismatch in synthapp in ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)}`);
 };
-*/
 
 export const typecheck = (tm: Term): [Term, Val] => {
   metaReset();

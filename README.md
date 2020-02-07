@@ -16,9 +16,7 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- fix type inference
-- improve application with metas
-- automatic insertion of meta variables
+- fix synthapp of meta
 - add rigid
 - improve type inference of annotated lambdas
 - improve impredicative type inference
