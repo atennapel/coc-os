@@ -2,9 +2,9 @@ import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, sho
 import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
-import { index, Nil, List, Cons, toString, filter, mapIndex, foldr } from '../list';
+import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl } from '../list';
 import { globalGet, globalSet } from './globalenv';
-import { eqPlicity, PlicityR, Plicity } from '../syntax';
+import { eqPlicity, PlicityR, Plicity, PlicityE } from '../syntax';
 import { unify } from './unify';
 import { Def, showDef } from './definitions';
 import { log } from '../config';
@@ -37,6 +37,17 @@ const newMeta = (ts: EnvT): Term => {
   return foldr((x, y) => App(y, PlicityR, x), freshMeta() as Term, spine);
 };
 
+const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
+  const ty = force(ty_);
+  if (ty.tag === 'VPi' && ty.plicity.erased) {
+    const m = newMeta(ts);
+    const vm = evaluate(m, vs);
+    const [res, args] = inst(ts, vs, ty.body(vm));
+    return [res, Cons(m, args)];
+  }
+  return [ty, Nil];
+};
+
 const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Term => {
   log(() => `check ${showFromSurface(tm, ns)} : ${showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
@@ -65,14 +76,15 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
     return Let(tm.plicity, tm.name, val, body);
   }
   if (tm.tag === 'Hole') return newMeta(ts);
-  const [etm, ty2] = synth(ns, ts, vs, k, tm);
+  const [term, ty2] = synth(ns, ts, vs, k, tm);
+  const [ty2inst, targs] = inst(ts, vs, ty2);
   try {
-    unify(ns, k, ty2, ty);
+    unify(ns, k, ty2inst, ty);
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
     terr(`failed to unify ${showTermU(ty2, ns, k)} ~ ${showTermU(ty, ns, k)}: ${err.message}`);
   }
-  return etm;
+  return foldl((a, m) => App(a, PlicityE, m), term, targs);
 };
 
 const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
@@ -167,6 +179,34 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
   }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };
+
+/*
+const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, impl: boolean, arg: Term): [Val, Term, List<Term>] => {
+  const ty = force(vs, ty_);
+  log(() => `synthapp ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
+  if (ty.tag === 'VPi' && ty.impl && !impl) {
+    // {a} -> b @ c (instantiate with meta then b @ c)
+    const m = newMeta(ts);
+    const vm = evaluate(m, vs);
+    const [rt, ft, l] = synthapp(ts, vs, ty.body(vm), impl, arg);
+    return [rt, ft, Cons(m, l)];
+  }
+  if (ty.tag === 'VPi' && ty.impl === impl) {
+    const tm = check(ts, vs, arg, ty.type);
+    const vm = evaluate(tm, vs);
+    return [ty.body(vm), tm, Nil];
+  }
+  // TODO fix
+  if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
+    const a = freshMetaId();
+    const b = freshMetaId();
+    const pi = VPi('_', impl, VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
+    unify(vs, ty, pi);
+    return synthapp(ts, vs, pi, impl, arg);
+  }
+  return terr(`unable to syntapp: ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''}`);
+};
+*/
 
 export const typecheck = (tm: Term): [Term, Val] => {
   metaReset();

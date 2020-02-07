@@ -1302,6 +1302,16 @@ const newMeta = (ts) => {
     const spine = list_1.filter(list_1.mapIndex(ts, (i, [bound, _]) => bound ? syntax_1.Var(i) : null), x => x !== null);
     return list_1.foldr((x, y) => syntax_1.App(y, syntax_2.PlicityR, x), metas_1.freshMeta(), spine);
 };
+const inst = (ts, vs, ty_) => {
+    const ty = domain_1.force(ty_);
+    if (ty.tag === 'VPi' && ty.plicity.erased) {
+        const m = newMeta(ts);
+        const vm = domain_1.evaluate(m, vs);
+        const [res, args] = inst(ts, vs, ty.body(vm));
+        return [res, list_1.Cons(m, args)];
+    }
+    return [ty, list_1.Nil];
+};
 const check = (ns, ts, vs, k, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showFromSurface(tm, ns)} : ${domain_1.showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
@@ -1332,16 +1342,17 @@ const check = (ns, ts, vs, k, tm, ty) => {
     }
     if (tm.tag === 'Hole')
         return newMeta(ts);
-    const [etm, ty2] = synth(ns, ts, vs, k, tm);
+    const [term, ty2] = synth(ns, ts, vs, k, tm);
+    const [ty2inst, targs] = inst(ts, vs, ty2);
     try {
-        unify_1.unify(ns, k, ty2, ty);
+        unify_1.unify(ns, k, ty2inst, ty);
     }
     catch (err) {
         if (!(err instanceof TypeError))
             throw err;
         util_1.terr(`failed to unify ${domain_1.showTermU(ty2, ns, k)} ~ ${domain_1.showTermU(ty, ns, k)}: ${err.message}`);
     }
-    return etm;
+    return list_1.foldl((a, m) => syntax_1.App(a, syntax_2.PlicityE, m), term, targs);
 };
 const freshPi = (ts, vs, x, impl) => {
     const a = newMeta(ts);
@@ -1439,6 +1450,33 @@ const synth = (ns, ts, vs, k, tm) => {
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
+/*
+const synthapp = (ts: EnvT, vs: EnvV, ty_: Val, impl: boolean, arg: Term): [Val, Term, List<Term>] => {
+  const ty = force(vs, ty_);
+  log(() => `synthapp ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''} in ${showEnvT(ts, vs)} and ${showEnvV(vs)}`);
+  if (ty.tag === 'VPi' && ty.impl && !impl) {
+    // {a} -> b @ c (instantiate with meta then b @ c)
+    const m = newMeta(ts);
+    const vm = evaluate(m, vs);
+    const [rt, ft, l] = synthapp(ts, vs, ty.body(vm), impl, arg);
+    return [rt, ft, Cons(m, l)];
+  }
+  if (ty.tag === 'VPi' && ty.impl === impl) {
+    const tm = check(ts, vs, arg, ty.type);
+    const vm = evaluate(tm, vs);
+    return [ty.body(vm), tm, Nil];
+  }
+  // TODO fix
+  if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
+    const a = freshMetaId();
+    const b = freshMetaId();
+    const pi = VPi('_', impl, VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
+    unify(vs, ty, pi);
+    return synthapp(ts, vs, pi, impl, arg);
+  }
+  return terr(`unable to syntapp: ${showTerm(quote(ty, vs))} @ ${impl ? '{' : ''}${showTerm(arg)}${impl ? '}' : ''}`);
+};
+*/
 exports.typecheck = (tm) => {
     metas_1.metaReset();
     const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);

@@ -19,6 +19,7 @@ TODO:
 - fix type inference
 - improve application with metas
 - automatic insertion of meta variables
+- add rigid
 - improve type inference of annotated lambdas
 - improve impredicative type inference
 - solve issue with unnecessary eta-abstractions
