@@ -16,6 +16,8 @@ yarn start lib/nat.coc
 
 ```
 TODO:
+- fix lib/nat.p
+- change comment syntax to "--"
 - fix synthapp of meta
 - add rigid
 - improve type inference of annotated lambdas
