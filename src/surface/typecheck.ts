@@ -51,7 +51,17 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
 const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Term => {
   log(() => `check ${showFromSurface(tm, ns)} : ${showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
+  if (tm.tag === 'Var' || tm.tag === 'Global') {
+    try {
+      const [term, ty2] = synth(ns, ts, vs, k, tm);
+      unify(ns, k, ty2, ty);
+      return term;
+    } catch (err) {
+      if (!(err instanceof TypeError)) throw err;
+    }
+  }
   const tyf = force(ty);
+  log(() => `check after ${showTermU(tyf, ns, k)}`);
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && eqPlicity(tm.plicity, tyf.plicity)) {
     const v = VVar(k);
     const body = check(Cons(tm.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, tm.body, tyf.body(v));
@@ -177,6 +187,7 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
 };
 
 const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: Plicity, arg: Term): [Val, Term, List<Term>] => {
+  log(() => `synthapp before ${showTermU(ty_, ns, k)}`);
   const ty = force(ty_);
   log(() => `synthapp ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs)}`);
   if (ty.tag === 'VPi' && ty.plicity.erased && !plicity.erased) {

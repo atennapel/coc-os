@@ -1337,7 +1337,19 @@ const check = (ns, ts, vs, k, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showFromSurface(tm, ns)} : ${domain_1.showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return syntax_1.Type;
+    if (tm.tag === 'Var' || tm.tag === 'Global') {
+        try {
+            const [term, ty2] = synth(ns, ts, vs, k, tm);
+            unify_1.unify(ns, k, ty2, ty);
+            return term;
+        }
+        catch (err) {
+            if (!(err instanceof TypeError))
+                throw err;
+        }
+    }
     const tyf = domain_1.force(ty);
+    config_1.log(() => `check after ${domain_1.showTermU(tyf, ns, k)}`);
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && syntax_2.eqPlicity(tm.plicity, tyf.plicity)) {
         const v = domain_1.VVar(k);
         const body = check(list_1.Cons(tm.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
@@ -1468,6 +1480,7 @@ const synth = (ns, ts, vs, k, tm) => {
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
 const synthapp = (ns, ts, vs, k, ty_, plicity, arg) => {
+    config_1.log(() => `synthapp before ${domain_1.showTermU(ty_, ns, k)}`);
     const ty = domain_1.force(ty_);
     config_1.log(() => `synthapp ${domain_1.showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(arg, ns)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs)}`);
     if (ty.tag === 'VPi' && ty.plicity.erased && !plicity.erased) {
