@@ -20,8 +20,12 @@ TODO:
 - solve meta with glued value
 - change comment syntax to "--"
 - fix synthapp of meta
+- infer more uses of roll/unroll (also in synthapp and check)
 - add rigid
 - improve type inference of annotated lambdas
 - improve impredicative type inference
 - solve issue with unnecessary eta-abstractions (example: S Z)
+
+BUG:
+- lib/nat.p: 0 0 0
 ```
