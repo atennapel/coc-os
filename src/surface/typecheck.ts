@@ -8,7 +8,7 @@ import { eqPlicity, PlicityR, Plicity, PlicityE } from '../syntax';
 import { unify } from './unify';
 import { Def, showDef } from './definitions';
 import { log } from '../config';
-import { freshMeta, metaReset, freshMetaId } from './metas';
+import { freshMeta, metaReset, freshMetaId, metaPop, metaPush, metaDiscard } from './metas';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -54,11 +54,14 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
   if (tm.tag === 'Var' || tm.tag === 'Global') {
     try {
+      metaPush();
       const [term, ty2] = synth(ns, ts, vs, k, tm);
       unify(ns, k, ty2, ty);
+      metaDiscard();
       return term;
     } catch (err) {
       if (!(err instanceof TypeError)) throw err;
+      metaPop();
     }
   }
   if (tm.tag === 'Assert' && !tm.type) {
@@ -97,7 +100,7 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
     unify(ns, k, ty2inst, ty);
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
-    terr(`failed to unify ${showTermU(ty2, ns, k)} ~ ${showTermU(ty, ns, k)}: ${err.message}`);
+    return terr(`failed to unify ${showTermU(ty2, ns, k)} ~ ${showTermU(ty, ns, k)}: ${err.message}`);
   }
   return foldl((a, m) => App(a, PlicityE, m), term, targs);
 };

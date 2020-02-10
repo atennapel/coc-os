@@ -11,6 +11,7 @@ export type Solved = { tag: 'Solved', val: Val };
 const Solved = (val: Val): Solved => ({ tag: 'Solved', val });
 
 let metas: Solution[] = [];
+const stack: Solution[][] = [];
 
 export const metaReset = () => { metas = [] };
 
@@ -29,3 +30,14 @@ export const freshMetaId = (): Ix => {
   return id;
 };
 export const freshMeta = () => Meta(freshMetaId());
+
+export const metaPush = (): void => {
+  stack.push(metas);
+  metas = metas.slice();
+};
+export const metaPop = (): void => {
+  const x = stack.pop();
+  if (!x) return;
+  metas = x;
+};
+export const metaDiscard = (): void => { stack.pop() };

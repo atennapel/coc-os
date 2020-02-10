@@ -6,7 +6,7 @@ import { zipWithR_, length, List, Cons, map, toArray, foldl, Nil, index, contain
 import { forceLazy } from '../lazy';
 import { log } from '../config';
 import { Term, Abs, Type, showFromSurface } from './syntax';
-import { metaSet } from './metas';
+import { metaSet, metaPush, metaDiscard, metaPop } from './metas';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -69,9 +69,13 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
     return solve(ns, k, b.head.index, b.args, a);
   if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && length(a.args) === length(b.args)) {
     try {
-      return zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+      metaPush();
+      zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+      metaDiscard();
+      return;
     } catch(err) {
       if (!(err instanceof TypeError)) throw err;
+      metaPop();
       return unify(ns, k, forceLazy(a.val), forceLazy(b.val));
     }
   }

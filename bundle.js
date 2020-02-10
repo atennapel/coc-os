@@ -1054,6 +1054,7 @@ const util_1 = require("../util");
 const Unsolved = { tag: 'Unsolved' };
 const Solved = (val) => ({ tag: 'Solved', val });
 let metas = [];
+const stack = [];
 exports.metaReset = () => { metas = []; };
 exports.metaGet = (id) => {
     const s = metas[id] || null;
@@ -1070,6 +1071,17 @@ exports.freshMetaId = () => {
     return id;
 };
 exports.freshMeta = () => syntax_1.Meta(exports.freshMetaId());
+exports.metaPush = () => {
+    stack.push(metas);
+    metas = metas.slice();
+};
+exports.metaPop = () => {
+    const x = stack.pop();
+    if (!x)
+        return;
+    metas = x;
+};
+exports.metaDiscard = () => { stack.pop(); };
 
 },{"../util":18,"./syntax":13}],13:[function(require,module,exports){
 "use strict";
@@ -1384,13 +1396,16 @@ const check = (ns, ts, vs, k, tm, ty) => {
         return syntax_1.Type;
     if (tm.tag === 'Var' || tm.tag === 'Global') {
         try {
+            metas_1.metaPush();
             const [term, ty2] = synth(ns, ts, vs, k, tm);
             unify_1.unify(ns, k, ty2, ty);
+            metas_1.metaDiscard();
             return term;
         }
         catch (err) {
             if (!(err instanceof TypeError))
                 throw err;
+            metas_1.metaPop();
         }
     }
     if (tm.tag === 'Assert' && !tm.type) {
@@ -1432,7 +1447,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
     catch (err) {
         if (!(err instanceof TypeError))
             throw err;
-        util_1.terr(`failed to unify ${domain_1.showTermU(ty2, ns, k)} ~ ${domain_1.showTermU(ty, ns, k)}: ${err.message}`);
+        return util_1.terr(`failed to unify ${domain_1.showTermU(ty2, ns, k)} ~ ${domain_1.showTermU(ty, ns, k)}: ${err.message}`);
     }
     return list_1.foldl((a, m) => syntax_1.App(a, syntax_2.PlicityE, m), term, targs);
 };
@@ -1669,11 +1684,15 @@ exports.unify = (ns, k, a_, b_) => {
         return solve(ns, k, b.head.index, b.args, a);
     if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && list_1.length(a.args) === list_1.length(b.args)) {
         try {
-            return list_1.zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+            metas_1.metaPush();
+            list_1.zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+            metas_1.metaDiscard();
+            return;
         }
         catch (err) {
             if (!(err instanceof TypeError))
                 throw err;
+            metas_1.metaPop();
             return exports.unify(ns, k, lazy_1.forceLazy(a.val), lazy_1.forceLazy(b.val));
         }
     }

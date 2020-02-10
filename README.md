@@ -16,6 +16,7 @@ yarn start lib/nat.coc
 
 ```
 TODO:
+- fix meta solving (debruijn variables)
 - clean up lib to use type inference (rec-mendler.p, nat.p, list.p)
 - solve meta with glued value
 - change comment syntax to "--"
