@@ -1694,7 +1694,7 @@ const solve = (ns, k, m, spine, val) => {
         // TODO: I think it might actually matter
         const solution = domain_1.evaluate(list_1.foldl((body, [pl, y]) => {
             if (typeof y === 'string')
-                return body;
+                return syntax_2.Abs(pl, y, syntax_2.Type, body);
             const x = list_1.index(ns, y);
             if (!x)
                 return util_1.terr(`index ${y} out of range in meta spine`);

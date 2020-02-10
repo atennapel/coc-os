@@ -90,7 +90,7 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
     // Note: I'm solving with an abstraction that has * as type for all the parameters
     // TODO: I think it might actually matter
     const solution = evaluate(foldl((body, [pl, y]) => {
-      if (typeof y === 'string') return body;
+      if (typeof y === 'string') return Abs(pl, y, Type, body);
       const x = index(ns, y);
       if (!x) return terr(`index ${y} out of range in meta spine`);
       return Abs(pl, x, Type, body);
