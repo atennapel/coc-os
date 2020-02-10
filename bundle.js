@@ -1687,10 +1687,14 @@ const solve = (ns, k, m, spine, val) => {
     try {
         const spinex = checkSpine(ns, k, spine);
         const rhs = domain_1.quote(val, k, false);
-        checkSolution(ns, k, m, list_1.map(spinex, ([_, v]) => v), rhs);
+        // TODO: make this nicer
+        const ivs = list_1.map(list_1.filter(spinex, ([_, v]) => typeof v === 'number'), ([_, v]) => v);
+        checkSolution(ns, k, m, ivs, rhs);
         // Note: I'm solving with an abstraction that has * as type for all the parameters
         // TODO: I think it might actually matter
         const solution = domain_1.evaluate(list_1.foldl((body, [pl, y]) => {
+            if (typeof y === 'string')
+                return body;
             const x = list_1.index(ns, y);
             if (!x)
                 return util_1.terr(`index ${y} out of range in meta spine`);
@@ -1710,8 +1714,10 @@ const checkSpine = (ns, k, spine) => list_1.map(spine, elim => {
         return util_1.terr(`unroll in meta spine`);
     if (elim.tag === 'EApp') {
         const v = domain_1.force(elim.arg);
-        if (v.tag === 'VNe' && v.head.tag === 'HVar' && list_1.length(v.args) === 0)
+        if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && list_1.length(v.args) === 0)
             return [elim.plicity, v.head.index];
+        if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HGlobal' && list_1.length(v.args) === 0)
+            return [elim.plicity, v.head.name];
         return util_1.terr(`not a var in spine: ${domain_1.showTermU(v, ns, k)}`);
     }
     return elim;

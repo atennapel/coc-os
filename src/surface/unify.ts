@@ -2,7 +2,7 @@ import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue, showElimU, force, qu
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
 import { eqPlicity, Plicity } from '../syntax';
-import { zipWithR_, length, List, Cons, map, toArray, foldl, Nil, index, contains } from '../list';
+import { zipWithR_, length, List, Cons, map, toArray, foldl, Nil, index, contains, filter } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
 import { Term, Abs, Type, showFromSurface } from './syntax';
@@ -84,10 +84,13 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
   try {
     const spinex = checkSpine(ns, k, spine);
     const rhs = quote(val, k, false);
-    checkSolution(ns, k, m, map(spinex, ([_, v]) => v), rhs);
+    // TODO: make this nicer
+    const ivs = map(filter(spinex, ([_, v]) => typeof v === 'number'), ([_, v]) => v as number);
+    checkSolution(ns, k, m, ivs, rhs);
     // Note: I'm solving with an abstraction that has * as type for all the parameters
     // TODO: I think it might actually matter
     const solution = evaluate(foldl((body, [pl, y]) => {
+      if (typeof y === 'string') return body;
       const x = index(ns, y);
       if (!x) return terr(`index ${y} out of range in meta spine`);
       return Abs(pl, x, Type, body);
@@ -100,13 +103,15 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
   }
 };
 
-const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix]> =>
+const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix | Name]> =>
   map(spine, elim => {
     if (elim.tag === 'EUnroll') return terr(`unroll in meta spine`);
     if (elim.tag === 'EApp') {
       const v = force(elim.arg);
-      if (v.tag === 'VNe' && v.head.tag === 'HVar' && length(v.args) === 0)
+      if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && length(v.args) === 0)
         return [elim.plicity, v.head.index];
+      if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HGlobal' && length(v.args) === 0)
+        return [elim.plicity, v.head.name];
       return terr(`not a var in spine: ${showTermU(v, ns, k)}`);
     }
     return elim;
