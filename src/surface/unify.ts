@@ -2,7 +2,7 @@ import { Head, Elim, Val, VVar, vapp, showTermU, showElimU, quote, evaluate, for
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
 import { eqPlicity, Plicity } from '../syntax';
-import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldl } from '../list';
+import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldr } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
 import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Roll, Unroll, Pi, Fix } from './syntax';
@@ -94,8 +94,9 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
     const body = checkSolution(ns, k, m, ivs, rhs);
     // Note: I'm solving with an abstraction that has * as type for all the parameters
     // TODO: I think it might actually matter
-    const solution = foldl((body, [pl, y]) => {
+    const solution = foldr(([pl, y], body) => {
       if (typeof y === 'string') return Abs(pl, '_', Type, body);
+      // TODO: indexing is wrong
       const x = index(ns, y);
       if (!x) return terr(`index ${y} out of range in meta spine`);
       return Abs(pl, x, Type, body);
@@ -130,7 +131,7 @@ const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Ter
   if (t.tag === 'Var') {
     log(() => `checkSolution/Var ${m} ${toString(is)} ${t.index}`);
     if (contains(is, t.index))
-      return Var(indexOf(is, t.index));
+      return Var(length(is) - indexOf(is, t.index) - 1);
     return terr(`scope error ${t.index} | ${index(ns, t.index)}`);
   }
   if (t.tag === 'Meta') {

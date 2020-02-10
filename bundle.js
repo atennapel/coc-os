@@ -1726,7 +1726,7 @@ const solve = (ns, k, m, spine, val) => {
         const body = checkSolution(ns, k, m, ivs, rhs);
         // Note: I'm solving with an abstraction that has * as type for all the parameters
         // TODO: I think it might actually matter
-        const solution = list_1.foldl((body, [pl, y]) => {
+        const solution = list_1.foldr(([pl, y], body) => {
             if (typeof y === 'string')
                 return syntax_2.Abs(pl, '_', syntax_2.Type, body);
             const x = list_1.index(ns, y);
@@ -1766,7 +1766,7 @@ const checkSolution = (ns, k, m, is, t) => {
     if (t.tag === 'Var') {
         config_1.log(() => `checkSolution/Var ${m} ${list_1.toString(is)} ${t.index}`);
         if (list_1.contains(is, t.index))
-            return syntax_2.Var(list_1.indexOf(is, t.index));
+            return syntax_2.Var(list_1.length(is) - list_1.indexOf(is, t.index) - 1);
         return util_1.terr(`scope error ${t.index} | ${list_1.index(ns, t.index)}`);
     }
     if (t.tag === 'Meta') {
