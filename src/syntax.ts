@@ -87,7 +87,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
-    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${
+    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Assert' || f.tag === 'Fix', f)} ${
       as.map(([im, t], i) =>
         im.erased ? `{${showTerm(t)}}` :
           `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || f.tag === 'Fix', t)}`).join(' ')}`;
