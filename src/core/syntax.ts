@@ -3,7 +3,7 @@ import { Plicity } from '../syntax';
 import * as S from '../surface/syntax';
 import { impossible } from '../util';
 
-export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Assert;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -25,6 +25,8 @@ export type Fix = { tag: 'Fix', type: Term, body: Term };
 export const Fix = (type: Term, body: Term): Fix => ({ tag: 'Fix', type, body });
 export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
+export type Assert = { tag: 'Assert', type: Term, term: Term }
+export const Assert = (type: Term, term: Term): Assert => ({ tag: 'Assert', type, term });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
@@ -37,6 +39,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Pi') return `(/${t.plicity.erased ? '-' : ''}${showTerm(t.type)}. ${showTerm(t.body)})`;
   if (t.tag === 'Fix') return `(fix ${showTerm(t.type)}. ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
+  if (t.tag === 'Assert') return `(assert ${showTerm(t.type)} ${showTerm(t.term)})`;
   return t;
 };
 

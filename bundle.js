@@ -28,6 +28,7 @@ exports.Unroll = (term) => ({ tag: 'Unroll', term });
 exports.Pi = (plicity, type, body) => ({ tag: 'Pi', plicity, type, body });
 exports.Fix = (type, body) => ({ tag: 'Fix', type, body });
 exports.Type = { tag: 'Type' };
+exports.Assert = (type, term) => ({ tag: 'Assert', type, term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -49,6 +50,8 @@ exports.showTerm = (t) => {
         return `(fix ${exports.showTerm(t.type)}. ${exports.showTerm(t.body)})`;
     if (t.tag === 'Type')
         return '*';
+    if (t.tag === 'Assert')
+        return `(assert ${exports.showTerm(t.type)} ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toCore = (t) => {
