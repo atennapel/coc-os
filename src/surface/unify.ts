@@ -129,7 +129,7 @@ const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix>, t: Term): voi
   if (t.tag === 'Global') return;
   if (t.tag === 'Var') {
     if (contains(is, t.index)) return;
-    return terr(`scope error ${t.index}`);
+    return terr(`scope error ${t.index} / ${index(ns, t.index)}`);
   }
   if (t.tag === 'Meta') {
     if (m === t.index)

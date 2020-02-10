@@ -1752,7 +1752,7 @@ const checkSolution = (ns, k, m, is, t) => {
     if (t.tag === 'Var') {
         if (list_1.contains(is, t.index))
             return;
-        return util_1.terr(`scope error ${t.index}`);
+        return util_1.terr(`scope error ${t.index} / ${list_1.index(ns, t.index)}`);
     }
     if (t.tag === 'Meta') {
         if (m === t.index)
