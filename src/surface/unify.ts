@@ -2,7 +2,7 @@ import { Head, Elim, Val, VVar, vapp, showTermU, showElimU, quote, evaluate, for
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
 import { eqPlicity, Plicity } from '../syntax';
-import { zipWithR_, length, List, Cons, map, toArray, foldl, Nil, index, contains, filter, toString } from '../list';
+import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldl } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
 import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Roll, Unroll, Pi, Fix } from './syntax';
@@ -90,12 +90,12 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
     const spinex = checkSpine(ns, k, spine);
     const rhs = quote(val, k, false);
     // TODO: make this nicer
-    const ivs = map(filter(spinex, ([_, v]) => typeof v === 'number'), ([_, v]) => v as number);
+    const ivs = map(spinex, ([_, v]) => v);
     const body = checkSolution(ns, k, m, ivs, rhs);
     // Note: I'm solving with an abstraction that has * as type for all the parameters
     // TODO: I think it might actually matter
     const solution = foldl((body, [pl, y]) => {
-      if (typeof y === 'string') return Abs(pl, y, Type, body);
+      if (typeof y === 'string') return Abs(pl, '_', Type, body);
       const x = index(ns, y);
       if (!x) return terr(`index ${y} out of range in meta spine`);
       return Abs(pl, x, Type, body);
@@ -124,12 +124,13 @@ const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix
     return elim;
   });
 
-const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
+const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Term): Term => {
   if (t.tag === 'Type') return t;
   if (t.tag === 'Global') return t;
   if (t.tag === 'Var') {
+    log(() => `checkSolution/Var ${m} ${toString(is)} ${t.index}`);
     if (contains(is, t.index))
-      return Var(index(is, t.index) || 0);
+      return Var(indexOf(is, t.index));
     return terr(`scope error ${t.index} | ${index(ns, t.index)}`);
   }
   if (t.tag === 'Meta') {

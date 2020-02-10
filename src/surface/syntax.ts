@@ -129,6 +129,7 @@ export const isUnsolved = (t: Term): boolean => {
 };
 
 const decideName = (x: Name, t: Term, ns: List<Name>): Name => {
+  if (x === '_') return x;
   const a = indecesOf(ns, x).map(i => indexUsed(i + 1, t)).reduce((x, y) => x || y, false);
   const g = globalUsed(x, t);
   return a || g ? decideName(nextName(x), t, ns) : x;

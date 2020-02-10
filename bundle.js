@@ -176,6 +176,16 @@ exports.index = (l, i) => {
     }
     return null;
 };
+exports.indexOf = (l, x) => {
+    let i = 0;
+    while (l.tag === 'Cons') {
+        if (l.head === x)
+            return i;
+        l = l.tail;
+        i++;
+    }
+    return -1;
+};
 exports.indecesOf = (l, val) => {
     const a = [];
     let i = 0;
@@ -222,6 +232,8 @@ exports.max = (l) => exports.foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTE
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.nextName = (x) => {
+    if (x === '_')
+        return x;
     const s = x.split('$');
     if (s.length === 2)
         return `${s[0]}\$${+s[1] + 1}`;
@@ -1260,6 +1272,8 @@ exports.isUnsolved = (t) => {
     return t;
 };
 const decideName = (x, t, ns) => {
+    if (x === '_')
+        return x;
     const a = list_1.indecesOf(ns, x).map(i => indexUsed(i + 1, t)).reduce((x, y) => x || y, false);
     const g = globalUsed(x, t);
     return a || g ? decideName(names_1.nextName(x), t, ns) : x;
@@ -1708,13 +1722,13 @@ const solve = (ns, k, m, spine, val) => {
         const spinex = checkSpine(ns, k, spine);
         const rhs = domain_1.quote(val, k, false);
         // TODO: make this nicer
-        const ivs = list_1.map(list_1.filter(spinex, ([_, v]) => typeof v === 'number'), ([_, v]) => v);
+        const ivs = list_1.map(spinex, ([_, v]) => v);
         const body = checkSolution(ns, k, m, ivs, rhs);
         // Note: I'm solving with an abstraction that has * as type for all the parameters
         // TODO: I think it might actually matter
         const solution = list_1.foldl((body, [pl, y]) => {
             if (typeof y === 'string')
-                return syntax_2.Abs(pl, y, syntax_2.Type, body);
+                return syntax_2.Abs(pl, '_', syntax_2.Type, body);
             const x = list_1.index(ns, y);
             if (!x)
                 return util_1.terr(`index ${y} out of range in meta spine`);
@@ -1750,8 +1764,9 @@ const checkSolution = (ns, k, m, is, t) => {
     if (t.tag === 'Global')
         return t;
     if (t.tag === 'Var') {
+        config_1.log(() => `checkSolution/Var ${m} ${list_1.toString(is)} ${t.index}`);
         if (list_1.contains(is, t.index))
-            return syntax_2.Var(list_1.index(is, t.index) || 0);
+            return syntax_2.Var(list_1.indexOf(is, t.index));
         return util_1.terr(`scope error ${t.index} | ${list_1.index(ns, t.index)}`);
     }
     if (t.tag === 'Meta') {

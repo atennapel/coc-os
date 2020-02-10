@@ -94,6 +94,15 @@ export const index = <T>(l: List<T>, i: number): T | null => {
   }
   return null;
 };
+export const indexOf = <T>(l: List<T>, x: T): number => {
+  let i = 0;
+  while (l.tag === 'Cons') {
+    if (l.head === x) return i;
+    l = l.tail;
+    i++;
+  }
+  return -1;
+};
 
 export const indecesOf = <T>(l: List<T>, val: T): number[] => {
   const a: number[] = [];
