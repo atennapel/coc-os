@@ -1709,7 +1709,7 @@ const solve = (ns, k, m, spine, val) => {
         const rhs = domain_1.quote(val, k, false);
         // TODO: make this nicer
         const ivs = list_1.map(list_1.filter(spinex, ([_, v]) => typeof v === 'number'), ([_, v]) => v);
-        checkSolution(ns, k, m, ivs, rhs);
+        const body = checkSolution(ns, k, m, ivs, rhs);
         // Note: I'm solving with an abstraction that has * as type for all the parameters
         // TODO: I think it might actually matter
         const solution = list_1.foldl((body, [pl, y]) => {
@@ -1719,8 +1719,8 @@ const solve = (ns, k, m, spine, val) => {
             if (!x)
                 return util_1.terr(`index ${y} out of range in meta spine`);
             return syntax_2.Abs(pl, x, syntax_2.Type, body);
-        }, rhs, spinex);
-        config_1.log(() => `solution ?${m} := ${syntax_2.showFromSurface(solution, list_1.Nil)}`);
+        }, body, spinex);
+        config_1.log(() => `solution ?${m} := ${syntax_2.showFromSurface(solution, list_1.Nil)} | ${syntax_2.showTerm(solution)}`);
         const vsolution = domain_1.evaluate(solution, list_1.Nil);
         metas_1.metaSet(m, vsolution);
     }
@@ -1746,47 +1746,47 @@ const checkSpine = (ns, k, spine) => list_1.map(spine, elim => {
 });
 const checkSolution = (ns, k, m, is, t) => {
     if (t.tag === 'Type')
-        return;
+        return t;
     if (t.tag === 'Global')
-        return;
+        return t;
     if (t.tag === 'Var') {
         if (list_1.contains(is, t.index))
-            return;
-        return util_1.terr(`scope error ${t.index} / ${list_1.index(ns, t.index)}`);
+            return syntax_2.Var(list_1.index(is, t.index) || 0);
+        return util_1.terr(`scope error ${t.index} | ${list_1.index(ns, t.index)}`);
     }
     if (t.tag === 'Meta') {
         if (m === t.index)
             return util_1.terr(`occurs check failed: ${syntax_2.showFromSurface(t, ns)}`);
-        return;
+        return t;
     }
     if (t.tag === 'App') {
-        checkSolution(ns, k, m, is, t.left);
-        checkSolution(ns, k, m, is, t.right);
-        return;
+        const l = checkSolution(ns, k, m, is, t.left);
+        const r = checkSolution(ns, k, m, is, t.right);
+        return syntax_2.App(l, t.plicity, r);
     }
     if (t.tag === 'Roll' && t.type) {
-        checkSolution(ns, k, m, is, t.type);
-        checkSolution(ns, k, m, is, t.term);
-        return;
+        const ty = checkSolution(ns, k, m, is, t.type);
+        const tm = checkSolution(ns, k, m, is, t.term);
+        return syntax_2.Roll(ty, tm);
     }
     if (t.tag === 'Unroll') {
-        checkSolution(ns, k, m, is, t.term);
-        return;
+        const tm = checkSolution(ns, k, m, is, t.term);
+        return syntax_2.Unroll(tm);
     }
     if (t.tag === 'Abs' && t.type) {
-        checkSolution(ns, k, m, is, t.type);
-        checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
-        return;
+        const ty = checkSolution(ns, k, m, is, t.type);
+        const body = checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
+        return syntax_2.Abs(t.plicity, t.name, ty, body);
     }
     if (t.tag === 'Pi') {
-        checkSolution(ns, k, m, is, t.type);
-        checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
-        return;
+        const ty = checkSolution(ns, k, m, is, t.type);
+        const body = checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
+        return syntax_2.Pi(t.plicity, t.name, ty, body);
     }
     if (t.tag === 'Fix') {
-        checkSolution(ns, k, m, is, t.type);
-        checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
-        return;
+        const ty = checkSolution(ns, k, m, is, t.type);
+        const body = checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
+        return syntax_2.Fix(t.name, ty, body);
     }
     return util_1.impossible(`checkSolution ?${m}: non-normal term: ${syntax_2.showFromSurface(t, ns)}`);
 };
