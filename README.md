@@ -25,7 +25,4 @@ TODO:
 - improve type inference of annotated lambdas
 - improve impredicative type inference
 - solve issue with unnecessary eta-abstractions (example: S Z)
-
-BUG:
-- lib/nat.p: 0 0 0
-```
+``` 

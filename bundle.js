@@ -1355,7 +1355,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
         const body = check(list_1.Cons(tm.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
-        return syntax_1.Abs(tm.plicity, tm.name, domain_1.quote(tyf.type, k, false), body);
+        return syntax_1.Abs(tm.plicity, tm.name === '_' ? tyf.name : tm.name, domain_1.quote(tyf.type, k, false), body);
     }
     if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
         const v = domain_1.VVar(k);

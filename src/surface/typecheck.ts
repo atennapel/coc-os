@@ -67,7 +67,7 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
     const body = check(Cons(tm.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, tm.body, tyf.body(v));
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
-    return Abs(tm.plicity, tm.name, quote(tyf.type, k, false), body);
+    return Abs(tm.plicity, tm.name === '_' ? tyf.name : tm.name, quote(tyf.type, k, false), body);
   }
   if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
     const v = VVar(k);
