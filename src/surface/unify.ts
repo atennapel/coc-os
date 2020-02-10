@@ -2,7 +2,7 @@ import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue, showElimU, quote, ev
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
 import { eqPlicity, Plicity } from '../syntax';
-import { zipWithR_, length, List, Cons, map, toArray, foldl, Nil, index, contains, filter } from '../list';
+import { zipWithR_, length, List, Cons, map, toArray, foldl, Nil, index, contains, filter, toString } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
 import { Term, Abs, Type, showFromSurface } from './syntax';
@@ -81,6 +81,7 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
 };
 
 const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void => {
+  log(() => `solve ?${m} ${toString(spine, e => showElimU(e, ns, k, false))} := ${showTermU(val, ns, k)}`);
   try {
     const spinex = checkSpine(ns, k, spine);
     const rhs = quote(val, k, false);
@@ -89,13 +90,15 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
     checkSolution(ns, k, m, ivs, rhs);
     // Note: I'm solving with an abstraction that has * as type for all the parameters
     // TODO: I think it might actually matter
-    const solution = evaluate(foldl((body, [pl, y]) => {
+    const solution = foldl((body, [pl, y]) => {
       if (typeof y === 'string') return Abs(pl, y, Type, body);
       const x = index(ns, y);
       if (!x) return terr(`index ${y} out of range in meta spine`);
       return Abs(pl, x, Type, body);
-    }, rhs, spinex), Nil);
-    metaSet(m, solution);
+    }, rhs, spinex);
+    log(() => `solution ?${m} := ${showFromSurface(solution, Nil)}`);
+    const vsolution = evaluate(solution, Nil);
+    metaSet(m, vsolution);
   } catch (err) {
     if (!(err instanceof TypeError)) throw err;
     const a = toArray(spine, e => showElimU(e, ns, k));

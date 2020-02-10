@@ -1684,6 +1684,7 @@ exports.unify = (ns, k, a_, b_) => {
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(a, ns, k)} ~ ${domain_1.showTermU(b, ns, k)}`);
 };
 const solve = (ns, k, m, spine, val) => {
+    config_1.log(() => `solve ?${m} ${list_1.toString(spine, e => domain_1.showElimU(e, ns, k, false))} := ${domain_1.showTermU(val, ns, k)}`);
     try {
         const spinex = checkSpine(ns, k, spine);
         const rhs = domain_1.quote(val, k, false);
@@ -1692,15 +1693,17 @@ const solve = (ns, k, m, spine, val) => {
         checkSolution(ns, k, m, ivs, rhs);
         // Note: I'm solving with an abstraction that has * as type for all the parameters
         // TODO: I think it might actually matter
-        const solution = domain_1.evaluate(list_1.foldl((body, [pl, y]) => {
+        const solution = list_1.foldl((body, [pl, y]) => {
             if (typeof y === 'string')
                 return syntax_2.Abs(pl, y, syntax_2.Type, body);
             const x = list_1.index(ns, y);
             if (!x)
                 return util_1.terr(`index ${y} out of range in meta spine`);
             return syntax_2.Abs(pl, x, syntax_2.Type, body);
-        }, rhs, spinex), list_1.Nil);
-        metas_1.metaSet(m, solution);
+        }, rhs, spinex);
+        config_1.log(() => `solution ?${m} := ${syntax_2.showFromSurface(solution, list_1.Nil)}`);
+        const vsolution = domain_1.evaluate(solution, list_1.Nil);
+        metas_1.metaSet(m, vsolution);
     }
     catch (err) {
         if (!(err instanceof TypeError))
