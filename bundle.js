@@ -1713,7 +1713,7 @@ const checkSpine = (ns, k, spine) => list_1.map(spine, elim => {
     if (elim.tag === 'EUnroll')
         return util_1.terr(`unroll in meta spine`);
     if (elim.tag === 'EApp') {
-        const v = domain_1.force(elim.arg);
+        const v = domain_1.forceGlue(elim.arg);
         if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && list_1.length(v.args) === 0)
             return [elim.plicity, v.head.index];
         if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HGlobal' && list_1.length(v.args) === 0)

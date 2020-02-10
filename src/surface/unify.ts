@@ -1,4 +1,4 @@
-import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue, showElimU, force, quote, evaluate } from './domain';
+import { Head, Elim, Val, VVar, vapp, showTermU, forceGlue, showElimU, quote, evaluate } from './domain';
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
 import { eqPlicity, Plicity } from '../syntax';
@@ -107,7 +107,7 @@ const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix
   map(spine, elim => {
     if (elim.tag === 'EUnroll') return terr(`unroll in meta spine`);
     if (elim.tag === 'EApp') {
-      const v = force(elim.arg);
+      const v = forceGlue(elim.arg);
       if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && length(v.args) === 0)
         return [elim.plicity, v.head.index];
       if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HGlobal' && length(v.args) === 0)
