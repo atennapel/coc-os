@@ -1,5 +1,5 @@
 import { serr } from './util'
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, flattenApp, Hole } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, flattenApp, Hole, Assert } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 
@@ -205,6 +205,17 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     } else {
       const body = exprs(ts.slice(1), '(');
       return Roll(null, body);
+    }
+  }
+  if (isName(ts[0], 'assert')) {
+    if (ts[1].tag === 'List' && ts[1].bracket === '{') {
+      const [ty, b] = expr(ts[1]);
+      if (!b) return serr(`something went wrong when parsing assert`);
+      const body = exprs(ts.slice(2), '(');
+      return Assert(ty, body);
+    } else {
+      const body = exprs(ts.slice(1), '(');
+      return Assert(null, body);
     }
   }
   if (isName(ts[0], 'fix')) {

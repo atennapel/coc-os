@@ -6,7 +6,7 @@ export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.era
 export const PlicityE: Plicity = { erased: true };
 export const PlicityR: Plicity = { erased: false };
 
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Assert;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -32,6 +32,8 @@ export type Hole = { tag: 'Hole' };
 export const Hole: Hole = { tag: 'Hole' };
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
+export type Assert = { tag: 'Assert', type: Term | null, term: Term };
+export const Assert = (type: Term | null, term: Term): Assert => ({ tag: 'Assert', type, term });
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -47,6 +49,7 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Fix') return `(fix (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTermS(t.term)} : ${showTermS(t.type)})`;
+  if (t.tag === 'Assert') return t.type ? `(assert {${showTermS(t.type)}} ${showTermS(t.term)})` : `(assert ${showTermS(t.term)})`;
   return t;
 };
 
@@ -107,6 +110,8 @@ export const showTerm = (t: Term): string => {
     return !t.type ? `roll ${showTermP(t.term.tag === 'Ann', t.term)}` : `roll {${showTerm(t.type)}} ${showTermP(t.term.tag === 'Ann', t.term)}`;
   if (t.tag === 'Ann')
     return `${showTermP(t.term.tag === 'Ann', t.term)} : ${showTermP(t.term.tag === 'Ann', t.type)}`;
+  if (t.tag === 'Assert')
+    return !t.type ? `assert ${showTermP(t.term.tag === 'Ann', t.term)}` : `assert {${showTerm(t.type)}} ${showTermP(t.term.tag === 'Ann', t.term)}`;
   return t;
 };
 
@@ -119,6 +124,7 @@ export const eraseTypes = (t: Term): Term => {
   if (t.tag === 'Let') return t.plicity.erased ? eraseTypes(t.body) : Let(t.plicity, t.name, eraseTypes(t.val), eraseTypes(t.body));
   if (t.tag === 'Roll') return eraseTypes(t.term);
   if (t.tag === 'Unroll') return eraseTypes(t.term);
+  if (t.tag === 'Assert') return eraseTypes(t.term);
   if (t.tag === 'Pi') return Type;
   if (t.tag === 'Fix') return Type;
   if (t.tag === 'Type') return Type;
