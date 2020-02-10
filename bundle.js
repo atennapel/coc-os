@@ -653,6 +653,7 @@ COMMANDS
 [:t term] or [:type term] show the type of an expressions
 [:del name] delete a name
 [:gtype name] view the fully normalized type of a name
+[:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
 [:gterme name] view the term of a name with erased types
@@ -708,6 +709,13 @@ exports.runREPL = (_s, _cb) => {
                 return _cb(`undefined global: ${name}`, true);
             const type = domain_1.quoteZ(res.type, list_1.Nil, 0, true);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(type)));
+        }
+        if (_s.startsWith(':gelab')) {
+            const name = _s.slice(6).trim();
+            const res = globalenv_1.globalGet(name);
+            if (!res)
+                return _cb(`undefined global: ${name}`, true);
+            return _cb(syntax_1.showTerm(syntax_2.fromSurface(res.term)));
         }
         if (_s.startsWith(':gterme')) {
             const name = _s.slice(7).trim();
@@ -1031,8 +1039,8 @@ exports.globalReset = () => {
 };
 exports.globalMap = () => env;
 exports.globalGet = (name) => env[name] || null;
-exports.globalSet = (name, val, type) => {
-    env[name] = { val, type };
+exports.globalSet = (name, term, val, type) => {
+    env[name] = { term, val, type };
 };
 exports.globalDelete = (name) => {
     delete env[name];
@@ -1576,7 +1584,7 @@ exports.typecheckDefs = (ds, allowRedefinition = false) => {
         if (d.tag === 'DDef') {
             const [tm, ty] = exports.typecheck(d.value);
             config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(tm)}`);
-            globalenv_1.globalSet(d.name, domain_1.evaluate(tm), ty);
+            globalenv_1.globalSet(d.name, tm, domain_1.evaluate(tm), ty);
             xs.push(d.name);
         }
     }

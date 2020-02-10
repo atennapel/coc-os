@@ -25,6 +25,7 @@ COMMANDS
 [:t term] or [:type term] show the type of an expressions
 [:del name] delete a name
 [:gtype name] view the fully normalized type of a name
+[:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
 [:gterme name] view the term of a name with erased types
@@ -80,6 +81,12 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       if (!res) return _cb(`undefined global: ${name}`, true);
       const type = quoteZ(res.type, Nil, 0, true);
       return _cb(showTerm(fromSurface(type)));
+    }
+    if (_s.startsWith(':gelab')) {
+      const name = _s.slice(6).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      return _cb(showTerm(fromSurface(res.term)));
     }
     if (_s.startsWith(':gterme')) {
       const name = _s.slice(7).trim();

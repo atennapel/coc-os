@@ -1,3 +1,4 @@
+// @ts-ignore
 import { Pi, Type, Abs, Var, App, Fix, Roll, showTerm, Term, Global, toCore } from './core/syntax';
 import * as U from './untyped/syntax';
 import * as UD from './untyped/domain';
@@ -7,7 +8,9 @@ import { typecheck } from './core/typecheck';
 import { typecheck as typecheckS } from './surface/typecheck';
 import { normalize as normalizeS, quote as quoteS } from './surface/domain';
 import { Nil } from './list';
+// @ts-ignore
 import { normalize, evaluate, quote } from './core/domain';
+// @ts-ignore
 import { globalSet, globalReset } from './core/globalenv';
 import { parse } from './parser';
 
@@ -24,16 +27,6 @@ const N = (n: number): Term => { let x = Global('Z'); for (let i = 0; i < n; i++
 const SN = (n: number): Term => { let x = Global('SZ'); for (let i = 0; i < n; i++) x = App(Global('SS'), R, x); return x };
 
 globalReset();
-globalSet('Nat', evaluate(Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(1), Var(2)), Var(2))))), evaluate(Type));
-globalSet('Z', evaluate(Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), Var(1))))), evaluate(Global('Nat')));
-globalSet('S', evaluate(Abs(R, Global('Nat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Var(1), Var(2)), App(Var(0), R, App(App(App(Var(3), E, Var(2)), R, Var(1)), R, Var(0)))))))), evaluate(Pi(R, Global('Nat'), Global('Nat'))));
-globalSet('add', evaluate(Abs(R, Global('Nat'), Abs(R, Global('Nat'), App(App(App(Var(1), E, Global('Nat')), R, Var(0)), R, Global('S'))))), evaluate(Pi(R, Global('Nat'), Pi(R, Global('Nat'), Global('Nat')))));
-globalSet('mul', evaluate(Abs(R, Global('Nat'), Abs(R, Global('Nat'), App(App(App(Var(1), E, Global('Nat')), R, N(0)), R, App(Global('add'), R, Var(0)))))), evaluate(Pi(R, Global('Nat'), Pi(R, Global('Nat'), Global('Nat')))));
-globalSet('pow', evaluate(Abs(R, Global('Nat'), Abs(R, Global('Nat'), App(App(App(Var(0), E, Global('Nat')), R, N(1)), R, App(Global('mul'), R, Var(1)))))), evaluate(Pi(R, Global('Nat'), Pi(R, Global('Nat'), Global('Nat')))));
-
-globalSet('SNat', evaluate(Fix(Type, Pi(E, Type, Pi(R, Var(0), Pi(R, Pi(R, Var(2), Var(2)), Var(2)))))), evaluate(Type));
-globalSet('SZ', evaluate(Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), Var(1)))))), evaluate(Global('SNat')));
-globalSet('SS', evaluate(Abs(R, Global('SNat'), Roll(Global('SNat'), Abs(E, Type, Abs(R, Var(0), Abs(R, Pi(R, Global('SNat'), Var(2)), App(Var(0), R, Var(3)))))))), evaluate(Pi(R, Global('SNat'), Global('SNat'))));
 
 const tm1 = parse('let {Nat} = {t : *} -> t -> (t -> t) -> t in \\(n : Nat) {t : *} (z : t) (s : t -> t). s (n {t} z s)');
 console.log(S.showTerm(tm1));

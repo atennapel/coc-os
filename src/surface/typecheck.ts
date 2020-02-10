@@ -249,7 +249,7 @@ export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Na
     if (d.tag === 'DDef') {
       const [tm, ty] = typecheck(d.value);
       log(() => `set ${d.name} = ${showTerm(tm)}`);
-      globalSet(d.name, evaluate(tm), ty);
+      globalSet(d.name, tm, evaluate(tm), ty);
       xs.push(d.name);
     }
   }
