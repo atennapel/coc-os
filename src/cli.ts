@@ -6,8 +6,10 @@ import { globalReset, globalMap } from './surface/globalenv';
 import { typecheckDefs } from './surface/typecheck';
 import { quoteZ } from './surface/domain';
 import { fromSurface, showFromSurface } from './surface/syntax';
+import { setConfig } from './config';
 
 if (process.argv[2]) {
+  if (process.argv[3] === '-d') setConfig({ debug: true });
   try {
     globalReset();
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');

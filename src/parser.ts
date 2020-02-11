@@ -40,7 +40,7 @@ const tokenize = (sc: string): Token[] => {
     if (state === START) {
       if (SYM2.indexOf(c + next) >= 0) r.push(TName(c + next)), i++;
       else if (SYM1.indexOf(c) >= 0) r.push(TName(c));
-      else if (c === ';') state = COMMENT;
+      else if (c + next === '--') i++, state = COMMENT;
       else if (/[\_a-z]/i.test(c)) t += c, state = NAME;
       else if (/[0-9]/.test(c)) t += c, state = NUMBER;
       else if(c === '(' || c === '{') b.push(c), p.push(r), r = [];

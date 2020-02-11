@@ -2,7 +2,7 @@ import { Head, Elim, Val, VVar, vapp, showTermU, showElimU, quote, evaluate, for
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
 import { eqPlicity, Plicity } from '../syntax';
-import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldr } from '../list';
+import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldl } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
 import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Roll, Unroll, Pi, Fix } from './syntax';
@@ -85,19 +85,18 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
 };
 
 const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void => {
-  log(() => `solve ?${m} ${toString(spine, e => showElimU(e, ns, k, false))} := ${showTermU(val, ns, k)}`);
+  log(() => `solve ?${m} ${toString(spine, e => showElimU(e, ns, k, false))} := ${showTermU(val, ns, k)} (${k}, ${toString(ns)})`);
   try {
     const spinex = checkSpine(ns, k, spine);
     const rhs = quote(val, k, false);
-    // TODO: make this nicer
     const ivs = map(spinex, ([_, v]) => v);
     const body = checkSolution(ns, k, m, ivs, rhs);
     // Note: I'm solving with an abstraction that has * as type for all the parameters
     // TODO: I think it might actually matter
-    const solution = foldr(([pl, y], body) => {
+    log(() => `spinex ${toString(spinex, ([p, s]) => `${p.erased ? '-' : ''}${s}`)}`);
+    const solution = foldl((body, [pl, y]) => {
       if (typeof y === 'string') return Abs(pl, '_', Type, body);
-      // TODO: indexing is wrong
-      const x = index(ns, y);
+      const x = index(ns, k - y - 1);
       if (!x) return terr(`index ${y} out of range in meta spine`);
       return Abs(pl, x, Type, body);
     }, body, spinex);
@@ -129,10 +128,10 @@ const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Ter
   if (t.tag === 'Type') return t;
   if (t.tag === 'Global') return t;
   if (t.tag === 'Var') {
-    log(() => `checkSolution/Var ${m} ${toString(is)} ${t.index}`);
-    if (contains(is, t.index))
-      return Var(length(is) - indexOf(is, t.index) - 1);
-    return terr(`scope error ${t.index} | ${index(ns, t.index)}`);
+    const i = k - t.index - 1;
+    if (contains(is, i))
+      return Var(indexOf(is, i));
+    return terr(`scope error ${t.index} (${i}) | ${index(ns, t.index)}`);
   }
   if (t.tag === 'Meta') {
     if (m === t.index)

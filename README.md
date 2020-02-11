@@ -16,10 +16,7 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- fix meta solving (debruijn variables)
 - clean up lib to use type inference (rec-mendler.p, nat.p, list.p)
-- solve meta with glued value
-- change comment syntax to "--"
 - fix synthapp of meta
 - infer more uses of roll/unroll (also in synthapp and check)
 - add rigid

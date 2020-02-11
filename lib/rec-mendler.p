@@ -1,4 +1,4 @@
-; mendler-style recursion, using a fixpoint type
+-- mendler-style recursion, using a fixpoint type
 def Fix = \(f : * -> *). fix (r : *). {x : *} -> ((r -> x) -> f r -> x) -> x
 
 def fold : {f : * -> *} -> {x : *} -> ((Fix f -> x) -> f (Fix f) -> x) -> Fix f -> x
@@ -8,7 +8,7 @@ def inF : {f : * -> *} -> f (Fix f) -> Fix f
 def outF : {f : * -> *} -> Fix f -> f (Fix f)
   = \{f} x. fold {f} {f (Fix f)} (\_ x. x) x
 
-; nats
+-- nats
 def NatF = \(r : *). {t : *} -> t -> (r -> t) -> t
 def Nat = Fix NatF
 def Z : Nat = inF {NatF} \z s. z
@@ -30,7 +30,7 @@ def pow : Nat -> Nat -> Nat = \n m. foldNat m (S Z) (mul n)
 
 def sub : Nat -> Nat -> Nat = \n m. foldNat m n pred
 
-; lists
+-- lists
 def ListF = \(t : *) (r : *). {x : *} -> x -> (t -> r -> x) -> x
 def List = \(t : *). Fix (ListF t)
 def Nil : {t : *} -> List t = \{t}. inF {ListF t} \{x} n c. n
@@ -47,7 +47,7 @@ def foldList : {t r : *} -> List t -> r -> (t -> r -> r) -> r
 def mapList : {a b : *} -> (a -> b) -> List a -> List b
   = \{a b} f l. foldList {a} {List b} l (Nil {b}) (\hd r. Cons {b} (f hd) r)
 
-; binary nats
+-- binary nats
 def BNatF = \(r : *). {t : *} -> t -> (r -> t) -> (r -> t) -> t
 def BNat = Fix BNatF
 def BE : BNat = inF {BNatF} \{t} e z o. e
