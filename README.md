@@ -16,6 +16,8 @@ yarn start lib/nat.coc
 
 ```
 TODO:
+- maybe unfold globals in toCore or erase?
+- erase without going to core?
 - clean up lib to use type inference (rec-mendler.p, nat.p, list.p)
 - fix synthapp of meta
 - infer more uses of roll/unroll (also in synthapp and check)
