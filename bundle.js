@@ -1949,6 +1949,7 @@ exports.eraseTypes = (t) => {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("../core/syntax");
+const util_1 = require("../util");
 exports.Var = (index) => ({ tag: 'Var', index });
 exports.App = (left, right) => ({ tag: 'App', left, right });
 exports.Abs = (body) => ({ tag: 'Abs', body });
@@ -1991,21 +1992,23 @@ exports.shift = (d, c, t) => {
         return exports.App(exports.shift(d, c, t.left), exports.shift(d, c, t.right));
     return t;
 };
-exports.erase = (t) => {
+exports.erase = (t, map = {}) => {
+    if (t.tag === 'Global')
+        return map[t.name] || util_1.impossible(`erase: global not in map: ${t.name}`);
     if (t.tag === 'Var')
         return exports.Var(t.index);
     if (t.tag === 'App')
-        return t.plicity.erased ? exports.erase(t.left) : exports.App(exports.erase(t.left), exports.erase(t.right));
+        return t.plicity.erased ? exports.erase(t.left, map) : exports.App(exports.erase(t.left, map), exports.erase(t.right, map));
     if (t.tag === 'Abs')
-        return t.plicity.erased ? exports.shift(-1, 0, exports.erase(t.body)) : exports.Abs(exports.erase(t.body));
+        return t.plicity.erased ? exports.shift(-1, 0, exports.erase(t.body, map)) : exports.Abs(exports.erase(t.body, map));
     if (t.tag === 'Let')
-        return t.plicity.erased ? exports.shift(-1, 0, exports.erase(t.body)) : exports.App(exports.Abs(exports.erase(t.body)), exports.erase(t.val));
+        return t.plicity.erased ? exports.shift(-1, 0, exports.erase(t.body, map)) : exports.App(exports.Abs(exports.erase(t.body, map)), exports.erase(t.val, map));
     if (t.tag === 'Roll')
-        return exports.erase(t.term);
+        return exports.erase(t.term, map);
     if (t.tag === 'Unroll')
-        return exports.erase(t.term);
+        return exports.erase(t.term, map);
     if (t.tag === 'Assert')
-        return exports.erase(t.term);
+        return exports.erase(t.term, map);
     if (t.tag === 'Pi')
         return exports.idTerm;
     if (t.tag === 'Fix')
@@ -2015,7 +2018,7 @@ exports.erase = (t) => {
     throw new Error(`unable to erase: ${syntax_1.showTerm(t)}`);
 };
 
-},{"../core/syntax":2}],18:[function(require,module,exports){
+},{"../core/syntax":2,"../util":18}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {

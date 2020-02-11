@@ -1,5 +1,6 @@
 import { Ix } from '../names';
 import { Term as TTerm, showTerm as showTTerm } from '../core/syntax';
+import { impossible } from '../util';
 
 export type Term = Var | App | Abs;
 
@@ -49,14 +50,15 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   return t;
 };
 
-export const erase = (t: TTerm): Term => {
+export const erase = (t: TTerm, map: { [key: string]: Term } = {}): Term => {
+  if (t.tag === 'Global') return map[t.name] || impossible(`erase: global not in map: ${t.name}`);
   if (t.tag === 'Var') return Var(t.index);
-  if (t.tag === 'App') return t.plicity.erased ? erase(t.left) : App(erase(t.left), erase(t.right));
-  if (t.tag === 'Abs') return t.plicity.erased ? shift(-1, 0, erase(t.body)) : Abs(erase(t.body));
-  if (t.tag === 'Let') return t.plicity.erased ? shift(-1, 0, erase(t.body)) : App(Abs(erase(t.body)), erase(t.val));
-  if (t.tag === 'Roll') return erase(t.term);
-  if (t.tag === 'Unroll') return erase(t.term);
-  if (t.tag === 'Assert') return erase(t.term);
+  if (t.tag === 'App') return t.plicity.erased ? erase(t.left, map) : App(erase(t.left, map), erase(t.right, map));
+  if (t.tag === 'Abs') return t.plicity.erased ? shift(-1, 0, erase(t.body, map)) : Abs(erase(t.body, map));
+  if (t.tag === 'Let') return t.plicity.erased ? shift(-1, 0, erase(t.body, map)) : App(Abs(erase(t.body, map)), erase(t.val, map));
+  if (t.tag === 'Roll') return erase(t.term, map);
+  if (t.tag === 'Unroll') return erase(t.term, map);
+  if (t.tag === 'Assert') return erase(t.term, map);
   if (t.tag === 'Pi') return idTerm;
   if (t.tag === 'Fix') return idTerm;
   if (t.tag === 'Type') return idTerm;
