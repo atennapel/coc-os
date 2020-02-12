@@ -86,8 +86,6 @@ export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
     return VPi(t.plicity, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Fix')
     return VFix(evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
-  if (t.tag === 'Assert')
-    return evaluate(t.term, vs);
   return t;
 };
 

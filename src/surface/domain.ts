@@ -1,6 +1,6 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Assert, Unroll, Global, fromSurface, Meta, Let, Ann } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global, fromSurface, Meta, Let, Ann } from './syntax';
 import { impossible } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
@@ -116,8 +116,6 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return VFix(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Ann')
     return evaluate(t.term, vs);
-  if (t.tag === 'Assert' && t.type)
-    return evaluate(t.term, vs);
   return impossible(`cannot evaluate: ${showTerm(t)}`);
 };
 
@@ -203,8 +201,6 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
     return Unroll(zonk(tm.term, vs, k, full));
   if (tm.tag === 'Roll')
     return Roll(tm.type && zonk(tm.type, vs, k, full), zonk(tm.term, vs, k, full));
-  if (tm.tag === 'Assert')
-    return Assert(tm.type && zonk(tm.type, vs, k, full), zonk(tm.term, vs, k, full));
   if (tm.tag === 'Abs')
     return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'App') {

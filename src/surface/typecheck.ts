@@ -1,5 +1,5 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, Assert, showTerm, isUnsolved, Type, shift } from './syntax';
+import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl } from '../list';
@@ -23,7 +23,6 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity.erased && erasedUsed(k, t.val));
   if (t.tag === 'Roll') return erasedUsed(k, t.term);
   if (t.tag === 'Unroll') return erasedUsed(k, t.term);
-  if (t.tag === 'Assert') return erasedUsed(k, t.term);
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
@@ -63,10 +62,6 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
       if (!(err instanceof TypeError)) throw err;
       metaPop();
     }
-  }
-  if (tm.tag === 'Assert' && !tm.type) {
-    const [term] = synth(ns, ts, vs, k, tm.term);
-    return Assert(quote(ty, k, false), term);
   }
   const tyf = force(ty);
   log(() => `check after ${showTermU(tyf, ns, k)}`);
@@ -190,12 +185,6 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     const vt = evaluate(type, vs);
     const term = check(ns, ts, vs, k, tm.term, vt);
     return [term, vt];
-  }
-  if (tm.tag === 'Assert' && tm.type) {
-    const type = check(ns, ts, vs, k, tm.type, VType);
-    const vt = evaluate(type, vs);
-    const [term] = synth(ns, ts, vs, k, tm.term);
-    return [Assert(type, term), vt];
   }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };

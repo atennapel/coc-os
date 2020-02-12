@@ -28,7 +28,6 @@ exports.Unroll = (term) => ({ tag: 'Unroll', term });
 exports.Pi = (plicity, type, body) => ({ tag: 'Pi', plicity, type, body });
 exports.Fix = (type, body) => ({ tag: 'Fix', type, body });
 exports.Type = { tag: 'Type' };
-exports.Assert = (type, term) => ({ tag: 'Assert', type, term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -50,8 +49,6 @@ exports.showTerm = (t) => {
         return `(fix ${exports.showTerm(t.type)}. ${exports.showTerm(t.body)})`;
     if (t.tag === 'Type')
         return '*';
-    if (t.tag === 'Assert')
-        return `(assert ${exports.showTerm(t.type)} ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toCore = (t) => {
@@ -480,19 +477,6 @@ const exprs = (ts, br) => {
         else {
             const body = exprs(ts.slice(1), '(');
             return syntax_1.Roll(null, body);
-        }
-    }
-    if (isName(ts[0], 'assert')) {
-        if (ts[1].tag === 'List' && ts[1].bracket === '{') {
-            const [ty, b] = expr(ts[1]);
-            if (!b)
-                return util_1.serr(`something went wrong when parsing assert`);
-            const body = exprs(ts.slice(2), '(');
-            return syntax_1.Assert(ty, body);
-        }
-        else {
-            const body = exprs(ts.slice(1), '(');
-            return syntax_1.Assert(null, body);
         }
     }
     if (isName(ts[0], 'fix')) {
@@ -948,8 +932,6 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.VFix(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Ann')
         return exports.evaluate(t.term, vs);
-    if (t.tag === 'Assert' && t.type)
-        return exports.evaluate(t.term, vs);
     return util_1.impossible(`cannot evaluate: ${syntax_1.showTerm(t)}`);
 };
 const quoteHead = (h, k) => {
@@ -1029,8 +1011,6 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
         return syntax_1.Unroll(exports.zonk(tm.term, vs, k, full));
     if (tm.tag === 'Roll')
         return syntax_1.Roll(tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.term, vs, k, full));
-    if (tm.tag === 'Assert')
-        return syntax_1.Assert(tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.term, vs, k, full));
     if (tm.tag === 'Abs')
         return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'App') {
@@ -1115,7 +1095,6 @@ exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = { tag: 'Hole' };
 exports.Meta = (index) => ({ tag: 'Meta', index });
-exports.Assert = (type, term) => ({ tag: 'Assert', type, term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -1143,8 +1122,6 @@ exports.showTerm = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
-    if (t.tag === 'Assert')
-        return t.type ? `(assert {${exports.showTerm(t.type)}} ${exports.showTerm(t.term)})` : `(assert ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
@@ -1174,8 +1151,6 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return exports.Type;
     if (t.tag === 'Ann')
         return exports.Ann(exports.toSurface(t.term, ns, k), exports.toSurface(t.type, ns, k));
-    if (t.tag === 'Assert')
-        return exports.Assert(t.type && exports.toSurface(t.type, ns, k), exports.toSurface(t.term, ns, k));
     return t;
 };
 const globalUsed = (k, t) => {
@@ -1189,8 +1164,6 @@ const globalUsed = (k, t) => {
         return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
     if (t.tag === 'Unroll')
         return globalUsed(k, t.term);
-    if (t.tag === 'Assert')
-        return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
     if (t.tag === 'Pi')
         return globalUsed(k, t.type) || globalUsed(k, t.body);
     if (t.tag === 'Fix')
@@ -1222,8 +1195,6 @@ const indexUsed = (k, t) => {
         return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
     if (t.tag === 'Unroll')
         return indexUsed(k, t.term);
-    if (t.tag === 'Assert')
-        return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
     if (t.tag === 'Pi')
         return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
     if (t.tag === 'Fix')
@@ -1255,8 +1226,6 @@ exports.isUnsolved = (t) => {
         return (t.type && exports.isUnsolved(t.type)) || exports.isUnsolved(t.term);
     if (t.tag === 'Unroll')
         return exports.isUnsolved(t.term);
-    if (t.tag === 'Assert')
-        return (t.type && exports.isUnsolved(t.type)) || exports.isUnsolved(t.term);
     if (t.tag === 'Pi')
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Fix')
@@ -1297,8 +1266,6 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         return S.Roll(t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.term, ns));
     if (t.tag === 'Unroll')
         return S.Unroll(exports.fromSurface(t.term, ns));
-    if (t.tag === 'Assert')
-        return S.Assert(t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.term, ns));
     if (t.tag === 'Ann')
         return S.Ann(exports.fromSurface(t.term, ns), exports.fromSurface(t.type, ns));
     if (t.tag === 'Abs') {
@@ -1333,8 +1300,6 @@ exports.shift = (d, c, t) => {
         return exports.Roll(t.type && exports.shift(d, c, t.type), exports.shift(d, c, t.term));
     if (t.tag === 'Unroll')
         return exports.Unroll(exports.shift(d, c, t.term));
-    if (t.tag === 'Assert')
-        return exports.Assert(t.type && exports.shift(d, c, t.type), exports.shift(d, c, t.term));
     if (t.tag === 'Pi')
         return exports.Pi(t.plicity, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Fix')
@@ -1373,8 +1338,6 @@ const erasedUsed = (k, t) => {
     if (t.tag === 'Roll')
         return erasedUsed(k, t.term);
     if (t.tag === 'Unroll')
-        return erasedUsed(k, t.term);
-    if (t.tag === 'Assert')
         return erasedUsed(k, t.term);
     if (t.tag === 'Ann')
         return erasedUsed(k, t.term);
@@ -1421,10 +1384,6 @@ const check = (ns, ts, vs, k, tm, ty) => {
                 throw err;
             metas_1.metaPop();
         }
-    }
-    if (tm.tag === 'Assert' && !tm.type) {
-        const [term] = synth(ns, ts, vs, k, tm.term);
-        return syntax_1.Assert(domain_1.quote(ty, k, false), term);
     }
     const tyf = domain_1.force(ty);
     config_1.log(() => `check after ${domain_1.showTermU(tyf, ns, k)}`);
@@ -1554,12 +1513,6 @@ const synth = (ns, ts, vs, k, tm) => {
         const vt = domain_1.evaluate(type, vs);
         const term = check(ns, ts, vs, k, tm.term, vt);
         return [term, vt];
-    }
-    if (tm.tag === 'Assert' && tm.type) {
-        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
-        const vt = domain_1.evaluate(type, vs);
-        const [term] = synth(ns, ts, vs, k, tm.term);
-        return [syntax_1.Assert(type, term), vt];
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
@@ -1824,7 +1777,6 @@ exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = { tag: 'Hole' };
 exports.Meta = (index) => ({ tag: 'Meta', index });
-exports.Assert = (type, term) => ({ tag: 'Assert', type, term });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1850,8 +1802,6 @@ exports.showTermS = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTermS(t.term)} : ${exports.showTermS(t.type)})`;
-    if (t.tag === 'Assert')
-        return t.type ? `(assert {${exports.showTermS(t.type)}} ${exports.showTermS(t.term)})` : `(assert ${exports.showTermS(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1890,8 +1840,8 @@ exports.showTerm = (t) => {
         return '_';
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
-        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Assert' || f.tag === 'Fix', f)} ${as.map(([im, t], i) => im.erased ? `{${exports.showTerm(t)}}` :
-            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll' || t.tag === 'Assert', t)}`).join(' ')}`;
+        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${as.map(([im, t], i) => im.erased ? `{${exports.showTerm(t)}}` :
+            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
     }
     if (t.tag === 'Abs') {
         const [as, b] = exports.flattenAbs(t);
@@ -1911,8 +1861,6 @@ exports.showTerm = (t) => {
         return !t.type ? `roll ${exports.showTermP(t.term.tag === 'Ann', t.term)}` : `roll {${exports.showTerm(t.type)}} ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
     if (t.tag === 'Ann')
         return `${exports.showTermP(t.term.tag === 'Ann', t.term)} : ${exports.showTermP(t.term.tag === 'Ann', t.type)}`;
-    if (t.tag === 'Assert')
-        return !t.type ? `assert ${exports.showTermP(t.term.tag === 'Ann', t.term)}` : `assert {${exports.showTerm(t.type)}} ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
     return t;
 };
 exports.eraseTypes = (t) => {
@@ -1931,8 +1879,6 @@ exports.eraseTypes = (t) => {
     if (t.tag === 'Roll')
         return exports.eraseTypes(t.term);
     if (t.tag === 'Unroll')
-        return exports.eraseTypes(t.term);
-    if (t.tag === 'Assert')
         return exports.eraseTypes(t.term);
     if (t.tag === 'Pi')
         return exports.Type;
@@ -2006,8 +1952,6 @@ exports.erase = (t, map = {}) => {
     if (t.tag === 'Roll')
         return exports.erase(t.term, map);
     if (t.tag === 'Unroll')
-        return exports.erase(t.term, map);
-    if (t.tag === 'Assert')
         return exports.erase(t.term, map);
     if (t.tag === 'Pi')
         return exports.idTerm;

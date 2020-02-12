@@ -4,7 +4,7 @@ import { Plicity } from '../syntax';
 import { List, lookup, Cons, Nil, index, indecesOf } from '../list';
 import { impossible } from '../util';
 
-export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Assert;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -32,8 +32,6 @@ export type Hole = { tag: 'Hole' };
 export const Hole: Hole = { tag: 'Hole' };
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
-export type Assert = { tag: 'Assert', type: Term | null, term: Term };
-export const Assert = (type: Term | null, term: Term): Assert => ({ tag: 'Assert', type, term });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
@@ -50,7 +48,6 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Fix') return `(fix (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
-  if (t.tag === 'Assert') return t.type ? `(assert {${showTerm(t.type)}} ${showTerm(t.term)})` : `(assert ${showTerm(t.term)})`;
   return t;
 };
 
@@ -70,7 +67,6 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
   if (t.tag === 'Fix') return Fix(t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return Ann(toSurface(t.term, ns, k), toSurface(t.type, ns, k));
-  if (t.tag === 'Assert') return Assert(t.type && toSurface(t.type, ns, k), toSurface(t.term, ns, k));
   return t;
 };
 
@@ -80,7 +76,6 @@ const globalUsed = (k: Name, t: Term): boolean => {
   if (t.tag === 'Let') return globalUsed(k, t.val) || globalUsed(k, t.body);
   if (t.tag === 'Roll') return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
   if (t.tag === 'Unroll') return globalUsed(k, t.term);
-  if (t.tag === 'Assert') return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
   if (t.tag === 'Pi') return globalUsed(k, t.type) || globalUsed(k, t.body);
   if (t.tag === 'Fix') return globalUsed(k, t.type) || globalUsed(k, t.body);
   if (t.tag === 'Ann') return globalUsed(k, t.term) || globalUsed(k, t.type);
@@ -99,7 +94,6 @@ const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Let') return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
   if (t.tag === 'Roll') return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
   if (t.tag === 'Unroll') return indexUsed(k, t.term);
-  if (t.tag === 'Assert') return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
   if (t.tag === 'Pi') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
   if (t.tag === 'Fix') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
   if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
@@ -118,7 +112,6 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
   if (t.tag === 'Roll') return (t.type && isUnsolved(t.type)) || isUnsolved(t.term);
   if (t.tag === 'Unroll') return isUnsolved(t.term);
-  if (t.tag === 'Assert') return (t.type && isUnsolved(t.type)) || isUnsolved(t.term);
   if (t.tag === 'Pi') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Fix') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
@@ -147,7 +140,6 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'App') return S.App(fromSurface(t.left, ns), t.plicity, fromSurface(t.right, ns));
   if (t.tag === 'Roll') return S.Roll(t.type && fromSurface(t.type, ns), fromSurface(t.term, ns));
   if (t.tag === 'Unroll') return S.Unroll(fromSurface(t.term, ns));
-  if (t.tag === 'Assert') return S.Assert(t.type && fromSurface(t.type, ns), fromSurface(t.term, ns));
   if (t.tag === 'Ann') return S.Ann(fromSurface(t.term, ns), fromSurface(t.type, ns));
   if (t.tag === 'Abs') {
     const x = decideName(t.name, t.body, ns);
@@ -178,7 +170,6 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Let') return Let(t.plicity, t.name, shift(d, c, t.val), shift(d, c + 1, t.body));
   if (t.tag === 'Roll') return Roll(t.type && shift(d, c, t.type), shift(d, c, t.term));
   if (t.tag === 'Unroll') return Unroll(shift(d, c, t.term));
-  if (t.tag === 'Assert') return Assert(t.type && shift(d, c, t.type), shift(d, c, t.term));
   if (t.tag === 'Pi') return Pi(t.plicity, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Fix') return Fix(t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Ann') return Ann(shift(d, c, t.term), shift(d, c, t.type));

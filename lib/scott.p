@@ -19,7 +19,7 @@ def recNatStep : {x : *} -> x -> (Nat -> x -> x) -> NatRS x
 -- natToNatR does not work currently, but is key in making the recursor work
 -- technically NatR is an eta-expansion of Nat but because of fix
 -- this does not work nicely and there will be normalization errors
-def natToNatR : Nat -> NatR = \n. assert n
+def natToNatR : Nat -> NatR = \n. n
 
 def recNat : {x : *} -> x -> (Nat -> x -> x) -> Nat -> x
   = \{x} z s n. (natToNatR n) {x} (recNatBase z) (recNatStep z s) (recNatBase z) (recNatStep z s) n
