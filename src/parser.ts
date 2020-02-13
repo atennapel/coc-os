@@ -1,5 +1,5 @@
-import { serr } from './util'
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, flattenApp, Hole } from './syntax';
+import { serr } from './util';
+import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, Hole, Ind } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 
@@ -191,10 +191,15 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? PlicityE : PlicityR, name, ty, x), body);
   }
   if (isName(ts[0], 'unroll')) {
-    const body = exprs(ts.slice(1), '(');
-    if (body.tag !== 'App') return Unroll(body);
-    const fl = flattenApp(body);
-    return fl[1].reduce((x, [m, y]) => App(x, m, y), Unroll(fl[0]) as Term);
+    if (ts.length < 2) return serr(`something went wrong when parsing unroll`);
+    if (ts.length === 2) {
+      const [term, tb] = expr(ts[1]);
+      if (tb) return serr(`something went wrong when parsing unroll`);
+      return Unroll(term);
+    }
+    const indPart = ts.slice(0, 2);
+    const rest = ts.slice(2);
+    return exprs([TList(indPart, '(')].concat(rest), '(');
   }
   if (isName(ts[0], 'roll')) {
     if (ts[1].tag === 'List' && ts[1].bracket === '{') {
@@ -206,6 +211,25 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       const body = exprs(ts.slice(1), '(');
       return Roll(null, body);
     }
+  }
+  if (isName(ts[0], 'induction')) {
+    if (ts.length < 2) return serr(`something went wrong when parsing induction`);
+    if (ts.length === 2) {
+      const [term, tb] = expr(ts[1]);
+      if (tb) return serr(`something went wrong when parsing induction`);
+      return Ind(null, term);
+    }
+    if (ts.length === 3) {
+      const [type, tb1] = expr(ts[1]);
+      if (!tb1) return serr(`something went wrong when parsing induction`);
+      const [term, tb2] = expr(ts[2]);
+      if (tb2) return serr(`something went wrong when parsing induction`);
+      return Ind(type, term);
+    }
+    const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
+    const indPart = ts.slice(0, hasType ? 3 : 2);
+    const rest = ts.slice(hasType ? 3 : 2);
+    return exprs([TList(indPart, '(')].concat(rest), '(');
   }
   if (isName(ts[0], 'fix')) {
     const args: [Name, boolean, Term | null][] = [];

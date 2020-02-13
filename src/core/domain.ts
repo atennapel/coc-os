@@ -1,10 +1,10 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global, Ind } from './syntax';
 import { impossible } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
-import { Plicity, eqPlicity } from '../syntax';
+import { Plicity, eqPlicity, PlicityR, PlicityE } from '../syntax';
 
 export type Head = HVar | HGlobal;
 
@@ -13,12 +13,14 @@ export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
 export type HGlobal = { tag: 'HGlobal', name: Name };
 export const HGlobal = (name: Name): HGlobal => ({ tag: 'HGlobal', name });
 
-export type Elim = EApp | EUnroll
+export type Elim = EApp | EUnroll | EInd;
 
 export type EApp = { tag: 'EApp', plicity: Plicity, arg: Val };
 export const EApp = (plicity: Plicity, arg: Val): EApp => ({ tag: 'EApp', plicity, arg });
 export type EUnroll = { tag: 'EUnroll' };
 export const EUnroll: EUnroll = { tag: 'EUnroll' };
+export type EInd = { tag: 'EInd', type: Val };
+export const EInd = (type: Val): EInd => ({ tag: 'EInd', type });
 
 export type Clos = (val: Val) => Val;
 export type Val = VNe | VGlued | VAbs | VRoll | VPi | VFix | VType;
@@ -64,6 +66,15 @@ export const vunroll = (v: Val): Val => {
     return VGlued(v.head, Cons(EUnroll, v.args), mapLazy(v.val, v => vunroll(v)));
   return impossible(`vunroll: ${v.tag}`);
 };
+export const vinduction = (ty: Val, v: Val): Val => {
+  if (v.tag === 'VAbs' && v.plicity.erased)
+    return VAbs(PlicityE, VPi(PlicityR, ty, _ => VType), P => vapp(v, PlicityE, vapp(P, PlicityR, v)));
+  if (v.tag === 'VNe') return VNe(v.head, Cons(EInd(ty), v.args));
+  if (v.tag === 'VGlued')
+    return VGlued(v.head, Cons(EInd(ty), v.args), mapLazy(v.val, v => vinduction(ty, v)));
+  return impossible(`vinduction: ${v.tag}`);
+};
+
 export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var')
@@ -86,6 +97,8 @@ export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
     return VPi(t.plicity, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Fix')
     return VFix(evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
+  if (t.tag === 'Ind')
+    return vinduction(evaluate(t.type, vs), evaluate(t.term, vs));
   return t;
 };
 
@@ -97,6 +110,7 @@ const quoteHead = (h: Head, k: Ix): Term => {
 const quoteElim = (t: Term, e: Elim, k: Ix, full: boolean): Term => {
   if (e.tag === 'EApp') return App(t, e.plicity, quote(e.arg, k, full));
   if (e.tag === 'EUnroll') return Unroll(t);
+  if (e.tag === 'EInd') return Ind(quote(e.type, k, full), t);
   return e;
 };
 export const quote = (v: Val, k: Ix, full: boolean): Term => {

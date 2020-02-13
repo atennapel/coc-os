@@ -21,6 +21,8 @@ const unifyElim = (ns: List<Name>, k: Ix, a: Elim, b: Elim, x: Val, y: Val): voi
   if (a.tag === 'EUnroll' && b.tag === 'EUnroll') return;
   if (a.tag === 'EApp' && b.tag === 'EApp' && eqPlicity(a.plicity, b.plicity))
     return unify(ns, k, a.arg, b.arg);
+  if (a.tag === 'EInd' && b.tag === 'EInd')
+    return unify(ns, k, a.type, b.type);
   return terr(`unify failed (${k}): ${showTermU(x, ns, k)} ~ ${showTermU(y, ns, k)}`);
 };
 
@@ -113,6 +115,7 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
 const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix | Name]> =>
   map(spine, elim => {
     if (elim.tag === 'EUnroll') return terr(`unroll in meta spine`);
+    if (elim.tag === 'EInd') return terr(`induction in meta spine`);
     if (elim.tag === 'EApp') {
       const v = forceGlue(elim.arg);
       if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && length(v.args) === 0)

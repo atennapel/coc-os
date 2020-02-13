@@ -28,6 +28,7 @@ exports.Unroll = (term) => ({ tag: 'Unroll', term });
 exports.Pi = (plicity, type, body) => ({ tag: 'Pi', plicity, type, body });
 exports.Fix = (type, body) => ({ tag: 'Fix', type, body });
 exports.Type = { tag: 'Type' };
+exports.Ind = (type, term) => ({ tag: 'Ind', type, term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -49,6 +50,8 @@ exports.showTerm = (t) => {
         return `(fix ${exports.showTerm(t.type)}. ${exports.showTerm(t.body)})`;
     if (t.tag === 'Type')
         return '*';
+    if (t.tag === 'Ind')
+        return `(induction {${exports.showTerm(t.type)}} ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toCore = (t) => {
@@ -72,6 +75,8 @@ exports.toCore = (t) => {
         return exports.Fix(exports.toCore(t.type), exports.toCore(t.body));
     if (t.tag === 'Type')
         return exports.Type;
+    if (t.tag === 'Ind' && t.type)
+        return exports.Ind(exports.toCore(t.type), exports.toCore(t.term));
     return util_1.impossible(`toCore failed on ${S.showTerm(t)}`);
 };
 
@@ -460,11 +465,17 @@ const exprs = (ts, br) => {
         return args.reduceRight((x, [name, impl, ty]) => syntax_1.Abs(impl ? syntax_1.PlicityE : syntax_1.PlicityR, name, ty, x), body);
     }
     if (isName(ts[0], 'unroll')) {
-        const body = exprs(ts.slice(1), '(');
-        if (body.tag !== 'App')
-            return syntax_1.Unroll(body);
-        const fl = syntax_1.flattenApp(body);
-        return fl[1].reduce((x, [m, y]) => syntax_1.App(x, m, y), syntax_1.Unroll(fl[0]));
+        if (ts.length < 2)
+            return util_1.serr(`something went wrong when parsing unroll`);
+        if (ts.length === 2) {
+            const [term, tb] = expr(ts[1]);
+            if (tb)
+                return util_1.serr(`something went wrong when parsing unroll`);
+            return syntax_1.Unroll(term);
+        }
+        const indPart = ts.slice(0, 2);
+        const rest = ts.slice(2);
+        return exprs([TList(indPart, '(')].concat(rest), '(');
     }
     if (isName(ts[0], 'roll')) {
         if (ts[1].tag === 'List' && ts[1].bracket === '{') {
@@ -478,6 +489,29 @@ const exprs = (ts, br) => {
             const body = exprs(ts.slice(1), '(');
             return syntax_1.Roll(null, body);
         }
+    }
+    if (isName(ts[0], 'induction')) {
+        if (ts.length < 2)
+            return util_1.serr(`something went wrong when parsing induction`);
+        if (ts.length === 2) {
+            const [term, tb] = expr(ts[1]);
+            if (tb)
+                return util_1.serr(`something went wrong when parsing induction`);
+            return syntax_1.Ind(null, term);
+        }
+        if (ts.length === 3) {
+            const [type, tb1] = expr(ts[1]);
+            if (!tb1)
+                return util_1.serr(`something went wrong when parsing induction`);
+            const [term, tb2] = expr(ts[2]);
+            if (tb2)
+                return util_1.serr(`something went wrong when parsing induction`);
+            return syntax_1.Ind(type, term);
+        }
+        const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
+        const indPart = ts.slice(0, hasType ? 3 : 2);
+        const rest = ts.slice(hasType ? 3 : 2);
+        return exprs([TList(indPart, '(')].concat(rest), '(');
     }
     if (isName(ts[0], 'fix')) {
         const args = [];
@@ -847,6 +881,7 @@ exports.HGlobal = (name) => ({ tag: 'HGlobal', name });
 exports.HMeta = (index) => ({ tag: 'HMeta', index });
 exports.EApp = (plicity, arg) => ({ tag: 'EApp', plicity, arg });
 exports.EUnroll = { tag: 'EUnroll' };
+exports.EInd = (type) => ({ tag: 'EInd', type });
 exports.VNe = (head, args) => ({ tag: 'VNe', head, args });
 exports.VGlued = (head, args, val) => ({ tag: 'VGlued', head, args, val });
 exports.VAbs = (plicity, name, type, body) => ({ tag: 'VAbs', name, plicity, type, body });
@@ -866,7 +901,9 @@ exports.force = (v) => {
         const val = metas_1.metaGet(v.head.index);
         if (val.tag === 'Unsolved')
             return v;
-        return exports.force(list_1.foldr((elim, y) => elim.tag === 'EUnroll' ? exports.vunroll(y) : exports.vapp(y, elim.plicity, elim.arg), val.val, v.args));
+        return exports.force(list_1.foldr((elim, y) => elim.tag === 'EUnroll' ? exports.vunroll(y) :
+            elim.tag === 'EInd' ? exports.vinduction(elim.type, y) :
+                exports.vapp(y, elim.plicity, elim.arg), val.val, v.args));
     }
     return v;
 };
@@ -877,7 +914,9 @@ exports.forceGlue = (v) => {
         const val = metas_1.metaGet(v.head.index);
         if (val.tag === 'Unsolved')
             return v;
-        const delayed = lazy_1.Lazy(() => exports.forceGlue(list_1.foldr((elim, y) => elim.tag === 'EUnroll' ? exports.vunroll(y) : exports.vapp(y, elim.plicity, elim.arg), val.val, v.args)));
+        const delayed = lazy_1.Lazy(() => exports.forceGlue(list_1.foldr((elim, y) => elim.tag === 'EUnroll' ? exports.vunroll(y) :
+            elim.tag === 'EInd' ? exports.vinduction(elim.type, y) :
+                exports.vapp(y, elim.plicity, elim.arg), val.val, v.args)));
         return exports.VGlued(v.head, v.args, delayed);
     }
     return v;
@@ -895,6 +934,7 @@ exports.vapp = (a, plicity, b) => {
     return util_1.impossible(`vapp: ${a.tag}`);
 };
 exports.vunroll = (v) => {
+    // unroll (roll v) = v
     if (v.tag === 'VRoll')
         return v.term;
     if (v.tag === 'VNe')
@@ -902,6 +942,16 @@ exports.vunroll = (v) => {
     if (v.tag === 'VGlued')
         return exports.VGlued(v.head, list_1.Cons(exports.EUnroll, v.args), lazy_1.mapLazy(v.val, v => exports.vunroll(v)));
     return util_1.impossible(`vunroll: ${v.tag}`);
+};
+exports.vinduction = (ty, v) => {
+    // induction t (\{x:*}. b) = \{P : t -> *}. (\{x:*}. b) {P (\{x:*}. b)}
+    if (v.tag === 'VAbs' && v.plicity.erased)
+        return exports.VAbs(syntax_2.PlicityE, 'P', exports.VPi(syntax_2.PlicityR, '_', ty, _ => exports.VType), P => exports.vapp(v, syntax_2.PlicityE, exports.vapp(P, syntax_2.PlicityR, v)));
+    if (v.tag === 'VNe')
+        return exports.VNe(v.head, list_1.Cons(exports.EInd(ty), v.args));
+    if (v.tag === 'VGlued')
+        return exports.VGlued(v.head, list_1.Cons(exports.EInd(ty), v.args), lazy_1.mapLazy(v.val, v => exports.vinduction(ty, v)));
+    return util_1.impossible(`vinduction: ${v.tag}`);
 };
 exports.evaluate = (t, vs = list_1.Nil) => {
     if (t.tag === 'Type')
@@ -932,6 +982,8 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.VFix(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Ann')
         return exports.evaluate(t.term, vs);
+    if (t.tag === 'Ind' && t.type)
+        return exports.vinduction(exports.evaluate(t.type, vs), exports.evaluate(t.term, vs));
     return util_1.impossible(`cannot evaluate: ${syntax_1.showTerm(t)}`);
 };
 const quoteHead = (h, k) => {
@@ -948,6 +1000,8 @@ const quoteElim = (t, e, k, full) => {
         return syntax_1.App(t, e.plicity, exports.quote(e.arg, k, full));
     if (e.tag === 'EUnroll')
         return syntax_1.Unroll(t);
+    if (e.tag === 'EInd')
+        return syntax_1.Ind(exports.quote(e.type, k, full), t);
     return e;
 };
 exports.quote = (v_, k, full) => {
@@ -977,6 +1031,8 @@ exports.showElimU = (e, ns = list_1.Nil, k = 0, full = false) => {
         return 'unroll';
     if (e.tag === 'EApp')
         return `${e.plicity.erased ? '{' : ''}${exports.showTermU(e.arg, ns, k, full)}${e.plicity.erased ? '}' : ''}`;
+    if (e.tag === 'EInd')
+        return `induction ${exports.showTermU(e.type, ns, k, full)}`;
     return e;
 };
 const zonkSpine = (tm, vs, k, full) => {
@@ -1019,6 +1075,8 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
             syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, vs, k, full)) :
             exports.quote(exports.vapp(spine[1], tm.plicity, exports.evaluate(tm.right, vs)), k, full);
     }
+    if (tm.tag === 'Ind')
+        return syntax_1.Ind(tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.term, vs, k, full));
     return tm;
 };
 
@@ -1095,6 +1153,7 @@ exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = { tag: 'Hole' };
 exports.Meta = (index) => ({ tag: 'Meta', index });
+exports.Ind = (type, term) => ({ tag: 'Ind', type, term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -1122,6 +1181,8 @@ exports.showTerm = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
+    if (t.tag === 'Ind')
+        return t.type ? `(induction {${exports.showTerm(t.type)}} ${exports.showTerm(t.term)})` : `(induction ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
@@ -1151,6 +1212,8 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return exports.Type;
     if (t.tag === 'Ann')
         return exports.Ann(exports.toSurface(t.term, ns, k), exports.toSurface(t.type, ns, k));
+    if (t.tag === 'Ind')
+        return exports.Ind(t.type && exports.toSurface(t.type, ns, k), exports.toSurface(t.term, ns, k));
     return t;
 };
 const globalUsed = (k, t) => {
@@ -1170,6 +1233,8 @@ const globalUsed = (k, t) => {
         return globalUsed(k, t.type) || globalUsed(k, t.body);
     if (t.tag === 'Ann')
         return globalUsed(k, t.term) || globalUsed(k, t.type);
+    if (t.tag === 'Ind')
+        return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
     if (t.tag === 'Global')
         return t.name === k;
     if (t.tag === 'Var')
@@ -1201,6 +1266,8 @@ const indexUsed = (k, t) => {
         return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
     if (t.tag === 'Ann')
         return indexUsed(k, t.term) || indexUsed(k, t.type);
+    if (t.tag === 'Ind')
+        return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
     if (t.tag === 'Global')
         return false;
     if (t.tag === 'Type')
@@ -1232,6 +1299,8 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Ann')
         return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
+    if (t.tag === 'Ind')
+        return (t.type && exports.isUnsolved(t.type)) || exports.isUnsolved(t.term);
     if (t.tag === 'Global')
         return false;
     if (t.tag === 'Type')
@@ -1268,6 +1337,8 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         return S.Unroll(exports.fromSurface(t.term, ns));
     if (t.tag === 'Ann')
         return S.Ann(exports.fromSurface(t.term, ns), exports.fromSurface(t.type, ns));
+    if (t.tag === 'Ind')
+        return S.Ind(t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.term, ns));
     if (t.tag === 'Abs') {
         const x = decideName(t.name, t.body, ns);
         return S.Abs(t.plicity, x, t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
@@ -1306,7 +1377,17 @@ exports.shift = (d, c, t) => {
         return exports.Fix(t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Ann')
         return exports.Ann(exports.shift(d, c, t.term), exports.shift(d, c, t.type));
+    if (t.tag === 'Ind')
+        return exports.Ind(t.type && exports.shift(d, c, t.type), exports.shift(d, c, t.term));
     return t;
+};
+exports.flattenPi = (t) => {
+    const r = [];
+    while (t.tag === 'Pi') {
+        r.push([t.name, t.plicity, t.type]);
+        t = t.body;
+    }
+    return [r, t];
 };
 
 },{"../list":5,"../names":6,"../syntax":16,"../util":18}],14:[function(require,module,exports){
@@ -1341,6 +1422,8 @@ const erasedUsed = (k, t) => {
         return erasedUsed(k, t.term);
     if (t.tag === 'Ann')
         return erasedUsed(k, t.term);
+    if (t.tag === 'Ind')
+        return erasedUsed(k, t.term);
     if (t.tag === 'Pi')
         return false;
     if (t.tag === 'Fix')
@@ -1371,7 +1454,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showFromSurface(tm, ns)} : ${domain_1.showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return syntax_1.Type;
-    if (tm.tag === 'Var' || tm.tag === 'Global') {
+    if (tm.tag === 'Var' || tm.tag === 'Global' || tm.tag === 'App') {
         try {
             metas_1.metaPush();
             const [term, ty2] = synth(ns, ts, vs, k, tm);
@@ -1429,6 +1512,37 @@ const freshPi = (ts, vs, x, impl) => {
     const va = domain_1.evaluate(a, vs);
     const b = newMeta(list_1.Cons([true, va], ts));
     return domain_1.VPi(impl, x, va, v => domain_1.evaluate(b, domain_1.extendV(vs, v)));
+};
+const makeInduction = (t, gty, gterm) => {
+    // {t : *} -> (a -> ... -> t) -> ... -> t
+    // {P : ty -> *} -> ((x: a) -> ... -> P (C x)) -> ... -> P tm
+    // \{t : *} (c1 : a -> ... -> t) (c2 : ) ... . 
+    config_1.log(() => `makeInduction ${syntax_1.showTerm(t)} ${syntax_1.showTerm(gty)} ${syntax_1.showTerm(gterm)}`);
+    if (!(t.tag === 'Pi' && t.type === syntax_1.Type && t.plicity.erased))
+        return null;
+    const [cs, rt] = syntax_1.flattenPi(t.body);
+    if (!(rt.tag === 'Var' && rt.index === cs.length))
+        return null;
+    const ctm = (x) => syntax_1.Abs(syntax_2.PlicityE, 't', syntax_1.Type, cs.reduceRight((b, [y, p, ty], i) => syntax_1.Abs(p, y === '_' ? `c${i}` : y, ty, b), x));
+    const cases_ = cs.map((c, i) => makeInductionCase(ctm, c, i, cs.length));
+    if (cases_.some(x => x === null))
+        return null;
+    const cases = cases_;
+    const indterm = syntax_1.Pi(syntax_2.PlicityE, 'P', syntax_1.Pi(syntax_2.PlicityR, '_', gty, syntax_1.Type), cases.reduceRight((body, [x, t]) => syntax_1.Pi(syntax_2.PlicityR, x, t, body), syntax_1.App(syntax_1.Var(cs.length), syntax_2.PlicityR, syntax_1.shift(cs.length + 1, 0, gterm))));
+    config_1.log(() => syntax_1.showTerm(indterm));
+    return indterm;
+};
+const makeInductionCase = (ctm, c, i, amount) => {
+    config_1.log(() => `makeInductionCase ${c[0]} ${syntax_1.showTerm(c[2])} ${i}`);
+    if (c[1].erased)
+        return null;
+    const [as, rt] = syntax_1.flattenPi(c[2]);
+    if (!(rt.tag === 'Var' && rt.index === as.length + i))
+        return null;
+    const inner = as.reduce((body, [x, pl, t], i) => syntax_1.App(body, pl, syntax_1.Var(amount + 1 + as.length - i - 1)), syntax_1.Var(amount - i - 1));
+    const tm = as.reduceRight((body, [x, pl, t], i) => syntax_1.Pi(pl, x === '_' ? `x${i}` : x, t, body), syntax_1.App(syntax_1.Var(as.length + i), syntax_2.PlicityR, ctm(inner)));
+    config_1.log(() => syntax_1.showTerm(tm));
+    return [c[0], tm];
 };
 const synth = (ns, ts, vs, k, tm) => {
     config_1.log(() => `synth ${syntax_1.showFromSurface(tm, ns)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
@@ -1513,6 +1627,27 @@ const synth = (ns, ts, vs, k, tm) => {
         const vt = domain_1.evaluate(type, vs);
         const term = check(ns, ts, vs, k, tm.term, vt);
         return [term, vt];
+    }
+    if (tm.tag === 'Ind') {
+        let type;
+        let vt;
+        let term;
+        if (tm.type) {
+            type = check(ns, ts, vs, k, tm.type, domain_1.VType);
+            vt = domain_1.evaluate(type, vs);
+            term = check(ns, ts, vs, k, tm.term, vt);
+        }
+        else {
+            const [term_, ty] = synth(ns, ts, vs, k, tm.term);
+            type = domain_1.quote(ty, k, false);
+            vt = ty;
+            term = term_;
+        }
+        const fulltype = domain_1.quote(vt, k, true);
+        const ind = makeInduction(fulltype, type, term);
+        if (!ind)
+            return util_1.terr(`cannot figure out induction principle for ${syntax_1.showFromSurface(type, ns)}: ${syntax_1.showFromSurface(fulltype, ns)}`);
+        return [syntax_1.Ind(type, term), domain_1.evaluate(ind, vs)];
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
@@ -1602,6 +1737,8 @@ const unifyElim = (ns, k, a, b, x, y) => {
         return;
     if (a.tag === 'EApp' && b.tag === 'EApp' && syntax_1.eqPlicity(a.plicity, b.plicity))
         return exports.unify(ns, k, a.arg, b.arg);
+    if (a.tag === 'EInd' && b.tag === 'EInd')
+        return exports.unify(ns, k, a.type, b.type);
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermU(x, ns, k)} ~ ${domain_1.showTermU(y, ns, k)}`);
 };
 exports.unify = (ns, k, a_, b_) => {
@@ -1701,6 +1838,8 @@ const solve = (ns, k, m, spine, val) => {
 const checkSpine = (ns, k, spine) => list_1.map(spine, elim => {
     if (elim.tag === 'EUnroll')
         return util_1.terr(`unroll in meta spine`);
+    if (elim.tag === 'EInd')
+        return util_1.terr(`induction in meta spine`);
     if (elim.tag === 'EApp') {
         const v = domain_1.forceGlue(elim.arg);
         if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && list_1.length(v.args) === 0)
@@ -1777,6 +1916,7 @@ exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = { tag: 'Hole' };
 exports.Meta = (index) => ({ tag: 'Meta', index });
+exports.Ind = (type, term) => ({ tag: 'Ind', type, term });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1802,6 +1942,8 @@ exports.showTermS = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTermS(t.term)} : ${exports.showTermS(t.type)})`;
+    if (t.tag === 'Ind')
+        return t.type ? `(induction {${exports.showTermS(t.type)}} ${exports.showTermS(t.term)})` : `(induction ${exports.showTermS(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1841,7 +1983,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
         return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${as.map(([im, t], i) => im.erased ? `{${exports.showTerm(t)}}` :
-            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
+            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll' || t.tag === 'Ind', t)}`).join(' ')}`;
     }
     if (t.tag === 'Abs') {
         const [as, b] = exports.flattenAbs(t);
@@ -1861,6 +2003,10 @@ exports.showTerm = (t) => {
         return !t.type ? `roll ${exports.showTermP(t.term.tag === 'Ann', t.term)}` : `roll {${exports.showTerm(t.type)}} ${exports.showTermP(t.term.tag === 'Ann', t.term)}`;
     if (t.tag === 'Ann')
         return `${exports.showTermP(t.term.tag === 'Ann', t.term)} : ${exports.showTermP(t.term.tag === 'Ann', t.type)}`;
+    if (t.tag === 'Ind') {
+        const fp = (t) => t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'App' || t.tag === 'Fix' || t.tag === 'Ind' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Roll' || t.tag === 'Unroll';
+        return !t.type ? `induction ${exports.showTermP(fp(t.term), t.term)}` : `induction {${exports.showTerm(t.type)}} ${exports.showTermP(fp(t.term), t.term)}`;
+    }
     return t;
 };
 exports.eraseTypes = (t) => {
@@ -1888,6 +2034,8 @@ exports.eraseTypes = (t) => {
         return exports.Type;
     if (t.tag === 'Ann')
         return exports.eraseTypes(t.term);
+    if (t.tag === 'Ind')
+        return exports.Ind(t.type && exports.eraseTypes(t.type), exports.eraseTypes(t.term));
     return t;
 };
 
@@ -1959,6 +2107,8 @@ exports.erase = (t, map = {}) => {
         return exports.idTerm;
     if (t.tag === 'Type')
         return exports.idTerm;
+    if (t.tag === 'Ind')
+        return exports.erase(t.term, map);
     throw new Error(`unable to erase: ${syntax_1.showTerm(t)}`);
 };
 

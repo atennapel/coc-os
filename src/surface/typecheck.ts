@@ -1,5 +1,5 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift } from './syntax';
+import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift, Ind, flattenPi } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl } from '../list';
@@ -24,6 +24,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Roll') return erasedUsed(k, t.term);
   if (t.tag === 'Unroll') return erasedUsed(k, t.term);
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
+  if (t.tag === 'Ind') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;
@@ -51,7 +52,7 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
 const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Term => {
   log(() => `check ${showFromSurface(tm, ns)} : ${showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return Type;
-  if (tm.tag === 'Var' || tm.tag === 'Global') {
+  if (tm.tag === 'Var' || tm.tag === 'Global' || tm.tag === 'App') {
     try {
       metaPush();
       const [term, ty2] = synth(ns, ts, vs, k, tm);
@@ -105,6 +106,34 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
   const va = evaluate(a, vs);
   const b = newMeta(Cons([true, va], ts));
   return VPi(impl, x, va, v => evaluate(b, extendV(vs, v)));
+};
+
+const makeInduction = (t: Term, gty: Term, gterm: Term): Term | null => {
+  // {t : *} -> (a -> ... -> t) -> ... -> t
+  // {P : ty -> *} -> ((x: a) -> ... -> P (C x)) -> ... -> P tm
+  // \{t : *} (c1 : a -> ... -> t) (c2 : ) ... . 
+  log(() => `makeInduction ${showTerm(t)} ${showTerm(gty)} ${showTerm(gterm)}`);
+  if (!(t.tag === 'Pi' && t.type === Type && t.plicity.erased)) return null;
+  const [cs, rt] = flattenPi(t.body);
+  if (!(rt.tag === 'Var' && rt.index === cs.length)) return null;
+  const ctm = (x: Term) => Abs(PlicityE, 't', Type, cs.reduceRight((b, [y, p, ty], i) => Abs(p, y === '_' ? `c${i}` : y, ty, b), x));
+  const cases_ = cs.map((c, i) => makeInductionCase(ctm, c, i, cs.length));
+  if (cases_.some(x => x === null)) return null;
+  const cases = cases_ as [string, Term][];
+  const indterm = Pi(PlicityE, 'P', Pi(PlicityR, '_', gty, Type),
+    cases.reduceRight((body, [x, t]) => Pi(PlicityR, x, t, body), App(Var(cs.length), PlicityR, shift(cs.length + 1, 0, gterm)) as Term));
+  log(() => showTerm(indterm));
+  return indterm;
+};
+const makeInductionCase = (ctm: (t: Term) => Term, c: [string, Plicity, Term], i: number, amount: number): [string, Term] | null => {
+  log(() => `makeInductionCase ${c[0]} ${showTerm(c[2])} ${i}`);
+  if (c[1].erased) return null;
+  const [as, rt] = flattenPi(c[2]);
+  if (!(rt.tag === 'Var' && rt.index === as.length + i)) return null;
+  const inner = as.reduce((body, [x, pl, t], i) => App(body, pl, Var(amount + 1 + as.length - i - 1)), Var(amount - i - 1) as Term);
+  const tm = as.reduceRight((body, [x, pl, t], i) => Pi(pl, x === '_' ? `x${i}` : x, t, body), App(Var(as.length + i), PlicityR, ctm(inner)) as Term);
+  log(() => showTerm(tm));
+  return [c[0], tm];
 };
 
 const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val] => {
@@ -185,6 +214,25 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     const vt = evaluate(type, vs);
     const term = check(ns, ts, vs, k, tm.term, vt);
     return [term, vt];
+  }
+  if (tm.tag === 'Ind') {
+    let type;
+    let vt;
+    let term;
+    if (tm.type) {
+      type = check(ns, ts, vs, k, tm.type, VType);
+      vt = evaluate(type, vs);
+      term = check(ns, ts, vs, k, tm.term, vt);
+    } else {
+      const [term_, ty] = synth(ns, ts, vs, k, tm.term);
+      type = quote(ty, k, false);
+      vt = ty;
+      term = term_;
+    }
+    const fulltype = quote(vt, k, true);
+    const ind = makeInduction(fulltype, type, term);
+    if (!ind) return terr(`cannot figure out induction principle for ${showFromSurface(type, ns)}: ${showFromSurface(fulltype, ns)}`);
+    return [Ind(type, term), evaluate(ind, vs)];
   }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };

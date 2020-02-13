@@ -18,6 +18,8 @@ const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a.tag === 'EUnroll' && b.tag === 'EUnroll') return;
   if (a.tag === 'EApp' && b.tag === 'EApp' && eqPlicity(a.plicity, b.plicity))
     return unify(k, a.arg, b.arg);
+  if (a.tag === 'EInd' && b.tag === 'EInd')
+    return unify(k, a.type, b.type);
   return terr(`unify failed (${k}): ${showTermQ(x, k)} ~ ${showTermQ(y, k)}`);
 };
 const unify = (k: Ix, a: Val, b: Val): void => {
@@ -73,6 +75,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity.erased && erasedUsed(k, t.val));
   if (t.tag === 'Roll') return erasedUsed(k, t.term);
   if (t.tag === 'Unroll') return erasedUsed(k, t.term);
+  if (t.tag === 'Ind') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;

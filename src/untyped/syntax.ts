@@ -61,5 +61,6 @@ export const erase = (t: TTerm, map: { [key: string]: Term } = {}): Term => {
   if (t.tag === 'Pi') return idTerm;
   if (t.tag === 'Fix') return idTerm;
   if (t.tag === 'Type') return idTerm;
+  if (t.tag === 'Ind') return erase(t.term, map);
   throw new Error(`unable to erase: ${showTTerm(t)}`);
 };

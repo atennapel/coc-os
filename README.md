@@ -16,11 +16,12 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- add induction
-- improve induction
-- clean up lib to use type inference (rec-mendler.p, nat.p, list.p)
+- check plicities of induction generation
+- induction for types with fix
+- induction for recursive church types
+- induction in core
 - fix synthapp of meta
-- try unify rigidly?
+- named holes
 - infer more uses of roll/unroll (also in synthapp and check)
 - add rigid
 - improve type inference of annotated lambdas

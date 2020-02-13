@@ -6,7 +6,7 @@ export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.era
 export const PlicityE: Plicity = { erased: true };
 export const PlicityR: Plicity = { erased: false };
 
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Ind;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -32,6 +32,8 @@ export type Hole = { tag: 'Hole' };
 export const Hole: Hole = { tag: 'Hole' };
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
+export type Ind = { tag: 'Ind', type: Term | null, term: Term };
+export const Ind = (type: Term | null, term: Term): Ind => ({ tag: 'Ind', type, term });
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -47,6 +49,7 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Fix') return `(fix (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTermS(t.term)} : ${showTermS(t.type)})`;
+  if (t.tag === 'Ind') return t.type ? `(induction {${showTermS(t.type)}} ${showTermS(t.term)})` : `(induction ${showTermS(t.term)})`;
   return t;
 };
 
@@ -87,7 +90,7 @@ export const showTerm = (t: Term): string => {
     return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${
       as.map(([im, t], i) =>
         im.erased ? `{${showTerm(t)}}` :
-          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
+          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll' || t.tag === 'Ind', t)}`).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
@@ -107,6 +110,10 @@ export const showTerm = (t: Term): string => {
     return !t.type ? `roll ${showTermP(t.term.tag === 'Ann', t.term)}` : `roll {${showTerm(t.type)}} ${showTermP(t.term.tag === 'Ann', t.term)}`;
   if (t.tag === 'Ann')
     return `${showTermP(t.term.tag === 'Ann', t.term)} : ${showTermP(t.term.tag === 'Ann', t.type)}`;
+  if (t.tag === 'Ind') {
+    const fp = (t: Term) => t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'App' || t.tag === 'Fix' || t.tag === 'Ind' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Roll' || t.tag === 'Unroll';
+    return !t.type ? `induction ${showTermP(fp(t.term), t.term)}` : `induction {${showTerm(t.type)}} ${showTermP(fp(t.term), t.term)}`;
+  }
   return t;
 };
 
@@ -123,5 +130,6 @@ export const eraseTypes = (t: Term): Term => {
   if (t.tag === 'Fix') return Type;
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return eraseTypes(t.term);
+  if (t.tag === 'Ind') return Ind(t.type && eraseTypes(t.type), eraseTypes(t.term));
   return t;
 };
