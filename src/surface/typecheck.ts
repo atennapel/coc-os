@@ -8,7 +8,7 @@ import { eqPlicity, PlicityR, Plicity, PlicityE } from '../syntax';
 import { unify } from './unify';
 import { Def, showDef } from './definitions';
 import { log } from '../config';
-import { freshMeta, metaReset, freshMetaId, metaPop, metaPush, metaDiscard } from './metas';
+import { freshMeta, freshMetaId, metaPop, metaPush, metaDiscard } from './metas';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -275,7 +275,7 @@ const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: 
 };
 
 export const typecheck = (tm: Term): [Term, Val] => {
-  metaReset();
+  // metaReset(); // TODO: fix this
   const [etm, ty] = synth(Nil, Nil, Nil, 0, tm);
   const ztm = zonk(etm);
   // TODO: should type be checked?

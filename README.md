@@ -16,7 +16,7 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- fix induction for sigma, pair, sum (issue with unsolved metas)
+- fix issue with meta resetting
 - induction for types with fix
 - induction for recursive church types
 - induction in core

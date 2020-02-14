@@ -1677,7 +1677,7 @@ const synthapp = (ns, ts, vs, k, ty_, plicity, arg) => {
     return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(arg, ns)}`);
 };
 exports.typecheck = (tm) => {
-    metas_1.metaReset();
+    // metaReset(); // TODO: fix this
     const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
     const ztm = domain_1.zonk(etm);
     // TODO: should type be checked?
