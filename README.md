@@ -16,7 +16,7 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- check plicities of induction generation
+- fix induction for sigma, pair, sum (issue with unsolved metas)
 - induction for types with fix
 - induction for recursive church types
 - induction in core

@@ -1514,36 +1514,38 @@ const freshPi = (ts, vs, x, impl) => {
     return domain_1.VPi(impl, x, va, v => domain_1.evaluate(b, domain_1.extendV(vs, v)));
 };
 const makeInduction = (t, gty, gterm) => {
-    // {t : *} -> (a -> ... -> t) -> ... -> t
-    // {P : ty -> *} -> ((x: a) -> ... -> P (C x)) -> ... -> P tm
-    // \{t : *} (c1 : a -> ... -> t) (c2 : ) ... . 
-    config_1.log(() => `makeInduction ${syntax_1.showTerm(t)} ${syntax_1.showTerm(gty)} ${syntax_1.showTerm(gterm)}`);
     if (!(t.tag === 'Pi' && t.type === syntax_1.Type && t.plicity.erased))
-        return null;
+        return util_1.terr(`makeInduction error`);
     const [cs, rt] = syntax_1.flattenPi(t.body);
     if (!(rt.tag === 'Var' && rt.index === cs.length))
-        return null;
-    const ctm = (x) => syntax_1.Abs(syntax_2.PlicityE, 't', syntax_1.Type, cs.reduceRight((b, [y, p, ty], i) => syntax_1.Abs(p, y === '_' ? `c${i}` : y, ty, b), x));
-    const cases_ = cs.map((c, i) => makeInductionCase(ctm, c, i, cs.length));
-    if (cases_.some(x => x === null))
-        return null;
-    const cases = cases_;
-    const indterm = syntax_1.Pi(syntax_2.PlicityE, 'P', syntax_1.Pi(syntax_2.PlicityR, '_', gty, syntax_1.Type), cases.reduceRight((body, [x, t]) => syntax_1.Pi(syntax_2.PlicityR, x, t, body), syntax_1.App(syntax_1.Var(cs.length), syntax_2.PlicityR, syntax_1.shift(cs.length + 1, 0, gterm))));
-    config_1.log(() => syntax_1.showTerm(indterm));
+        return util_1.terr(`makeInduction error`);
+    const adt = cs.map(([x, pl, t], i) => {
+        if (pl.erased)
+            return util_1.terr(`makeInduction error`);
+        const [as, rt] = syntax_1.flattenPi(t);
+        if (!(rt.tag === 'Var' && rt.index === as.length + i))
+            return util_1.terr(`makeInduction error`);
+        return [x, as];
+    });
+    const indterm = syntax_1.Pi(syntax_2.PlicityE, 'P', syntax_1.Pi(syntax_2.PlicityR, '_', gty, syntax_1.Type), adt.reduceRight((body, [x, as], i) => syntax_1.Pi(syntax_2.PlicityR, x === '_' ? `c${i}` : x, makeInductionCases(as, i, adt), body), syntax_1.App(syntax_1.Var(cs.length), syntax_2.PlicityR, syntax_1.shift(cs.length + 1, 0, gterm))));
     return indterm;
 };
-const makeInductionCase = (ctm, c, i, amount) => {
-    config_1.log(() => `makeInductionCase ${c[0]} ${syntax_1.showTerm(c[2])} ${i}`);
-    if (c[1].erased)
-        return null;
-    const [as, rt] = syntax_1.flattenPi(c[2]);
-    if (!(rt.tag === 'Var' && rt.index === as.length + i))
-        return null;
-    const inner = as.reduce((body, [x, pl, t], i) => syntax_1.App(body, pl, syntax_1.Var(amount + 1 + as.length - i - 1)), syntax_1.Var(amount - i - 1));
-    const tm = as.reduceRight((body, [x, pl, t], i) => syntax_1.Pi(pl, x === '_' ? `x${i}` : x, t, body), syntax_1.App(syntax_1.Var(as.length + i), syntax_2.PlicityR, ctm(inner)));
-    config_1.log(() => syntax_1.showTerm(tm));
-    return [c[0], tm];
+const makeInductionCases = (as, i, adt) => {
+    const cases = as.reduceRight((body, [x, pl, t], j) => syntax_1.Pi(pl, x === '_' ? `a${j}` : x, t, body), syntax_1.App(syntax_1.Var(as.length + i), syntax_2.PlicityR, makeInductionConstr(as, i, adt)));
+    return cases;
 };
+const makeInductionConstr = (as, i, adt) => {
+    const constr = as.reduce((body, [x, pl, t], j) => syntax_1.App(body, pl, syntax_1.Var(as.length - j + as.length + 1)), syntax_1.Var(as.length - i));
+    return makeInductionConstrPrefix(adt, constr, i);
+};
+const makeInductionConstrPrefix = (adt, body, k) => {
+    const tms = adt.reduceRight((body, [x, as], i) => syntax_1.Abs(syntax_2.PlicityR, x === '_' ? `c${i}` : x, makeInductionConstrPrefixType(as, i, adt, k), body), body);
+    return syntax_1.Abs(syntax_2.PlicityE, 't', syntax_1.Type, tms);
+};
+const makeInductionConstrPrefixType = (as, i, adt, k) => as.reduceRight((body, [x, pl, ty], j) => {
+    console.log(x, syntax_1.showTerm(ty), as.length, j, adt.length, i, k);
+    return syntax_1.Pi(pl, x === '_' ? `p${j}` : x, syntax_1.shift(2 + k, 1, ty), body);
+}, syntax_1.Var(as.length + i));
 const synth = (ns, ts, vs, k, tm) => {
     config_1.log(() => `synth ${syntax_1.showFromSurface(tm, ns)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (tm.tag === 'Type')
@@ -1645,8 +1647,8 @@ const synth = (ns, ts, vs, k, tm) => {
         }
         const fulltype = domain_1.quote(vt, k, true);
         const ind = makeInduction(fulltype, type, term);
-        if (!ind)
-            return util_1.terr(`cannot figure out induction principle for ${syntax_1.showFromSurface(type, ns)}: ${syntax_1.showFromSurface(fulltype, ns)}`);
+        config_1.log(() => syntax_1.showTerm(ind));
+        config_1.log(() => syntax_1.showFromSurface(ind, ns));
         return [syntax_1.Ind(type, term), domain_1.evaluate(ind, vs)];
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);

@@ -108,33 +108,43 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
   return VPi(impl, x, va, v => evaluate(b, extendV(vs, v)));
 };
 
-const makeInduction = (t: Term, gty: Term, gterm: Term): Term | null => {
-  // {t : *} -> (a -> ... -> t) -> ... -> t
-  // {P : ty -> *} -> ((x: a) -> ... -> P (C x)) -> ... -> P tm
-  // \{t : *} (c1 : a -> ... -> t) (c2 : ) ... . 
-  log(() => `makeInduction ${showTerm(t)} ${showTerm(gty)} ${showTerm(gterm)}`);
-  if (!(t.tag === 'Pi' && t.type === Type && t.plicity.erased)) return null;
+type ADTCase = [Name, Plicity, Term];
+type ADT = [Name, ADTCase[]][];
+const makeInduction = (t: Term, gty: Term, gterm: Term): Term => {
+  if (!(t.tag === 'Pi' && t.type === Type && t.plicity.erased)) return terr(`makeInduction error`);
   const [cs, rt] = flattenPi(t.body);
-  if (!(rt.tag === 'Var' && rt.index === cs.length)) return null;
-  const ctm = (x: Term) => Abs(PlicityE, 't', Type, cs.reduceRight((b, [y, p, ty], i) => Abs(p, y === '_' ? `c${i}` : y, ty, b), x));
-  const cases_ = cs.map((c, i) => makeInductionCase(ctm, c, i, cs.length));
-  if (cases_.some(x => x === null)) return null;
-  const cases = cases_ as [string, Term][];
+  if (!(rt.tag === 'Var' && rt.index === cs.length)) return terr(`makeInduction error`);
+  const adt: ADT = cs.map(([x, pl, t], i) => {
+    if (pl.erased) return terr(`makeInduction error`);
+    const [as, rt] = flattenPi(t);
+    if (!(rt.tag === 'Var' && rt.index === as.length + i)) return terr(`makeInduction error`);
+    return [x, as];
+  });
   const indterm = Pi(PlicityE, 'P', Pi(PlicityR, '_', gty, Type),
-    cases.reduceRight((body, [x, t]) => Pi(PlicityR, x, t, body), App(Var(cs.length), PlicityR, shift(cs.length + 1, 0, gterm)) as Term));
-  log(() => showTerm(indterm));
+    adt.reduceRight((body, [x, as], i) => Pi(PlicityR, x === '_' ? `c${i}` : x, makeInductionCases(as, i, adt), body),
+      App(Var(cs.length), PlicityR, shift(cs.length + 1, 0, gterm)) as Term));
   return indterm;
 };
-const makeInductionCase = (ctm: (t: Term) => Term, c: [string, Plicity, Term], i: number, amount: number): [string, Term] | null => {
-  log(() => `makeInductionCase ${c[0]} ${showTerm(c[2])} ${i}`);
-  if (c[1].erased) return null;
-  const [as, rt] = flattenPi(c[2]);
-  if (!(rt.tag === 'Var' && rt.index === as.length + i)) return null;
-  const inner = as.reduce((body, [x, pl, t], i) => App(body, pl, Var(amount + 1 + as.length - i - 1)), Var(amount - i - 1) as Term);
-  const tm = as.reduceRight((body, [x, pl, t], i) => Pi(pl, x === '_' ? `x${i}` : x, t, body), App(Var(as.length + i), PlicityR, ctm(inner)) as Term);
-  log(() => showTerm(tm));
-  return [c[0], tm];
+const makeInductionCases = (as: ADTCase[], i: number, adt: ADT): Term => {
+  const cases = as.reduceRight((body, [x, pl, t], j) => Pi(pl, x === '_' ? `a${j}` : x, t, body),
+    App(Var(as.length + i), PlicityR, makeInductionConstr(as, i, adt)) as Term);
+  return cases;
 };
+const makeInductionConstr = (as: ADTCase[], i: number, adt: ADT): Term => {
+  const constr = as.reduce((body, [x, pl, t], j) => App(body, pl, Var(as.length - j + as.length + 1)),
+    Var(as.length - i) as Term);
+  return makeInductionConstrPrefix(adt, constr, i);
+};
+const makeInductionConstrPrefix = (adt: ADT, body: Term, k: number): Term => {
+  const tms = adt.reduceRight((body, [x, as], i) =>
+    Abs(PlicityR, x === '_' ? `c${i}` : x, makeInductionConstrPrefixType(as, i, adt, k), body), body);
+  return Abs(PlicityE, 't', Type, tms);
+};
+const makeInductionConstrPrefixType = (as: ADTCase[], i: number, adt: ADT, k: number): Term =>
+  as.reduceRight((body, [x, pl, ty], j) => {
+    console.log(x, showTerm(ty), as.length, j, adt.length, i, k);
+    return Pi(pl, x === '_' ? `p${j}` : x, shift(2 + k, 1, ty), body) },
+    Var(as.length + i) as Term);
 
 const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val] => {
   log(() => `synth ${showFromSurface(tm, ns)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
@@ -231,7 +241,8 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     }
     const fulltype = quote(vt, k, true);
     const ind = makeInduction(fulltype, type, term);
-    if (!ind) return terr(`cannot figure out induction principle for ${showFromSurface(type, ns)}: ${showFromSurface(fulltype, ns)}`);
+    log(() => showTerm(ind));
+    log(() => showFromSurface(ind, ns));
     return [Ind(type, term), evaluate(ind, vs)];
   }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
