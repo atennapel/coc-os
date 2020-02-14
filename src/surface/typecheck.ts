@@ -131,7 +131,7 @@ const makeInductionCases = (as: ADTCase[], i: number, adt: ADT): Term => {
   return cases;
 };
 const makeInductionConstr = (as: ADTCase[], i: number, adt: ADT): Term => {
-  const constr = as.reduce((body, [x, pl, t], j) => App(body, pl, Var(as.length - j + as.length + 1)),
+  const constr = as.reduce((body, [x, pl, t], j) => App(body, pl, Var(as.length - j + adt.length)),
     Var(adt.length - i - 1) as Term);
   return makeInductionConstrPrefix(adt, constr, i);
 };
@@ -142,7 +142,7 @@ const makeInductionConstrPrefix = (adt: ADT, body: Term, k: number): Term => {
 };
 const makeInductionConstrPrefixType = (as: ADTCase[], i: number, adt: ADT, k: number): Term =>
   as.reduceRight((body, [x, pl, ty], j) =>
-    Pi(pl, x === '_' ? `p${j}` : x, shift(2 + k, 1, ty), body),
+    Pi(pl, x === '_' ? `p${j}` : x, shift(2 + k + as.length - 1, 1, ty), body),
     Var(as.length + i) as Term);
 
 const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val] => {
