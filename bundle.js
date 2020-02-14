@@ -1535,17 +1535,14 @@ const makeInductionCases = (as, i, adt) => {
     return cases;
 };
 const makeInductionConstr = (as, i, adt) => {
-    const constr = as.reduce((body, [x, pl, t], j) => syntax_1.App(body, pl, syntax_1.Var(as.length - j + as.length + 1)), syntax_1.Var(as.length - i));
+    const constr = as.reduce((body, [x, pl, t], j) => syntax_1.App(body, pl, syntax_1.Var(as.length - j + as.length + 1)), syntax_1.Var(adt.length - i - 1));
     return makeInductionConstrPrefix(adt, constr, i);
 };
 const makeInductionConstrPrefix = (adt, body, k) => {
     const tms = adt.reduceRight((body, [x, as], i) => syntax_1.Abs(syntax_2.PlicityR, x === '_' ? `c${i}` : x, makeInductionConstrPrefixType(as, i, adt, k), body), body);
     return syntax_1.Abs(syntax_2.PlicityE, 't', syntax_1.Type, tms);
 };
-const makeInductionConstrPrefixType = (as, i, adt, k) => as.reduceRight((body, [x, pl, ty], j) => {
-    console.log(x, syntax_1.showTerm(ty), as.length, j, adt.length, i, k);
-    return syntax_1.Pi(pl, x === '_' ? `p${j}` : x, syntax_1.shift(2 + k, 1, ty), body);
-}, syntax_1.Var(as.length + i));
+const makeInductionConstrPrefixType = (as, i, adt, k) => as.reduceRight((body, [x, pl, ty], j) => syntax_1.Pi(pl, x === '_' ? `p${j}` : x, syntax_1.shift(2 + k, 1, ty), body), syntax_1.Var(as.length + i));
 const synth = (ns, ts, vs, k, tm) => {
     config_1.log(() => `synth ${syntax_1.showFromSurface(tm, ns)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (tm.tag === 'Type')
