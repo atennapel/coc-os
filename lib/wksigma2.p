@@ -11,3 +11,7 @@ def indWkSigma2
     ((x : a) -> {y : b x} -> P (MkWkSigma2 {a} {b} x {y})) ->
     P x
   = \{a b} {P} x. induction {WkSigma2 a b} x {P}
+
+def fst
+  : {a : *} -> {b : a -> *} -> WkSigma2 a b -> a
+  = \s. s \x {y}. x
