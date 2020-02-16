@@ -1,8 +1,8 @@
 import { Ix } from '../names';
-import { Term as TTerm, showTerm as showTTerm, Var as CVar, IndFix } from '../core/syntax';
+import { Term as TTerm, showTerm as showTTerm } from '../core/syntax';
 import { impossible } from '../util';
 
-export type Term = Var | App | Abs;
+export type Term = Var | App | Abs | Fix;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -10,6 +10,8 @@ export type App = { tag: 'App', left: Term, right: Term };
 export const App = (left: Term, right: Term): App => ({ tag: 'App', left, right });
 export type Abs = { tag: 'Abs', body: Term };
 export const Abs = (body: Term): Abs => ({ tag: 'Abs', body });
+export type Fix = { tag: 'Fix', term: Term };
+export const Fix = (term: Term): Fix => ({ tag: 'Fix', term });
 
 export const idTerm = Abs(Var(0));
 
@@ -17,6 +19,7 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'App') return `(${showTermS(t.left)} ${showTermS(t.right)})`;
   if (t.tag === 'Abs') return `(\\${showTermS(t.body)})`;
+  if (t.tag === 'Fix') return `(fix ${showTermS(t.term)})`;
   return t;
 };
 
@@ -37,9 +40,10 @@ export const showTerm = (t: Term): string => {
     const [f, as] = flattenApp(t);
     return `${showTermP(f.tag === 'Abs' || f.tag === 'App', f)} ${
       as.map((t, i) =>
-          `${showTermP(t.tag === 'App' || (t.tag === 'Abs' && i < as.length - 1), t)}`).join(' ')}`;
+          `${showTermP(t.tag === 'App' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Fix', t)}`).join(' ')}`;
   }
   if (t.tag === 'Abs') return `\\${showTerm(t.body)}`;
+  if (t.tag === 'Fix') return `fix ${showTermP(t.term.tag === 'App', t.term)}`;
   return t;
 };
 
@@ -47,6 +51,7 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Var') return t.index < c ? t : Var(t.index + d);
   if (t.tag === 'Abs') return Abs(shift(d, c + 1, t.body));
   if (t.tag === 'App') return App(shift(d, c, t.left), shift(d, c, t.right));
+  if (t.tag === 'Fix') return Abs(shift(d, c, t.term));
   return t;
 };
 
@@ -65,6 +70,7 @@ export const erase = (t: TTerm, map: { [key: string]: Term } = {}): Term => {
   // TODO:
   // inductionFix x ~>
   // \r. r (\y. inductionFix y r) x
-  if (t.tag === 'IndFix') return Abs(App(App(Var(0), Abs(App(erase(IndFix(t.type, CVar(0))), Var(1)))), erase(t.term)));
+  // \r. fix r x
+  if (t.tag === 'IndFix') return Abs(App(Fix(Var(0)), erase(t.term, map)));
   throw new Error(`unable to erase: ${showTTerm(t)}`);
 };

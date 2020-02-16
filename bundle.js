@@ -2147,6 +2147,7 @@ const util_1 = require("../util");
 exports.Var = (index) => ({ tag: 'Var', index });
 exports.App = (left, right) => ({ tag: 'App', left, right });
 exports.Abs = (body) => ({ tag: 'Abs', body });
+exports.Fix = (term) => ({ tag: 'Fix', term });
 exports.idTerm = exports.Abs(exports.Var(0));
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
@@ -2155,6 +2156,8 @@ exports.showTermS = (t) => {
         return `(${exports.showTermS(t.left)} ${exports.showTermS(t.right)})`;
     if (t.tag === 'Abs')
         return `(\\${exports.showTermS(t.body)})`;
+    if (t.tag === 'Fix')
+        return `(fix ${exports.showTermS(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -2171,10 +2174,12 @@ exports.showTerm = (t) => {
         return `${t.index}`;
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
-        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'App', f)} ${as.map((t, i) => `${exports.showTermP(t.tag === 'App' || (t.tag === 'Abs' && i < as.length - 1), t)}`).join(' ')}`;
+        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'App', f)} ${as.map((t, i) => `${exports.showTermP(t.tag === 'App' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Fix', t)}`).join(' ')}`;
     }
     if (t.tag === 'Abs')
         return `\\${exports.showTerm(t.body)}`;
+    if (t.tag === 'Fix')
+        return `fix ${exports.showTermP(t.term.tag === 'App', t.term)}`;
     return t;
 };
 exports.shift = (d, c, t) => {
@@ -2184,6 +2189,8 @@ exports.shift = (d, c, t) => {
         return exports.Abs(exports.shift(d, c + 1, t.body));
     if (t.tag === 'App')
         return exports.App(exports.shift(d, c, t.left), exports.shift(d, c, t.right));
+    if (t.tag === 'Fix')
+        return exports.Abs(exports.shift(d, c, t.term));
     return t;
 };
 exports.erase = (t, map = {}) => {
@@ -2212,8 +2219,9 @@ exports.erase = (t, map = {}) => {
     // TODO:
     // inductionFix x ~>
     // \r. r (\y. inductionFix y r) x
+    // \r. fix r x
     if (t.tag === 'IndFix')
-        return exports.Abs(exports.App(exports.App(exports.Var(0), exports.Abs(exports.App(exports.erase(syntax_1.IndFix(t.type, syntax_1.Var(0))), exports.Var(1)))), exports.erase(t.term)));
+        return exports.Abs(exports.App(exports.Fix(exports.Var(0)), exports.erase(t.term, map)));
     throw new Error(`unable to erase: ${syntax_1.showTerm(t)}`);
 };
 
