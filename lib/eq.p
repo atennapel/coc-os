@@ -9,3 +9,7 @@ def cast
   = \{a b}. castF {*} {a} {b} {\x. x}
 
 def refl : {t : *} -> {x : t} -> Eq t x x = \x. x
+
+def symm
+  : {t : *} -> {a b : t} -> Eq t a b -> Eq t b a
+  = \{t} {a b} x {f} fa. castF {t} {a} {b} {\x. f x -> f a} x (\x. x) fa
