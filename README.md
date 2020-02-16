@@ -16,7 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- add import defs for files
 - fix issue with meta resetting
 - induction for types with fix
 - induction for recursive church types

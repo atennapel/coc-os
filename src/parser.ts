@@ -1,4 +1,4 @@
-import { serr } from './util';
+import { serr, loadFile } from './util';
 import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, Hole, Ind, IndFix } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
@@ -55,7 +55,7 @@ const tokenize = (sc: string): Token[] => {
       else if (/\s/.test(c)) continue;
       else return serr(`invalid char ${c} in tokenize`);
     } else if (state === NAME) {
-      if (!/[\@a-z0-9\_]/i.test(c)) {
+      if (!(/[\@a-z0-9\_\/]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
         r.push(TName(t));
         t = '', i--, state = START;
       } else t += c;
@@ -86,14 +86,14 @@ const isNames = (t: Token[]): Name[] =>
     return x.name;
   });
 
-const splitTokens = (a: Token[], fn: (t: Token) => boolean): Token[][] => {
+const splitTokens = (a: Token[], fn: (t: Token) => boolean, keepSymbol: boolean = false): Token[][] => {
   const r: Token[][] = [];
   let t: Token[] = [];
   for (let i = 0, l = a.length; i < l; i++) {
     const c = a[i];
     if (fn(c)) {
       r.push(t);
-      t = [];
+      t = keepSymbol ? [c] : [];
     } else t.push(c);
   }
   r.push(t);
@@ -330,23 +330,25 @@ export const parse = (s: string): Term => {
   return ex;
 };
 
-export const parseDefs = (s: string): Def[] => {
-  const ts = tokenize(s);
-  if (ts[0].tag !== 'Name' || ts[0].name !== 'def')
-    return serr(`def should start with "def"`);
-  const spl = splitTokens(ts, t => t.tag === 'Name' && t.name === 'def');
-  const ds: Def[] = [];
-  for (let i = 0; i < spl.length; i++) {
-    const c = spl[i];
-    if (c.length === 0) continue;
-    if (c[0].tag === 'Name') {
-      const name = c[0].name;
-      const fst = 1;
+export type ImportMap = { [key: string]: boolean };
+export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]> => {
+  if (c.length === 0) return [];
+  if (c[0].tag === 'Name' && c[0].name === 'import') {
+    const files = c.slice(1).map(t => {
+      if (t.tag !== 'Name') return serr(`trying to import a non-path`);
+      return importMap[t.name] ? null : t.name;
+    }).filter(x => x) as string[];
+    const imps: string[] = await Promise.all(files.map(loadFile));
+    const defs: Def[][] = await Promise.all(imps.map(s => parseDefs(s, importMap)));
+    return defs.reduce((x, y) => x.concat(y), []);
+  } else if (c[0].tag === 'Name' && c[0].name === 'def') {
+    if (c[1].tag === 'Name') {
+      const name = c[1].name;
+      const fst = 2;
       const sym = c[fst];
       if (sym.tag !== 'Name') return serr(`def: after name should be : or =`);
       if (sym.name === '=') {
-        ds.push(DDef(name, exprs(c.slice(fst + 1), '(')));
-        continue;
+        return [DDef(name, exprs(c.slice(fst + 1), '('))];
       } else if (sym.name === ':') {
         const tyts: Token[] = [];
         let j = fst + 1;
@@ -358,10 +360,17 @@ export const parseDefs = (s: string): Def[] => {
         }
         const ety = exprs(tyts, '(');
         const body = exprs(c.slice(j + 1), '(');
-        ds.push(DDef(name, Ann(body, ety)));
-        continue;
+        return [DDef(name, Ann(body, ety))];
       } else return serr(`def: : or = expected but got ${sym.name}`);
     } else return serr(`def should start with a name`);
-  }
-  return ds;
+  } else return serr(`def should start with def or import`);
+};
+
+export const parseDefs = async (s: string, importMap: ImportMap): Promise<Def[]> => {
+  const ts = tokenize(s);
+  if (ts[0].tag !== 'Name' || (ts[0].name !== 'def' && ts[0].name !== 'import'))
+    return serr(`def should start with "def" or "import"`);
+  const spl = splitTokens(ts, t => t.tag === 'Name' && (t.name === 'def' || t.name === 'import'), true);
+  const ds: Def[][] = await Promise.all(spl.map(s => parseDef(s, importMap)));
+  return ds.reduce((x, y) => x.concat(y), []);
 };

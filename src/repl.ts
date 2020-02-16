@@ -3,12 +3,13 @@ import { globalReset, globalMap, globalDelete, globalGet } from './surface/globa
 import { showTerm, eraseTypes } from './syntax';
 import { quoteZ, normalize } from './surface/domain';
 import { fromSurface, toSurface } from './surface/syntax';
-import { parseDefs, parse } from './parser';
+import { parseDefs, parse, ImportMap } from './parser';
 import { typecheckDefs, typecheck } from './surface/typecheck';
 import { toSurfaceDefs } from './surface/definitions';
 import { erase, showTerm as showTermE } from './untyped/syntax';
 import { Nil } from './list';
 import { toCore } from './core/syntax';
+import { loadFile } from './util';
 
 const help = `
 EXAMPLES
@@ -32,21 +33,11 @@ COMMANDS
 [:gnorme name] view the fully normalized term of a name with erased types
 `.trim();
 
-const loadFile = (fn: string): Promise<string> => {
-  if (typeof window === 'undefined') {
-    return new Promise((resolve, reject) => {
-      require('fs').readFile(fn, 'utf8', (err: Error, data: string) => {
-        if (err) return reject(err);
-        return resolve(data);
-      });
-    });
-  } else {
-    return fetch(fn).then(r => r.text());
-  }
-};
+let importMap: ImportMap = {};
 
 export const initREPL = () => {
   globalReset();
+  importMap = {};
 };
 
 export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) => {
@@ -68,12 +59,14 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       globalDelete(name);
       return _cb(`deleted ${name}`);
     }
-    if (_s.startsWith(':def')) {
+    if (_s.startsWith(':def') || _s.startsWith(':import')) {
       const rest = _s.slice(1);
-      const ds = parseDefs(rest);
-      const dsc = toSurfaceDefs(ds)
-      const xs = typecheckDefs(dsc, true);
-      return _cb(`defined ${xs.join(' ')}`);
+      parseDefs(rest, importMap).then(ds => {
+        const dsc = toSurfaceDefs(ds)
+        const xs = typecheckDefs(dsc, true);
+        return _cb(`defined ${xs.join(' ')}`);
+      }).catch(err => _cb(''+err, true));
+      return;
     }
     if (_s.startsWith(':gtype')) {
       const name = _s.slice(6).trim();
@@ -116,20 +109,23 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const term = quoteZ(res.val, Nil, 0, true);
       return _cb(showTerm(fromSurface(term)));
     }
+    /*
     if (_s.startsWith(':import')) {
       const files = _s.slice(7).trim().split(/\s+/g);
       Promise.all(files.map(loadFile)).then(defs => {
         const xs: string[] = [];
         defs.forEach(rest => {
-          const ds = parseDefs(rest);
-          const dsc = toSurfaceDefs(ds)
-          const lxs = typecheckDefs(dsc, true);
-          lxs.forEach(x => xs.push(x));
+          parseDefs(rest, importMap).then(ds => {
+            const dsc = toSurfaceDefs(ds)
+            const lxs = typecheckDefs(dsc, true);
+            lxs.forEach(x => xs.push(x));
+          });
         });
         return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
       }).catch(err => _cb(''+err, true));
       return;
     }
+    */
     if (_s.startsWith(':view')) {
       const files = _s.slice(5).trim().split(/\s+/g);
       Promise.all(files.map(loadFile)).then(ds => {

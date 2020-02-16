@@ -311,7 +311,7 @@ const tokenize = (sc) => {
                 return util_1.serr(`invalid char ${c} in tokenize`);
         }
         else if (state === NAME) {
-            if (!/[\@a-z0-9\_]/i.test(c)) {
+            if (!(/[\@a-z0-9\_\/]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
                 r.push(TName(t));
                 t = '', i--, state = START;
             }
@@ -347,14 +347,14 @@ const isNames = (t) => t.map(x => {
         return util_1.serr(`expected name`);
     return x.name;
 });
-const splitTokens = (a, fn) => {
+const splitTokens = (a, fn, keepSymbol = false) => {
     const r = [];
     let t = [];
     for (let i = 0, l = a.length; i < l; i++) {
         const c = a[i];
         if (fn(c)) {
             r.push(t);
-            t = [];
+            t = keepSymbol ? [c] : [];
         }
         else
             t.push(c);
@@ -632,25 +632,28 @@ exports.parse = (s) => {
     const ex = exprs(ts, '(');
     return ex;
 };
-exports.parseDefs = (s) => {
-    const ts = tokenize(s);
-    if (ts[0].tag !== 'Name' || ts[0].name !== 'def')
-        return util_1.serr(`def should start with "def"`);
-    const spl = splitTokens(ts, t => t.tag === 'Name' && t.name === 'def');
-    const ds = [];
-    for (let i = 0; i < spl.length; i++) {
-        const c = spl[i];
-        if (c.length === 0)
-            continue;
-        if (c[0].tag === 'Name') {
-            const name = c[0].name;
-            const fst = 1;
+exports.parseDef = async (c, importMap) => {
+    if (c.length === 0)
+        return [];
+    if (c[0].tag === 'Name' && c[0].name === 'import') {
+        const files = c.slice(1).map(t => {
+            if (t.tag !== 'Name')
+                return util_1.serr(`trying to import a non-path`);
+            return importMap[t.name] ? null : t.name;
+        }).filter(x => x);
+        const imps = await Promise.all(files.map(util_1.loadFile));
+        const defs = await Promise.all(imps.map(s => exports.parseDefs(s, importMap)));
+        return defs.reduce((x, y) => x.concat(y), []);
+    }
+    else if (c[0].tag === 'Name' && c[0].name === 'def') {
+        if (c[1].tag === 'Name') {
+            const name = c[1].name;
+            const fst = 2;
             const sym = c[fst];
             if (sym.tag !== 'Name')
                 return util_1.serr(`def: after name should be : or =`);
             if (sym.name === '=') {
-                ds.push(definitions_1.DDef(name, exprs(c.slice(fst + 1), '(')));
-                continue;
+                return [definitions_1.DDef(name, exprs(c.slice(fst + 1), '('))];
             }
             else if (sym.name === ':') {
                 const tyts = [];
@@ -664,8 +667,7 @@ exports.parseDefs = (s) => {
                 }
                 const ety = exprs(tyts, '(');
                 const body = exprs(c.slice(j + 1), '(');
-                ds.push(definitions_1.DDef(name, syntax_1.Ann(body, ety)));
-                continue;
+                return [definitions_1.DDef(name, syntax_1.Ann(body, ety))];
             }
             else
                 return util_1.serr(`def: : or = expected but got ${sym.name}`);
@@ -673,7 +675,16 @@ exports.parseDefs = (s) => {
         else
             return util_1.serr(`def should start with a name`);
     }
-    return ds;
+    else
+        return util_1.serr(`def should start with def or import`);
+};
+exports.parseDefs = async (s, importMap) => {
+    const ts = tokenize(s);
+    if (ts[0].tag !== 'Name' || (ts[0].name !== 'def' && ts[0].name !== 'import'))
+        return util_1.serr(`def should start with "def" or "import"`);
+    const spl = splitTokens(ts, t => t.tag === 'Name' && (t.name === 'def' || t.name === 'import'), true);
+    const ds = await Promise.all(spl.map(s => exports.parseDef(s, importMap)));
+    return ds.reduce((x, y) => x.concat(y), []);
 };
 
 },{"./definitions":3,"./syntax":16,"./util":18}],8:[function(require,module,exports){
@@ -690,6 +701,7 @@ const definitions_1 = require("./surface/definitions");
 const syntax_3 = require("./untyped/syntax");
 const list_1 = require("./list");
 const syntax_4 = require("./core/syntax");
+const util_1 = require("./util");
 const help = `
 EXAMPLES
 identity = \\{t : *} (x : t). x
@@ -711,22 +723,10 @@ COMMANDS
 [:gterme name] view the term of a name with erased types
 [:gnorme name] view the fully normalized term of a name with erased types
 `.trim();
-const loadFile = (fn) => {
-    if (typeof window === 'undefined') {
-        return new Promise((resolve, reject) => {
-            require('fs').readFile(fn, 'utf8', (err, data) => {
-                if (err)
-                    return reject(err);
-                return resolve(data);
-            });
-        });
-    }
-    else {
-        return fetch(fn).then(r => r.text());
-    }
-};
+let importMap = {};
 exports.initREPL = () => {
     globalenv_1.globalReset();
+    importMap = {};
 };
 exports.runREPL = (_s, _cb) => {
     try {
@@ -747,12 +747,14 @@ exports.runREPL = (_s, _cb) => {
             globalenv_1.globalDelete(name);
             return _cb(`deleted ${name}`);
         }
-        if (_s.startsWith(':def')) {
+        if (_s.startsWith(':def') || _s.startsWith(':import')) {
             const rest = _s.slice(1);
-            const ds = parser_1.parseDefs(rest);
-            const dsc = definitions_1.toSurfaceDefs(ds);
-            const xs = typecheck_1.typecheckDefs(dsc, true);
-            return _cb(`defined ${xs.join(' ')}`);
+            parser_1.parseDefs(rest, importMap).then(ds => {
+                const dsc = definitions_1.toSurfaceDefs(ds);
+                const xs = typecheck_1.typecheckDefs(dsc, true);
+                return _cb(`defined ${xs.join(' ')}`);
+            }).catch(err => _cb('' + err, true));
+            return;
         }
         if (_s.startsWith(':gtype')) {
             const name = _s.slice(6).trim();
@@ -801,23 +803,26 @@ exports.runREPL = (_s, _cb) => {
             const term = domain_1.quoteZ(res.val, list_1.Nil, 0, true);
             return _cb(syntax_1.showTerm(syntax_2.fromSurface(term)));
         }
+        /*
         if (_s.startsWith(':import')) {
-            const files = _s.slice(7).trim().split(/\s+/g);
-            Promise.all(files.map(loadFile)).then(defs => {
-                const xs = [];
-                defs.forEach(rest => {
-                    const ds = parser_1.parseDefs(rest);
-                    const dsc = definitions_1.toSurfaceDefs(ds);
-                    const lxs = typecheck_1.typecheckDefs(dsc, true);
-                    lxs.forEach(x => xs.push(x));
-                });
-                return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
-            }).catch(err => _cb('' + err, true));
-            return;
+          const files = _s.slice(7).trim().split(/\s+/g);
+          Promise.all(files.map(loadFile)).then(defs => {
+            const xs: string[] = [];
+            defs.forEach(rest => {
+              parseDefs(rest, importMap).then(ds => {
+                const dsc = toSurfaceDefs(ds)
+                const lxs = typecheckDefs(dsc, true);
+                lxs.forEach(x => xs.push(x));
+              });
+            });
+            return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
+          }).catch(err => _cb(''+err, true));
+          return;
         }
+        */
         if (_s.startsWith(':view')) {
             const files = _s.slice(5).trim().split(/\s+/g);
-            Promise.all(files.map(loadFile)).then(ds => {
+            Promise.all(files.map(util_1.loadFile)).then(ds => {
                 return _cb(ds.join('\n\n'));
             }).catch(err => _cb('' + err, true));
             return;
@@ -870,7 +875,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./core/syntax":2,"./list":5,"./parser":7,"./surface/definitions":9,"./surface/domain":10,"./surface/globalenv":11,"./surface/syntax":13,"./surface/typecheck":14,"./syntax":16,"./untyped/syntax":17,"fs":20}],9:[function(require,module,exports){
+},{"./config":1,"./core/syntax":2,"./list":5,"./parser":7,"./surface/definitions":9,"./surface/domain":10,"./surface/globalenv":11,"./surface/syntax":13,"./surface/typecheck":14,"./syntax":16,"./untyped/syntax":17,"./util":18}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -2237,8 +2242,22 @@ exports.terr = (msg) => {
 exports.serr = (msg) => {
     throw new SyntaxError(msg);
 };
+exports.loadFile = (fn) => {
+    if (typeof window === 'undefined') {
+        return new Promise((resolve, reject) => {
+            require('fs').readFile(fn, 'utf8', (err, data) => {
+                if (err)
+                    return reject(err);
+                return resolve(data);
+            });
+        });
+    }
+    else {
+        return fetch(fn).then(r => r.text());
+    }
+};
 
-},{}],19:[function(require,module,exports){
+},{"fs":20}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");

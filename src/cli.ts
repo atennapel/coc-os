@@ -13,16 +13,20 @@ if (process.argv[2]) {
   try {
     globalReset();
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
-    const ds = parseDefs(sc);
-    const dsc = toSurfaceDefs(ds)
-    const ns = typecheckDefs(dsc);
-    const m = globalMap();
-    const main = m.main;
-    if (!main) console.log(`defined ${ns.join(' ')}`);
-    else {
-      console.log(`${showFromSurface(main.term)} : ${showTerm(fromSurface(quoteZ(main.type)))}`);
-    }
-    process.exit();
+    parseDefs(sc, {}).then(ds => {
+      const dsc = toSurfaceDefs(ds)
+      const ns = typecheckDefs(dsc);
+      const m = globalMap();
+      const main = m.main;
+      if (!main) console.log(`defined ${ns.join(' ')}`);
+      else {
+        console.log(`${showFromSurface(main.term)} : ${showTerm(fromSurface(quoteZ(main.type)))}`);
+      }
+      process.exit();
+    }).catch(err => {
+      console.error(err);
+      process.exit();
+    });
   } catch(err) {
     console.error(err);
     process.exit();
