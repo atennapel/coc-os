@@ -1,5 +1,5 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift, Ind, flattenPi } from './syntax';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta, VFix, vapp, VRoll } from './domain';
+import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift, Ind, flattenPi, IndFix } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl } from '../list';
@@ -25,6 +25,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Unroll') return erasedUsed(k, t.term);
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
   if (t.tag === 'Ind') return erasedUsed(k, t.term);
+  if (t.tag === 'IndFix') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;
@@ -243,6 +244,22 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     log(() => showTerm(ind));
     log(() => showFromSurface(ind, ns));
     return [Ind(type, term), evaluate(ind, vs)];
+  }
+  if (tm.tag === 'IndFix') {
+    // inductionFix {f} (x : fix (r : *). f r) :
+    // {P : Fix f} -> (((h : Fix f) -> P h) -> (y : f (Fix f)) -> P y) -> P x
+    const type = check(ns, ts, vs, k, tm.type, VPi(PlicityR, '_', VType, _ => VType));
+    const vt = evaluate(type, vs);
+    const fixF = VFix('r', VType, r => vapp(vt, PlicityR, r));
+    const term = check(ns, ts, vs, k, tm.term, fixF);
+    const vterm = evaluate(term, vs);
+    const rtype = VPi(PlicityE, 'P', VPi(PlicityR, '_', fixF, _ => VType), P =>
+      VPi(PlicityR, '_',
+        VPi(PlicityR, '_',
+          VPi(PlicityR, 'h', fixF, h => vapp(P, PlicityR, h)), _ =>
+          VPi(PlicityR, 'y', vapp(vt, PlicityR, fixF), y => vapp(P, PlicityR, VRoll(fixF, y)))), _ =>
+      vapp(P, PlicityR, vterm)));
+    return [IndFix(type, term), rtype];
   }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };

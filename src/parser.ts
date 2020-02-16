@@ -1,5 +1,5 @@
 import { serr } from './util';
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, Hole, Ind } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, Hole, Ind, IndFix } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 
@@ -225,6 +225,21 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       const [term, tb2] = expr(ts[2]);
       if (tb2) return serr(`something went wrong when parsing induction`);
       return Ind(type, term);
+    }
+    const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
+    const indPart = ts.slice(0, hasType ? 3 : 2);
+    const rest = ts.slice(hasType ? 3 : 2);
+    return exprs([TList(indPart, '(')].concat(rest), '(');
+  }
+  
+  if (isName(ts[0], 'inductionFix')) {
+    if (ts.length < 3) return serr(`something went wrong when parsing inductionFix`);
+    if (ts.length === 3) {
+      const [type, tb1] = expr(ts[1]);
+      if (!tb1) return serr(`something went wrong when parsing inductionFix`);
+      const [term, tb2] = expr(ts[2]);
+      if (tb2) return serr(`something went wrong when parsing inductionFix`);
+      return IndFix(type, term);
     }
     const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
     const indPart = ts.slice(0, hasType ? 3 : 2);

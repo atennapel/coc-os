@@ -5,7 +5,7 @@ import { eqPlicity, Plicity } from '../syntax';
 import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldl } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
-import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Roll, Unroll, Pi, Fix } from './syntax';
+import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Roll, Unroll, Pi, Fix, IndFix, Ind } from './syntax';
 import { metaSet, metaPush, metaDiscard, metaPop } from './metas';
 
 const eqHead = (a: Head, b: Head): boolean => {
@@ -22,6 +22,8 @@ const unifyElim = (ns: List<Name>, k: Ix, a: Elim, b: Elim, x: Val, y: Val): voi
   if (a.tag === 'EApp' && b.tag === 'EApp' && eqPlicity(a.plicity, b.plicity))
     return unify(ns, k, a.arg, b.arg);
   if (a.tag === 'EInd' && b.tag === 'EInd')
+    return unify(ns, k, a.type, b.type);
+  if (a.tag === 'EIndFix' && b.tag === 'EIndFix')
     return unify(ns, k, a.type, b.type);
   return terr(`unify failed (${k}): ${showTermU(x, ns, k)} ~ ${showTermU(y, ns, k)}`);
 };
@@ -116,6 +118,7 @@ const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix
   map(spine, elim => {
     if (elim.tag === 'EUnroll') return terr(`unroll in meta spine`);
     if (elim.tag === 'EInd') return terr(`induction in meta spine`);
+    if (elim.tag === 'EIndFix') return terr(`inductionFix in meta spine`);
     if (elim.tag === 'EApp') {
       const v = forceGlue(elim.arg);
       if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && length(v.args) === 0)
@@ -169,6 +172,16 @@ const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Ter
     const ty = checkSolution(ns, k, m, is, t.type);
     const body = checkSolution(ns, k + 1, m, Cons(k, is), t.body);
     return Fix(t.name, ty, body);
+  }
+  if (t.tag === 'Ind' && t.type) {
+    const ty = checkSolution(ns, k, m, is, t.type);
+    const tm = checkSolution(ns, k, m, is, t.term);
+    return Ind(ty, tm);
+  }
+  if (t.tag === 'IndFix') {
+    const ty = checkSolution(ns, k, m, is, t.type);
+    const tm = checkSolution(ns, k, m, is, t.term);
+    return IndFix(ty, tm);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${showFromSurface(t, ns)}`);
 };

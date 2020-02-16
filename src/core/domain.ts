@@ -1,6 +1,6 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global, Ind } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Fix, Roll, Unroll, Global, Ind, IndFix } from './syntax';
 import { impossible } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
@@ -13,7 +13,7 @@ export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
 export type HGlobal = { tag: 'HGlobal', name: Name };
 export const HGlobal = (name: Name): HGlobal => ({ tag: 'HGlobal', name });
 
-export type Elim = EApp | EUnroll | EInd;
+export type Elim = EApp | EUnroll | EInd | EIndFix;
 
 export type EApp = { tag: 'EApp', plicity: Plicity, arg: Val };
 export const EApp = (plicity: Plicity, arg: Val): EApp => ({ tag: 'EApp', plicity, arg });
@@ -21,6 +21,8 @@ export type EUnroll = { tag: 'EUnroll' };
 export const EUnroll: EUnroll = { tag: 'EUnroll' };
 export type EInd = { tag: 'EInd', type: Val };
 export const EInd = (type: Val): EInd => ({ tag: 'EInd', type });
+export type EIndFix = { tag: 'EIndFix', type: Val };
+export const EIndFix = (type: Val): EIndFix => ({ tag: 'EIndFix', type });
 
 export type Clos = (val: Val) => Val;
 export type Val = VNe | VGlued | VAbs | VRoll | VPi | VFix | VType;
@@ -74,6 +76,24 @@ export const vinduction = (ty: Val, v: Val): Val => {
     return VGlued(v.head, Cons(EInd(ty), v.args), mapLazy(v.val, v => vinduction(ty, v)));
   return impossible(`vinduction: ${v.tag}`);
 };
+export const vinductionfix = (ty: Val, v: Val): Val => {
+  // {f : * -> *} -> (x : Fix f) ->
+  //  (map : {a b : *} -> (a -> b) -> f a -> f b) -> {P : Fix f} ->
+  //  (((h : Fix f) -> P h) -> (y : f (Fix f)) -> P y) -> P x
+  // inductionFix {f} (roll {fix (r : *). f r} t) ~>
+  //  {P : Fix f} (rec : ((h : Fix f) -> P h) -> (y : f (Fix f)) -> P (roll {Fix f} y)).
+  //    rec (\y. inductionFix {f} y {P} rec) (unroll x)
+  if (v.tag === 'VRoll') {
+    const fixF = VFix(VType, r => vapp(ty, PlicityR, r));
+    return VAbs(PlicityE, VPi(PlicityR, fixF, _ => VType), P =>
+      VAbs(PlicityR, VPi(PlicityR, VPi(PlicityR, fixF, h => vapp(P, PlicityR, h)), _ => VPi(PlicityR, vapp(ty, PlicityR, fixF), y => vapp(P, PlicityR, VRoll(fixF, y)))), rec =>
+      vapp(vapp(rec, PlicityR, VAbs(PlicityR, fixF, y => vapp(vapp(vinductionfix(ty, y), PlicityE, P), PlicityR, rec))), PlicityR, vunroll(v))));
+  }
+  if (v.tag === 'VNe') return VNe(v.head, Cons(EIndFix(ty), v.args));
+  if (v.tag === 'VGlued')
+    return VGlued(v.head, Cons(EIndFix(ty), v.args), mapLazy(v.val, v => vinductionfix(ty, v)));
+  return impossible(`vinductionfix: ${v.tag}`);
+};
 
 export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
   if (t.tag === 'Type') return VType;
@@ -99,6 +119,8 @@ export const evaluate = (t: Term, vs: EnvV =Nil): Val => {
     return VFix(evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Ind')
     return vinduction(evaluate(t.type, vs), evaluate(t.term, vs));
+  if (t.tag === 'IndFix')
+    return vinductionfix(evaluate(t.type, vs), evaluate(t.term, vs));
   return t;
 };
 
@@ -111,6 +133,7 @@ const quoteElim = (t: Term, e: Elim, k: Ix, full: boolean): Term => {
   if (e.tag === 'EApp') return App(t, e.plicity, quote(e.arg, k, full));
   if (e.tag === 'EUnroll') return Unroll(t);
   if (e.tag === 'EInd') return Ind(quote(e.type, k, full), t);
+  if (e.tag === 'EIndFix') return IndFix(quote(e.type, k, full), t);
   return e;
 };
 export const quote = (v: Val, k: Ix, full: boolean): Term => {

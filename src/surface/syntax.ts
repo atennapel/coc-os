@@ -4,7 +4,7 @@ import { Plicity } from '../syntax';
 import { List, lookup, Cons, Nil, index, indecesOf } from '../list';
 import { impossible } from '../util';
 
-export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Ind;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Ind | IndFix;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -34,6 +34,8 @@ export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export type Ind = { tag: 'Ind', type: Term | null, term: Term };
 export const Ind = (type: Term | null, term: Term): Ind => ({ tag: 'Ind', type, term });
+export type IndFix = { tag: 'IndFix', type: Term, term: Term };
+export const IndFix = (type: Term, term: Term): IndFix => ({ tag: 'IndFix', type, term });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
@@ -51,6 +53,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
   if (t.tag === 'Ind') return t.type ? `(induction {${showTerm(t.type)}} ${showTerm(t.term)})` : `(induction ${showTerm(t.term)})`;
+  if (t.tag === 'IndFix') return `(inductionFix {${showTerm(t.type)}} ${showTerm(t.term)})`;
   return t;
 };
 
@@ -71,6 +74,7 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return Ann(toSurface(t.term, ns, k), toSurface(t.type, ns, k));
   if (t.tag === 'Ind') return Ind(t.type && toSurface(t.type, ns, k), toSurface(t.term, ns, k));
+  if (t.tag === 'IndFix') return IndFix(toSurface(t.type, ns, k), toSurface(t.term, ns, k));
   return t;
 };
 
@@ -84,6 +88,7 @@ const globalUsed = (k: Name, t: Term): boolean => {
   if (t.tag === 'Fix') return globalUsed(k, t.type) || globalUsed(k, t.body);
   if (t.tag === 'Ann') return globalUsed(k, t.term) || globalUsed(k, t.type);
   if (t.tag === 'Ind') return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
+  if (t.tag === 'IndFix') return globalUsed(k, t.type) || globalUsed(k, t.term);
   if (t.tag === 'Global') return t.name === k;
   if (t.tag === 'Var') return false;
   if (t.tag === 'Type') return false;
@@ -103,6 +108,7 @@ const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Fix') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
   if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
   if (t.tag === 'Ind') return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
+  if (t.tag === 'IndFix') return indexUsed(k, t.type) || indexUsed(k, t.term);
   if (t.tag === 'Global') return false;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Hole') return false;
@@ -122,6 +128,7 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Fix') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
   if (t.tag === 'Ind') return (t.type && isUnsolved(t.type)) || isUnsolved(t.term);
+  if (t.tag === 'IndFix') return isUnsolved(t.type) || isUnsolved(t.term);
   if (t.tag === 'Global') return false;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Var') return false;
@@ -149,6 +156,7 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'Unroll') return S.Unroll(fromSurface(t.term, ns));
   if (t.tag === 'Ann') return S.Ann(fromSurface(t.term, ns), fromSurface(t.type, ns));
   if (t.tag === 'Ind') return S.Ind(t.type && fromSurface(t.type, ns), fromSurface(t.term, ns));
+  if (t.tag === 'IndFix') return S.IndFix(fromSurface(t.type, ns), fromSurface(t.term, ns));
   if (t.tag === 'Abs') {
     const x = decideName(t.name, t.body, ns);
     return S.Abs(t.plicity, x, t.type && fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
@@ -182,6 +190,7 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Fix') return Fix(t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Ann') return Ann(shift(d, c, t.term), shift(d, c, t.type));
   if (t.tag === 'Ind') return Ind(t.type && shift(d, c, t.type), shift(d, c, t.term));
+  if (t.tag === 'IndFix') return IndFix(shift(d, c, t.type), shift(d, c, t.term));
   return t;
 };
 

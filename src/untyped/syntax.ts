@@ -1,5 +1,5 @@
 import { Ix } from '../names';
-import { Term as TTerm, showTerm as showTTerm } from '../core/syntax';
+import { Term as TTerm, showTerm as showTTerm, Var as CVar, IndFix } from '../core/syntax';
 import { impossible } from '../util';
 
 export type Term = Var | App | Abs;
@@ -62,5 +62,9 @@ export const erase = (t: TTerm, map: { [key: string]: Term } = {}): Term => {
   if (t.tag === 'Fix') return idTerm;
   if (t.tag === 'Type') return idTerm;
   if (t.tag === 'Ind') return erase(t.term, map);
+  // TODO:
+  // inductionFix x ~>
+  // \r. r (\y. inductionFix y r) x
+  if (t.tag === 'IndFix') return Abs(App(App(Var(0), Abs(App(erase(IndFix(t.type, CVar(0))), Var(1)))), erase(t.term)));
   throw new Error(`unable to erase: ${showTTerm(t)}`);
 };

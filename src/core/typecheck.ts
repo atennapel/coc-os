@@ -76,6 +76,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Roll') return erasedUsed(k, t.term);
   if (t.tag === 'Unroll') return erasedUsed(k, t.term);
   if (t.tag === 'Ind') return erasedUsed(k, t.term);
+  if (t.tag === 'IndFix') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;

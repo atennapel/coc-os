@@ -6,7 +6,7 @@ export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.era
 export const PlicityE: Plicity = { erased: true };
 export const PlicityR: Plicity = { erased: false };
 
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Ind;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Ind | IndFix;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -34,6 +34,8 @@ export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export type Ind = { tag: 'Ind', type: Term | null, term: Term };
 export const Ind = (type: Term | null, term: Term): Ind => ({ tag: 'Ind', type, term });
+export type IndFix = { tag: 'IndFix', type: Term, term: Term };
+export const IndFix = (type: Term, term: Term): IndFix => ({ tag: 'IndFix', type, term });
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -50,6 +52,7 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTermS(t.term)} : ${showTermS(t.type)})`;
   if (t.tag === 'Ind') return t.type ? `(induction {${showTermS(t.type)}} ${showTermS(t.term)})` : `(induction ${showTermS(t.term)})`;
+  if (t.tag === 'IndFix') return `(inductionFix {${showTermS(t.type)}} ${showTermS(t.term)})`;
   return t;
 };
 
@@ -114,6 +117,10 @@ export const showTerm = (t: Term): string => {
     const fp = (t: Term) => t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'App' || t.tag === 'Fix' || t.tag === 'Ind' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Roll' || t.tag === 'Unroll';
     return !t.type ? `induction ${showTermP(fp(t.term), t.term)}` : `induction {${showTerm(t.type)}} ${showTermP(fp(t.term), t.term)}`;
   }
+  if (t.tag === 'IndFix') {
+    const fp = (t: Term) => t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'App' || t.tag === 'Fix' || t.tag === 'Ind' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Roll' || t.tag === 'Unroll';
+    return `inductionFix {${showTerm(t.type)}} ${showTermP(fp(t.term), t.term)}`;
+  }
   return t;
 };
 
@@ -131,5 +138,6 @@ export const eraseTypes = (t: Term): Term => {
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return eraseTypes(t.term);
   if (t.tag === 'Ind') return Ind(t.type && eraseTypes(t.type), eraseTypes(t.term));
+  if (t.tag === 'IndFix') return IndFix(eraseTypes(t.type), eraseTypes(t.term));
   return t;
 };
