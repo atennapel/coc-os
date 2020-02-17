@@ -3,6 +3,7 @@ import * as S from '../syntax';
 import { Plicity } from '../syntax';
 import { List, lookup, Cons, Nil, index, indecesOf } from '../list';
 import { impossible } from '../util';
+import { EnvV, zonk } from './domain';
 
 export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Ind | IndFix;
 
@@ -28,8 +29,9 @@ export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
-export type Hole = { tag: 'Hole' };
-export const Hole: Hole = { tag: 'Hole' };
+export type Hole = { tag: 'Hole', name: Name | null };
+export const HoleN: Hole = { tag: 'Hole', name: null };
+export const Hole = (name: Name): Hole => ({ tag: 'Hole', name });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export type Ind = { tag: 'Ind', type: Term | null, term: Term };
@@ -41,7 +43,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'Global') return t.name;
-  if (t.tag === 'Hole') return '_';
+  if (t.tag === 'Hole') return `_${t.name || ''}`;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${t.plicity.erased ? '-' : ''}${showTerm(t.right)})`;
   if (t.tag === 'Abs')
     return t.type ? `(\\(${t.plicity.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})` : `(\\${t.plicity.erased ? '-' : ''}${t.name}. ${showTerm(t.body)})`;
@@ -62,7 +64,7 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
     const l = lookup(ns, t.name);
     return l === null ? Global(t.name) : Var(k - l - 1);
   }
-  if (t.tag === 'Hole') return Hole;
+  if (t.tag === 'Hole') return t.name ? Hole(t.name) : HoleN;
   if (t.tag === 'Meta') return Meta(t.index);
   if (t.tag === 'App') return App(toSurface(t.left, ns, k), t.plicity, toSurface(t.right, ns, k));
   if (t.tag === 'Abs') return Abs(t.plicity, t.name, t.type && toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
@@ -149,7 +151,7 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   }
   if (t.tag === 'Meta') return S.Meta(t.index);
   if (t.tag === 'Type') return S.Type;
-  if (t.tag === 'Hole') return S.Hole;
+  if (t.tag === 'Hole') return t.name ? S.Hole(t.name) : S.HoleN;
   if (t.tag === 'Global') return S.Var(t.name);
   if (t.tag === 'App') return S.App(fromSurface(t.left, ns), t.plicity, fromSurface(t.right, ns));
   if (t.tag === 'Roll') return S.Roll(t.type && fromSurface(t.type, ns), fromSurface(t.term, ns));
@@ -178,6 +180,8 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
 
 export const showFromSurface = (t: Term, ns: List<Name> = Nil): string =>
   S.showTerm(fromSurface(t, ns));
+export const showFromSurfaceZ = (t: Term, ns: List<Name> = Nil, vs: EnvV = Nil, k: Ix = 0): string =>
+  S.showTerm(fromSurface(zonk(t, vs, k, false), ns));
 
 export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Var') return t.index < c ? t : Var(t.index + d);

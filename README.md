@@ -16,11 +16,12 @@ yarn start lib/nat.coc
 
 ```
 TODO:
+- print local env with named holes
+- zonk debug messages?
 - fix issue with meta resetting
 - induction for types with fix
 - induction/inductionfix in core
 - fix synthapp of meta
-- named holes
 - infer more uses of roll/unroll (also in synthapp and check)
 - improve type inference of annotated lambdas
 - improve impredicative type inference

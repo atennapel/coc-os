@@ -1,5 +1,5 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta, VFix, vapp, VRoll } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift, Ind, flattenPi, IndFix } from './syntax';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta, VFix, vapp, VRoll, showTermUZ } from './domain';
+import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift, Ind, flattenPi, IndFix, showFromSurfaceZ } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl } from '../list';
@@ -90,7 +90,14 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
     return Let(tm.plicity, tm.name, val, body);
   }
-  if (tm.tag === 'Hole') return newMeta(ts);
+  if (tm.tag === 'Hole') {
+    const x = newMeta(ts);
+    if (tm.name) {
+      if (holes[tm.name]) return terr(`named hole used more than once: _${tm.name}`);
+      holes[tm.name] = [evaluate(x, vs), ty, ns, k, vs, ts];
+    }
+    return x;
+  }
   const [term, ty2] = synth(ns, ts, vs, k, tm);
   const [ty2inst, targs] = inst(ts, vs, ty2);
   try {
@@ -162,6 +169,10 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
   if (tm.tag === 'Hole') {
     const t = newMeta(ts);
     const vt = evaluate(newMeta(ts), vs);
+    if (tm.name) {
+      if (holes[tm.name]) return terr(`named hole used more than once: _${tm.name}`);
+      holes[tm.name] = [evaluate(t, vs), vt, ns, k, vs, ts];
+    }
     return [t, vt];
   }
   if (tm.tag === 'App') {
@@ -291,13 +302,23 @@ const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: 
   return terr(`invalid type or plicity mismatch in synthapp in ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)}`);
 };
 
+let holes: { [key:string]: [Val, Val, List<Name>, number, EnvV, EnvT] } = {};
+
 export const typecheck = (tm: Term): [Term, Val] => {
   // metaReset(); // TODO: fix this
+  holes = {};
   const [etm, ty] = synth(Nil, Nil, Nil, 0, tm);
   const ztm = zonk(etm);
   // TODO: should type be checked?
+  const holeprops = Object.entries(holes);
+  if (holeprops.length > 0) {
+    const strtype = showTermUZ(ty);
+    const strterm = showFromSurfaceZ(ztm);
+    const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => `_${x} : ${showTermUZ(v, ns, vs, k)} = ${showTermUZ(t, ns, vs, k)}`).join('\n');
+    return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\nholes:\n${str}`);
+  }
   if (isUnsolved(ztm))
-    return terr(`elaborated term was unsolved: ${showFromSurface(ztm)}`);
+    return terr(`elaborated term was unsolved: ${showFromSurfaceZ(ztm)}`);
   return [ztm, ty];
 };
 

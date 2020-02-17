@@ -28,8 +28,9 @@ export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
-export type Hole = { tag: 'Hole' };
-export const Hole: Hole = { tag: 'Hole' };
+export type Hole = { tag: 'Hole', name: Name | null };
+export const HoleN: Hole = { tag: 'Hole', name: null };
+export const Hole = (name: Name): Hole => ({ tag: 'Hole', name });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export type Ind = { tag: 'Ind', type: Term | null, term: Term };
@@ -40,7 +41,7 @@ export const IndFix = (type: Term, term: Term): IndFix => ({ tag: 'IndFix', type
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'Hole') return '_';
+  if (t.tag === 'Hole') return `_${t.name || ''}`;
   if (t.tag === 'App') return `(${showTermS(t.left)} ${t.plicity.erased ? '-' : ''}${showTermS(t.right)})`;
   if (t.tag === 'Abs')
     return t.type ? `(\\(${t.plicity.erased ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})` : `(\\${t.plicity.erased ? '-' : ''}${t.name}. ${showTermS(t.body)})`;
@@ -87,7 +88,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'Hole') return '_';
+  if (t.tag === 'Hole') return `_${t.name || ''}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
     return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${
@@ -137,7 +138,7 @@ export const eraseTypes = (t: Term): Term => {
   if (t.tag === 'Fix') return Type;
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return eraseTypes(t.term);
-  if (t.tag === 'Ind') return Ind(t.type && eraseTypes(t.type), eraseTypes(t.term));
+  if (t.tag === 'Ind') return eraseTypes(t.term);
   if (t.tag === 'IndFix') return IndFix(eraseTypes(t.type), eraseTypes(t.term));
   return t;
 };

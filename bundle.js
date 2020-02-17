@@ -406,8 +406,8 @@ const expr = (t) => {
         const x = t.name;
         if (x === '*')
             return [syntax_1.Type, false];
-        if (x === '_')
-            return [syntax_1.Hole, false];
+        if (x[0] === '_')
+            return [x.length === 1 ? syntax_1.HoleN : syntax_1.Hole(x.slice(1)), false];
         if (x.includes('@'))
             return util_1.serr(`invalid name: ${x}`);
         if (/[a-z]/i.test(x[0]))
@@ -1086,6 +1086,7 @@ exports.quoteZ = (v, vs = list_1.Nil, k = 0, full = false) => exports.zonk(expor
 exports.normalize = (t, vs, k, full) => exports.quote(exports.evaluate(t, vs), k, full);
 exports.showTermQ = (v, k = 0, full = false) => syntax_1.showTerm(exports.quote(v, k, full));
 exports.showTermU = (v, ns = list_1.Nil, k = 0, full = false) => syntax_3.showTerm(syntax_1.fromSurface(exports.quote(v, k, full), ns));
+exports.showTermUZ = (v, ns = list_1.Nil, vs = list_1.Nil, k = 0, full = false) => syntax_3.showTerm(syntax_1.fromSurface(exports.quoteZ(v, vs, k, full), ns));
 exports.showElimU = (e, ns = list_1.Nil, k = 0, full = false) => {
     if (e.tag === 'EUnroll')
         return 'unroll';
@@ -1204,6 +1205,7 @@ const names_1 = require("../names");
 const S = require("../syntax");
 const list_1 = require("../list");
 const util_1 = require("../util");
+const domain_1 = require("./domain");
 exports.Var = (index) => ({ tag: 'Var', index });
 exports.Global = (name) => ({ tag: 'Global', name });
 exports.App = (left, plicity, right) => ({ tag: 'App', left, plicity, right });
@@ -1215,7 +1217,8 @@ exports.Pi = (plicity, name, type, body) => ({ tag: 'Pi', plicity, name, type, b
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
-exports.Hole = { tag: 'Hole' };
+exports.HoleN = { tag: 'Hole', name: null };
+exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.Ind = (type, term) => ({ tag: 'Ind', type, term });
 exports.IndFix = (type, term) => ({ tag: 'IndFix', type, term });
@@ -1227,7 +1230,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'Global')
         return t.name;
     if (t.tag === 'Hole')
-        return '_';
+        return `_${t.name || ''}`;
     if (t.tag === 'App')
         return `(${exports.showTerm(t.left)} ${t.plicity.erased ? '-' : ''}${exports.showTerm(t.right)})`;
     if (t.tag === 'Abs')
@@ -1258,7 +1261,7 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return l === null ? exports.Global(t.name) : exports.Var(k - l - 1);
     }
     if (t.tag === 'Hole')
-        return exports.Hole;
+        return t.name ? exports.Hole(t.name) : exports.HoleN;
     if (t.tag === 'Meta')
         return exports.Meta(t.index);
     if (t.tag === 'App')
@@ -1401,7 +1404,7 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
     if (t.tag === 'Type')
         return S.Type;
     if (t.tag === 'Hole')
-        return S.Hole;
+        return t.name ? S.Hole(t.name) : S.HoleN;
     if (t.tag === 'Global')
         return S.Var(t.name);
     if (t.tag === 'App')
@@ -1435,6 +1438,7 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
     return t;
 };
 exports.showFromSurface = (t, ns = list_1.Nil) => S.showTerm(exports.fromSurface(t, ns));
+exports.showFromSurfaceZ = (t, ns = list_1.Nil, vs = list_1.Nil, k = 0) => S.showTerm(exports.fromSurface(domain_1.zonk(t, vs, k, false), ns));
 exports.shift = (d, c, t) => {
     if (t.tag === 'Var')
         return t.index < c ? t : exports.Var(t.index + d);
@@ -1469,7 +1473,7 @@ exports.flattenPi = (t) => {
     return [r, t];
 };
 
-},{"../list":5,"../names":6,"../syntax":16,"../util":18}],14:[function(require,module,exports){
+},{"../list":5,"../names":6,"../syntax":16,"../util":18,"./domain":10}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const domain_1 = require("./domain");
@@ -1574,8 +1578,15 @@ const check = (ns, ts, vs, k, tm, ty) => {
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
         return syntax_1.Let(tm.plicity, tm.name, val, body);
     }
-    if (tm.tag === 'Hole')
-        return newMeta(ts);
+    if (tm.tag === 'Hole') {
+        const x = newMeta(ts);
+        if (tm.name) {
+            if (holes[tm.name])
+                return util_1.terr(`named hole used more than once: _${tm.name}`);
+            holes[tm.name] = [domain_1.evaluate(x, vs), ty, ns, k, vs, ts];
+        }
+        return x;
+    }
     const [term, ty2] = synth(ns, ts, vs, k, tm);
     const [ty2inst, targs] = inst(ts, vs, ty2);
     try {
@@ -1643,6 +1654,11 @@ const synth = (ns, ts, vs, k, tm) => {
     if (tm.tag === 'Hole') {
         const t = newMeta(ts);
         const vt = domain_1.evaluate(newMeta(ts), vs);
+        if (tm.name) {
+            if (holes[tm.name])
+                return util_1.terr(`named hole used more than once: _${tm.name}`);
+            holes[tm.name] = [domain_1.evaluate(t, vs), vt, ns, k, vs, ts];
+        }
         return [t, vt];
     }
     if (tm.tag === 'App') {
@@ -1768,13 +1784,22 @@ const synthapp = (ns, ts, vs, k, ty_, plicity, arg) => {
     }
     return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(arg, ns)}`);
 };
+let holes = {};
 exports.typecheck = (tm) => {
     // metaReset(); // TODO: fix this
+    holes = {};
     const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
     const ztm = domain_1.zonk(etm);
     // TODO: should type be checked?
+    const holeprops = Object.entries(holes);
+    if (holeprops.length > 0) {
+        const strtype = domain_1.showTermUZ(ty);
+        const strterm = syntax_1.showFromSurfaceZ(ztm);
+        const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => `_${x} : ${domain_1.showTermUZ(v, ns, vs, k)} = ${domain_1.showTermUZ(t, ns, vs, k)}`).join('\n');
+        return util_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\nholes:\n${str}`);
+    }
     if (syntax_1.isUnsolved(ztm))
-        return util_1.terr(`elaborated term was unsolved: ${syntax_1.showFromSurface(ztm)}`);
+        return util_1.terr(`elaborated term was unsolved: ${syntax_1.showFromSurfaceZ(ztm)}`);
     return [ztm, ty];
 };
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
@@ -2020,7 +2045,8 @@ exports.Pi = (plicity, name, type, body) => ({ tag: 'Pi', plicity, name, type, b
 exports.Fix = (name, type, body) => ({ tag: 'Fix', name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
-exports.Hole = { tag: 'Hole' };
+exports.HoleN = { tag: 'Hole', name: null };
+exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.Ind = (type, term) => ({ tag: 'Ind', type, term });
 exports.IndFix = (type, term) => ({ tag: 'IndFix', type, term });
@@ -2030,7 +2056,7 @@ exports.showTermS = (t) => {
     if (t.tag === 'Meta')
         return `?${t.index}`;
     if (t.tag === 'Hole')
-        return '_';
+        return `_${t.name || ''}`;
     if (t.tag === 'App')
         return `(${exports.showTermS(t.left)} ${t.plicity.erased ? '-' : ''}${exports.showTermS(t.right)})`;
     if (t.tag === 'Abs')
@@ -2088,7 +2114,7 @@ exports.showTerm = (t) => {
     if (t.tag === 'Meta')
         return `?${t.index}`;
     if (t.tag === 'Hole')
-        return '_';
+        return `_${t.name || ''}`;
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
         return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Fix', f)} ${as.map(([im, t], i) => im.erased ? `{${exports.showTerm(t)}}` :
@@ -2148,7 +2174,7 @@ exports.eraseTypes = (t) => {
     if (t.tag === 'Ann')
         return exports.eraseTypes(t.term);
     if (t.tag === 'Ind')
-        return exports.Ind(t.type && exports.eraseTypes(t.type), exports.eraseTypes(t.term));
+        return exports.eraseTypes(t.term);
     if (t.tag === 'IndFix')
         return exports.IndFix(exports.eraseTypes(t.type), exports.eraseTypes(t.term));
     return t;
