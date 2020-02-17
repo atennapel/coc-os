@@ -216,6 +216,8 @@ exports.lookup = (l, name, eq = (x, y) => x === y) => {
 };
 exports.foldr = (f, i, l) => l.tag === 'Nil' ? i : f(l.head, exports.foldr(f, i, l.tail));
 exports.foldl = (f, i, l) => l.tag === 'Nil' ? i : exports.foldl(f, f(i, l.head), l.tail);
+exports.foldrprim = (f, i, l, ind = 0) => l.tag === 'Nil' ? i : f(l.head, exports.foldrprim(f, i, l.tail, ind + 1), l, ind);
+exports.foldlprim = (f, i, l, ind = 0) => l.tag === 'Nil' ? i : exports.foldlprim(f, f(l.head, i, l, ind), l.tail, ind + 1);
 exports.zipWith = (f, la, lb) => la.tag === 'Nil' || lb.tag === 'Nil' ? exports.Nil :
     exports.Cons(f(la.head, lb.head), exports.zipWith(f, la.tail, lb.tail));
 exports.zipWith_ = (f, la, lb) => {
@@ -1790,14 +1792,16 @@ exports.typecheck = (tm) => {
     holes = {};
     const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
     const ztm = domain_1.zonk(etm);
-    // TODO: should type be checked?
     const holeprops = Object.entries(holes);
     if (holeprops.length > 0) {
         const strtype = domain_1.showTermUZ(ty);
         const strterm = syntax_1.showFromSurfaceZ(ztm);
-        const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => `_${x} : ${domain_1.showTermUZ(v, ns, vs, k)} = ${domain_1.showTermUZ(t, ns, vs, k)}`).join('\n');
-        return util_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\nholes:\n${str}`);
+        const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => {
+            return `\n_${x} : ${domain_1.showTermUZ(v, ns, vs, k)} = ${domain_1.showTermUZ(t, ns, vs, k)}\nenvT: ${showEnvT(ts, k, false)}\nenvV: ${domain_1.showEnvV(vs, k, false)}\n`;
+        }).join('\n');
+        return util_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
     }
+    // TODO: should type be checked?
     if (syntax_1.isUnsolved(ztm))
         return util_1.terr(`elaborated term was unsolved: ${syntax_1.showFromSurfaceZ(ztm)}`);
     return [ztm, ty];

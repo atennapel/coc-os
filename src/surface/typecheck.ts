@@ -309,14 +309,16 @@ export const typecheck = (tm: Term): [Term, Val] => {
   holes = {};
   const [etm, ty] = synth(Nil, Nil, Nil, 0, tm);
   const ztm = zonk(etm);
-  // TODO: should type be checked?
   const holeprops = Object.entries(holes);
   if (holeprops.length > 0) {
     const strtype = showTermUZ(ty);
     const strterm = showFromSurfaceZ(ztm);
-    const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => `_${x} : ${showTermUZ(v, ns, vs, k)} = ${showTermUZ(t, ns, vs, k)}`).join('\n');
-    return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\nholes:\n${str}`);
+    const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => {
+      return `\n_${x} : ${showTermUZ(v, ns, vs, k)} = ${showTermUZ(t, ns, vs, k)}\nenvT: ${showEnvT(ts, k, false)}\nenvV: ${showEnvV(vs, k, false)}\n`;
+    }).join('\n');
+    return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
   }
+  // TODO: should type be checked?
   if (isUnsolved(ztm))
     return terr(`elaborated term was unsolved: ${showFromSurfaceZ(ztm)}`);
   return [ztm, ty];

@@ -130,6 +130,10 @@ export const foldr = <T, R>(f: (h: T, a: R) => R, i: R, l: List<T>): R =>
   l.tag === 'Nil' ? i : f(l.head, foldr(f, i, l.tail));
 export const foldl = <T, R>(f: (a: R, h: T) => R, i: R, l: List<T>): R =>
   l.tag === 'Nil' ? i : foldl(f, f(i, l.head), l.tail);
+export const foldrprim = <T, R>(f: (h: T, a: R, l: List<T>, j: number) => R, i: R, l: List<T>, ind: number = 0): R =>
+  l.tag === 'Nil' ? i : f(l.head, foldrprim(f, i, l.tail, ind + 1), l, ind);
+export const foldlprim = <T, R>(f: (h: T, a: R, l: List<T>, j: number) => R, i: R, l: List<T>, ind: number = 0): R =>
+  l.tag === 'Nil' ? i : foldlprim(f, f(l.head, i, l, ind), l.tail, ind + 1);
 
 export const zipWith = <A, B, R>(f: (a: A, b: B) => R, la: List<A>, lb: List<B>): List<R> =>
   la.tag === 'Nil' || lb.tag === 'Nil' ? Nil :
