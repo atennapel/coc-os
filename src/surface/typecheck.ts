@@ -302,6 +302,7 @@ export const typecheck = (tm: Term): [Term, Val] => {
 };
 
 export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Name[] => {
+  log(() => `typecheckDefs ${ds.map(x => x.name).join(' ')}`);
   const xs: Name[] = [];
   if (!allowRedefinition) {
     for (let i = 0; i < ds.length; i++) {

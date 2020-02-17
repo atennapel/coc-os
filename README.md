@@ -18,15 +18,14 @@ yarn start lib/nat.coc
 TODO:
 - fix issue with meta resetting
 - induction for types with fix
-- induction for recursive church types
-- induction in core
+- induction/inductionfix in core
 - fix synthapp of meta
 - named holes
 - infer more uses of roll/unroll (also in synthapp and check)
-- add rigid
 - improve type inference of annotated lambdas
 - improve impredicative type inference
 - solve issue with unnecessary eta-abstractions (example: S Z)
+- add rigid
 - maybe unfold globals in toCore or erase?
 - erase without going to core?
 ``` 

@@ -253,6 +253,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("./util");
 const syntax_1 = require("./syntax");
 const definitions_1 = require("./definitions");
+const config_1 = require("./config");
 const matchingBracket = (c) => {
     if (c === '(')
         return ')';
@@ -639,11 +640,19 @@ exports.parseDef = async (c, importMap) => {
         const files = c.slice(1).map(t => {
             if (t.tag !== 'Name')
                 return util_1.serr(`trying to import a non-path`);
-            return importMap[t.name] ? null : t.name;
+            if (importMap[t.name]) {
+                config_1.log(() => `skipping import ${t.name}`);
+                return null;
+            }
+            return t.name;
         }).filter(x => x);
+        config_1.log(() => `import ${files.join(' ')}`);
         const imps = await Promise.all(files.map(util_1.loadFile));
         const defs = await Promise.all(imps.map(s => exports.parseDefs(s, importMap)));
-        return defs.reduce((x, y) => x.concat(y), []);
+        const fdefs = defs.reduce((x, y) => x.concat(y), []);
+        fdefs.forEach(t => importMap[t.name] = true);
+        config_1.log(() => `imported ${fdefs.map(x => x.name).join(' ')}`);
+        return fdefs;
     }
     else if (c[0].tag === 'Name' && c[0].name === 'def') {
         if (c[1].tag === 'Name') {
@@ -687,7 +696,7 @@ exports.parseDefs = async (s, importMap) => {
     return ds.reduce((x, y) => x.concat(y), []);
 };
 
-},{"./definitions":3,"./syntax":16,"./util":18}],8:[function(require,module,exports){
+},{"./config":1,"./definitions":3,"./syntax":16,"./util":18}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_1 = require("./config");
@@ -1769,6 +1778,7 @@ exports.typecheck = (tm) => {
     return [ztm, ty];
 };
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
+    config_1.log(() => `typecheckDefs ${ds.map(x => x.name).join(' ')}`);
     const xs = [];
     if (!allowRedefinition) {
         for (let i = 0; i < ds.length; i++) {

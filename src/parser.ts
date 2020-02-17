@@ -2,6 +2,7 @@ import { serr, loadFile } from './util';
 import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, Hole, Ind, IndFix } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
+import { log } from './config';
 
 type BracketO = '(' | '{'
 type Bracket = BracketO | ')' | '}';
@@ -336,11 +337,19 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
   if (c[0].tag === 'Name' && c[0].name === 'import') {
     const files = c.slice(1).map(t => {
       if (t.tag !== 'Name') return serr(`trying to import a non-path`);
-      return importMap[t.name] ? null : t.name;
+      if (importMap[t.name]) {
+        log(() => `skipping import ${t.name}`);
+        return null;
+      }
+      return t.name;
     }).filter(x => x) as string[];
+    log(() => `import ${files.join(' ')}`);
     const imps: string[] = await Promise.all(files.map(loadFile));
     const defs: Def[][] = await Promise.all(imps.map(s => parseDefs(s, importMap)));
-    return defs.reduce((x, y) => x.concat(y), []);
+    const fdefs = defs.reduce((x, y) => x.concat(y), []);
+    fdefs.forEach(t => importMap[t.name] = true);
+    log(() => `imported ${fdefs.map(x => x.name).join(' ')}`);
+    return fdefs;
   } else if (c[0].tag === 'Name' && c[0].name === 'def') {
     if (c[1].tag === 'Name') {
       const name = c[1].name;
