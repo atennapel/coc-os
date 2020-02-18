@@ -2,7 +2,7 @@ import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, sho
 import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift, Ind, flattenPi, IndFix, showFromSurfaceZ } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
-import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl } from '../list';
+import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl, zipWith, toArray } from '../list';
 import { globalGet, globalSet } from './globalenv';
 import { eqPlicity, PlicityR, Plicity, PlicityE } from '../syntax';
 import { unify } from './unify';
@@ -314,7 +314,9 @@ export const typecheck = (tm: Term): [Term, Val] => {
     const strtype = showTermUZ(ty);
     const strterm = showFromSurfaceZ(ztm);
     const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => {
-      return `\n_${x} : ${showTermUZ(v, ns, vs, k)} = ${showTermUZ(t, ns, vs, k)}\nenvT: ${showEnvT(ts, k, false)}\nenvV: ${showEnvV(vs, k, false)}\n`;
+      const all = zipWith(([x, v], [def, ty]) => [x, v, def, ty] as [Name, Val, boolean, Val], zipWith((x, v) => [x, v] as [Name, Val], ns, vs), ts);
+      const allstr = toArray(all, ([x, v, b, t]) => `${x} : ${showTermUZ(t, ns, vs, k)}${b ? '' : ` = ${showTermUZ(v, ns, vs, k)}`}`).join('\n');
+      return `\n_${x} : ${showTermUZ(v, ns, vs, k)} = ${showTermUZ(t, ns, vs, k)}\nlocal:\n${allstr}\n`;
     }).join('\n');
     return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
   }

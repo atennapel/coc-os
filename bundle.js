@@ -1797,7 +1797,9 @@ exports.typecheck = (tm) => {
         const strtype = domain_1.showTermUZ(ty);
         const strterm = syntax_1.showFromSurfaceZ(ztm);
         const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => {
-            return `\n_${x} : ${domain_1.showTermUZ(v, ns, vs, k)} = ${domain_1.showTermUZ(t, ns, vs, k)}\nenvT: ${showEnvT(ts, k, false)}\nenvV: ${domain_1.showEnvV(vs, k, false)}\n`;
+            const all = list_1.zipWith(([x, v], [def, ty]) => [x, v, def, ty], list_1.zipWith((x, v) => [x, v], ns, vs), ts);
+            const allstr = list_1.toArray(all, ([x, v, b, t]) => `${x} : ${domain_1.showTermUZ(t, ns, vs, k)}${b ? '' : ` = ${domain_1.showTermUZ(v, ns, vs, k)}`}`).join('\n');
+            return `\n_${x} : ${domain_1.showTermUZ(v, ns, vs, k)} = ${domain_1.showTermUZ(t, ns, vs, k)}\nlocal:\n${allstr}\n`;
         }).join('\n');
         return util_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
     }
