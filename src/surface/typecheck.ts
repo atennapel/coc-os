@@ -56,13 +56,16 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
   if (tm.tag === 'Var' || tm.tag === 'Global' || tm.tag === 'App') {
     try {
       metaPush();
+      holesPush();
       const [term, ty2] = synth(ns, ts, vs, k, tm);
       unify(ns, k, ty2, ty);
       metaDiscard();
+      holesDiscard();
       return term;
     } catch (err) {
       if (!(err instanceof TypeError)) throw err;
       metaPop();
+      holesPop();
     }
   }
   const tyf = force(ty);
@@ -302,7 +305,21 @@ const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: 
   return terr(`invalid type or plicity mismatch in synthapp in ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)}`);
 };
 
-let holes: { [key:string]: [Val, Val, List<Name>, number, EnvV, EnvT] } = {};
+type HoleInfo = [Val, Val, List<Name>, number, EnvV, EnvT];
+let holesStack: { [key:string]: HoleInfo }[] = [];
+let holes: { [key:string]: HoleInfo } = {};
+const holesPush = (): void => {
+  const old = holes;
+  holesStack.push(holes);
+  holes = {};
+  for (let k in old) holes[k] = old[k];
+};
+const holesPop = (): void => {
+  const x = holesStack.pop();
+  if (!x) return;
+  holes = x;
+};
+const holesDiscard = (): void => { holesStack.pop() };
 
 export const typecheck = (tm: Term): [Term, Val] => {
   // metaReset(); // TODO: fix this

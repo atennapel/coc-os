@@ -1544,15 +1544,18 @@ const check = (ns, ts, vs, k, tm, ty) => {
     if (tm.tag === 'Var' || tm.tag === 'Global' || tm.tag === 'App') {
         try {
             metas_1.metaPush();
+            holesPush();
             const [term, ty2] = synth(ns, ts, vs, k, tm);
             unify_1.unify(ns, k, ty2, ty);
             metas_1.metaDiscard();
+            holesDiscard();
             return term;
         }
         catch (err) {
             if (!(err instanceof TypeError))
                 throw err;
             metas_1.metaPop();
+            holesPop();
         }
     }
     const tyf = domain_1.force(ty);
@@ -1786,7 +1789,22 @@ const synthapp = (ns, ts, vs, k, ty_, plicity, arg) => {
     }
     return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(arg, ns)}`);
 };
+let holesStack = [];
 let holes = {};
+const holesPush = () => {
+    const old = holes;
+    holesStack.push(holes);
+    holes = {};
+    for (let k in old)
+        holes[k] = old[k];
+};
+const holesPop = () => {
+    const x = holesStack.pop();
+    if (!x)
+        return;
+    holes = x;
+};
+const holesDiscard = () => { holesStack.pop(); };
 exports.typecheck = (tm) => {
     // metaReset(); // TODO: fix this
     holes = {};
