@@ -521,19 +521,19 @@ const check = (ns, ts, vs, k, tm, ty) => {
         const body = check(list_1.Cons(tm.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
-        return syntax_1.Abs(tm.plicity, tm.name === '_' ? tyf.name : tm.name, domain_1.quote(tyf.type, k, false), body);
+        return tm.plicity.erased ? body : syntax_1.Abs(tm.plicity, tm.name === '_' ? tyf.name : tm.name, null, body);
     }
     if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
         const v = domain_1.VVar(k);
         const body = check(list_1.Cons(tyf.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, syntax_1.shift(1, 0, tm), tyf.body(v));
-        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, k, false), body);
+        return body;
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(ns, ts, vs, k, tm.val);
         const body = check(list_1.Cons(tm.name, ns), extendT(ts, vty, false), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body, ty);
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
-        return syntax_1.Let(tm.plicity, tm.name, val, body);
+        return tm.plicity.erased ? body : syntax_1.Let(tm.plicity, tm.name, val, body);
     }
     if (tm.tag === 'Hole') {
         const x = newMeta(ts);
@@ -545,7 +545,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
         return x;
     }
     const [term, ty2] = synth(ns, ts, vs, k, tm);
-    const [ty2inst, targs] = inst(ts, vs, ty2);
+    const [ty2inst] = inst(ts, vs, ty2);
     try {
         unify_1.unify(ns, k, ty2inst, ty);
     }
@@ -554,7 +554,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
             throw err;
         return util_1.terr(`failed to unify ${domain_1.showTermU(ty2, ns, k)} ~ ${domain_1.showTermU(ty, ns, k)}: ${err.message}`);
     }
-    return list_1.foldl((a, m) => syntax_1.App(a, syntax_2.PlicityE, m), term, targs);
+    return term;
 };
 const freshPi = (ts, vs, x, impl) => {
     const a = newMeta(ts);
@@ -590,8 +590,8 @@ const synth = (ns, ts, vs, k, tm) => {
     }
     if (tm.tag === 'App') {
         const [fntm, fn] = synth(ns, ts, vs, k, tm.left);
-        const [rt, res, ms] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
-        return [syntax_1.App(list_1.foldl((f, a) => syntax_1.App(f, syntax_2.PlicityE, a), fntm, ms), tm.plicity, res), rt];
+        const [rt, res] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
+        return [tm.plicity.erased ? fntm : syntax_1.App(fntm, tm.plicity, res), rt];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
@@ -602,7 +602,7 @@ const synth = (ns, ts, vs, k, tm) => {
                 return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
             // TODO: avoid quote here
             const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, type, domain_1.quote(rt, k + 1, false)), vs);
-            return [syntax_1.Abs(tm.plicity, tm.name, type, body), pi];
+            return [tm.plicity.erased ? body : syntax_1.Abs(tm.plicity, tm.name, type, body), pi];
         }
         else {
             const pi = freshPi(ts, vs, tm.name, tm.plicity);
@@ -615,7 +615,7 @@ const synth = (ns, ts, vs, k, tm) => {
         const [body, rt] = synth(list_1.Cons(tm.name, ns), extendT(ts, vty, false), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body);
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
-        return [syntax_1.Let(tm.plicity, tm.name, val, body), rt];
+        return [tm.plicity.erased ? body : syntax_1.Let(tm.plicity, tm.name, val, body), rt];
     }
     if (tm.tag === 'Pi') {
         const type = check(ns, ts, vs, k, tm.type, domain_1.VType);

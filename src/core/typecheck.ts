@@ -2,9 +2,9 @@ import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, sho
 import { Term, showFromSurface, Pi, App, Abs, Let, Var, showTerm, isUnsolved, Type, shift, showFromSurfaceZ } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
-import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl, zipWith, toArray } from '../list';
+import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, zipWith, toArray } from '../list';
 import { globalGet, globalSet } from './globalenv';
-import { eqPlicity, PlicityR, Plicity, PlicityE } from '../syntax';
+import { eqPlicity, PlicityR, Plicity } from '../syntax';
 import { unify } from './unify';
 import { Def, showDef } from './definitions';
 import { log } from '../config';
@@ -70,19 +70,19 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
     const body = check(Cons(tm.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, tm.body, tyf.body(v));
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
-    return Abs(tm.plicity, tm.name === '_' ? tyf.name : tm.name, quote(tyf.type, k, false), body);
+    return tm.plicity.erased ? body : Abs(tm.plicity, tm.name === '_' ? tyf.name : tm.name, null, body);
   }
   if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
     const v = VVar(k);
     const body = check(Cons(tyf.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, shift(1, 0, tm), tyf.body(v));
-    return Abs(tyf.plicity, tyf.name, quote(tyf.type, k, false), body);
+    return body;
   }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(ns, ts, vs, k, tm.val);
     const body = check(Cons(tm.name, ns), extendT(ts, vty, false), extendV(vs, evaluate(val, vs)), k + 1, tm.body, ty);
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
-    return Let(tm.plicity, tm.name, val, body);
+    return tm.plicity.erased ? body : Let(tm.plicity, tm.name, val, body);
   }
   if (tm.tag === 'Hole') {
     const x = newMeta(ts);
@@ -93,14 +93,14 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
     return x;
   }
   const [term, ty2] = synth(ns, ts, vs, k, tm);
-  const [ty2inst, targs] = inst(ts, vs, ty2);
+  const [ty2inst] = inst(ts, vs, ty2);
   try {
     unify(ns, k, ty2inst, ty);
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
     return terr(`failed to unify ${showTermU(ty2, ns, k)} ~ ${showTermU(ty, ns, k)}: ${err.message}`);
   }
-  return foldl((a, m) => App(a, PlicityE, m), term, targs);
+  return term;
 };
 
 const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
@@ -134,8 +134,8 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
   }
   if (tm.tag === 'App') {
     const [fntm, fn] = synth(ns, ts, vs, k, tm.left);
-    const [rt, res, ms] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
-    return [App(foldl((f, a) => App(f, PlicityE, a), fntm, ms), tm.plicity, res), rt];
+    const [rt, res] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
+    return [tm.plicity.erased ? fntm : App(fntm, tm.plicity, res), rt];
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
@@ -146,7 +146,7 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
         return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
       // TODO: avoid quote here
       const pi = evaluate(Pi(tm.plicity, tm.name, type, quote(rt, k + 1, false)), vs);
-      return [Abs(tm.plicity, tm.name, type, body), pi];
+      return [tm.plicity.erased ? body : Abs(tm.plicity, tm.name, type, body), pi];
     } else {
       const pi = freshPi(ts, vs, tm.name, tm.plicity);
       const term = check(ns, ts, vs, k, tm, pi);
@@ -158,7 +158,7 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     const [body, rt] = synth(Cons(tm.name, ns), extendT(ts, vty, false), extendV(vs, evaluate(val, vs)), k + 1, tm.body);
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
-    return [Let(tm.plicity, tm.name, val, body), rt];
+    return [tm.plicity.erased ? body : Let(tm.plicity, tm.name, val, body), rt];
   }
   if (tm.tag === 'Pi') {
     const type = check(ns, ts, vs, k, tm.type, VType);
