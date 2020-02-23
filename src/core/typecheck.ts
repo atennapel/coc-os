@@ -75,7 +75,7 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
   if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
     const v = VVar(k);
     const body = check(Cons(tyf.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, shift(1, 0, tm), tyf.body(v));
-    return body;
+    return shift(-1, 0, body);
   }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(ns, ts, vs, k, tm.val);

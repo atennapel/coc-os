@@ -526,7 +526,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
     if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
         const v = domain_1.VVar(k);
         const body = check(list_1.Cons(tyf.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, syntax_1.shift(1, 0, tm), tyf.body(v));
-        return body;
+        return syntax_1.shift(-1, 0, body);
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(ns, ts, vs, k, tm.val);
