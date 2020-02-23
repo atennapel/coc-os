@@ -34,7 +34,6 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
     return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
-    if (a.type && b.type) unify(ns, k, a.type, b.type);
     const v = VVar(k);
     return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
   }

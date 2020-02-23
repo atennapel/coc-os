@@ -47,7 +47,7 @@ exports.HMeta = (index) => ({ tag: 'HMeta', index });
 exports.EApp = (arg) => ({ tag: 'EApp', arg });
 exports.VNe = (head, args) => ({ tag: 'VNe', head, args });
 exports.VGlued = (head, args, val) => ({ tag: 'VGlued', head, args, val });
-exports.VAbs = (name, type, body) => ({ tag: 'VAbs', name, type, body });
+exports.VAbs = (name, body) => ({ tag: 'VAbs', name, body });
 exports.VPi = (plicity, name, type, body) => ({ tag: 'VPi', name, plicity, type, body });
 exports.VType = { tag: 'VType' };
 exports.VVar = (index) => exports.VNe(exports.HVar(index), list_1.Nil);
@@ -104,7 +104,7 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return t.plicity.erased ? exports.evaluate(t.left, vs) : exports.vapp(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
     if (t.tag === 'Abs')
         return t.plicity.erased ? exports.evaluate(t.body, vs) :
-            exports.VAbs(t.name, t.type && exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
+            exports.VAbs(t.name, v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Let')
         return t.plicity.erased ? exports.evaluate(t.body, vs) : exports.evaluate(t.body, exports.extendV(vs, exports.evaluate(t.val, vs)));
     if (t.tag === 'Pi')
@@ -138,7 +138,7 @@ exports.quote = (v_, k, full) => {
     if (v.tag === 'VGlued')
         return full ? exports.quote(lazy_1.forceLazy(v.val), k, full) : list_1.foldr((x, y) => quoteElim(y, x, k, full), quoteHead(v.head, k), v.args);
     if (v.tag === 'VAbs')
-        return syntax_1.Abs(syntax_2.PlicityR, v.name, v.type && exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
+        return syntax_1.Abs(syntax_2.PlicityR, v.name, null, exports.quote(v.body(exports.VVar(k)), k + 1, full));
     if (v.tag === 'VPi')
         return syntax_1.Pi(v.plicity, v.name, exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
     return v;
@@ -496,16 +496,16 @@ const inst = (ts, vs, ty_) => {
 const check = (ns, ts, vs, k, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showFromSurface(tm, ns)} : ${domain_1.showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
-        return syntax_1.Type;
+        return;
     if (tm.tag === 'Var' || tm.tag === 'Global' || tm.tag === 'App') {
         try {
             metas_1.metaPush();
             holesPush();
-            const [term, ty2] = synth(ns, ts, vs, k, tm);
+            const ty2 = synth(ns, ts, vs, k, tm);
             unify_1.unify(ns, k, ty2, ty);
             metas_1.metaDiscard();
             holesDiscard();
-            return term;
+            return;
         }
         catch (err) {
             if (!(err instanceof TypeError))
@@ -518,22 +518,22 @@ const check = (ns, ts, vs, k, tm, ty) => {
     config_1.log(() => `check after ${domain_1.showTermU(tyf, ns, k)}`);
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && syntax_2.eqPlicity(tm.plicity, tyf.plicity)) {
         const v = domain_1.VVar(k);
-        const body = check(list_1.Cons(tm.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
+        check(list_1.Cons(tm.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, tm.body, tyf.body(v));
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
-        return tm.plicity.erased ? body : syntax_1.Abs(tm.plicity, tm.name === '_' ? tyf.name : tm.name, null, body);
+        return;
     }
     if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
         const v = domain_1.VVar(k);
-        const body = check(list_1.Cons(tyf.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, syntax_1.shift(1, 0, tm), tyf.body(v));
-        return syntax_1.shift(-1, 0, body);
+        check(list_1.Cons(tyf.name, ns), extendT(ts, tyf.type, true), domain_1.extendV(vs, v), k + 1, syntax_1.shift(1, 0, tm), tyf.body(v));
+        return;
     }
     if (tm.tag === 'Let') {
-        const [val, vty] = synth(ns, ts, vs, k, tm.val);
-        const body = check(list_1.Cons(tm.name, ns), extendT(ts, vty, false), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body, ty);
+        const vty = synth(ns, ts, vs, k, tm.val);
+        check(list_1.Cons(tm.name, ns), extendT(ts, vty, false), domain_1.extendV(vs, domain_1.evaluate(tm.val, vs)), k + 1, tm.body, ty);
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
-        return tm.plicity.erased ? body : syntax_1.Let(tm.plicity, tm.name, val, body);
+        return;
     }
     if (tm.tag === 'Hole') {
         const x = newMeta(ts);
@@ -542,9 +542,9 @@ const check = (ns, ts, vs, k, tm, ty) => {
                 return util_1.terr(`named hole used more than once: _${tm.name}`);
             holes[tm.name] = [domain_1.evaluate(x, vs), ty, ns, k, vs, ts];
         }
-        return x;
+        return;
     }
-    const [term, ty2] = synth(ns, ts, vs, k, tm);
+    const ty2 = synth(ns, ts, vs, k, tm);
     const [ty2inst] = inst(ts, vs, ty2);
     try {
         unify_1.unify(ns, k, ty2inst, ty);
@@ -554,7 +554,7 @@ const check = (ns, ts, vs, k, tm, ty) => {
             throw err;
         return util_1.terr(`failed to unify ${domain_1.showTermU(ty2, ns, k)} ~ ${domain_1.showTermU(ty, ns, k)}: ${err.message}`);
     }
-    return term;
+    return;
 };
 const freshPi = (ts, vs, x, impl) => {
     const a = newMeta(ts);
@@ -565,18 +565,18 @@ const freshPi = (ts, vs, x, impl) => {
 const synth = (ns, ts, vs, k, tm) => {
     config_1.log(() => `synth ${syntax_1.showFromSurface(tm, ns)} in ${showEnvT(ts, k, false)} and ${domain_1.showEnvV(vs, k, false)}`);
     if (tm.tag === 'Type')
-        return [tm, domain_1.VType];
+        return domain_1.VType;
     if (tm.tag === 'Var') {
         const res = list_1.index(ts, tm.index);
         if (!res)
             return util_1.terr(`var out of scope ${syntax_1.showFromSurface(tm, ns)}`);
-        return [tm, res[1]];
+        return res[1];
     }
     if (tm.tag === 'Global') {
         const entry = globalenv_1.globalGet(tm.name);
         if (!entry)
             return util_1.terr(`global ${tm.name} not found`);
-        return [tm, entry.type];
+        return entry.type;
     }
     if (tm.tag === 'Hole') {
         const t = newMeta(ts);
@@ -586,47 +586,47 @@ const synth = (ns, ts, vs, k, tm) => {
                 return util_1.terr(`named hole used more than once: _${tm.name}`);
             holes[tm.name] = [domain_1.evaluate(t, vs), vt, ns, k, vs, ts];
         }
-        return [t, vt];
+        return vt;
     }
     if (tm.tag === 'App') {
-        const [fntm, fn] = synth(ns, ts, vs, k, tm.left);
-        const [rt, res] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
-        return [tm.plicity.erased ? fntm : syntax_1.App(fntm, tm.plicity, res), rt];
+        const fn = synth(ns, ts, vs, k, tm.left);
+        const [rt] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
+        return rt;
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
-            const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
-            const vtype = domain_1.evaluate(type, vs);
-            const [body, rt] = synth(list_1.Cons(tm.name, ns), extendT(ts, vtype, true), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body);
+            check(ns, ts, vs, k, tm.type, domain_1.VType);
+            const vtype = domain_1.evaluate(tm.type, vs);
+            const rt = synth(list_1.Cons(tm.name, ns), extendT(ts, vtype, true), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body);
             if (tm.plicity.erased && erasedUsed(0, tm.body))
                 return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
             // TODO: avoid quote here
-            const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, type, domain_1.quote(rt, k + 1, false)), vs);
-            return [tm.plicity.erased ? body : syntax_1.Abs(tm.plicity, tm.name, type, body), pi];
+            const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, tm.type, domain_1.quote(rt, k + 1, false)), vs);
+            return pi;
         }
         else {
             const pi = freshPi(ts, vs, tm.name, tm.plicity);
-            const term = check(ns, ts, vs, k, tm, pi);
-            return [term, pi];
+            check(ns, ts, vs, k, tm, pi);
+            return pi;
         }
     }
     if (tm.tag === 'Let') {
-        const [val, vty] = synth(ns, ts, vs, k, tm.val);
-        const [body, rt] = synth(list_1.Cons(tm.name, ns), extendT(ts, vty, false), domain_1.extendV(vs, domain_1.evaluate(val, vs)), k + 1, tm.body);
+        const vty = synth(ns, ts, vs, k, tm.val);
+        const rt = synth(list_1.Cons(tm.name, ns), extendT(ts, vty, false), domain_1.extendV(vs, domain_1.evaluate(tm.val, vs)), k + 1, tm.body);
         if (tm.plicity.erased && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showFromSurface(tm, ns)}`);
-        return [tm.plicity.erased ? body : syntax_1.Let(tm.plicity, tm.name, val, body), rt];
+        return rt;
     }
     if (tm.tag === 'Pi') {
-        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
-        const body = check(list_1.Cons(tm.name, ns), extendT(ts, domain_1.evaluate(type, vs), true), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, domain_1.VType);
-        return [syntax_1.Pi(tm.plicity, tm.name, type, body), domain_1.VType];
+        check(ns, ts, vs, k, tm.type, domain_1.VType);
+        check(list_1.Cons(tm.name, ns), extendT(ts, domain_1.evaluate(tm.type, vs), true), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, domain_1.VType);
+        return domain_1.VType;
     }
     if (tm.tag === 'Ann') {
-        const type = check(ns, ts, vs, k, tm.type, domain_1.VType);
-        const vt = domain_1.evaluate(type, vs);
-        const term = check(ns, ts, vs, k, tm.term, vt);
-        return [term, vt];
+        check(ns, ts, vs, k, tm.type, domain_1.VType);
+        const vt = domain_1.evaluate(tm.type, vs);
+        check(ns, ts, vs, k, tm.term, vt);
+        return vt;
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
@@ -638,13 +638,13 @@ const synthapp = (ns, ts, vs, k, ty_, plicity, arg) => {
         // {a} -> b @ c (instantiate with meta then b @ c)
         const m = newMeta(ts);
         const vm = domain_1.evaluate(m, vs);
-        const [rt, ft, l] = synthapp(ns, ts, vs, k, ty.body(vm), plicity, arg);
-        return [rt, ft, list_1.Cons(m, l)];
+        const [rt, l] = synthapp(ns, ts, vs, k, ty.body(vm), plicity, arg);
+        return [rt, list_1.Cons(m, l)];
     }
     if (ty.tag === 'VPi' && syntax_2.eqPlicity(ty.plicity, plicity)) {
-        const tm = check(ns, ts, vs, k, arg, ty.type);
-        const vm = domain_1.evaluate(tm, vs);
-        return [ty.body(vm), tm, list_1.Nil];
+        check(ns, ts, vs, k, arg, ty.type);
+        const vm = domain_1.evaluate(arg, vs);
+        return [ty.body(vm), list_1.Nil];
     }
     // TODO fix the following
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
@@ -675,23 +675,25 @@ const holesDiscard = () => { holesStack.pop(); };
 exports.typecheck = (tm) => {
     // metaReset(); // TODO: fix this
     holes = {};
-    const [etm, ty] = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
-    const ztm = domain_1.zonk(etm);
+    const ty = synth(list_1.Nil, list_1.Nil, list_1.Nil, 0, tm);
+    /*
+    const ztm = zonk(etm);
     const holeprops = Object.entries(holes);
     if (holeprops.length > 0) {
-        const strtype = domain_1.showTermUZ(ty);
-        const strterm = syntax_1.showFromSurfaceZ(ztm);
-        const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => {
-            const all = list_1.zipWith(([x, v], [def, ty]) => [x, v, def, ty], list_1.zipWith((x, v) => [x, v], ns, vs), ts);
-            const allstr = list_1.toArray(all, ([x, v, b, t]) => `${x} : ${domain_1.showTermUZ(t, ns, vs, k)}${b ? '' : ` = ${domain_1.showTermUZ(v, ns, vs, k)}`}`).join('\n');
-            return `\n_${x} : ${domain_1.showTermUZ(v, ns, vs, k)} = ${domain_1.showTermUZ(t, ns, vs, k)}\nlocal:\n${allstr}\n`;
-        }).join('\n');
-        return util_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
+      const strtype = showTermUZ(ty);
+      const strterm = showFromSurfaceZ(ztm);
+      const str = holeprops.map(([x, [t, v, ns, k, vs, ts]]) => {
+        const all = zipWith(([x, v], [def, ty]) => [x, v, def, ty] as [Name, Val, boolean, Val], zipWith((x, v) => [x, v] as [Name, Val], ns, vs), ts);
+        const allstr = toArray(all, ([x, v, b, t]) => `${x} : ${showTermUZ(t, ns, vs, k)}${b ? '' : ` = ${showTermUZ(v, ns, vs, k)}`}`).join('\n');
+        return `\n_${x} : ${showTermUZ(v, ns, vs, k)} = ${showTermUZ(t, ns, vs, k)}\nlocal:\n${allstr}\n`;
+      }).join('\n');
+      return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
     }
     // TODO: should type be checked?
-    if (syntax_1.isUnsolved(ztm))
-        return util_1.terr(`elaborated term was unsolved: ${syntax_1.showFromSurfaceZ(ztm)}`);
-    return [ztm, ty];
+    if (isUnsolved(ztm))
+      return terr(`elaborated term was unsolved: ${showFromSurfaceZ(ztm)}`);
+    */
+    return ty;
 };
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
     config_1.log(() => `typecheckDefs ${ds.map(x => x.name).join(' ')}`);
@@ -707,9 +709,9 @@ exports.typecheckDefs = (ds, allowRedefinition = false) => {
         const d = ds[i];
         config_1.log(() => `typecheckDefs ${definitions_1.showDef(d)}`);
         if (d.tag === 'DDef') {
-            const [tm, ty] = exports.typecheck(d.value);
-            config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(tm)}`);
-            globalenv_1.globalSet(d.name, tm, domain_1.evaluate(tm), ty);
+            const ty = exports.typecheck(d.value);
+            config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(d.value)}`);
+            globalenv_1.globalSet(d.name, d.value, domain_1.evaluate(d.value), ty);
             xs.push(d.name);
         }
     }
@@ -759,8 +761,6 @@ exports.unify = (ns, k, a_, b_) => {
         return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
     }
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
-        if (a.type && b.type)
-            exports.unify(ns, k, a.type, b.type);
         const v = domain_1.VVar(k);
         return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
     }
@@ -1531,12 +1531,12 @@ exports.runREPL = (_s, _cb) => {
             const t = parser_1.parse(_s);
             config_1.log(() => syntax_1.showTerm(t));
             const tt = syntax_2.toSurface(t);
-            const [etm, vty] = typecheck_1.typecheck(tt);
+            const vty = typecheck_1.typecheck(tt);
             const ty = domain_1.quoteZ(vty, list_1.Nil, 0, false);
-            tm_ = etm;
+            tm_ = tt;
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(ty)));
-            config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(etm)));
-            msg += `type: ${syntax_1.showTerm(syntax_2.fromSurface(ty))}\nterm: ${syntax_1.showTerm(syntax_2.fromSurface(etm))}`;
+            config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(tt)));
+            msg += `type: ${syntax_1.showTerm(syntax_2.fromSurface(ty))}\nterm: ${syntax_1.showTerm(syntax_2.fromSurface(tm_))}`;
             if (typeOnly)
                 return _cb(msg);
         }
@@ -1545,9 +1545,9 @@ exports.runREPL = (_s, _cb) => {
             return _cb('' + err, true);
         }
         try {
-            const n = domain_1.normalize(tm_, list_1.Nil, 0, false);
+            const n = domain_1.normalize(tm_, list_1.Nil, 0, true);
             config_1.log(() => syntax_1.showTerm(syntax_2.fromSurface(n)));
-            return _cb(msg);
+            return _cb(`${msg}\nnorm: ${syntax_1.showTerm(syntax_2.fromSurface(n))}`);
         }
         catch (err) {
             config_1.log(() => '' + err);

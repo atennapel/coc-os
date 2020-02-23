@@ -125,21 +125,21 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const t = parse(_s);
       log(() => showTerm(t));
       const tt = toSurface(t);
-      const [etm, vty] = typecheck(tt);
+      const vty = typecheck(tt);
       const ty = quoteZ(vty, Nil, 0, false);
-      tm_ = etm;
+      tm_ = tt;
       log(() => showTerm(fromSurface(ty)));
-      log(() => showTerm(fromSurface(etm)));
-      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(etm))}`;
+      log(() => showTerm(fromSurface(tt)));
+      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(tm_))}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);
       return _cb(''+err, true);
     }
     try {
-      const n = normalize(tm_, Nil, 0, false);
+      const n = normalize(tm_, Nil, 0, true);
       log(() => showTerm(fromSurface(n)));
-      return _cb(msg);
+      return _cb(`${msg}\nnorm: ${showTerm(fromSurface(n))}`);
     } catch (err) {
       log(() => ''+err);
       msg += '\n'+err;
