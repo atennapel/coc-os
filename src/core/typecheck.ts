@@ -1,4 +1,4 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, VNe, HMeta, forceGlue } from './domain';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, VNe, HMeta } from './domain';
 import { Term, showFromSurface, Pi, App, Var, showTerm, shift } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
@@ -189,13 +189,13 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): Val => {
   }
   if (tm.tag === 'Fst') {
     const ty = synth(ns, ts, vs, k, tm.term);
-    const vty = forceGlue(ty);
+    const vty = force(ty);
     if (vty.tag !== 'VInter') return terr(`not an intersection type in fst: ${vty.tag}`);
     return vty.type;
   }
   if (tm.tag === 'Snd') {
     const ty = synth(ns, ts, vs, k, tm.term);
-    const vty = forceGlue(ty);
+    const vty = force(ty);
     if (vty.tag !== 'VInter') return terr(`not an intersection type in snd: ${vty.tag}`);
     return vty.body(evaluate(tm.term, vs));
   }

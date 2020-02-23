@@ -731,14 +731,14 @@ const synth = (ns, ts, vs, k, tm) => {
     }
     if (tm.tag === 'Fst') {
         const ty = synth(ns, ts, vs, k, tm.term);
-        const vty = domain_1.forceGlue(ty);
+        const vty = domain_1.force(ty);
         if (vty.tag !== 'VInter')
             return util_1.terr(`not an intersection type in fst: ${vty.tag}`);
         return vty.type;
     }
     if (tm.tag === 'Snd') {
         const ty = synth(ns, ts, vs, k, tm.term);
-        const vty = domain_1.forceGlue(ty);
+        const vty = domain_1.force(ty);
         if (vty.tag !== 'VInter')
             return util_1.terr(`not an intersection type in snd: ${vty.tag}`);
         return vty.body(domain_1.evaluate(tm.term, vs));
