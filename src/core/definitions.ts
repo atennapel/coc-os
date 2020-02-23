@@ -1,6 +1,6 @@
 import { Name } from '../names';
-import { Term, showTerm, toCore } from './syntax';
-import * as D from '../surface/definitions';
+import { Term, showTerm, toSurface } from './syntax';
+import * as D from '../definitions';
 
 export type Def = DDef;
 
@@ -12,8 +12,8 @@ export const showDef = (d: Def): string => {
   return d.tag;
 };
 
-export const toCoreDef = (d: D.Def): Def => {
-  if (d.tag === 'DDef') return DDef(d.name, toCore(d.value));
+export const toSurfaceDef = (d: D.Def): Def => {
+  if (d.tag === 'DDef') return DDef(d.name, toSurface(d.value));
   return d.tag;
 };
-export const toCoreDefs = (d: D.Def[]): Def[] => d.map(toCoreDef);
+export const toSurfaceDefs = (d: D.Def[]): Def[] => d.map(toSurfaceDef);

@@ -1,11 +1,11 @@
 import { parseDefs } from './parser';
 import { initREPL, runREPL } from './repl';
 import { showTerm } from './syntax';
-import { toSurfaceDefs } from './surface/definitions';
-import { globalReset, globalMap } from './surface/globalenv';
-import { typecheckDefs } from './surface/typecheck';
-import { quoteZ } from './surface/domain';
-import { fromSurface, showFromSurface } from './surface/syntax';
+import { toSurfaceDefs } from './core/definitions';
+import { globalReset, globalMap } from './core/globalenv';
+import { typecheckDefs } from './core/typecheck';
+import { quoteZ } from './core/domain';
+import { fromSurface, showFromSurface } from './core/syntax';
 import { setConfig } from './config';
 
 if (process.argv[2]) {

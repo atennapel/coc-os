@@ -1,5 +1,5 @@
 import { serr, loadFile } from './util';
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, Hole, Ind, IndFix, HoleN } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 import { log } from './config';
@@ -190,84 +190,6 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1), '(');
     return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? PlicityE : PlicityR, name, ty, x), body);
-  }
-  if (isName(ts[0], 'unroll')) {
-    if (ts.length < 2) return serr(`something went wrong when parsing unroll`);
-    if (ts.length === 2) {
-      const [term, tb] = expr(ts[1]);
-      if (tb) return serr(`something went wrong when parsing unroll`);
-      return Unroll(term);
-    }
-    const indPart = ts.slice(0, 2);
-    const rest = ts.slice(2);
-    return exprs([TList(indPart, '(')].concat(rest), '(');
-  }
-  if (isName(ts[0], 'roll')) {
-    if (ts[1].tag === 'List' && ts[1].bracket === '{') {
-      const [ty, b] = expr(ts[1]);
-      if (!b) return serr(`something went wrong when parsing roll`);
-      const body = exprs(ts.slice(2), '(');
-      return Roll(ty, body);
-    } else {
-      const body = exprs(ts.slice(1), '(');
-      return Roll(null, body);
-    }
-  }
-  if (isName(ts[0], 'induction')) {
-    if (ts.length < 2) return serr(`something went wrong when parsing induction`);
-    if (ts.length === 2) {
-      const [term, tb] = expr(ts[1]);
-      if (tb) return serr(`something went wrong when parsing induction`);
-      return Ind(null, term);
-    }
-    if (ts.length === 3) {
-      const [type, tb1] = expr(ts[1]);
-      if (!tb1) return serr(`something went wrong when parsing induction`);
-      const [term, tb2] = expr(ts[2]);
-      if (tb2) return serr(`something went wrong when parsing induction`);
-      return Ind(type, term);
-    }
-    const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
-    const indPart = ts.slice(0, hasType ? 3 : 2);
-    const rest = ts.slice(hasType ? 3 : 2);
-    return exprs([TList(indPart, '(')].concat(rest), '(');
-  }
-  
-  if (isName(ts[0], 'inductionFix')) {
-    if (ts.length < 3) return serr(`something went wrong when parsing inductionFix`);
-    if (ts.length === 3) {
-      const [type, tb1] = expr(ts[1]);
-      if (!tb1) return serr(`something went wrong when parsing inductionFix`);
-      const [term, tb2] = expr(ts[2]);
-      if (tb2) return serr(`something went wrong when parsing inductionFix`);
-      return IndFix(type, term);
-    }
-    const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
-    const indPart = ts.slice(0, hasType ? 3 : 2);
-    const rest = ts.slice(hasType ? 3 : 2);
-    return exprs([TList(indPart, '(')].concat(rest), '(');
-  }
-  if (isName(ts[0], 'fix')) {
-    const args: [Name, boolean, Term | null][] = [];
-    let found = false;
-    let i = 1;
-    for (; i < ts.length; i++) {
-      const c = ts[i];
-      if (isName(c, '.')) {
-        found = true;
-        break;
-      }
-      lambdaParams(c).forEach(x => args.push(x));
-    }
-    if (!found) return serr(`. not found after fix`);
-    const rargs: [Name, Term][] = [];
-    args.forEach(([x, i, t]) => {
-      if (i) return serr(`fix arg cannot be implicit`);
-      if (!t) return serr(`fix arg must have a type annotation`);
-      return rargs.push([x, t]);
-    });
-    const body = exprs(ts.slice(i + 1), '(');
-    return rargs.reduceRight((x, [name, ty]) => Fix(name, ty, x), body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

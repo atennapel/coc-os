@@ -1,14 +1,12 @@
 import { log, setConfig, config } from './config';
-import { globalReset, globalMap, globalDelete, globalGet } from './surface/globalenv';
+import { globalReset, globalMap, globalDelete, globalGet } from './core/globalenv';
 import { showTerm, eraseTypes } from './syntax';
-import { quoteZ, normalize } from './surface/domain';
-import { fromSurface, toSurface } from './surface/syntax';
+import { quoteZ, normalize } from './core/domain';
+import { fromSurface, toSurface } from './core/syntax';
 import { parseDefs, parse, ImportMap } from './parser';
-import { typecheckDefs, typecheck } from './surface/typecheck';
-import { toSurfaceDefs } from './surface/definitions';
-import { erase, showTerm as showTermE } from './untyped/syntax';
+import { typecheckDefs, typecheck } from './core/typecheck';
+import { toSurfaceDefs } from './core/definitions';
 import { Nil } from './list';
-import { toCore } from './core/syntax';
 import { loadFile } from './util';
 
 const help = `
@@ -109,23 +107,6 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const term = quoteZ(res.val, Nil, 0, true);
       return _cb(showTerm(fromSurface(term)));
     }
-    /*
-    if (_s.startsWith(':import')) {
-      const files = _s.slice(7).trim().split(/\s+/g);
-      Promise.all(files.map(loadFile)).then(defs => {
-        const xs: string[] = [];
-        defs.forEach(rest => {
-          parseDefs(rest, importMap).then(ds => {
-            const dsc = toSurfaceDefs(ds)
-            const lxs = typecheckDefs(dsc, true);
-            lxs.forEach(x => xs.push(x));
-          });
-        });
-        return _cb(`imported ${files.join(' ')}; defined ${xs.join(' ')}`);
-      }).catch(err => _cb(''+err, true));
-      return;
-    }
-    */
     if (_s.startsWith(':view')) {
       const files = _s.slice(5).trim().split(/\s+/g);
       Promise.all(files.map(loadFile)).then(ds => {
@@ -149,8 +130,6 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       tm_ = etm;
       log(() => showTerm(fromSurface(ty)));
       log(() => showTerm(fromSurface(etm)));
-      const eras = erase(toCore(normalize(etm, Nil, 0, true)));
-      log(() => showTermE(eras));
       msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(etm))}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
@@ -160,9 +139,6 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     try {
       const n = normalize(tm_, Nil, 0, false);
       log(() => showTerm(fromSurface(n)));
-      const er = erase(toCore(normalize(n, Nil, 0, true)));
-      log(() => showTermE(er));
-      msg += `\neras: ${showTermE(er)}`;
       return _cb(msg);
     } catch (err) {
       log(() => ''+err);
