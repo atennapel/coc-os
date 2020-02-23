@@ -118,6 +118,10 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.evaluate(t.fst, vs);
     if (t.tag === 'Hole')
         return util_1.terr(`unable to evaluate hole ${syntax_1.showTerm(t)}`);
+    if (t.tag === 'Fst')
+        return exports.evaluate(t.term, vs);
+    if (t.tag === 'Snd')
+        return exports.evaluate(t.term, vs);
     return t;
 };
 const quoteHead = (h, k) => {
@@ -192,6 +196,10 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
         return syntax_1.Both(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full));
     if (tm.tag === 'Abs')
         return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
+    if (tm.tag === 'Fst')
+        return syntax_1.Fst(exports.zonk(tm.term, vs, k, full));
+    if (tm.tag === 'Snd')
+        return syntax_1.Snd(exports.zonk(tm.term, vs, k, full));
     if (tm.tag === 'App') {
         const spine = zonkSpine(tm.left, vs, k, full);
         return spine[0] ?
@@ -275,6 +283,8 @@ exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.Inter = (name, type, body) => ({ tag: 'Inter', name, type, body });
 exports.Both = (fst, snd) => ({ tag: 'Both', fst, snd });
+exports.Fst = (term) => ({ tag: 'Fst', term });
+exports.Snd = (term) => ({ tag: 'Snd', term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -300,6 +310,10 @@ exports.showTerm = (t) => {
         return `(iota (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
     if (t.tag === 'Both')
         return `[${exports.showTerm(t.fst)}, ${exports.showTerm(t.snd)}]`;
+    if (t.tag === 'Fst')
+        return `(fst ${exports.showTerm(t.term)})`;
+    if (t.tag === 'Snd')
+        return `(snd ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
@@ -327,6 +341,10 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return exports.Inter(t.name, exports.toSurface(t.type, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
     if (t.tag === 'Both')
         return exports.Both(exports.toSurface(t.fst, ns, k), exports.toSurface(t.snd, ns, k));
+    if (t.tag === 'Fst')
+        return exports.Fst(exports.toSurface(t.term, ns, k));
+    if (t.tag === 'Snd')
+        return exports.Snd(exports.toSurface(t.term, ns, k));
     return t;
 };
 const globalUsed = (k, t) => {
@@ -344,6 +362,10 @@ const globalUsed = (k, t) => {
         return globalUsed(k, t.term) || globalUsed(k, t.type);
     if (t.tag === 'Both')
         return globalUsed(k, t.fst) || globalUsed(k, t.snd);
+    if (t.tag === 'Fst')
+        return globalUsed(k, t.term);
+    if (t.tag === 'Snd')
+        return globalUsed(k, t.term);
     if (t.tag === 'Global')
         return t.name === k;
     if (t.tag === 'Var')
@@ -373,6 +395,10 @@ const indexUsed = (k, t) => {
         return indexUsed(k, t.term) || indexUsed(k, t.type);
     if (t.tag === 'Both')
         return indexUsed(k, t.fst) || indexUsed(k, t.snd);
+    if (t.tag === 'Fst')
+        return indexUsed(k, t.term);
+    if (t.tag === 'Snd')
+        return indexUsed(k, t.term);
     if (t.tag === 'Global')
         return false;
     if (t.tag === 'Type')
@@ -402,6 +428,10 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
     if (t.tag === 'Both')
         return exports.isUnsolved(t.fst) || exports.isUnsolved(t.snd);
+    if (t.tag === 'Fst')
+        return exports.isUnsolved(t.term);
+    if (t.tag === 'Snd')
+        return exports.isUnsolved(t.term);
     if (t.tag === 'Global')
         return false;
     if (t.tag === 'Type')
@@ -452,6 +482,10 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         const x = decideName(t.name, t.body, ns);
         return S.Inter(x, exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
     }
+    if (t.tag === 'Fst')
+        return S.Fst(exports.fromSurface(t.term, ns));
+    if (t.tag === 'Snd')
+        return S.Snd(exports.fromSurface(t.term, ns));
     return t;
 };
 exports.showFromSurface = (t, ns = list_1.Nil) => S.showTerm(exports.fromSurface(t, ns));
@@ -473,6 +507,10 @@ exports.shift = (d, c, t) => {
         return exports.Ann(exports.shift(d, c, t.term), exports.shift(d, c, t.type));
     if (t.tag === 'Both')
         return exports.Both(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd));
+    if (t.tag === 'Fst')
+        return exports.Fst(exports.shift(d, c, t.term));
+    if (t.tag === 'Snd')
+        return exports.Snd(exports.shift(d, c, t.term));
     return t;
 };
 exports.flattenPi = (t) => {
@@ -514,6 +552,10 @@ const erasedUsed = (k, t) => {
         return erasedUsed(k, t.term);
     if (t.tag === 'Both')
         return erasedUsed(k, t.fst) || erasedUsed(k, t.snd);
+    if (t.tag === 'Fst')
+        return erasedUsed(k, t.term);
+    if (t.tag === 'Snd')
+        return erasedUsed(k, t.term);
     if (t.tag === 'Pi')
         return false;
     if (t.tag === 'Inter')
@@ -686,6 +728,20 @@ const synth = (ns, ts, vs, k, tm) => {
         const vt = domain_1.evaluate(tm.type, vs);
         check(ns, ts, vs, k, tm.term, vt);
         return vt;
+    }
+    if (tm.tag === 'Fst') {
+        const ty = synth(ns, ts, vs, k, tm.term);
+        const vty = domain_1.forceGlue(ty);
+        if (vty.tag !== 'VInter')
+            return util_1.terr(`not an intersection type in fst: ${vty.tag}`);
+        return vty.type;
+    }
+    if (tm.tag === 'Snd') {
+        const ty = synth(ns, ts, vs, k, tm.term);
+        const vty = domain_1.forceGlue(ty);
+        if (vty.tag !== 'VInter')
+            return util_1.terr(`not an intersection type in snd: ${vty.tag}`);
+        return vty.body(domain_1.evaluate(tm.term, vs));
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
@@ -1361,6 +1417,14 @@ const exprs = (ts, br) => {
             return util_1.serr(`both cannot be erased`);
         return syntax_1.Both(t1, t2);
     }
+    if (isName(ts[0], 'fst')) {
+        const body = exprs(ts.slice(1), '(');
+        return syntax_1.Fst(body);
+    }
+    if (isName(ts[0], 'snd')) {
+        const body = exprs(ts.slice(1), '(');
+        return syntax_1.Snd(body);
+    }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
         let impl = false;
@@ -1678,6 +1742,8 @@ exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.Inter = (name, type, body) => ({ tag: 'Inter', name, type, body });
 exports.Both = (fst, snd) => ({ tag: 'Both', fst, snd });
+exports.Fst = (term) => ({ tag: 'Fst', term });
+exports.Snd = (term) => ({ tag: 'Snd', term });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1701,6 +1767,10 @@ exports.showTermS = (t) => {
         return `(iota (${t.name} : ${exports.showTermS(t.type)}). ${exports.showTermS(t.body)})`;
     if (t.tag === 'Both')
         return `[${exports.showTermS(t.fst)}, ${exports.showTermS(t.snd)}]`;
+    if (t.tag === 'Fst')
+        return `(fst ${exports.showTermS(t.term)})`;
+    if (t.tag === 'Snd')
+        return `(snd ${exports.showTermS(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1758,6 +1828,10 @@ exports.showTerm = (t) => {
         return `(iota (${t.name} : ${exports.showTermS(t.type)}). ${exports.showTermS(t.body)})`;
     if (t.tag === 'Both')
         return `[${exports.showTermS(t.fst)}, ${exports.showTermS(t.snd)}]`;
+    if (t.tag === 'Fst')
+        return `(fst ${exports.showTermS(t.term)})`;
+    if (t.tag === 'Snd')
+        return `(snd ${exports.showTermS(t.term)})`;
     return t;
 };
 

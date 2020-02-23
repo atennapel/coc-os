@@ -1,6 +1,6 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann, Inter, Both } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann, Inter, Both, Snd, Fst } from './syntax';
 import { impossible, terr } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
@@ -103,6 +103,10 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return evaluate(t.fst, vs);
   if (t.tag === 'Hole')
     return terr(`unable to evaluate hole ${showTerm(t)}`);
+  if (t.tag === 'Fst')
+    return evaluate(t.term, vs);
+  if (t.tag === 'Snd')
+    return evaluate(t.term, vs);
   return t;
 };
 
@@ -186,6 +190,8 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
   if (tm.tag === 'Both') return Both(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full));
   if (tm.tag === 'Abs')
     return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
+  if (tm.tag === 'Fst') return Fst(zonk(tm.term, vs, k, full));
+  if (tm.tag === 'Snd') return Snd(zonk(tm.term, vs, k, full));
   if (tm.tag === 'App') {
     const spine = zonkSpine(tm.left, vs, k, full);
     return spine[0] ?
