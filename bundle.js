@@ -49,6 +49,7 @@ exports.VNe = (head, args) => ({ tag: 'VNe', head, args });
 exports.VGlued = (head, args, val) => ({ tag: 'VGlued', head, args, val });
 exports.VAbs = (name, body) => ({ tag: 'VAbs', name, body });
 exports.VPi = (plicity, name, type, body) => ({ tag: 'VPi', name, plicity, type, body });
+exports.VInter = (name, type, body) => ({ tag: 'VInter', name, type, body });
 exports.VType = { tag: 'VType' };
 exports.VVar = (index) => exports.VNe(exports.HVar(index), list_1.Nil);
 exports.VGlobal = (name) => exports.VNe(exports.HGlobal(name), list_1.Nil);
@@ -109,6 +110,8 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return t.plicity.erased ? exports.evaluate(t.body, vs) : exports.evaluate(t.body, exports.extendV(vs, exports.evaluate(t.val, vs)));
     if (t.tag === 'Pi')
         return exports.VPi(t.plicity, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
+    if (t.tag === 'Inter')
+        return exports.VInter(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Ann')
         return exports.evaluate(t.term, vs);
     if (t.tag === 'Hole')
@@ -141,6 +144,8 @@ exports.quote = (v_, k, full) => {
         return syntax_1.Abs(syntax_2.PlicityR, v.name, null, exports.quote(v.body(exports.VVar(k)), k + 1, full));
     if (v.tag === 'VPi')
         return syntax_1.Pi(v.plicity, v.name, exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
+    if (v.tag === 'VInter')
+        return syntax_1.Inter(v.name, exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
     return v;
 };
 exports.quoteZ = (v, vs = list_1.Nil, k = 0, full = false) => exports.zonk(exports.quote(v, k, full), vs, k, full);
@@ -175,6 +180,8 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
     }
     if (tm.tag === 'Pi')
         return syntax_1.Pi(tm.plicity, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
+    if (tm.tag === 'Inter')
+        return syntax_1.Inter(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'Let')
         return syntax_1.Let(tm.plicity, tm.name, exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'Ann')
@@ -262,6 +269,7 @@ exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.HoleN = { tag: 'Hole', name: null };
 exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
+exports.Inter = (name, type, body) => ({ tag: 'Inter', name, type, body });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -283,6 +291,8 @@ exports.showTerm = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
+    if (t.tag === 'Inter')
+        return `(iota (${t.name} : ${exports.showTerm(t.type)}). ${exports.showTerm(t.body)})`;
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
@@ -306,6 +316,8 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return exports.Type;
     if (t.tag === 'Ann')
         return exports.Ann(exports.toSurface(t.term, ns, k), exports.toSurface(t.type, ns, k));
+    if (t.tag === 'Inter')
+        return exports.Inter(t.name, exports.toSurface(t.type, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
     return t;
 };
 const globalUsed = (k, t) => {
@@ -316,6 +328,8 @@ const globalUsed = (k, t) => {
     if (t.tag === 'Let')
         return globalUsed(k, t.val) || globalUsed(k, t.body);
     if (t.tag === 'Pi')
+        return globalUsed(k, t.type) || globalUsed(k, t.body);
+    if (t.tag === 'Inter')
         return globalUsed(k, t.type) || globalUsed(k, t.body);
     if (t.tag === 'Ann')
         return globalUsed(k, t.term) || globalUsed(k, t.type);
@@ -342,6 +356,8 @@ const indexUsed = (k, t) => {
         return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
     if (t.tag === 'Pi')
         return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+    if (t.tag === 'Inter')
+        return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
     if (t.tag === 'Ann')
         return indexUsed(k, t.term) || indexUsed(k, t.type);
     if (t.tag === 'Global')
@@ -366,6 +382,8 @@ exports.isUnsolved = (t) => {
     if (t.tag === 'Let')
         return exports.isUnsolved(t.val) || exports.isUnsolved(t.body);
     if (t.tag === 'Pi')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
+    if (t.tag === 'Inter')
         return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
     if (t.tag === 'Ann')
         return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
@@ -413,6 +431,10 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         const x = decideName(t.name, t.body, ns);
         return S.Pi(t.plicity, x, exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
     }
+    if (t.tag === 'Inter') {
+        const x = decideName(t.name, t.body, ns);
+        return S.Inter(x, exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
+    }
     return t;
 };
 exports.showFromSurface = (t, ns = list_1.Nil) => S.showTerm(exports.fromSurface(t, ns));
@@ -428,6 +450,8 @@ exports.shift = (d, c, t) => {
         return exports.Let(t.plicity, t.name, exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Pi')
         return exports.Pi(t.plicity, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Inter')
+        return exports.Inter(t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Ann')
         return exports.Ann(exports.shift(d, c, t.term), exports.shift(d, c, t.type));
     return t;
@@ -470,6 +494,8 @@ const erasedUsed = (k, t) => {
     if (t.tag === 'Ann')
         return erasedUsed(k, t.term);
     if (t.tag === 'Pi')
+        return false;
+    if (t.tag === 'Inter')
         return false;
     if (t.tag === 'Type')
         return false;
@@ -622,6 +648,11 @@ const synth = (ns, ts, vs, k, tm) => {
         check(list_1.Cons(tm.name, ns), extendT(ts, domain_1.evaluate(tm.type, vs), true), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, domain_1.VType);
         return domain_1.VType;
     }
+    if (tm.tag === 'Inter') {
+        check(ns, ts, vs, k, tm.type, domain_1.VType);
+        check(list_1.Cons(tm.name, ns), extendT(ts, domain_1.evaluate(tm.type, vs), true), domain_1.extendV(vs, domain_1.VVar(k)), k + 1, tm.body, domain_1.VType);
+        return domain_1.VType;
+    }
     if (tm.tag === 'Ann') {
         check(ns, ts, vs, k, tm.type, domain_1.VType);
         const vt = domain_1.evaluate(tm.type, vs);
@@ -760,6 +791,11 @@ exports.unify = (ns, k, a_, b_) => {
         const v = domain_1.VVar(k);
         return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
     }
+    if (a.tag === 'VInter' && b.tag === 'VInter') {
+        exports.unify(ns, k, a.type, b.type);
+        const v = domain_1.VVar(k);
+        return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
+    }
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
         const v = domain_1.VVar(k);
         return exports.unify(list_1.Cons(a.name, ns), k + 1, a.body(v), b.body(v));
@@ -871,6 +907,11 @@ const checkSolution = (ns, k, m, is, t) => {
         const ty = checkSolution(ns, k, m, is, t.type);
         const body = checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
         return syntax_2.Pi(t.plicity, t.name, ty, body);
+    }
+    if (t.tag === 'Inter') {
+        const ty = checkSolution(ns, k, m, is, t.type);
+        const body = checkSolution(ns, k + 1, m, list_1.Cons(k, is), t.body);
+        return syntax_2.Inter(t.name, ty, body);
     }
     return util_1.impossible(`checkSolution ?${m}: non-normal term: ${syntax_2.showFromSurface(t, ns)}`);
 };
@@ -1262,6 +1303,29 @@ const exprs = (ts, br) => {
         const body = exprs(ts.slice(i + 1), '(');
         return args.reduceRight((x, [name, impl, ty]) => syntax_1.Abs(impl ? syntax_1.PlicityE : syntax_1.PlicityR, name, ty, x), body);
     }
+    if (isName(ts[0], 'iota')) {
+        const args = [];
+        let found = false;
+        let i = 1;
+        for (; i < ts.length; i++) {
+            const c = ts[i];
+            if (isName(c, '.')) {
+                found = true;
+                break;
+            }
+            lambdaParams(c).forEach(x => args.push(x));
+        }
+        if (!found)
+            return util_1.serr(`. not found after \\`);
+        const body = exprs(ts.slice(i + 1), '(');
+        return args.reduceRight((x, [name, impl, ty]) => {
+            if (impl)
+                return util_1.serr(`iota cannot have erased parameter`);
+            if (!ty)
+                return util_1.serr(`iota needs a type`);
+            return syntax_1.Inter(name, ty, x);
+        }, body);
+    }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
         let impl = false;
@@ -1485,7 +1549,7 @@ exports.runREPL = (_s, _cb) => {
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
             const term = domain_1.quoteZ(res.val, list_1.Nil, 0, false);
-            return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
+            return _cb(syntax_1.showTerm(syntax_2.fromSurface(term)));
         }
         if (_s.startsWith(':gnorme')) {
             const name = _s.slice(7).trim();
@@ -1493,7 +1557,7 @@ exports.runREPL = (_s, _cb) => {
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
             const term = domain_1.quoteZ(res.val, list_1.Nil, 0, true);
-            return _cb(syntax_1.showTerm(syntax_1.eraseTypes(syntax_2.fromSurface(term))));
+            return _cb(syntax_1.showTerm(syntax_2.fromSurface(term)));
         }
         if (_s.startsWith(':gterm')) {
             const name = _s.slice(6).trim();
@@ -1577,6 +1641,7 @@ exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.HoleN = { tag: 'Hole', name: null };
 exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
+exports.Inter = (name, type, body) => ({ tag: 'Inter', name, type, body });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1596,6 +1661,8 @@ exports.showTermS = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTermS(t.term)} : ${exports.showTermS(t.type)})`;
+    if (t.tag === 'Inter')
+        return `(iota (${t.name} : ${exports.showTermS(t.type)}). ${exports.showTermS(t.body)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1649,27 +1716,8 @@ exports.showTerm = (t) => {
         return `let ${t.plicity.erased ? `{${t.name}}` : t.name} = ${exports.showTermP(t.val.tag === 'Let', t.val)} in ${exports.showTermP(t.body.tag === 'Ann', t.body)}`;
     if (t.tag === 'Ann')
         return `${exports.showTermP(t.term.tag === 'Ann', t.term)} : ${exports.showTermP(t.term.tag === 'Ann', t.type)}`;
-    return t;
-};
-exports.eraseTypes = (t) => {
-    if (t.tag === 'Var')
-        return t;
-    if (t.tag === 'Meta')
-        return t;
-    if (t.tag === 'Hole')
-        return t;
-    if (t.tag === 'App')
-        return t.plicity.erased ? exports.eraseTypes(t.left) : exports.App(exports.eraseTypes(t.left), t.plicity, exports.eraseTypes(t.right));
-    if (t.tag === 'Abs')
-        return t.plicity.erased ? exports.eraseTypes(t.body) : exports.Abs(t.plicity, t.name, null, exports.eraseTypes(t.body));
-    if (t.tag === 'Let')
-        return t.plicity.erased ? exports.eraseTypes(t.body) : exports.Let(t.plicity, t.name, exports.eraseTypes(t.val), exports.eraseTypes(t.body));
-    if (t.tag === 'Pi')
-        return exports.Type;
-    if (t.tag === 'Type')
-        return exports.Type;
-    if (t.tag === 'Ann')
-        return exports.eraseTypes(t.term);
+    if (t.tag === 'Inter')
+        return `(iota (${t.name} : ${exports.showTermS(t.type)}). ${exports.showTermS(t.body)})`;
     return t;
 };
 

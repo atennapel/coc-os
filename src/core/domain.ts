@@ -1,6 +1,6 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann, Inter } from './syntax';
 import { impossible, terr } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
@@ -23,7 +23,7 @@ export type EApp = { tag: 'EApp', arg: Val };
 export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
 
 export type Clos = (val: Val) => Val;
-export type Val = VNe | VGlued | VAbs | VPi | VType;
+export type Val = VNe | VGlued | VAbs | VPi | VType | VInter;
 
 export type VNe = { tag: 'VNe', head: Head, args: List<Elim> };
 export const VNe = (head: Head, args: List<Elim>): VNe => ({ tag: 'VNe', head, args });
@@ -33,6 +33,8 @@ export type VAbs = { tag: 'VAbs', name: Name, body: Clos };
 export const VAbs = (name: Name, body: Clos): VAbs => ({ tag: 'VAbs', name, body});
 export type VPi = { tag: 'VPi', plicity: Plicity, name: Name, type: Val, body: Clos };
 export const VPi = (plicity: Plicity, name: Name, type: Val, body: Clos): VPi => ({ tag: 'VPi', name, plicity, type, body});
+export type VInter = { tag: 'VInter', name: Name, type: Val, body: Clos };
+export const VInter = (name: Name, type: Val, body: Clos): VInter => ({ tag: 'VInter', name, type, body});
 export type VType = { tag: 'VType' };
 export const VType: VType = { tag: 'VType' };
 
@@ -93,6 +95,8 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return t.plicity.erased ? evaluate(t.body, vs) : evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
   if (t.tag === 'Pi')
     return VPi(t.plicity, t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
+  if (t.tag === 'Inter')
+    return VInter(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Ann')
     return evaluate(t.term, vs);
   if (t.tag === 'Hole')
@@ -129,6 +133,8 @@ export const quote = (v_: Val, k: Ix, full: boolean): Term => {
     return Abs(PlicityR, v.name, null, quote(v.body(VVar(k)), k + 1, full));
   if (v.tag === 'VPi')
     return Pi(v.plicity, v.name, quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
+  if (v.tag === 'VInter')
+    return Inter(v.name, quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
   return v;
 };
 export const quoteZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term =>
@@ -170,6 +176,8 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
   }
   if (tm.tag === 'Pi')
     return Pi(tm.plicity, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
+  if (tm.tag === 'Inter')
+    return Inter(tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'Let')
     return Let(tm.plicity, tm.name, zonk(tm.val, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'Ann') return Ann(zonk(tm.term, vs, k, full), zonk(tm.type, vs, k, full));

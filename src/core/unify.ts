@@ -5,7 +5,7 @@ import { eqPlicity, PlicityR } from '../syntax';
 import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldl } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
-import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Pi } from './syntax';
+import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Pi, Inter } from './syntax';
 import { metaSet, metaPush, metaDiscard, metaPop } from './metas';
 
 const eqHead = (a: Head, b: Head): boolean => {
@@ -29,6 +29,11 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && eqPlicity(a.plicity, b.plicity)) {
+    unify(ns, k, a.type, b.type);
+    const v = VVar(k);
+    return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
+  }
+  if (a.tag === 'VInter' && b.tag === 'VInter') {
     unify(ns, k, a.type, b.type);
     const v = VVar(k);
     return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
@@ -138,6 +143,11 @@ const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Ter
     const ty = checkSolution(ns, k, m, is, t.type);
     const body = checkSolution(ns, k + 1, m, Cons(k, is), t.body);
     return Pi(t.plicity, t.name, ty, body);
+  }
+  if (t.tag === 'Inter') {
+    const ty = checkSolution(ns, k, m, is, t.type);
+    const body = checkSolution(ns, k + 1, m, Cons(k, is), t.body);
+    return Inter(t.name, ty, body);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${showFromSurface(t, ns)}`);
 };

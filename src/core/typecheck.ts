@@ -23,6 +23,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity.erased && erasedUsed(k, t.val));
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
+  if (t.tag === 'Inter') return false;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Hole') return false;
   if (t.tag === 'Meta') return false;
@@ -161,6 +162,11 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): Val => {
     return rt;
   }
   if (tm.tag === 'Pi') {
+    check(ns, ts, vs, k, tm.type, VType);
+    check(Cons(tm.name, ns), extendT(ts, evaluate(tm.type, vs), true), extendV(vs, VVar(k)), k + 1, tm.body, VType);
+    return VType;
+  }
+  if (tm.tag === 'Inter') {
     check(ns, ts, vs, k, tm.type, VType);
     check(Cons(tm.name, ns), extendT(ts, evaluate(tm.type, vs), true), extendV(vs, VVar(k)), k + 1, tm.body, VType);
     return VType;

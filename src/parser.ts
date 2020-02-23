@@ -1,5 +1,5 @@
 import { serr, loadFile } from './util';
-import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN, Inter } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 import { log } from './config';
@@ -190,6 +190,27 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1), '(');
     return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? PlicityE : PlicityR, name, ty, x), body);
+  }
+  
+  if (isName(ts[0], 'iota')) {
+    const args: [Name, boolean, Term | null][] = [];
+    let found = false;
+    let i = 1;
+    for (; i < ts.length; i++) {
+      const c = ts[i];
+      if (isName(c, '.')) {
+        found = true;
+        break;
+      }
+      lambdaParams(c).forEach(x => args.push(x));
+    }
+    if (!found) return serr(`. not found after \\`);
+    const body = exprs(ts.slice(i + 1), '(');
+    return args.reduceRight((x, [name, impl, ty]) => {
+      if (impl) return serr(`iota cannot have erased parameter`);
+      if (!ty) return serr(`iota needs a type`);
+      return Inter(name, ty, x);
+    }, body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

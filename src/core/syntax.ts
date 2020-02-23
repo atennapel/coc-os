@@ -5,7 +5,7 @@ import { List, lookup, Cons, Nil, index, indecesOf } from '../list';
 import { impossible } from '../util';
 import { EnvV, zonk } from './domain';
 
-export type Term = Var | Global | App | Abs | Let | Pi | Type | Ann | Hole | Meta;
+export type Term = Var | Global | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -28,6 +28,8 @@ export const HoleN: Hole = { tag: 'Hole', name: null };
 export const Hole = (name: Name): Hole => ({ tag: 'Hole', name });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
+export type Inter = { tag: 'Inter', name: Name, type: Term, body: Term };
+export const Inter = (name: Name, type: Term, body: Term): Inter => ({ tag: 'Inter', name, type, body });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
@@ -41,6 +43,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Pi') return `(/(${t.plicity.erased ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
+  if (t.tag === 'Inter') return `(iota (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   return t;
 };
 
@@ -57,6 +60,7 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
   if (t.tag === 'Pi') return Pi(t.plicity, t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return Ann(toSurface(t.term, ns, k), toSurface(t.type, ns, k));
+  if (t.tag === 'Inter') return Inter(t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   return t;
 };
 
@@ -65,6 +69,7 @@ const globalUsed = (k: Name, t: Term): boolean => {
   if (t.tag === 'Abs') return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.body);
   if (t.tag === 'Let') return globalUsed(k, t.val) || globalUsed(k, t.body);
   if (t.tag === 'Pi') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Inter') return globalUsed(k, t.type) || globalUsed(k, t.body);
   if (t.tag === 'Ann') return globalUsed(k, t.term) || globalUsed(k, t.type);
   if (t.tag === 'Global') return t.name === k;
   if (t.tag === 'Var') return false;
@@ -80,6 +85,7 @@ const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Abs') return (t.type && indexUsed(k, t.type)) || indexUsed(k + 1, t.body);
   if (t.tag === 'Let') return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
   if (t.tag === 'Pi') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Inter') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
   if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
   if (t.tag === 'Global') return false;
   if (t.tag === 'Type') return false;
@@ -95,6 +101,7 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Abs') return (t.type && isUnsolved(t.type)) || isUnsolved( t.body);
   if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
   if (t.tag === 'Pi') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Inter') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
   if (t.tag === 'Global') return false;
   if (t.tag === 'Type') return false;
@@ -132,6 +139,10 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
     const x = decideName(t.name, t.body, ns);
     return S.Pi(t.plicity, x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
   }
+  if (t.tag === 'Inter') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Inter(x, fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
+  }
   return t;
 };
 
@@ -146,6 +157,7 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'App') return App(shift(d, c, t.left), t.plicity, shift(d, c, t.right));
   if (t.tag === 'Let') return Let(t.plicity, t.name, shift(d, c, t.val), shift(d, c + 1, t.body));
   if (t.tag === 'Pi') return Pi(t.plicity, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Inter') return Inter(t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Ann') return Ann(shift(d, c, t.term), shift(d, c, t.type));
   return t;
 };

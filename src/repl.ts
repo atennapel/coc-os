@@ -1,6 +1,6 @@
 import { log, setConfig, config } from './config';
 import { globalReset, globalMap, globalDelete, globalGet } from './core/globalenv';
-import { showTerm, eraseTypes } from './syntax';
+import { showTerm } from './syntax';
 import { quoteZ, normalize } from './core/domain';
 import { fromSurface, toSurface } from './core/syntax';
 import { parseDefs, parse, ImportMap } from './parser';
@@ -84,14 +84,14 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
       const term = quoteZ(res.val, Nil, 0, false);
-      return _cb(showTerm(eraseTypes(fromSurface(term))));
+      return _cb(showTerm(fromSurface(term)));
     }
     if (_s.startsWith(':gnorme')) {
       const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
       const term = quoteZ(res.val, Nil, 0, true);
-      return _cb(showTerm(eraseTypes(fromSurface(term))));
+      return _cb(showTerm(fromSurface(term)));
     }
     if (_s.startsWith(':gterm')) {
       const name = _s.slice(6).trim();
