@@ -1,5 +1,5 @@
 import { serr, loadFile } from './util';
-import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN, Inter } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN, Inter, Both } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 import { log } from './config';
@@ -211,6 +211,12 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       if (!ty) return serr(`iota needs a type`);
       return Inter(name, ty, x);
     }, body);
+  }
+  if (isName(ts[0], 'both')) {
+    const [t1, b1] = expr(ts[1]);
+    const [t2, b2] = expr(ts[2]);
+    if (b1 || b2) return serr(`both cannot be erased`);
+    return Both(t1, t2);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

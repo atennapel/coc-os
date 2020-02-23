@@ -22,6 +22,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Abs') return erasedUsed(k + 1, t.body);
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity.erased && erasedUsed(k, t.val));
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
+  if (t.tag === 'Both') return erasedUsed(k, t.fst) || erasedUsed(k, t.snd);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Inter') return false;
   if (t.tag === 'Type') return false;
@@ -76,6 +77,13 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): vo
   if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
     const v = VVar(k);
     check(Cons(tyf.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, shift(1, 0, tm), tyf.body(v));
+    return;
+  }
+  if (tyf.tag === 'VInter' && tm.tag === 'Both') {
+    check(ns, ts, vs, k, tm.fst, tyf.type);
+    const vfst = evaluate(tm.fst, vs);
+    check(ns, ts, vs, k, tm.snd, tyf.body(vfst));
+    unify(ns, k, vfst, evaluate(tm.snd, vs));
     return;
   }
   if (tm.tag === 'Let') {

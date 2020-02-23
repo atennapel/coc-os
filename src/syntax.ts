@@ -6,7 +6,7 @@ export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.era
 export const PlicityE: Plicity = { erased: true };
 export const PlicityR: Plicity = { erased: false };
 
-export type Term = Var | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter;
+export type Term = Var | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter | Both;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -29,6 +29,8 @@ export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export type Inter = { tag: 'Inter', name: Name, type: Term, body: Term };
 export const Inter = (name: Name, type: Term, body: Term): Inter => ({ tag: 'Inter', name, type, body });
+export type Both = { tag: 'Both', fst: Term, snd: Term };
+export const Both = (fst: Term, snd: Term): Both => ({ tag: 'Both', fst, snd });
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -42,6 +44,7 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTermS(t.term)} : ${showTermS(t.type)})`;
   if (t.tag === 'Inter') return `(iota (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
+  if (t.tag === 'Both') return `[${showTermS(t.fst)}, ${showTermS(t.snd)}]`;
   return t;
 };
 
@@ -97,5 +100,6 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Ann')
     return `${showTermP(t.term.tag === 'Ann', t.term)} : ${showTermP(t.term.tag === 'Ann', t.type)}`;
   if (t.tag === 'Inter') return `(iota (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
+  if (t.tag === 'Both') return `[${showTermS(t.fst)}, ${showTermS(t.snd)}]`;
   return t;
 };
