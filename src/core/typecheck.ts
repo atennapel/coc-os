@@ -1,5 +1,5 @@
-import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta, VFix, vapp, VRoll, showTermUZ } from './domain';
-import { Term, showFromSurface, Pi, App, Abs, Let, Fix, Roll, Unroll, Var, showTerm, isUnsolved, Type, shift, Ind, flattenPi, IndFix, showFromSurfaceZ } from './syntax';
+import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, zonk, VNe, HMeta, showTermUZ } from './domain';
+import { Term, showFromSurface, Pi, App, Abs, Let, Var, showTerm, isUnsolved, Type, shift, showFromSurfaceZ } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr, foldl, zipWith, toArray } from '../list';
@@ -21,13 +21,8 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'App') return erasedUsed(k, t.left) || (!t.plicity.erased && erasedUsed(k, t.right));
   if (t.tag === 'Abs') return erasedUsed(k + 1, t.body);
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity.erased && erasedUsed(k, t.val));
-  if (t.tag === 'Roll') return erasedUsed(k, t.term);
-  if (t.tag === 'Unroll') return erasedUsed(k, t.term);
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
-  if (t.tag === 'Ind') return erasedUsed(k, t.term);
-  if (t.tag === 'IndFix') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
-  if (t.tag === 'Fix') return false;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Hole') return false;
   if (t.tag === 'Meta') return false;
@@ -82,10 +77,6 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): Te
     const body = check(Cons(tyf.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, shift(1, 0, tm), tyf.body(v));
     return Abs(tyf.plicity, tyf.name, quote(tyf.type, k, false), body);
   }
-  if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
-    const term = check(ns, ts, vs, k, tm.term, tyf.body(ty));
-    return Roll(quote(ty, k, false), term);
-  }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(ns, ts, vs, k, tm.val);
     const body = check(Cons(tm.name, ns), extendT(ts, vty, false), extendV(vs, evaluate(val, vs)), k + 1, tm.body, ty);
@@ -118,43 +109,6 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
   const b = newMeta(Cons([true, va], ts));
   return VPi(impl, x, va, v => evaluate(b, extendV(vs, v)));
 };
-
-type ADTCase = [Name, Plicity, Term];
-type ADT = [Name, ADTCase[]][];
-const makeInduction = (t: Term, gty: Term, gterm: Term): Term => {
-  if (!(t.tag === 'Pi' && t.type === Type && t.plicity.erased)) return terr(`makeInduction error`);
-  const [cs, rt] = flattenPi(t.body);
-  if (!(rt.tag === 'Var' && rt.index === cs.length)) return terr(`makeInduction error`);
-  const adt: ADT = cs.map(([x, pl, t], i) => {
-    if (pl.erased) return terr(`makeInduction error`);
-    const [as, rt] = flattenPi(t);
-    if (!(rt.tag === 'Var' && rt.index === as.length + i)) return terr(`makeInduction error`);
-    return [x, as];
-  });
-  const indterm = Pi(PlicityE, 'P', Pi(PlicityR, '_', gty, Type),
-    adt.reduceRight((body, [x, as], i) => Pi(PlicityR, x === '_' ? `c${i}` : x, makeInductionCases(as, i, adt), body),
-      App(Var(cs.length), PlicityR, shift(cs.length + 1, 0, gterm)) as Term));
-  return indterm;
-};
-const makeInductionCases = (as: ADTCase[], i: number, adt: ADT): Term => {
-  const cases = as.reduceRight((body, [x, pl, t], j) => Pi(pl, x === '_' ? `a${j}` : x, t, body),
-    App(Var(as.length + i), PlicityR, makeInductionConstr(as, i, adt)) as Term);
-  return cases;
-};
-const makeInductionConstr = (as: ADTCase[], i: number, adt: ADT): Term => {
-  const constr = as.reduce((body, [x, pl, t], j) => App(body, pl, Var(as.length - j + adt.length)),
-    Var(adt.length - i - 1) as Term);
-  return makeInductionConstrPrefix(adt, constr, i);
-};
-const makeInductionConstrPrefix = (adt: ADT, body: Term, k: number): Term => {
-  const tms = adt.reduceRight((body, [x, as], i) =>
-    Abs(PlicityR, x === '_' ? `c${i}` : x, makeInductionConstrPrefixType(as, i, adt, k), body), body);
-  return Abs(PlicityE, 't', Type, tms);
-};
-const makeInductionConstrPrefixType = (as: ADTCase[], i: number, adt: ADT, k: number): Term =>
-  as.reduceRight((body, [x, pl, ty], j) =>
-    Pi(pl, x === '_' ? `p${j}` : x, shift(2 + k + as.length - 1, 1, ty), body),
-    Var(as.length + i) as Term);
 
 const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val] => {
   log(() => `synth ${showFromSurface(tm, ns)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
@@ -211,69 +165,11 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): [Term, Val]
     const body = check(Cons(tm.name, ns), extendT(ts, evaluate(type, vs), true), extendV(vs, VVar(k)), k + 1, tm.body, VType);
     return [Pi(tm.plicity, tm.name, type, body), VType];
   }
-  if (tm.tag === 'Fix') {
-    const type = check(ns, ts, vs, k, tm.type, VType);
-    const vt = evaluate(type, vs);
-    const body = check(Cons(tm.name, ns), extendT(ts, vt, true), extendV(vs, VVar(k)), k + 1, tm.body, vt);
-    return [Fix(tm.name, type, body), vt];
-  }
-  if (tm.tag === 'Roll' && tm.type) {
-    const type = check(ns, ts, vs, k, tm.type, VType);
-    const vt = evaluate(type, vs);
-    const vtf = force(vt);
-    if (vtf.tag === 'VFix') {
-      const term = check(ns, ts, vs, k, tm.term, vtf.body(vt));
-      return [Roll(type, term), vt];
-    }
-    return terr(`fix type expected in ${showFromSurface(tm, ns)}: ${showTermU(vt, ns, k)}`);
-  }
-  if (tm.tag === 'Unroll') {
-    const [term, ty] = synth(ns, ts, vs, k, tm.term);
-    const vt = force(ty);
-    if (vt.tag === 'VFix') return [Unroll(term), vt.body(ty)];
-    return terr(`fix type expected in ${showFromSurface(tm, ns)}: ${showTermU(vt, ns, k)}`);
-  }
   if (tm.tag === 'Ann') {
     const type = check(ns, ts, vs, k, tm.type, VType);
     const vt = evaluate(type, vs);
     const term = check(ns, ts, vs, k, tm.term, vt);
     return [term, vt];
-  }
-  if (tm.tag === 'Ind') {
-    let type;
-    let vt;
-    let term;
-    if (tm.type) {
-      type = check(ns, ts, vs, k, tm.type, VType);
-      vt = evaluate(type, vs);
-      term = check(ns, ts, vs, k, tm.term, vt);
-    } else {
-      const [term_, ty] = synth(ns, ts, vs, k, tm.term);
-      type = quote(ty, k, false);
-      vt = ty;
-      term = term_;
-    }
-    const fulltype = quote(vt, k, true);
-    const ind = makeInduction(fulltype, type, term);
-    log(() => showTerm(ind));
-    log(() => showFromSurface(ind, ns));
-    return [Ind(type, term), evaluate(ind, vs)];
-  }
-  if (tm.tag === 'IndFix') {
-    // inductionFix {f} (x : fix (r : *). f r) :
-    // {P : Fix f} -> (((h : Fix f) -> P h) -> (y : f (Fix f)) -> P y) -> P x
-    const type = check(ns, ts, vs, k, tm.type, VPi(PlicityR, '_', VType, _ => VType));
-    const vt = evaluate(type, vs);
-    const fixF = VFix('r', VType, r => vapp(vt, PlicityR, r));
-    const term = check(ns, ts, vs, k, tm.term, fixF);
-    const vterm = evaluate(term, vs);
-    const rtype = VPi(PlicityE, 'P', VPi(PlicityR, '_', fixF, _ => VType), P =>
-      VPi(PlicityR, '_',
-        VPi(PlicityR, '_',
-          VPi(PlicityR, 'h', fixF, h => vapp(P, PlicityR, h)), _ =>
-          VPi(PlicityR, 'y', vapp(vt, PlicityR, fixF), y => vapp(P, PlicityR, VRoll(fixF, y)))), _ =>
-      vapp(P, PlicityR, vterm)));
-    return [IndFix(type, term), rtype];
   }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };

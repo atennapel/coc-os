@@ -1,11 +1,11 @@
 import { Head, Elim, Val, VVar, vapp, showTermU, showElimU, quote, evaluate, forceGlue } from './domain';
 import { Ix, Name } from '../names';
 import { terr, impossible } from '../util';
-import { eqPlicity, Plicity } from '../syntax';
+import { eqPlicity, PlicityR } from '../syntax';
 import { zipWithR_, length, List, Cons, map, toArray, Nil, index, contains, toString, indexOf, foldl } from '../list';
 import { forceLazy } from '../lazy';
 import { log } from '../config';
-import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Roll, Unroll, Pi, Fix, IndFix, Ind } from './syntax';
+import { Term, Abs, Type, showFromSurface, showTerm, Var, App, Pi } from './syntax';
 import { metaSet, metaPush, metaDiscard, metaPop } from './metas';
 
 const eqHead = (a: Head, b: Head): boolean => {
@@ -18,13 +18,7 @@ const eqHead = (a: Head, b: Head): boolean => {
 
 const unifyElim = (ns: List<Name>, k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
-  if (a.tag === 'EUnroll' && b.tag === 'EUnroll') return;
-  if (a.tag === 'EApp' && b.tag === 'EApp' && eqPlicity(a.plicity, b.plicity))
-    return unify(ns, k, a.arg, b.arg);
-  if (a.tag === 'EInd' && b.tag === 'EInd')
-    return unify(ns, k, a.type, b.type);
-  if (a.tag === 'EIndFix' && b.tag === 'EIndFix')
-    return unify(ns, k, a.type, b.type);
+  if (a.tag === 'EApp' && b.tag === 'EApp') return unify(ns, k, a.arg, b.arg);
   return terr(`unify failed (${k}): ${showTermU(x, ns, k)} ~ ${showTermU(y, ns, k)}`);
 };
 
@@ -34,32 +28,23 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
   log(() => `unify ${showTermU(a, ns, k)} ~ ${showTermU(b, ns, k)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
-  if (a.tag === 'VRoll' && b.tag === 'VRoll') {
-    unify(ns, k, a.type, b.type);
-    return unify(ns, k, a.term, b.term);
-  }
   if (a.tag === 'VPi' && b.tag === 'VPi' && eqPlicity(a.plicity, b.plicity)) {
     unify(ns, k, a.type, b.type);
     const v = VVar(k);
     return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
   }
-  if (a.tag === 'VFix' && b.tag === 'VFix') {
-    unify(ns, k, a.type, b.type);
-    const v = VVar(k);
-    return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
-  }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs' && eqPlicity(a.plicity, b.plicity)) {
-    unify(ns, k, a.type, b.type);
+  if (a.tag === 'VAbs' && b.tag === 'VAbs') {
+    if (a.type && b.type) unify(ns, k, a.type, b.type);
     const v = VVar(k);
     return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(Cons(a.name, ns), k + 1, a.body(v), vapp(b, a.plicity, v));
+    return unify(Cons(a.name, ns), k + 1, a.body(v), vapp(b, v));
   }
   if (b.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(Cons(b.name, ns), k + 1, vapp(a, b.plicity, v), b.body(v));
+    return unify(Cons(b.name, ns), k + 1, vapp(a, v), b.body(v));
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
     return zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
@@ -93,16 +78,15 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
   try {
     const spinex = checkSpine(ns, k, spine);
     const rhs = quote(val, k, false);
-    const ivs = map(spinex, ([_, v]) => v);
-    const body = checkSolution(ns, k, m, ivs, rhs);
+    const body = checkSolution(ns, k, m, spinex, rhs);
     // Note: I'm solving with an abstraction that has * as type for all the parameters
     // TODO: I think it might actually matter
-    log(() => `spinex ${toString(spinex, ([p, s]) => `${p.erased ? '-' : ''}${s}`)}`);
-    const solution = foldl((body, [pl, y]) => {
-      if (typeof y === 'string') return Abs(pl, '_', Type, body);
+    log(() => `spinex ${toString(spinex, s => `${s}`)}`);
+    const solution = foldl((body, y) => {
+      if (typeof y === 'string') return Abs(PlicityR, '_', Type, body);
       const x = index(ns, k - y - 1);
       if (!x) return terr(`index ${y} out of range in meta spine`);
-      return Abs(pl, x, Type, body);
+      return Abs(PlicityR, x, Type, body);
     }, body, spinex);
     log(() => `solution ?${m} := ${showFromSurface(solution, Nil)} | ${showTerm(solution)}`);
     const vsolution = evaluate(solution, Nil);
@@ -114,20 +98,17 @@ const solve = (ns: List<Name>, k: Ix, m: Ix, spine: List<Elim>, val: Val): void 
   }
 };
 
-const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<[Plicity, Ix | Name]> =>
+const checkSpine = (ns: List<Name>, k: Ix, spine: List<Elim>): List<Ix | Name> =>
   map(spine, elim => {
-    if (elim.tag === 'EUnroll') return terr(`unroll in meta spine`);
-    if (elim.tag === 'EInd') return terr(`induction in meta spine`);
-    if (elim.tag === 'EIndFix') return terr(`inductionFix in meta spine`);
     if (elim.tag === 'EApp') {
       const v = forceGlue(elim.arg);
       if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && length(v.args) === 0)
-        return [elim.plicity, v.head.index];
+        return v.head.index;
       if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HGlobal' && length(v.args) === 0)
-        return [elim.plicity, v.head.name];
+        return v.head.name;
       return terr(`not a var in spine: ${showTermU(v, ns, k)}`);
     }
-    return elim;
+    return elim.tag;
   });
 
 const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Term): Term => {
@@ -149,17 +130,8 @@ const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Ter
     const r = checkSolution(ns, k, m, is, t.right);
     return App(l, t.plicity, r);
   }
-  if (t.tag === 'Roll' && t.type) {
-    const ty = checkSolution(ns, k, m, is, t.type);
-    const tm = checkSolution(ns, k, m, is, t.term);
-    return Roll(ty, tm);
-  }
-  if (t.tag === 'Unroll') {
-    const tm = checkSolution(ns, k, m, is, t.term);
-    return Unroll(tm);
-  }
-  if (t.tag === 'Abs' && t.type) {
-    const ty = checkSolution(ns, k, m, is, t.type);
+  if (t.tag === 'Abs') {
+    const ty = t.type && checkSolution(ns, k, m, is, t.type);
     const body = checkSolution(ns, k + 1, m, Cons(k, is), t.body);
     return Abs(t.plicity, t.name, ty, body);
   }
@@ -167,21 +139,6 @@ const checkSolution = (ns: List<Name>, k: Ix, m: Ix, is: List<Ix | Name>, t: Ter
     const ty = checkSolution(ns, k, m, is, t.type);
     const body = checkSolution(ns, k + 1, m, Cons(k, is), t.body);
     return Pi(t.plicity, t.name, ty, body);
-  }
-  if (t.tag === 'Fix') {
-    const ty = checkSolution(ns, k, m, is, t.type);
-    const body = checkSolution(ns, k + 1, m, Cons(k, is), t.body);
-    return Fix(t.name, ty, body);
-  }
-  if (t.tag === 'Ind' && t.type) {
-    const ty = checkSolution(ns, k, m, is, t.type);
-    const tm = checkSolution(ns, k, m, is, t.term);
-    return Ind(ty, tm);
-  }
-  if (t.tag === 'IndFix') {
-    const ty = checkSolution(ns, k, m, is, t.type);
-    const tm = checkSolution(ns, k, m, is, t.term);
-    return IndFix(ty, tm);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${showFromSurface(t, ns)}`);
 };
