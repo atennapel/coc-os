@@ -16,42 +16,44 @@ const eqHead = (a: Head, b: Head): boolean => {
   return a;
 };
 
-const unifyElim = (ns: List<Name>, k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
+const unifyElim = (ns: List<Name>, k: Ix, k2: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
-  if (a.tag === 'EApp' && b.tag === 'EApp') return unify(ns, k, a.arg, b.arg);
+  if (a.tag === 'EApp' && b.tag === 'EApp') return unify(ns, k, k2, a.arg, b.arg);
+  log(() => `unify failed`);
   return terr(`unify failed (${k}): ${showTermU(x, ns, k)} ~ ${showTermU(y, ns, k)}`);
 };
 
-export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
+export const unify = (ns: List<Name>, k: Ix, k2: Ix, a_: Val, b_: Val): void => {
   const a = forceGlue(a_);
   const b = forceGlue(b_);
-  log(() => `unify ${showTermU(a, ns, k)} ~ ${showTermU(b, ns, k)}`);
+  log(() => `unify here ${k} ${k2}`);
+  log(() => `unify ${showTermU(a, ns, k2)} ~ ${showTermU(b, ns, k2)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && eqPlicity(a.plicity, b.plicity)) {
-    unify(ns, k, a.type, b.type);
+    unify(ns, k, k2, a.type, b.type);
     const v = VVar(k);
-    return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
+    return unify(Cons(a.name, ns), k + 1, k2, a.body(v), b.body(v));
   }
   if (a.tag === 'VInter' && b.tag === 'VInter') {
-    unify(ns, k, a.type, b.type);
+    unify(ns, k, k2, a.type, b.type);
     const v = VVar(k);
-    return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
+    return unify(Cons(a.name, ns), k + 1, k2, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(Cons(a.name, ns), k + 1, a.body(v), b.body(v));
+    return unify(Cons(a.name, ns), k + 1, k2, a.body(v), b.body(v));
   }
   if (a.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(Cons(a.name, ns), k + 1, a.body(v), vapp(b, v));
+    return unify(Cons(a.name, ns), k + 1, k2, a.body(v), vapp(b, v));
   }
   if (b.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(Cons(b.name, ns), k + 1, vapp(a, v), b.body(v));
+    return unify(Cons(b.name, ns), k + 1, k2, vapp(a, v), b.body(v));
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
-    return zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+    return zipWithR_((x, y) => unifyElim(ns, k, k2, x, y, a, b), a.args, b.args);
   if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
     return length(a.args) > length(b.args) ?
       solve(ns, k, a.head.index, a.args, b) :
@@ -63,17 +65,18 @@ export const unify = (ns: List<Name>, k: Ix, a_: Val, b_: Val): void => {
   if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && length(a.args) === length(b.args)) {
     try {
       metaPush();
-      zipWithR_((x, y) => unifyElim(ns, k, x, y, a, b), a.args, b.args);
+      zipWithR_((x, y) => unifyElim(ns, k, k2, x, y, a, b), a.args, b.args);
       metaDiscard();
       return;
     } catch(err) {
       if (!(err instanceof TypeError)) throw err;
       metaPop();
-      return unify(ns, k, forceLazy(a.val), forceLazy(b.val));
+      return unify(ns, k, k2, forceLazy(a.val), forceLazy(b.val));
     }
   }
-  if (a.tag === 'VGlued') return unify(ns, k, forceLazy(a.val), b);
-  if (b.tag === 'VGlued') return unify(ns, k, a, forceLazy(b.val));
+  if (a.tag === 'VGlued') return unify(ns, k, k2, forceLazy(a.val), b);
+  if (b.tag === 'VGlued') return unify(ns, k, k2, a, forceLazy(b.val));
+  log(() => 'here3');
   return terr(`unify failed (${k}): ${showTermU(a, ns, k)} ~ ${showTermU(b, ns, k)}`);
 };
 

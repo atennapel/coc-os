@@ -49,15 +49,16 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
   return [ty, Nil];
 };
 
-const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): void => {
+const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, k2: Ix, tm: Term, ty: Val): void => {
+  log(() => 'check');
   log(() => `check ${showFromSurface(tm, ns)} : ${showTermU(ty, ns, k)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return;
   if (tm.tag === 'Var' || tm.tag === 'Global' || tm.tag === 'App') {
     try {
       metaPush();
       holesPush();
-      const ty2 = synth(ns, ts, vs, k, tm);
-      unify(ns, k, ty2, ty);
+      const ty2 = synth(ns, ts, vs, k, k2, tm);
+      unify(ns, k, k2, ty2, ty);
       metaDiscard();
       holesDiscard();
       return;
@@ -71,26 +72,26 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): vo
   log(() => `check after ${showTermU(tyf, ns, k)}`);
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && eqPlicity(tm.plicity, tyf.plicity)) {
     const v = VVar(k);
-    check(Cons(tm.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, tm.body, tyf.body(v));
+    check(Cons(tm.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, tm.plicity.erased ? k2 : k2 + 1, tm.body, tyf.body(v));
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
     return;
   }
   if (tyf.tag === 'VPi' && tyf.plicity.erased && !(tm.tag === 'Abs' && tm.type && tm.plicity.erased)) {
     const v = VVar(k);
-    check(Cons(tyf.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, shift(1, 0, tm), tyf.body(v));
+    check(Cons(tyf.name, ns), extendT(ts, tyf.type, true), extendV(vs, v), k + 1, k2, shift(1, 0, tm), tyf.body(v));
     return;
   }
   if (tyf.tag === 'VInter' && tm.tag === 'Both') {
-    check(ns, ts, vs, k, tm.fst, tyf.type);
+    check(ns, ts, vs, k, k2, tm.fst, tyf.type);
     const vfst = evaluate(tm.fst, vs);
-    check(ns, ts, vs, k, tm.snd, tyf.body(vfst));
-    unify(ns, k, vfst, evaluate(tm.snd, vs));
+    check(ns, ts, vs, k, k2, tm.snd, tyf.body(vfst));
+    unify(ns, k, k2, vfst, evaluate(tm.snd, vs));
     return;
   }
   if (tm.tag === 'Let') {
-    const vty = synth(ns, ts, vs, k, tm.val);
-    check(Cons(tm.name, ns), extendT(ts, vty, false), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.body, ty);
+    const vty = synth(ns, ts, vs, k, k2, tm.val);
+    check(Cons(tm.name, ns), extendT(ts, vty, false), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.plicity.erased ? k2 : k2 + 1, tm.body, ty);
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
     return;
@@ -103,10 +104,10 @@ const check = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term, ty: Val): vo
     }
     return;
   }
-  const ty2 = synth(ns, ts, vs, k, tm);
+  const ty2 = synth(ns, ts, vs, k, k2, tm);
   const [ty2inst] = inst(ts, vs, ty2);
   try {
-    unify(ns, k, ty2inst, ty);
+    unify(ns, k, k2, ty2inst, ty);
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
     return terr(`failed to unify ${showTermU(ty2, ns, k)} ~ ${showTermU(ty, ns, k)}: ${err.message}`);
@@ -121,7 +122,8 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
   return VPi(impl, x, va, v => evaluate(b, extendV(vs, v)));
 };
 
-const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): Val => {
+const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, k2: Ix, tm: Term): Val => {
+  log(() => 'synth');
   log(() => `synth ${showFromSurface(tm, ns)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs, k, false)}`);
   if (tm.tag === 'Type') return VType;
   if (tm.tag === 'Var') {
@@ -144,57 +146,58 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): Val => {
     return vt;
   }
   if (tm.tag === 'App') {
-    const fn = synth(ns, ts, vs, k, tm.left);
-    const [rt] = synthapp(ns, ts, vs, k, fn, tm.plicity, tm.right);
+    const fn = synth(ns, ts, vs, k, k2, tm.left);
+    const [rt] = synthapp(ns, ts, vs, k, k2, fn, tm.plicity, tm.right);
     return rt;
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
-      check(ns, ts, vs, k, tm.type, VType);
+      check(ns, ts, vs, k, k2, tm.type, VType);
       const vtype = evaluate(tm.type, vs);
-      const rt = synth(Cons(tm.name, ns), extendT(ts, vtype, true), extendV(vs, VVar(k)), k + 1, tm.body);
+      const rt = synth(Cons(tm.name, ns), extendT(ts, vtype, true), extendV(vs, VVar(k)), k + 1, tm.plicity.erased ? k2 : k2 + 1, tm.body);
       if (tm.plicity.erased && erasedUsed(0, tm.body))
         return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
       // TODO: avoid quote here
+      log(() => 'here1');
       const pi = evaluate(Pi(tm.plicity, tm.name, tm.type, quote(rt, k + 1, false)), vs);
       return pi;
     } else {
       const pi = freshPi(ts, vs, tm.name, tm.plicity);
-      check(ns, ts, vs, k, tm, pi);
+      check(ns, ts, vs, k, k2, tm, pi);
       return pi;
     }
   }
   if (tm.tag === 'Let') {
-    const vty = synth(ns, ts, vs, k, tm.val);
-    const rt = synth(Cons(tm.name, ns), extendT(ts, vty, false), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.body);
+    const vty = synth(ns, ts, vs, k, k2, tm.val);
+    const rt = synth(Cons(tm.name, ns), extendT(ts, vty, false), extendV(vs, evaluate(tm.val, vs)), k + 1, tm.plicity.erased ? k2 : k2 + 1, tm.body);
     if (tm.plicity.erased && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showFromSurface(tm, ns)}`);
     return rt;
   }
   if (tm.tag === 'Pi') {
-    check(ns, ts, vs, k, tm.type, VType);
-    check(Cons(tm.name, ns), extendT(ts, evaluate(tm.type, vs), true), extendV(vs, VVar(k)), k + 1, tm.body, VType);
+    check(ns, ts, vs, k, k2, tm.type, VType);
+    check(Cons(tm.name, ns), extendT(ts, evaluate(tm.type, vs), true), extendV(vs, VVar(k)), k + 1, tm.plicity.erased ? k2 : k2 + 1, tm.body, VType);
     return VType;
   }
   if (tm.tag === 'Inter') {
-    check(ns, ts, vs, k, tm.type, VType);
-    check(Cons(tm.name, ns), extendT(ts, evaluate(tm.type, vs), true), extendV(vs, VVar(k)), k + 1, tm.body, VType);
+    check(ns, ts, vs, k, k2, tm.type, VType);
+    check(Cons(tm.name, ns), extendT(ts, evaluate(tm.type, vs), true), extendV(vs, VVar(k)), k + 1, k2, tm.body, VType);
     return VType;
   }
   if (tm.tag === 'Ann') {
-    check(ns, ts, vs, k, tm.type, VType);
+    check(ns, ts, vs, k, k2, tm.type, VType);
     const vt = evaluate(tm.type, vs);
-    check(ns, ts, vs, k, tm.term, vt);
+    check(ns, ts, vs, k, k2, tm.term, vt);
     return vt;
   }
   if (tm.tag === 'Fst') {
-    const ty = synth(ns, ts, vs, k, tm.term);
+    const ty = synth(ns, ts, vs, k, k2, tm.term);
     const vty = force(ty);
     if (vty.tag !== 'VInter') return terr(`not an intersection type in fst: ${vty.tag}`);
     return vty.type;
   }
   if (tm.tag === 'Snd') {
-    const ty = synth(ns, ts, vs, k, tm.term);
+    const ty = synth(ns, ts, vs, k, k2, tm.term);
     const vty = force(ty);
     if (vty.tag !== 'VInter') return terr(`not an intersection type in snd: ${vty.tag}`);
     return vty.body(evaluate(tm.term, vs));
@@ -202,7 +205,8 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, tm: Term): Val => {
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };
 
-const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: Plicity, arg: Term): [Val, List<Term>] => {
+const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, k2: Ix, ty_: Val, plicity: Plicity, arg: Term): [Val, List<Term>] => {
+  log(() => 'synthapp');
   log(() => `synthapp before ${showTermU(ty_, ns, k)}`);
   const ty = force(ty_);
   log(() => `synthapp ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)} in ${showEnvT(ts, k, false)} and ${showEnvV(vs)}`);
@@ -210,11 +214,11 @@ const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: 
     // {a} -> b @ c (instantiate with meta then b @ c)
     const m = newMeta(ts);
     const vm = evaluate(m, vs);
-    const [rt, l] = synthapp(ns, ts, vs, k, ty.body(vm), plicity, arg);
+    const [rt, l] = synthapp(ns, ts, vs, k, k2, ty.body(vm), plicity, arg);
     return [rt, Cons(m, l)];
   }
   if (ty.tag === 'VPi' && eqPlicity(ty.plicity, plicity)) {
-    check(ns, ts, vs, k, arg, ty.type);
+    check(ns, ts, vs, k, k2, arg, ty.type);
     const vm = evaluate(arg, vs);
     return [ty.body(vm), Nil];
   }
@@ -223,9 +227,11 @@ const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, ty_: Val, plicity: 
     const a = freshMetaId();
     const b = freshMetaId();
     const pi = VPi(plicity, '_', VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
-    unify(ns, k, ty, pi);
-    return synthapp(ns, ts, vs, k, pi, plicity, arg);
+    unify(ns, k, k2, ty, pi);
+    return synthapp(ns, ts, vs, k, k2, pi, plicity, arg);
   }
+  
+      log(() => 'here2');
   return terr(`invalid type or plicity mismatch in synthapp in ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)}`);
 };
 
@@ -248,7 +254,8 @@ const holesDiscard = (): void => { holesStack.pop() };
 export const typecheck = (tm: Term): Val => {
   // metaReset(); // TODO: fix this
   holes = {};
-  const ty = synth(Nil, Nil, Nil, 0, tm);
+  const ty = synth(Nil, Nil, Nil, 0, 0, tm);
+  log(() => `final type: ${showTermU(ty)}`);
   /*
   const ztm = zonk(etm);
   const holeprops = Object.entries(holes);

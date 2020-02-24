@@ -7,6 +7,7 @@ import { Lazy, mapLazy, forceLazy } from '../lazy';
 import { Plicity, PlicityR } from '../syntax';
 import { showTerm as showTermS } from '../syntax';
 import { metaGet } from './metas';
+import { log } from '../config';
 
 export type Head = HVar | HGlobal | HMeta;
 
@@ -89,10 +90,10 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
   if (t.tag === 'App')
     return t.plicity.erased ? evaluate(t.left, vs) : vapp(evaluate(t.left, vs), evaluate(t.right, vs));
   if (t.tag === 'Abs')
-    return t.plicity.erased ? evaluate(t.body, vs) :
+    return t.plicity.erased ? evaluate(t.body, extendV(vs, VVar(-1))) :
       VAbs(t.name, v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Let')
-    return t.plicity.erased ? evaluate(t.body, vs) : evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
+    return t.plicity.erased ? evaluate(t.body, extendV(vs, VVar(-1))) : evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
   if (t.tag === 'Pi')
     return VPi(t.plicity, t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Inter')
@@ -121,6 +122,7 @@ const quoteElim = (t: Term, e: Elim, k: Ix, full: boolean): Term => {
   return e.tag;
 };
 export const quote = (v_: Val, k: Ix, full: boolean): Term => {
+  log(() => `quote ${v_.tag} ${k} ${full}`);
   const v = forceGlue(v_);
   if (v.tag === 'VType') return Type;
   if (v.tag === 'VNe')
@@ -176,6 +178,7 @@ const zonkSpine = (tm: Term, vs: EnvV, k: Ix, full: boolean): S => {
   return [true, zonk(tm, vs, k, full)];
 };
 export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term => {
+  log(() => `zonk ${showTerm(tm)}`);
   if (tm.tag === 'Meta') {
     const s = metaGet(tm.index);
     return s.tag === 'Solved' ? quote(s.val, k, full) : tm;
