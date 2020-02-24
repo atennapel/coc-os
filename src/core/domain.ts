@@ -1,6 +1,6 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann, Inter, Both, Snd, Fst, Eql, Refl } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann, Inter, Both, Snd, Fst, Eql, Refl, Rewrite } from './syntax';
 import { impossible, terr } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
@@ -114,6 +114,8 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return VEql(evaluate(t.fst, vs), evaluate(t.snd, vs));
   if (t.tag === 'Refl')
     return evaluate(t.snd, vs);
+  if (t.tag === 'Rewrite')
+    return evaluate(t.term, vs);
   return t;
 };
 
@@ -201,6 +203,7 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
   if (tm.tag === 'Both') return Both(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full));
   if (tm.tag === 'Eql') return Eql(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full));
   if (tm.tag === 'Refl') return Refl(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full));
+  if (tm.tag === 'Rewrite') return Rewrite(zonk(tm.eq, vs, k, full), tm.name, zonk(tm.form, extendV(vs, VVar(k)), k + 1, full), zonk(tm.term, vs, k, full));
   if (tm.tag === 'Abs')
     return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'Fst') return Fst(zonk(tm.term, vs, k, full));

@@ -1,5 +1,5 @@
 import { serr, loadFile } from './util';
-import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN, Inter, Both, Fst, Snd, Eql, Refl } from './syntax';
+import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN, Inter, Both, Fst, Snd, Eql, Refl, Rewrite } from './syntax';
 import { Name } from './names';
 import { Def, DDef } from './definitions';
 import { log } from './config';
@@ -229,6 +229,14 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     const [t2, b2] = expr(ts[2]);
     if (b1 || b2) return serr(`refl cannot be erased`);
     return Refl(t1, t2);
+  }
+  if (isName(ts[0], 'rewrite')) {
+    const [t1, b1] = expr(ts[1]);
+    const x = ts[2].tag === 'Name' ? ts[2].name : serr(`not a name in rewrite`);
+    const [t2, b2] = expr(ts[3]);
+    const [t3, b3] = expr(ts[4]);
+    if (b1 || b2 || b3) return serr(`rewrite cannot be erased`);
+    return Rewrite(t1, x, t2, t3);
   }
   if (isName(ts[0], 'fst')) {
     const body = exprs(ts.slice(1), '(');

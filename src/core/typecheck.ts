@@ -26,6 +26,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Fst') return erasedUsed(k, t.term);
   if (t.tag === 'Snd') return erasedUsed(k, t.term);
   if (t.tag === 'Refl') return erasedUsed(k, t.snd);
+  if (t.tag === 'Rewrite') return erasedUsed(k, t.term);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Inter') return false;
   if (t.tag === 'Type') return false;
@@ -211,6 +212,13 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, k2: Ix, tm: Term): Val
   if (tm.tag === 'Refl') {
     // TODO: check eql type
     return evaluate(Eql(tm.fst, tm.fst), vs);
+  }
+  if (tm.tag === 'Rewrite') {
+    const eqt = synth(ns, ts, vs, k, k2, tm.eq);
+    const eqtf = force(eqt);
+    if (eqtf.tag !== 'VEql') return terr(`not an equality type in rewrite: ${eqtf.tag}`);
+    check(ns, ts, vs, k, k2, tm.term, evaluate(tm.form, extendV(vs, eqtf.snd)));
+    return evaluate(tm.form, extendV(vs, eqtf.fst));
   }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };

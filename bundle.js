@@ -128,6 +128,8 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.VEql(exports.evaluate(t.fst, vs), exports.evaluate(t.snd, vs));
     if (t.tag === 'Refl')
         return exports.evaluate(t.snd, vs);
+    if (t.tag === 'Rewrite')
+        return exports.evaluate(t.term, vs);
     return t;
 };
 const quoteHead = (h, k) => {
@@ -208,6 +210,8 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
         return syntax_1.Eql(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full));
     if (tm.tag === 'Refl')
         return syntax_1.Refl(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full));
+    if (tm.tag === 'Rewrite')
+        return syntax_1.Rewrite(exports.zonk(tm.eq, vs, k, full), tm.name, exports.zonk(tm.form, exports.extendV(vs, exports.VVar(k)), k + 1, full), exports.zonk(tm.term, vs, k, full));
     if (tm.tag === 'Abs')
         return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'Fst')
@@ -301,6 +305,7 @@ exports.Fst = (term) => ({ tag: 'Fst', term });
 exports.Snd = (term) => ({ tag: 'Snd', term });
 exports.Eql = (fst, snd) => ({ tag: 'Eql', fst, snd });
 exports.Refl = (fst, snd) => ({ tag: 'Refl', fst, snd });
+exports.Rewrite = (eq, name, form, term) => ({ tag: 'Rewrite', eq, name, form, term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -334,6 +339,8 @@ exports.showTerm = (t) => {
         return `(${exports.showTerm(t.fst)} ~ ${exports.showTerm(t.snd)})`;
     if (t.tag === 'Refl')
         return `(refl ${exports.showTerm(t.fst)} ${exports.showTerm(t.snd)})`;
+    if (t.tag === 'Rewrite')
+        return `(rewrite ${exports.showTerm(t.eq)} @ (${t.name}. ${exports.showTerm(t.form)}) - ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
@@ -369,6 +376,8 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return exports.Snd(exports.toSurface(t.term, ns, k));
     if (t.tag === 'Refl')
         return exports.Refl(exports.toSurface(t.fst, ns, k), exports.toSurface(t.snd, ns, k));
+    if (t.tag === 'Rewrite')
+        return exports.Rewrite(exports.toSurface(t.eq, ns, k), t.name, exports.toSurface(t.form, list_1.Cons([t.name, k], ns), k + 1), exports.toSurface(t.term, ns, k));
     return t;
 };
 const globalUsed = (k, t) => {
@@ -390,6 +399,8 @@ const globalUsed = (k, t) => {
         return globalUsed(k, t.fst) || globalUsed(k, t.snd);
     if (t.tag === 'Refl')
         return globalUsed(k, t.fst) || globalUsed(k, t.snd);
+    if (t.tag === 'Rewrite')
+        return globalUsed(k, t.eq) || globalUsed(k, t.form) || globalUsed(k, t.term);
     if (t.tag === 'Fst')
         return globalUsed(k, t.term);
     if (t.tag === 'Snd')
@@ -427,6 +438,8 @@ const indexUsed = (k, t) => {
         return indexUsed(k, t.fst) || indexUsed(k, t.snd);
     if (t.tag === 'Refl')
         return indexUsed(k, t.fst) || indexUsed(k, t.snd);
+    if (t.tag === 'Rewrite')
+        return indexUsed(k, t.eq) || indexUsed(k + 1, t.form) || indexUsed(k, t.term);
     if (t.tag === 'Fst')
         return indexUsed(k, t.term);
     if (t.tag === 'Snd')
@@ -464,6 +477,8 @@ exports.isUnsolved = (t) => {
         return exports.isUnsolved(t.fst) || exports.isUnsolved(t.snd);
     if (t.tag === 'Refl')
         return exports.isUnsolved(t.fst) || exports.isUnsolved(t.snd);
+    if (t.tag === 'Rewrite')
+        return exports.isUnsolved(t.eq) || exports.isUnsolved(t.form) || exports.isUnsolved(t.term);
     if (t.tag === 'Fst')
         return exports.isUnsolved(t.term);
     if (t.tag === 'Snd')
@@ -506,6 +521,10 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         return S.Eql(exports.fromSurface(t.fst, ns), exports.fromSurface(t.snd, ns));
     if (t.tag === 'Refl')
         return S.Refl(exports.fromSurface(t.fst, ns), exports.fromSurface(t.snd, ns));
+    if (t.tag === 'Rewrite') {
+        const x = decideName(t.name, t.form, ns);
+        return S.Rewrite(exports.fromSurface(t.eq, ns), x, exports.fromSurface(t.form, list_1.Cons(x, ns)), exports.fromSurface(t.term, ns));
+    }
     if (t.tag === 'Abs') {
         const x = decideName(t.name, t.body, ns);
         return S.Abs(t.plicity, x, t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
@@ -551,6 +570,8 @@ exports.shift = (d, c, t) => {
         return exports.Eql(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd));
     if (t.tag === 'Refl')
         return exports.Refl(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd));
+    if (t.tag === 'Rewrite')
+        return exports.Rewrite(exports.shift(d, c, t.eq), t.name, exports.shift(d, c + 1, t.form), exports.shift(d, c, t.term));
     if (t.tag === 'Fst')
         return exports.Fst(exports.shift(d, c, t.term));
     if (t.tag === 'Snd')
@@ -602,6 +623,8 @@ const erasedUsed = (k, t) => {
         return erasedUsed(k, t.term);
     if (t.tag === 'Refl')
         return erasedUsed(k, t.snd);
+    if (t.tag === 'Rewrite')
+        return erasedUsed(k, t.term);
     if (t.tag === 'Pi')
         return false;
     if (t.tag === 'Inter')
@@ -801,6 +824,14 @@ const synth = (ns, ts, vs, k, k2, tm) => {
     if (tm.tag === 'Refl') {
         // TODO: check eql type
         return domain_1.evaluate(syntax_1.Eql(tm.fst, tm.fst), vs);
+    }
+    if (tm.tag === 'Rewrite') {
+        const eqt = synth(ns, ts, vs, k, k2, tm.eq);
+        const eqtf = domain_1.force(eqt);
+        if (eqtf.tag !== 'VEql')
+            return util_1.terr(`not an equality type in rewrite: ${eqtf.tag}`);
+        check(ns, ts, vs, k, k2, tm.term, domain_1.evaluate(tm.form, domain_1.extendV(vs, eqtf.snd)));
+        return domain_1.evaluate(tm.form, domain_1.extendV(vs, eqtf.fst));
     }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
@@ -1500,6 +1531,15 @@ const exprs = (ts, br) => {
             return util_1.serr(`refl cannot be erased`);
         return syntax_1.Refl(t1, t2);
     }
+    if (isName(ts[0], 'rewrite')) {
+        const [t1, b1] = expr(ts[1]);
+        const x = ts[2].tag === 'Name' ? ts[2].name : util_1.serr(`not a name in rewrite`);
+        const [t2, b2] = expr(ts[3]);
+        const [t3, b3] = expr(ts[4]);
+        if (b1 || b2 || b3)
+            return util_1.serr(`rewrite cannot be erased`);
+        return syntax_1.Rewrite(t1, x, t2, t3);
+    }
     if (isName(ts[0], 'fst')) {
         const body = exprs(ts.slice(1), '(');
         return syntax_1.Fst(body);
@@ -1829,6 +1869,7 @@ exports.Fst = (term) => ({ tag: 'Fst', term });
 exports.Snd = (term) => ({ tag: 'Snd', term });
 exports.Eql = (fst, snd) => ({ tag: 'Eql', fst, snd });
 exports.Refl = (fst, snd) => ({ tag: 'Refl', fst, snd });
+exports.Rewrite = (eq, name, form, term) => ({ tag: 'Rewrite', eq, name, form, term });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1860,6 +1901,8 @@ exports.showTermS = (t) => {
         return `(${exports.showTermS(t.fst)} ~ ${exports.showTermS(t.snd)})`;
     if (t.tag === 'Refl')
         return `(refl ${exports.showTermS(t.fst)} ${exports.showTermS(t.snd)})`;
+    if (t.tag === 'Rewrite')
+        return `(rewrite ${exports.showTermS(t.eq)} @ (${t.name}. ${exports.showTermS(t.form)}) - ${exports.showTermS(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1925,6 +1968,8 @@ exports.showTerm = (t) => {
         return `(${exports.showTermS(t.fst)} ~ ${exports.showTermS(t.snd)})`;
     if (t.tag === 'Refl')
         return `(refl ${exports.showTermS(t.fst)} ${exports.showTermS(t.snd)})`;
+    if (t.tag === 'Rewrite')
+        return `(rewrite ${exports.showTermS(t.eq)} @ (${t.name}. ${exports.showTermS(t.form)}) - ${exports.showTermS(t.term)})`;
     return t;
 };
 
