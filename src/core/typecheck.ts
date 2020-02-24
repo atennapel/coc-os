@@ -1,5 +1,5 @@
 import { EnvV, Val, quote, evaluate, VType, extendV, VVar, showTermU, force, showEnvV, VPi, VNe, HMeta } from './domain';
-import { Term, showFromSurface, Pi, App, Var, showTerm, shift } from './syntax';
+import { Term, showFromSurface, Pi, App, Var, showTerm, shift, Eql } from './syntax';
 import { terr } from '../util';
 import { Ix, Name } from '../names';
 import { index, Nil, List, Cons, toString, filter, mapIndex, foldr } from '../list';
@@ -25,11 +25,13 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Both') return erasedUsed(k, t.fst) || erasedUsed(k, t.snd);
   if (t.tag === 'Fst') return erasedUsed(k, t.term);
   if (t.tag === 'Snd') return erasedUsed(k, t.term);
+  if (t.tag === 'Refl') return erasedUsed(k, t.snd);
   if (t.tag === 'Pi') return false;
   if (t.tag === 'Inter') return false;
   if (t.tag === 'Type') return false;
   if (t.tag === 'Hole') return false;
   if (t.tag === 'Meta') return false;
+  if (t.tag === 'Eql') return false;
   return t;
 };
 
@@ -202,6 +204,14 @@ const synth = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, k2: Ix, tm: Term): Val
     if (vty.tag !== 'VInter') return terr(`not an intersection type in snd: ${vty.tag}`);
     return vty.body(evaluate(tm.term, vs));
   }
+  if (tm.tag === 'Eql') {
+    // TODO: scope check terms
+    return VType;
+  }
+  if (tm.tag === 'Refl') {
+    // TODO: check eql type
+    return evaluate(Eql(tm.fst, tm.fst), vs);
+  }
   return terr(`cannot synth ${showFromSurface(tm, ns)}`);
 };
 
@@ -230,8 +240,6 @@ const synthapp = (ns: List<Name>, ts: EnvT, vs: EnvV, k: Ix, k2: Ix, ty_: Val, p
     unify(ns, k, k2, ty, pi);
     return synthapp(ns, ts, vs, k, k2, pi, plicity, arg);
   }
-  
-      log(() => 'here2');
   return terr(`invalid type or plicity mismatch in synthapp in ${showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${showFromSurface(arg, ns)}`);
 };
 

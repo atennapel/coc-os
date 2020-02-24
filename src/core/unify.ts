@@ -40,6 +40,11 @@ export const unify = (ns: List<Name>, k: Ix, k2: Ix, a_: Val, b_: Val): void => 
     const v = VVar(k);
     return unify(Cons(a.name, ns), k + 1, k2, a.body(v), b.body(v));
   }
+  if (a.tag === 'VEql' && b.tag === 'VEql') {
+    unify(ns, k, k2, a.fst, b.fst);
+    unify(ns, k, k2, a.snd, b.snd);
+    return;
+  }
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const v = VVar(k);
     return unify(Cons(a.name, ns), k + 1, k2, a.body(v), b.body(v));

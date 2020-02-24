@@ -6,7 +6,7 @@ export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.era
 export const PlicityE: Plicity = { erased: true };
 export const PlicityR: Plicity = { erased: false };
 
-export type Term = Var | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter | Both | Fst | Snd;
+export type Term = Var | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter | Both | Fst | Snd | Eql | Refl;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -35,6 +35,10 @@ export type Fst = { tag: 'Fst', term: Term };
 export const Fst = (term: Term): Fst => ({ tag: 'Fst', term });
 export type Snd = { tag: 'Snd', term: Term };
 export const Snd = (term: Term): Snd => ({ tag: 'Snd', term });
+export type Eql = { tag: 'Eql', fst: Term, snd: Term };
+export const Eql = (fst: Term, snd: Term): Eql => ({ tag: 'Eql', fst, snd });
+export type Refl = { tag: 'Refl', fst: Term, snd: Term };
+export const Refl = (fst: Term, snd: Term): Refl => ({ tag: 'Refl', fst, snd });
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -51,6 +55,8 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Both') return `[${showTermS(t.fst)}, ${showTermS(t.snd)}]`;
   if (t.tag === 'Fst') return `(fst ${showTermS(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTermS(t.term)})`;
+  if (t.tag === 'Eql') return `(${showTermS(t.fst)} ~ ${showTermS(t.snd)})`;
+  if (t.tag === 'Refl') return `(refl ${showTermS(t.fst)} ${showTermS(t.snd)})`;
   return t;
 };
 
@@ -109,5 +115,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Both') return `[${showTermS(t.fst)}, ${showTermS(t.snd)}]`;
   if (t.tag === 'Fst') return `(fst ${showTermS(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTermS(t.term)})`;
+  if (t.tag === 'Eql') return `(${showTermS(t.fst)} ~ ${showTermS(t.snd)})`;
+  if (t.tag === 'Refl') return `(refl ${showTermS(t.fst)} ${showTermS(t.snd)})`;
   return t;
 };

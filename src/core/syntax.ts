@@ -5,7 +5,7 @@ import { List, lookup, Cons, Nil, index, indecesOf } from '../list';
 import { impossible } from '../util';
 import { EnvV, zonk } from './domain';
 
-export type Term = Var | Global | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter | Both | Fst | Snd;
+export type Term = Var | Global | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter | Both | Fst | Snd | Eql | Refl;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -36,6 +36,10 @@ export type Fst = { tag: 'Fst', term: Term };
 export const Fst = (term: Term): Fst => ({ tag: 'Fst', term });
 export type Snd = { tag: 'Snd', term: Term };
 export const Snd = (term: Term): Snd => ({ tag: 'Snd', term });
+export type Eql = { tag: 'Eql', fst: Term, snd: Term };
+export const Eql = (fst: Term, snd: Term): Eql => ({ tag: 'Eql', fst, snd });
+export type Refl = { tag: 'Refl', fst: Term, snd: Term };
+export const Refl = (fst: Term, snd: Term): Refl => ({ tag: 'Refl', fst, snd });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
@@ -53,6 +57,8 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Both') return `[${showTerm(t.fst)}, ${showTerm(t.snd)}]`;
   if (t.tag === 'Fst') return `(fst ${showTerm(t.term)})`;
   if (t.tag === 'Snd') return `(snd ${showTerm(t.term)})`;
+  if (t.tag === 'Eql') return `(${showTerm(t.fst)} ~ ${showTerm(t.snd)})`;
+  if (t.tag === 'Refl') return `(refl ${showTerm(t.fst)} ${showTerm(t.snd)})`;
   return t;
 };
 
@@ -71,8 +77,10 @@ export const toSurface = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Ter
   if (t.tag === 'Ann') return Ann(toSurface(t.term, ns, k), toSurface(t.type, ns, k));
   if (t.tag === 'Inter') return Inter(t.name, toSurface(t.type, ns, k), toSurface(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Both') return Both(toSurface(t.fst, ns, k), toSurface(t.snd, ns, k));
+  if (t.tag === 'Eql') return Eql(toSurface(t.fst, ns, k), toSurface(t.snd, ns, k));
   if (t.tag === 'Fst') return Fst(toSurface(t.term, ns, k));
   if (t.tag === 'Snd') return Snd(toSurface(t.term, ns, k));
+  if (t.tag === 'Refl') return Refl(toSurface(t.fst, ns, k), toSurface(t.snd, ns, k));
   return t;
 };
 
@@ -84,6 +92,8 @@ const globalUsed = (k: Name, t: Term): boolean => {
   if (t.tag === 'Inter') return globalUsed(k, t.type) || globalUsed(k, t.body);
   if (t.tag === 'Ann') return globalUsed(k, t.term) || globalUsed(k, t.type);
   if (t.tag === 'Both') return globalUsed(k, t.fst) || globalUsed(k, t.snd);
+  if (t.tag === 'Eql') return globalUsed(k, t.fst) || globalUsed(k, t.snd);
+  if (t.tag === 'Refl') return globalUsed(k, t.fst) || globalUsed(k, t.snd);
   if (t.tag === 'Fst') return globalUsed(k, t.term);
   if (t.tag === 'Snd') return globalUsed(k, t.term);
   if (t.tag === 'Global') return t.name === k;
@@ -103,6 +113,8 @@ const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Inter') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
   if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
   if (t.tag === 'Both') return indexUsed(k, t.fst) || indexUsed(k, t.snd);
+  if (t.tag === 'Eql') return indexUsed(k, t.fst) || indexUsed(k, t.snd);
+  if (t.tag === 'Refl') return indexUsed(k, t.fst) || indexUsed(k, t.snd);
   if (t.tag === 'Fst') return indexUsed(k, t.term);
   if (t.tag === 'Snd') return indexUsed(k, t.term);
   if (t.tag === 'Global') return false;
@@ -122,6 +134,8 @@ export const isUnsolved = (t: Term): boolean => {
   if (t.tag === 'Inter') return isUnsolved(t.type) || isUnsolved(t.body);
   if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
   if (t.tag === 'Both') return isUnsolved(t.fst) || isUnsolved(t.snd);
+  if (t.tag === 'Eql') return isUnsolved(t.fst) || isUnsolved(t.snd);
+  if (t.tag === 'Refl') return isUnsolved(t.fst) || isUnsolved(t.snd);
   if (t.tag === 'Fst') return isUnsolved(t.term);
   if (t.tag === 'Snd') return isUnsolved(t.term);
   if (t.tag === 'Global') return false;
@@ -149,6 +163,8 @@ export const fromSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'App') return S.App(fromSurface(t.left, ns), t.plicity, fromSurface(t.right, ns));
   if (t.tag === 'Ann') return S.Ann(fromSurface(t.term, ns), fromSurface(t.type, ns));
   if (t.tag === 'Both') return S.Both(fromSurface(t.fst, ns), fromSurface(t.snd, ns));
+  if (t.tag === 'Eql') return S.Eql(fromSurface(t.fst, ns), fromSurface(t.snd, ns));
+  if (t.tag === 'Refl') return S.Refl(fromSurface(t.fst, ns), fromSurface(t.snd, ns));
   if (t.tag === 'Abs') {
     const x = decideName(t.name, t.body, ns);
     return S.Abs(t.plicity, x, t.type && fromSurface(t.type, ns), fromSurface(t.body, Cons(x, ns)));
@@ -184,6 +200,8 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Inter') return Inter(t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Ann') return Ann(shift(d, c, t.term), shift(d, c, t.type));
   if (t.tag === 'Both') return Both(shift(d, c, t.fst), shift(d, c, t.snd));
+  if (t.tag === 'Eql') return Eql(shift(d, c, t.fst), shift(d, c, t.snd));
+  if (t.tag === 'Refl') return Refl(shift(d, c, t.fst), shift(d, c, t.snd));
   if (t.tag === 'Fst') return Fst(shift(d, c, t.term));
   if (t.tag === 'Snd') return Snd(shift(d, c, t.term));
   return t;

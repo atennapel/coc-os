@@ -1,6 +1,6 @@
 import { Ix, Name } from '../names';
 import { List, Cons, Nil, toString, index, foldr } from '../list';
-import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann, Inter, Both, Snd, Fst } from './syntax';
+import { Term, showTerm, Type, Var, App, Abs, Pi, Global, fromSurface, Meta, Let, Ann, Inter, Both, Snd, Fst, Eql, Refl } from './syntax';
 import { impossible, terr } from '../util';
 import { globalGet } from './globalenv';
 import { Lazy, mapLazy, forceLazy } from '../lazy';
@@ -24,7 +24,7 @@ export type EApp = { tag: 'EApp', arg: Val };
 export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
 
 export type Clos = (val: Val) => Val;
-export type Val = VNe | VGlued | VAbs | VPi | VType | VInter;
+export type Val = VNe | VGlued | VAbs | VPi | VType | VInter | VEql;
 
 export type VNe = { tag: 'VNe', head: Head, args: List<Elim> };
 export const VNe = (head: Head, args: List<Elim>): VNe => ({ tag: 'VNe', head, args });
@@ -38,6 +38,8 @@ export type VInter = { tag: 'VInter', name: Name, type: Val, body: Clos };
 export const VInter = (name: Name, type: Val, body: Clos): VInter => ({ tag: 'VInter', name, type, body});
 export type VType = { tag: 'VType' };
 export const VType: VType = { tag: 'VType' };
+export type VEql = { tag: 'VEql', fst: Val, snd: Val };
+export const VEql = (fst: Val, snd: Val): VEql => ({ tag: 'VEql', fst, snd });
 
 export const VVar = (index: Ix): VNe => VNe(HVar(index), Nil);
 export const VGlobal = (name: Name): VNe => VNe(HGlobal(name), Nil);
@@ -108,6 +110,10 @@ export const evaluate = (t: Term, vs: EnvV = Nil): Val => {
     return evaluate(t.term, vs);
   if (t.tag === 'Snd')
     return evaluate(t.term, vs);
+  if (t.tag === 'Eql')
+    return VEql(evaluate(t.fst, vs), evaluate(t.snd, vs));
+  if (t.tag === 'Refl')
+    return evaluate(t.snd, vs);
   return t;
 };
 
@@ -143,6 +149,8 @@ export const quote = (v_: Val, k: Ix, full: boolean): Term => {
     return Pi(v.plicity, v.name, quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
   if (v.tag === 'VInter')
     return Inter(v.name, quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
+  if (v.tag === 'VEql')
+    return Eql(quote(v.fst, k, full), quote(v.snd, k, full));
   return v;
 };
 export const quoteZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term =>
@@ -191,6 +199,8 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
     return Let(tm.plicity, tm.name, zonk(tm.val, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'Ann') return Ann(zonk(tm.term, vs, k, full), zonk(tm.type, vs, k, full));
   if (tm.tag === 'Both') return Both(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full));
+  if (tm.tag === 'Eql') return Eql(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full));
+  if (tm.tag === 'Refl') return Refl(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full));
   if (tm.tag === 'Abs')
     return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
   if (tm.tag === 'Fst') return Fst(zonk(tm.term, vs, k, full));

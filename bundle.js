@@ -52,6 +52,7 @@ exports.VAbs = (name, body) => ({ tag: 'VAbs', name, body });
 exports.VPi = (plicity, name, type, body) => ({ tag: 'VPi', name, plicity, type, body });
 exports.VInter = (name, type, body) => ({ tag: 'VInter', name, type, body });
 exports.VType = { tag: 'VType' };
+exports.VEql = (fst, snd) => ({ tag: 'VEql', fst, snd });
 exports.VVar = (index) => exports.VNe(exports.HVar(index), list_1.Nil);
 exports.VGlobal = (name) => exports.VNe(exports.HGlobal(name), list_1.Nil);
 exports.VMeta = (index) => exports.VNe(exports.HMeta(index), list_1.Nil);
@@ -123,6 +124,10 @@ exports.evaluate = (t, vs = list_1.Nil) => {
         return exports.evaluate(t.term, vs);
     if (t.tag === 'Snd')
         return exports.evaluate(t.term, vs);
+    if (t.tag === 'Eql')
+        return exports.VEql(exports.evaluate(t.fst, vs), exports.evaluate(t.snd, vs));
+    if (t.tag === 'Refl')
+        return exports.evaluate(t.snd, vs);
     return t;
 };
 const quoteHead = (h, k) => {
@@ -154,6 +159,8 @@ exports.quote = (v_, k, full) => {
         return syntax_1.Pi(v.plicity, v.name, exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
     if (v.tag === 'VInter')
         return syntax_1.Inter(v.name, exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
+    if (v.tag === 'VEql')
+        return syntax_1.Eql(exports.quote(v.fst, k, full), exports.quote(v.snd, k, full));
     return v;
 };
 exports.quoteZ = (v, vs = list_1.Nil, k = 0, full = false) => exports.zonk(exports.quote(v, k, full), vs, k, full);
@@ -197,6 +204,10 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
         return syntax_1.Ann(exports.zonk(tm.term, vs, k, full), exports.zonk(tm.type, vs, k, full));
     if (tm.tag === 'Both')
         return syntax_1.Both(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full));
+    if (tm.tag === 'Eql')
+        return syntax_1.Eql(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full));
+    if (tm.tag === 'Refl')
+        return syntax_1.Refl(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full));
     if (tm.tag === 'Abs')
         return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
     if (tm.tag === 'Fst')
@@ -288,6 +299,8 @@ exports.Inter = (name, type, body) => ({ tag: 'Inter', name, type, body });
 exports.Both = (fst, snd) => ({ tag: 'Both', fst, snd });
 exports.Fst = (term) => ({ tag: 'Fst', term });
 exports.Snd = (term) => ({ tag: 'Snd', term });
+exports.Eql = (fst, snd) => ({ tag: 'Eql', fst, snd });
+exports.Refl = (fst, snd) => ({ tag: 'Refl', fst, snd });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -317,6 +330,10 @@ exports.showTerm = (t) => {
         return `(fst ${exports.showTerm(t.term)})`;
     if (t.tag === 'Snd')
         return `(snd ${exports.showTerm(t.term)})`;
+    if (t.tag === 'Eql')
+        return `(${exports.showTerm(t.fst)} ~ ${exports.showTerm(t.snd)})`;
+    if (t.tag === 'Refl')
+        return `(refl ${exports.showTerm(t.fst)} ${exports.showTerm(t.snd)})`;
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
@@ -344,10 +361,14 @@ exports.toSurface = (t, ns = list_1.Nil, k = 0) => {
         return exports.Inter(t.name, exports.toSurface(t.type, ns, k), exports.toSurface(t.body, list_1.Cons([t.name, k], ns), k + 1));
     if (t.tag === 'Both')
         return exports.Both(exports.toSurface(t.fst, ns, k), exports.toSurface(t.snd, ns, k));
+    if (t.tag === 'Eql')
+        return exports.Eql(exports.toSurface(t.fst, ns, k), exports.toSurface(t.snd, ns, k));
     if (t.tag === 'Fst')
         return exports.Fst(exports.toSurface(t.term, ns, k));
     if (t.tag === 'Snd')
         return exports.Snd(exports.toSurface(t.term, ns, k));
+    if (t.tag === 'Refl')
+        return exports.Refl(exports.toSurface(t.fst, ns, k), exports.toSurface(t.snd, ns, k));
     return t;
 };
 const globalUsed = (k, t) => {
@@ -364,6 +385,10 @@ const globalUsed = (k, t) => {
     if (t.tag === 'Ann')
         return globalUsed(k, t.term) || globalUsed(k, t.type);
     if (t.tag === 'Both')
+        return globalUsed(k, t.fst) || globalUsed(k, t.snd);
+    if (t.tag === 'Eql')
+        return globalUsed(k, t.fst) || globalUsed(k, t.snd);
+    if (t.tag === 'Refl')
         return globalUsed(k, t.fst) || globalUsed(k, t.snd);
     if (t.tag === 'Fst')
         return globalUsed(k, t.term);
@@ -398,6 +423,10 @@ const indexUsed = (k, t) => {
         return indexUsed(k, t.term) || indexUsed(k, t.type);
     if (t.tag === 'Both')
         return indexUsed(k, t.fst) || indexUsed(k, t.snd);
+    if (t.tag === 'Eql')
+        return indexUsed(k, t.fst) || indexUsed(k, t.snd);
+    if (t.tag === 'Refl')
+        return indexUsed(k, t.fst) || indexUsed(k, t.snd);
     if (t.tag === 'Fst')
         return indexUsed(k, t.term);
     if (t.tag === 'Snd')
@@ -430,6 +459,10 @@ exports.isUnsolved = (t) => {
     if (t.tag === 'Ann')
         return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
     if (t.tag === 'Both')
+        return exports.isUnsolved(t.fst) || exports.isUnsolved(t.snd);
+    if (t.tag === 'Eql')
+        return exports.isUnsolved(t.fst) || exports.isUnsolved(t.snd);
+    if (t.tag === 'Refl')
         return exports.isUnsolved(t.fst) || exports.isUnsolved(t.snd);
     if (t.tag === 'Fst')
         return exports.isUnsolved(t.term);
@@ -469,6 +502,10 @@ exports.fromSurface = (t, ns = list_1.Nil) => {
         return S.Ann(exports.fromSurface(t.term, ns), exports.fromSurface(t.type, ns));
     if (t.tag === 'Both')
         return S.Both(exports.fromSurface(t.fst, ns), exports.fromSurface(t.snd, ns));
+    if (t.tag === 'Eql')
+        return S.Eql(exports.fromSurface(t.fst, ns), exports.fromSurface(t.snd, ns));
+    if (t.tag === 'Refl')
+        return S.Refl(exports.fromSurface(t.fst, ns), exports.fromSurface(t.snd, ns));
     if (t.tag === 'Abs') {
         const x = decideName(t.name, t.body, ns);
         return S.Abs(t.plicity, x, t.type && exports.fromSurface(t.type, ns), exports.fromSurface(t.body, list_1.Cons(x, ns)));
@@ -510,6 +547,10 @@ exports.shift = (d, c, t) => {
         return exports.Ann(exports.shift(d, c, t.term), exports.shift(d, c, t.type));
     if (t.tag === 'Both')
         return exports.Both(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd));
+    if (t.tag === 'Eql')
+        return exports.Eql(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd));
+    if (t.tag === 'Refl')
+        return exports.Refl(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd));
     if (t.tag === 'Fst')
         return exports.Fst(exports.shift(d, c, t.term));
     if (t.tag === 'Snd')
@@ -559,6 +600,8 @@ const erasedUsed = (k, t) => {
         return erasedUsed(k, t.term);
     if (t.tag === 'Snd')
         return erasedUsed(k, t.term);
+    if (t.tag === 'Refl')
+        return erasedUsed(k, t.snd);
     if (t.tag === 'Pi')
         return false;
     if (t.tag === 'Inter')
@@ -568,6 +611,8 @@ const erasedUsed = (k, t) => {
     if (t.tag === 'Hole')
         return false;
     if (t.tag === 'Meta')
+        return false;
+    if (t.tag === 'Eql')
         return false;
     return t;
 };
@@ -749,6 +794,14 @@ const synth = (ns, ts, vs, k, k2, tm) => {
             return util_1.terr(`not an intersection type in snd: ${vty.tag}`);
         return vty.body(domain_1.evaluate(tm.term, vs));
     }
+    if (tm.tag === 'Eql') {
+        // TODO: scope check terms
+        return domain_1.VType;
+    }
+    if (tm.tag === 'Refl') {
+        // TODO: check eql type
+        return domain_1.evaluate(syntax_1.Eql(tm.fst, tm.fst), vs);
+    }
     return util_1.terr(`cannot synth ${syntax_1.showFromSurface(tm, ns)}`);
 };
 const synthapp = (ns, ts, vs, k, k2, ty_, plicity, arg) => {
@@ -776,7 +829,6 @@ const synthapp = (ns, ts, vs, k, k2, ty_, plicity, arg) => {
         unify_1.unify(ns, k, k2, ty, pi);
         return synthapp(ns, ts, vs, k, k2, pi, plicity, arg);
     }
-    config_1.log(() => 'here2');
     return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermU(ty, ns, k)} ${plicity.erased ? '-' : ''}@ ${syntax_1.showFromSurface(arg, ns)}`);
 };
 let holesStack = [];
@@ -890,6 +942,11 @@ exports.unify = (ns, k, k2, a_, b_) => {
         exports.unify(ns, k, k2, a.type, b.type);
         const v = domain_1.VVar(k);
         return exports.unify(list_1.Cons(a.name, ns), k + 1, k2, a.body(v), b.body(v));
+    }
+    if (a.tag === 'VEql' && b.tag === 'VEql') {
+        exports.unify(ns, k, k2, a.fst, b.fst);
+        exports.unify(ns, k, k2, a.snd, b.snd);
+        return;
     }
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
         const v = domain_1.VVar(k);
@@ -1429,6 +1486,20 @@ const exprs = (ts, br) => {
             return util_1.serr(`both cannot be erased`);
         return syntax_1.Both(t1, t2);
     }
+    if (isName(ts[0], 'eql')) {
+        const [t1, b1] = expr(ts[1]);
+        const [t2, b2] = expr(ts[2]);
+        if (b1 || b2)
+            return util_1.serr(`eql cannot be erased`);
+        return syntax_1.Eql(t1, t2);
+    }
+    if (isName(ts[0], 'refl')) {
+        const [t1, b1] = expr(ts[1]);
+        const [t2, b2] = expr(ts[2]);
+        if (b1 || b2)
+            return util_1.serr(`refl cannot be erased`);
+        return syntax_1.Refl(t1, t2);
+    }
     if (isName(ts[0], 'fst')) {
         const body = exprs(ts.slice(1), '(');
         return syntax_1.Fst(body);
@@ -1756,6 +1827,8 @@ exports.Inter = (name, type, body) => ({ tag: 'Inter', name, type, body });
 exports.Both = (fst, snd) => ({ tag: 'Both', fst, snd });
 exports.Fst = (term) => ({ tag: 'Fst', term });
 exports.Snd = (term) => ({ tag: 'Snd', term });
+exports.Eql = (fst, snd) => ({ tag: 'Eql', fst, snd });
+exports.Refl = (fst, snd) => ({ tag: 'Refl', fst, snd });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -1783,6 +1856,10 @@ exports.showTermS = (t) => {
         return `(fst ${exports.showTermS(t.term)})`;
     if (t.tag === 'Snd')
         return `(snd ${exports.showTermS(t.term)})`;
+    if (t.tag === 'Eql')
+        return `(${exports.showTermS(t.fst)} ~ ${exports.showTermS(t.snd)})`;
+    if (t.tag === 'Refl')
+        return `(refl ${exports.showTermS(t.fst)} ${exports.showTermS(t.snd)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -1844,6 +1921,10 @@ exports.showTerm = (t) => {
         return `(fst ${exports.showTermS(t.term)})`;
     if (t.tag === 'Snd')
         return `(snd ${exports.showTermS(t.term)})`;
+    if (t.tag === 'Eql')
+        return `(${exports.showTermS(t.fst)} ~ ${exports.showTermS(t.snd)})`;
+    if (t.tag === 'Refl')
+        return `(refl ${exports.showTermS(t.fst)} ${exports.showTermS(t.snd)})`;
     return t;
 };
 
