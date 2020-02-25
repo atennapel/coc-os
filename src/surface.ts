@@ -1,7 +1,7 @@
 import { Name } from './names';
 
 export type Plicity = boolean;
-export type Term = Var | App | Abs | Let | Pi | Fix | Type | Ann;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -11,6 +11,10 @@ export type Abs = { tag: 'Abs', plicity: Plicity, name: Name, type: Term | null,
 export const Abs = (plicity: Plicity, name: Name, type: Term | null, body: Term): Abs => ({ tag: 'Abs', plicity, name, type, body });
 export type Let = { tag: 'Let', plicity: Plicity, name: Name, val: Term, body: Term };
 export const Let = (plicity: Plicity, name: Name, val: Term, body: Term): Let => ({ tag: 'Let', plicity, name, val, body });
+export type Roll = { tag: 'Roll', type: Term | null, term: Term };
+export const Roll = (type: Term | null, term: Term): Roll => ({ tag: 'Roll', type, term });
+export type Unroll = { tag: 'Unroll', term: Term };
+export const Unroll = (term: Term): Unroll => ({ tag: 'Unroll', term });
 export type Pi = { tag: 'Pi', plicity: Plicity, name: Name, type: Term, body: Term };
 export const Pi = (plicity: Plicity, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', plicity, name, type, body });
 export type Fix = { tag: 'Fix', name: Name, type: Term, body: Term };
@@ -26,6 +30,8 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Abs')
     return t.type ? `(\\(${t.plicity ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})` : `(\\${t.plicity ? '-' : ''}${t.name}. ${showTermS(t.body)})`;
   if (t.tag === 'Let') return `(let ${t.plicity ? '-' : ''}${t.name} = ${showTermS(t.val)} in ${showTermS(t.body)})`;
+  if (t.tag === 'Roll') return t.type ? `(roll {${showTermS(t.type)}} ${showTermS(t.term)})` : `(roll ${showTermS(t.term)})`;
+  if (t.tag === 'Unroll') return `(unroll ${showTermS(t.term)})`;
   if (t.tag === 'Pi') return `(/(${t.plicity ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
   if (t.tag === 'Fix') return `(fix (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
   if (t.tag === 'Type') return '*';
@@ -65,10 +71,10 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
-    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann', f)} ${
+    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'Fix' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll', f)} ${
       as.map(([im, t], i) =>
         im ? `{${showTerm(t)}}` :
-          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi', t)}`).join(' ')}`;
+          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
@@ -76,7 +82,7 @@ export const showTerm = (t: Term): string => {
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `${as.map(([x, im, t]) => x === '_' ? (im ? `${im ? '{' : ''}${showTerm(t)}${im ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi', t)}`) : `${im ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
+    return `${as.map(([x, im, t]) => x === '_' ? (im ? `${im ? '{' : ''}${showTerm(t)}${im ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Fix', t)}`) : `${im ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
   }
   if (t.tag === 'Fix')
     return `fix (${t.name} : ${showTermP(t.type.tag === 'Ann', t.type)}). ${showTermP(t.body.tag === 'Ann', t.body)}`;
@@ -84,6 +90,10 @@ export const showTerm = (t: Term): string => {
     return `let ${t.plicity ? `{${t.name}}` : t.name} = ${showTermP(t.val.tag === 'Let', t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
   if (t.tag === 'Ann')
     return `${showTermP(t.term.tag === 'Ann', t.term)} : ${showTermP(t.term.tag === 'Ann', t.type)}`;
+  if (t.tag === 'Unroll')
+    return `unroll ${showTermP(t.term.tag !== 'Var', t.term)}`;
+  if (t.tag === 'Roll')
+    return !t.type ? `roll ${showTermP(t.term.tag !== 'Var', t.term)}` : `roll {${showTerm(t.type)}} ${showTermP(t.term.tag !== 'Var', t.term)}`;
   return t;
 };
 

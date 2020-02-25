@@ -59,6 +59,10 @@ const check = (local: Local, tm: Term, ty: Val): void => {
       return terr(`erased argument used in ${showSurface(tm, local.names)}`);
     return;
   }
+  if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
+    check(local, tm.term, tyf.body(ty));
+    return;
+  }
   const ty2 = synth(local, tm);
   try {
     unify(local.indexErased, ty2, ty);
@@ -111,7 +115,7 @@ const synth = (local: Local, tm: Term): Val => {
   if (tm.tag === 'Fix') {
     check(local, tm.type, VType);
     const vty = evaluate(tm.type, local.vs);
-    check(extend(local, tm.name, evaluate(tm.type, local.vs), true, VVar(local.indexErased), false), tm.body, vty);
+    check(extend(local, tm.name, evaluate(tm.type, local.vs), false, evaluate(tm, local.vs), false), tm.body, vty);
     return vty;
   }
   if (tm.tag === 'Ann') {
@@ -120,12 +124,29 @@ const synth = (local: Local, tm: Term): Val => {
     check(local, tm.term, vt);
     return vt;
   }
+  if (tm.tag === 'Roll' && tm.type) {
+    check(local, tm.type, VType);
+    const vt = evaluate(tm.type, local.vs);
+    const vtf = force(vt);
+    if (vtf.tag !== 'VFix')
+      return terr(`fix type expected in ${showSurface(tm, local.names)}: ${showTermU(vt, local.names, local.index)}`);
+    check(local, tm.term, vtf.body(vt));
+    return vt;
+  }
+  if (tm.tag === 'Unroll') {
+    const ty = synth(local, tm.term);
+    const vt = force(ty);
+    if (vt.tag !== 'VFix') 
+      return terr(`fix type expected in ${showSurface(tm, local.names)}: ${showTermU(vt, local.names, local.index)}`);
+    return vt.body(ty);
+  }
   return terr(`cannot synth ${showSurface(tm, local.names)}`);
 };
 
 const synthapp = (local: Local, ty_: Val, plicity: Plicity, arg: Term): Val => {
   const ty = force(ty_);
   log(() => `synthapp ${showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${showSurface(arg, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
+  if (ty.tag === 'VFix') return synthapp(local, ty.body(ty), plicity, arg);
   if (ty.tag === 'VPi' && ty.plicity === plicity) {
     check(local, arg, ty.type);
     const vm = evaluate(arg, local.vs);

@@ -73,6 +73,8 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Fix')
     return VFix(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Ann') return evaluate(t.term, vs);
+  if (t.tag === 'Roll') return evaluate(t.term, vs);
+  if (t.tag === 'Unroll') return evaluate(t.term, vs);
   return t;
 };
 
