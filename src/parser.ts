@@ -1,7 +1,7 @@
-import { serr, loadFile } from './util';
-import { Term, Var, App, Type, Abs, Pi, Let, PlicityR, PlicityE, Ann, Hole, HoleN, Inter, Both, Fst, Snd, Eql, Refl, Rewrite } from './syntax';
+import { serr, loadFile } from './utils/util';
+import { Term, Var, App, Type, Abs, Pi, Let, Ann } from './surface';
 import { Name } from './names';
-import { Def, DDef } from './definitions';
+import { Def, DDef } from './surface';
 import { log } from './config';
 
 type BracketO = '(' | '{'
@@ -138,7 +138,6 @@ const expr = (t: Token): [Term, boolean] => {
   if (t.tag === 'Name') {
     const x = t.name;
     if (x === '*') return [Type, false];
-    if (x[0] === '_') return [x.length === 1 ? HoleN : Hole(x.slice(1)), false];
     if (x.includes('@')) return serr(`invalid name: ${x}`);
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
@@ -151,14 +150,14 @@ const expr = (t: Token): [Term, boolean] => {
       const s1 = Var('B1');
       let c: Term = Var('BE');
       const s = n.toString(2);
-      for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, PlicityR, c);
+      for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, false, c);
       return [c, false];
     } else {
       const n = +t.num;
       if (isNaN(n)) return serr(`invalid number: ${t.num}`);
       const s = Var('S');
       let c: Term = Var('Z');
-      for (let i = 0; i < n; i++) c = App(s, PlicityR, c);
+      for (let i = 0; i < n; i++) c = App(s, false, c);
       return [c, false];
     }
   }
@@ -189,62 +188,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     }
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1), '(');
-    return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? PlicityE : PlicityR, name, ty, x), body);
-  }
-  
-  if (isName(ts[0], 'iota')) {
-    const args: [Name, boolean, Term | null][] = [];
-    let found = false;
-    let i = 1;
-    for (; i < ts.length; i++) {
-      const c = ts[i];
-      if (isName(c, '.')) {
-        found = true;
-        break;
-      }
-      lambdaParams(c).forEach(x => args.push(x));
-    }
-    if (!found) return serr(`. not found after \\`);
-    const body = exprs(ts.slice(i + 1), '(');
-    return args.reduceRight((x, [name, impl, ty]) => {
-      if (impl) return serr(`iota cannot have erased parameter`);
-      if (!ty) return serr(`iota needs a type`);
-      return Inter(name, ty, x);
-    }, body);
-  }
-  if (isName(ts[0], 'both')) {
-    const [t1, b1] = expr(ts[1]);
-    const [t2, b2] = expr(ts[2]);
-    if (b1 || b2) return serr(`both cannot be erased`);
-    return Both(t1, t2);
-  }
-  if (isName(ts[0], 'eql')) {
-    const [t1, b1] = expr(ts[1]);
-    const [t2, b2] = expr(ts[2]);
-    if (b1 || b2) return serr(`eql cannot be erased`);
-    return Eql(t1, t2);
-  }
-  if (isName(ts[0], 'refl')) {
-    const [t1, b1] = expr(ts[1]);
-    const [t2, b2] = expr(ts[2]);
-    if (b1 || b2) return serr(`refl cannot be erased`);
-    return Refl(t1, t2);
-  }
-  if (isName(ts[0], 'rewrite')) {
-    const [t1, b1] = expr(ts[1]);
-    const x = ts[2].tag === 'Name' ? ts[2].name : serr(`not a name in rewrite`);
-    const [t2, b2] = expr(ts[3]);
-    const [t3, b3] = expr(ts[4]);
-    if (b1 || b2 || b3) return serr(`rewrite cannot be erased`);
-    return Rewrite(t1, x, t2, t3);
-  }
-  if (isName(ts[0], 'fst')) {
-    const body = exprs(ts.slice(1), '(');
-    return Fst(body);
-  }
-  if (isName(ts[0], 'snd')) {
-    const body = exprs(ts.slice(1), '(');
-    return Snd(body);
+    return args.reduceRight((x, [name, impl, ty]) => Abs(impl, name, ty, x), body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];
@@ -276,7 +220,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     if (vals.length === 0) return serr(`empty val in let`);
     const val = exprs(vals, '(');
     const body = exprs(ts.slice(i + 1), '(');
-    return Let(impl ? PlicityE : PlicityR, name, val, body);
+    return Let(impl, name, val, body);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {
@@ -286,7 +230,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')] as [Name, boolean, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(');
-    return args.reduceRight((x, [name, impl, ty]) => Pi(impl ? PlicityE : PlicityR, name, ty, x), body);
+    return args.reduceRight((x, [name, impl, ty]) => Pi(impl, name, ty, x), body);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];
@@ -299,7 +243,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
   }
   if (all.length === 0) return serr(`empty application`);
   if (all[0] && all[0][1]) return serr(`in application function cannot be between {}`);
-  return all.slice(1).reduce((x, [y, impl]) => App(x, impl ? PlicityE : PlicityR, y), all[0][0]);
+  return all.slice(1).reduce((x, [y, impl]) => App(x, impl, y), all[0][0]);
 };
 
 export const parse = (s: string): Term => {

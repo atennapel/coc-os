@@ -1,15 +1,15 @@
-import { Name, Ix } from './names';
+import { Ix, Name, nextName } from './names';
+import { Plicity } from './surface';
+import * as S from './surface';
+import { List, lookup, Cons, Nil, indecesOf, index } from './utils/list';
+import { impossible } from './utils/util';
 
-export type Plicity = { erased: boolean };
-export const eqPlicity = (a: Plicity, b: Plicity): boolean => a.erased === b.erased;
+export type Term = Var | Global | App | Abs | Let | Pi | Type | Ann;
 
-export const PlicityE: Plicity = { erased: true };
-export const PlicityR: Plicity = { erased: false };
-
-export type Term = Var | App | Abs | Let | Pi | Type | Ann | Hole | Meta | Inter | Both | Fst | Snd | Eql | Refl | Rewrite;
-
-export type Var = { tag: 'Var', name: Name };
-export const Var = (name: Name): Var => ({ tag: 'Var', name });
+export type Var = { tag: 'Var', index: Ix };
+export const Var = (index: Ix): Var => ({ tag: 'Var', index });
+export type Global = { tag: 'Global', name: Name };
+export const Global = (name: Name): Global => ({ tag: 'Global', name });
 export type App = { tag: 'App', left: Term, plicity: Plicity, right: Term };
 export const App = (left: Term, plicity: Plicity, right: Term): App => ({ tag: 'App', left, plicity, right });
 export type Abs = { tag: 'Abs', plicity: Plicity, name: Name, type: Term | null, body: Term };
@@ -22,104 +22,80 @@ export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
-export type Hole = { tag: 'Hole', name: Name | null };
-export const HoleN: Hole = { tag: 'Hole', name: null };
-export const Hole = (name: Name): Hole => ({ tag: 'Hole', name });
-export type Meta = { tag: 'Meta', index: Ix };
-export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
-export type Inter = { tag: 'Inter', name: Name, type: Term, body: Term };
-export const Inter = (name: Name, type: Term, body: Term): Inter => ({ tag: 'Inter', name, type, body });
-export type Both = { tag: 'Both', fst: Term, snd: Term };
-export const Both = (fst: Term, snd: Term): Both => ({ tag: 'Both', fst, snd });
-export type Fst = { tag: 'Fst', term: Term };
-export const Fst = (term: Term): Fst => ({ tag: 'Fst', term });
-export type Snd = { tag: 'Snd', term: Term };
-export const Snd = (term: Term): Snd => ({ tag: 'Snd', term });
-export type Eql = { tag: 'Eql', fst: Term, snd: Term };
-export const Eql = (fst: Term, snd: Term): Eql => ({ tag: 'Eql', fst, snd });
-export type Refl = { tag: 'Refl', fst: Term, snd: Term };
-export const Refl = (fst: Term, snd: Term): Refl => ({ tag: 'Refl', fst, snd });
-export type Rewrite = { tag: 'Rewrite', eq: Term, name: Name, form: Term, term: Term };
-export const Rewrite = (eq: Term, name: Name, form: Term, term: Term): Rewrite => ({ tag: 'Rewrite', eq, name, form, term });
 
-export const showTermS = (t: Term): string => {
-  if (t.tag === 'Var') return t.name;
-  if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'Hole') return `_${t.name || ''}`;
-  if (t.tag === 'App') return `(${showTermS(t.left)} ${t.plicity.erased ? '-' : ''}${showTermS(t.right)})`;
+export const showTerm = (t: Term): string => {
+  if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'Global') return t.name;
+  if (t.tag === 'App') return `(${showTerm(t.left)} ${t.plicity ? '-' : ''}${showTerm(t.right)})`;
   if (t.tag === 'Abs')
-    return t.type ? `(\\(${t.plicity.erased ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})` : `(\\${t.plicity.erased ? '-' : ''}${t.name}. ${showTermS(t.body)})`;
-  if (t.tag === 'Let') return `(let ${t.plicity.erased ? '-' : ''}${t.name} = ${showTermS(t.val)} in ${showTermS(t.body)})`;
-  if (t.tag === 'Pi') return `(/(${t.plicity.erased ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
+    return t.type ? `(\\(${t.plicity ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})` : `(\\${t.plicity ? '-' : ''}${t.name}. ${showTerm(t.body)})`;
+  if (t.tag === 'Let') return `(let ${t.plicity ? '-' : ''}${t.name} = ${showTerm(t.val)} in ${showTerm(t.body)})`;
+  if (t.tag === 'Pi') return `(/(${t.plicity ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
-  if (t.tag === 'Ann') return `(${showTermS(t.term)} : ${showTermS(t.type)})`;
-  if (t.tag === 'Inter') return `(iota (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
-  if (t.tag === 'Both') return `[${showTermS(t.fst)}, ${showTermS(t.snd)}]`;
-  if (t.tag === 'Fst') return `(fst ${showTermS(t.term)})`;
-  if (t.tag === 'Snd') return `(snd ${showTermS(t.term)})`;
-  if (t.tag === 'Eql') return `(${showTermS(t.fst)} ~ ${showTermS(t.snd)})`;
-  if (t.tag === 'Refl') return `(refl ${showTermS(t.fst)} ${showTermS(t.snd)})`;
-  if (t.tag === 'Rewrite') return `(rewrite ${showTermS(t.eq)} @ (${t.name}. ${showTermS(t.form)}) - ${showTermS(t.term)})`;
+  if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
   return t;
 };
 
-export const flattenApp = (t: Term): [Term, [Plicity, Term][]] => {
-  const r: [Plicity, Term][] = [];
-  while (t.tag === 'App') {
-    r.push([t.plicity, t.right]);
-    t = t.left;
+export const toInternal = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Term => {
+  if (t.tag === 'Var') {
+    const l = lookup(ns, t.name);
+    return l === null ? Global(t.name) : Var(k - l - 1);
   }
-  return [t, r.reverse()];
-};
-export const flattenAbs = (t: Term): [[Name, Plicity, Term | null][], Term] => {
-  const r: [Name, Plicity, Term | null][] = [];
-  while (t.tag === 'Abs') {
-    r.push([t.name, t.plicity, t.type]);
-    t = t.body;
-  }
-  return [r, t];
-};
-export const flattenPi = (t: Term): [[Name, Plicity, Term][], Term] => {
-  const r: [Name, Plicity, Term][] = [];
-  while (t.tag === 'Pi') {
-    r.push([t.name, t.plicity, t.type]);
-    t = t.body;
-  }
-  return [r, t];
+  if (t.tag === 'App') return App(toInternal(t.left, ns, k), t.plicity, toInternal(t.right, ns, k));
+  if (t.tag === 'Abs') return Abs(t.plicity, t.name, t.type && toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Let') return Let(t.plicity, t.name, toInternal(t.val, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Pi') return Pi(t.plicity, t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Type') return Type;
+  if (t.tag === 'Ann') return Ann(toInternal(t.term, ns, k), toInternal(t.type, ns, k));
+  return t;
 };
 
-export const showTermP = (b: boolean, t: Term): string =>
-  b ? `(${showTerm(t)})` : showTerm(t);
-export const showTerm = (t: Term): string => {
-  if (t.tag === 'Type') return '*';
-  if (t.tag === 'Var') return t.name;
-  if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'Hole') return `_${t.name || ''}`;
-  if (t.tag === 'App') {
-    const [f, as] = flattenApp(t);
-    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann', f)} ${
-      as.map(([im, t], i) =>
-        im.erased ? `{${showTerm(t)}}` :
-          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi', t)}`).join(' ')}`;
+export const globalUsed = (k: Name, t: Term): boolean => {
+  if (t.tag === 'Global') return t.name === k;
+  if (t.tag === 'App') return globalUsed(k, t.left) || globalUsed(k, t.right);
+  if (t.tag === 'Abs') return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.body);
+  if (t.tag === 'Let') return globalUsed(k, t.val) || globalUsed(k, t.body);
+  if (t.tag === 'Pi') return globalUsed(k, t.type) || globalUsed(k, t.body);
+  if (t.tag === 'Ann') return globalUsed(k, t.term) || globalUsed(k, t.type);
+  return false;
+};
+export const indexUsed = (k: Ix, t: Term): boolean => {
+  if (t.tag === 'Var') return t.index === k;
+  if (t.tag === 'App') return indexUsed(k, t.left) || indexUsed(k, t.right);
+  if (t.tag === 'Abs') return (t.type && indexUsed(k, t.type)) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Let') return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Pi') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
+  return false;
+};
+
+const decideName = (x: Name, t: Term, ns: List<Name>): Name => {
+  if (x === '_') return x;
+  const a = indecesOf(ns, x).some(i => indexUsed(i + 1, t));
+  const g = globalUsed(x, t);
+  return a || g ? decideName(nextName(x), t, ns) : x;
+};
+export const toSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
+  if (t.tag === 'Var') {
+    const l = index(ns, t.index);
+    return l ? S.Var(l) : impossible(`var index out of range in toSurface: ${t.index}`);
   }
+  if (t.tag === 'Type') return S.Type;
+  if (t.tag === 'Global') return S.Var(t.name);
+  if (t.tag === 'App') return S.App(toSurface(t.left, ns), t.plicity, toSurface(t.right, ns));
+  if (t.tag === 'Ann') return S.Ann(toSurface(t.term, ns), toSurface(t.type, ns));
   if (t.tag === 'Abs') {
-    const [as, b] = flattenAbs(t);
-    return `\\${as.map(([x, im, t]) => im.erased ? `{${x}${t ? ` : ${showTermP(t.tag === 'Ann', t)}` : ''}}` : !t ? x : `(${x} : ${showTermP(t.tag === 'Ann', t)})`).join(' ')}. ${showTermP(b.tag === 'Ann', b)}`;
+    const x = decideName(t.name, t.body, ns);
+    return S.Abs(t.plicity, x, t.type && toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
+  }
+  if (t.tag === 'Let') {
+    const x = decideName(t.name, t.body, ns);
+    return S.Let(t.plicity, x, toSurface(t.val, ns), toSurface(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Pi') {
-    const [as, b] = flattenPi(t);
-    return `${as.map(([x, im, t]) => x === '_' ? (im.erased ? `${im.erased ? '{' : ''}${showTerm(t)}${im.erased ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi', t)}`) : `${im.erased ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im.erased ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
+    const x = decideName(t.name, t.body, ns);
+    return S.Pi(t.plicity, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
   }
-  if (t.tag === 'Let')
-    return `let ${t.plicity.erased ? `{${t.name}}` : t.name} = ${showTermP(t.val.tag === 'Let', t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
-  if (t.tag === 'Ann')
-    return `${showTermP(t.term.tag === 'Ann', t.term)} : ${showTermP(t.term.tag === 'Ann', t.type)}`;
-  if (t.tag === 'Inter') return `(iota (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
-  if (t.tag === 'Both') return `[${showTermS(t.fst)}, ${showTermS(t.snd)}]`;
-  if (t.tag === 'Fst') return `(fst ${showTermS(t.term)})`;
-  if (t.tag === 'Snd') return `(snd ${showTermS(t.term)})`;
-  if (t.tag === 'Eql') return `(${showTermS(t.fst)} ~ ${showTermS(t.snd)})`;
-  if (t.tag === 'Refl') return `(refl ${showTermS(t.fst)} ${showTermS(t.snd)})`;
-  if (t.tag === 'Rewrite') return `(rewrite ${showTermS(t.eq)} @ (${t.name}. ${showTermS(t.form)}) - ${showTermS(t.term)})`;
   return t;
 };
+export const showSurface = (t: Term, ns: List<Name> = Nil): string => S.showTerm(toSurface(t, ns));

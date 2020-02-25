@@ -1,6 +1,6 @@
 import { Val } from './domain';
 import { Term } from './syntax';
-import { Name } from '../names';
+import { Name } from './names';
 
 export type EnvGEntry = { term: Term, val: Val, type: Val };
 export type EnvG = { [key: string]: EnvGEntry };

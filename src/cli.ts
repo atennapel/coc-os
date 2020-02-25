@@ -1,6 +1,6 @@
 import { parseDefs } from './parser';
 import { initREPL, runREPL } from './repl';
-import { showTerm } from './syntax';
+import { showTerm } from './surface';
 import { toSurfaceDefs } from './core/definitions';
 import { globalReset, globalMap } from './core/globalenv';
 import { typecheckDefs } from './core/typecheck';

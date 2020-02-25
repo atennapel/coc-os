@@ -1,13 +1,13 @@
 import { log, setConfig, config } from './config';
 import { globalReset, globalMap, globalDelete, globalGet } from './core/globalenv';
-import { showTerm } from './syntax';
+import { showTerm } from './surface';
 import { quoteZ, normalize } from './core/domain';
 import { fromSurface, toSurface } from './core/syntax';
 import { parseDefs, parse, ImportMap } from './parser';
 import { typecheckDefs, typecheck } from './core/typecheck';
 import { toSurfaceDefs } from './core/definitions';
-import { Nil } from './list';
-import { loadFile } from './util';
+import { Nil } from './utils/list';
+import { loadFile } from './utils/util';
 
 const help = `
 EXAMPLES
