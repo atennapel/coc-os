@@ -2,7 +2,7 @@ import { Name, Ix } from './names';
 import { List, Nil, Cons, listToString, index, foldr } from './utils/list';
 import { Lazy, mapLazy, forceLazy } from './utils/lazy';
 import { Plicity, showTerm as surfaceShowterm } from './surface';
-import { showTerm, Term, Var, Global, App, Type, Abs, Pi, toSurface } from './syntax';
+import { showTerm, Term, Var, Global, App, Type, Abs, Pi, toSurface, Fix } from './syntax';
 import { impossible } from './utils/util';
 import { globalGet } from './globalenv';
 
@@ -19,7 +19,7 @@ export type EApp = { tag: 'EApp', arg: Val };
 export const EApp = (arg: Val): EApp => ({ tag: 'EApp', arg });
 
 export type Clos = (val: Val) => Val;
-export type Val = VNe | VGlued | VAbs | VPi | VType;
+export type Val = VNe | VGlued | VAbs | VPi | VFix | VType;
 
 export type VNe = { tag: 'VNe', head: Head, args: List<Elim> };
 export const VNe = (head: Head, args: List<Elim>): VNe => ({ tag: 'VNe', head, args });
@@ -29,6 +29,8 @@ export type VAbs = { tag: 'VAbs', name: Name, body: Clos };
 export const VAbs = (name: Name, body: Clos): VAbs => ({ tag: 'VAbs', name, body});
 export type VPi = { tag: 'VPi', plicity: Plicity, name: Name, type: Val, body: Clos };
 export const VPi = (plicity: Plicity, name: Name, type: Val, body: Clos): VPi => ({ tag: 'VPi', name, plicity, type, body});
+export type VFix = { tag: 'VFix', name: Name, type: Val, body: Clos };
+export const VFix = (name: Name, type: Val, body: Clos): VFix => ({ tag: 'VFix', name, type, body});
 export type VType = { tag: 'VType' };
 export const VType: VType = { tag: 'VType' };
 
@@ -68,6 +70,8 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return t.plicity ? evaluate(t.body, extendV(vs, VVar(-1))) : evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
   if (t.tag === 'Pi')
     return VPi(t.plicity, t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
+  if (t.tag === 'Fix')
+    return VFix(t.name, evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Ann') return evaluate(t.term, vs);
   return t;
 };
@@ -97,6 +101,7 @@ export const quote = (v: Val, k: Ix, full: boolean): Term => {
     );
   if (v.tag === 'VAbs') return Abs(false, v.name, null, quote(v.body(VVar(k)), k + 1, full));
   if (v.tag === 'VPi') return Pi(v.plicity, v.name, quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
+  if (v.tag === 'VFix') return Fix(v.name, quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
   return v;
 };
 

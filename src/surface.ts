@@ -1,7 +1,7 @@
 import { Name } from './names';
 
 export type Plicity = boolean;
-export type Term = Var | App | Abs | Let | Pi | Type | Ann;
+export type Term = Var | App | Abs | Let | Pi | Fix | Type | Ann;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -13,6 +13,8 @@ export type Let = { tag: 'Let', plicity: Plicity, name: Name, val: Term, body: T
 export const Let = (plicity: Plicity, name: Name, val: Term, body: Term): Let => ({ tag: 'Let', plicity, name, val, body });
 export type Pi = { tag: 'Pi', plicity: Plicity, name: Name, type: Term, body: Term };
 export const Pi = (plicity: Plicity, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', plicity, name, type, body });
+export type Fix = { tag: 'Fix', name: Name, type: Term, body: Term };
+export const Fix = (name: Name, type: Term, body: Term): Fix => ({ tag: 'Fix', name, type, body });
 export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
@@ -25,6 +27,7 @@ export const showTermS = (t: Term): string => {
     return t.type ? `(\\(${t.plicity ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})` : `(\\${t.plicity ? '-' : ''}${t.name}. ${showTermS(t.body)})`;
   if (t.tag === 'Let') return `(let ${t.plicity ? '-' : ''}${t.name} = ${showTermS(t.val)} in ${showTermS(t.body)})`;
   if (t.tag === 'Pi') return `(/(${t.plicity ? '-' : ''}${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
+  if (t.tag === 'Fix') return `(fix (${t.name} : ${showTermS(t.type)}). ${showTermS(t.body)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTermS(t.term)} : ${showTermS(t.type)})`;
   return t;
@@ -75,6 +78,8 @@ export const showTerm = (t: Term): string => {
     const [as, b] = flattenPi(t);
     return `${as.map(([x, im, t]) => x === '_' ? (im ? `${im ? '{' : ''}${showTerm(t)}${im ? '}' : ''}` : `${showTermP(t.tag === 'Ann' || t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi', t)}`) : `${im ? '{' : '('}${x} : ${showTermP(t.tag === 'Ann', t)}${im ? '}' : ')'}`).join(' -> ')} -> ${showTermP(b.tag === 'Ann', b)}`;
   }
+  if (t.tag === 'Fix')
+    return `fix (${t.name} : ${showTermP(t.type.tag === 'Ann', t.type)}). ${showTermP(t.body.tag === 'Ann', t.body)}`;
   if (t.tag === 'Let')
     return `let ${t.plicity ? `{${t.name}}` : t.name} = ${showTermP(t.val.tag === 'Let', t.val)} in ${showTermP(t.body.tag === 'Ann', t.body)}`;
   if (t.tag === 'Ann')

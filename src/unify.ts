@@ -23,6 +23,11 @@ export const unify = (k: Ix, a: Val, b: Val): void => {
     const v = VVar(k);
     return unify(k + 1, a.body(v), b.body(v));
   }
+  if (a.tag === 'VFix' && b.tag === 'VFix') {
+    unify(k, a.type, b.type);
+    const v = VVar(k);
+    return unify(k + 1, a.body(v), b.body(v));
+  }
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const v = VVar(k);
     return unify(k + 1, a.body(v), b.body(v));

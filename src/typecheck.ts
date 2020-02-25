@@ -108,6 +108,12 @@ const synth = (local: Local, tm: Term): Val => {
     check(extend(local, tm.name, evaluate(tm.type, local.vs), true, VVar(local.indexErased), false), tm.body, VType);
     return VType;
   }
+  if (tm.tag === 'Fix') {
+    check(local, tm.type, VType);
+    const vty = evaluate(tm.type, local.vs);
+    check(extend(local, tm.name, evaluate(tm.type, local.vs), true, VVar(local.indexErased), false), tm.body, vty);
+    return vty;
+  }
   if (tm.tag === 'Ann') {
     check(local, tm.type, VType);
     const vt = evaluate(tm.type, local.vs);
