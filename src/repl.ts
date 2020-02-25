@@ -1,18 +1,18 @@
 import { log, setConfig, config } from './config';
-import { globalReset, globalMap, globalDelete, globalGet } from './core/globalenv';
 import { showTerm } from './surface';
-import { quoteZ, normalize } from './core/domain';
-import { fromSurface, toSurface } from './core/syntax';
 import { parseDefs, parse, ImportMap } from './parser';
-import { typecheckDefs, typecheck } from './core/typecheck';
-import { toSurfaceDefs } from './core/definitions';
 import { Nil } from './utils/list';
 import { loadFile } from './utils/util';
+import { globalReset, globalMap, globalDelete, globalGet } from './globalenv';
+import { toInternalDefs } from './definitions';
+import { typecheckDefs, typecheck } from './typecheck';
+import { showTermU, normalize } from './domain';
+import { showSurface, toInternal } from './syntax';
 
 const help = `
 EXAMPLES
 identity = \\{t : *} (x : t). x
-zero = \\t z s. z : {t : *} -> t -> (t -> t) -> t
+zero = \\{t} z s. z : {t : *} -> t -> (t -> t) -> t
 
 COMMANDS
 [:help or :h] this help message
@@ -27,8 +27,6 @@ COMMANDS
 [:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
-[:gterme name] view the term of a name with erased types
-[:gnorme name] view the fully normalized term of a name with erased types
 `.trim();
 
 let importMap: ImportMap = {};
@@ -49,7 +47,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     }
     if (_s === ':defs') {
       const e = globalMap();
-      const msg = Object.keys(e).map(k => `def ${k} : ${showTerm(fromSurface(quoteZ(e[k].type, Nil, 0, false)))} = ${showTerm(fromSurface(quoteZ(e[k].val, Nil, 0, false)))}`).join('\n');
+      const msg = Object.keys(e).map(k => `def ${k} : ${showTermU(e[k].type)} = ${showSurface(e[k].term)} ~> ${showTermU(e[k].val)}`).join('\n');
       return _cb(msg || 'no definitions');
     }
     if (_s.startsWith(':del')) {
@@ -60,7 +58,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     if (_s.startsWith(':def') || _s.startsWith(':import')) {
       const rest = _s.slice(1);
       parseDefs(rest, importMap).then(ds => {
-        const dsc = toSurfaceDefs(ds)
+        const dsc = toInternalDefs(ds)
         const xs = typecheckDefs(dsc, true);
         return _cb(`defined ${xs.join(' ')}`);
       }).catch(err => _cb(''+err, true));
@@ -70,42 +68,25 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const name = _s.slice(6).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const type = quoteZ(res.type, Nil, 0, true);
-      return _cb(showTerm(fromSurface(type)));
+      return _cb(showTermU(res.type, Nil, 0, true));
     }
     if (_s.startsWith(':gelab')) {
       const name = _s.slice(6).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      return _cb(showTerm(fromSurface(res.term)));
-    }
-    if (_s.startsWith(':gterme')) {
-      const name = _s.slice(7).trim();
-      const res = globalGet(name);
-      if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, Nil, 0, false);
-      return _cb(showTerm(fromSurface(term)));
-    }
-    if (_s.startsWith(':gnorme')) {
-      const name = _s.slice(7).trim();
-      const res = globalGet(name);
-      if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, Nil, 0, true);
-      return _cb(showTerm(fromSurface(term)));
+      return _cb(showSurface(res.term));
     }
     if (_s.startsWith(':gterm')) {
-      const name = _s.slice(6).trim();
+      const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, Nil, 0, false);
-      return _cb(showTerm(fromSurface(term)));
+      return _cb(showTermU(res.val));
     }
     if (_s.startsWith(':gnorm')) {
-      const name = _s.slice(6).trim();
+      const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      const term = quoteZ(res.val, Nil, 0, true);
-      return _cb(showTerm(fromSurface(term)));
+      return _cb(showTermU(res.val, Nil, 0, true));
     }
     if (_s.startsWith(':view')) {
       const files = _s.slice(5).trim().split(/\s+/g);
@@ -124,13 +105,12 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     try {
       const t = parse(_s);
       log(() => showTerm(t));
-      const tt = toSurface(t);
+      const tt = toInternal(t);
       const vty = typecheck(tt);
-      const ty = quoteZ(vty, Nil, 0, false);
       tm_ = tt;
-      log(() => showTerm(fromSurface(ty)));
-      log(() => showTerm(fromSurface(tt)));
-      msg += `type: ${showTerm(fromSurface(ty))}\nterm: ${showTerm(fromSurface(tm_))}`;
+      log(() => showTermU(vty));
+      log(() => showSurface(tt));
+      msg += `type: ${showTermU(vty)}\nterm: ${showSurface(tm_)}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);
@@ -138,8 +118,8 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     }
     try {
       const n = normalize(tm_, Nil, 0, true);
-      log(() => showTerm(fromSurface(n)));
-      return _cb(`${msg}\nnorm: ${showTerm(fromSurface(n))}`);
+      log(() => showSurface(n));
+      return _cb(`${msg}\nnorm: ${showSurface(n)}`);
     } catch (err) {
       log(() => ''+err);
       msg += '\n'+err;

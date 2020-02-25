@@ -104,8 +104,11 @@ export const normalize = (t: Term, vs: EnvV, k: Ix, full: boolean): Term =>
   quote(evaluate(t, vs), k, full);
 
 export const showTermQ = (v: Val, k: number = 0, full: boolean = false): string => showTerm(quote(v, k, full));
-export const showTermU = (v: Val, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string =>
-  surfaceShowterm(toSurface(quote(v, k, full), ns));
+export const showTermU = (v: Val, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string => {
+  const term = quote(v, k, full);
+  const surface = toSurface(term, ns);
+  return surfaceShowterm(surface);
+};
 export const showElimU = (e: Elim, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string => {
   if (e.tag === 'EApp') return showTermU(e.arg, ns, k, full);
   return e.tag;

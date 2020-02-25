@@ -15,7 +15,7 @@ const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a.tag === 'EApp' && b.tag === 'EApp') return unify(k, a.arg, b.arg);
   return terr(`unify failed (${k}): ${showTermQ(x, k)} ~ ${showTermQ(y, k)}`);
 };
-const unify = (k: Ix, a: Val, b: Val): void => {
+export const unify = (k: Ix, a: Val, b: Val): void => {
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.plicity === b.plicity) {

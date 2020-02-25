@@ -17,7 +17,5 @@ yarn start lib/nat.coc
 ```
 TODO:
 - implement curry-style typechecking
-- add prove by contradiction
-- add symmetry of equality
-- add erasure when equal
+- add self-types
 ``` 
