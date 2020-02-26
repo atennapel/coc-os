@@ -16,18 +16,6 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- zonk debug messages?
-- fix issue with meta resetting
-- induction for types with fix
-- induction/inductionfix in core
-- improve erasure check
-- recheck term in core
-- fix synthapp of meta
-- infer more uses of roll/unroll (also in synthapp and check)
-- improve type inference of annotated lambdas
-- improve impredicative type inference
-- solve issue with unnecessary eta-abstractions (example: S Z)
-- add rigid
-- maybe unfold globals in toCore or erase?
-- erase without going to core?
-``` 
+- fix TODOS
+- implement some more type inference
+```

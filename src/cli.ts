@@ -1,12 +1,11 @@
 import { parseDefs } from './parser';
 import { initREPL, runREPL } from './repl';
-import { showTerm } from './syntax';
-import { toSurfaceDefs } from './surface/definitions';
-import { globalReset, globalMap } from './surface/globalenv';
-import { typecheckDefs } from './surface/typecheck';
-import { quoteZ } from './surface/domain';
-import { fromSurface, showFromSurface } from './surface/syntax';
 import { setConfig } from './config';
+import { globalReset, globalMap } from './globalenv';
+import { toInternalDefs } from './definitions';
+import { typecheckDefs } from './typecheck';
+import { showSurface } from './syntax';
+import { showTermU } from './domain';
 
 if (process.argv[2]) {
   if (process.argv[3] === '-d') setConfig({ debug: true });
@@ -14,13 +13,13 @@ if (process.argv[2]) {
     globalReset();
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
     parseDefs(sc, {}).then(ds => {
-      const dsc = toSurfaceDefs(ds)
+      const dsc = toInternalDefs(ds)
       const ns = typecheckDefs(dsc);
       const m = globalMap();
       const main = m.main;
       if (!main) console.log(`defined ${ns.join(' ')}`);
       else {
-        console.log(`${showFromSurface(main.term)} : ${showTerm(fromSurface(quoteZ(main.type)))}`);
+        console.log(`${showSurface(main.term)} : ${showTermU(main.type)}`);
       }
       process.exit();
     }).catch(err => {

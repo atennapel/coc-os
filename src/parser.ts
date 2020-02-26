@@ -1,7 +1,7 @@
-import { serr, loadFile } from './util';
-import { Term, Var, App, Type, Abs, Pi, Let, Fix, Unroll, Roll, PlicityR, PlicityE, Ann, Hole, Ind, IndFix, HoleN } from './syntax';
+import { serr, loadFile } from './utils/util';
+import { Term, Var, App, Type, Abs, Pi, Let, Ann, Fix, Roll, Unroll } from './surface';
 import { Name } from './names';
-import { Def, DDef } from './definitions';
+import { Def, DDef } from './surface';
 import { log } from './config';
 
 type BracketO = '(' | '{'
@@ -56,7 +56,7 @@ const tokenize = (sc: string): Token[] => {
       else if (/\s/.test(c)) continue;
       else return serr(`invalid char ${c} in tokenize`);
     } else if (state === NAME) {
-      if (!(/[\@a-z0-9\_\/]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
+      if (!(/[\@a-z0-9\-\_\/]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
         r.push(TName(t));
         t = '', i--, state = START;
       } else t += c;
@@ -138,7 +138,6 @@ const expr = (t: Token): [Term, boolean] => {
   if (t.tag === 'Name') {
     const x = t.name;
     if (x === '*') return [Type, false];
-    if (x[0] === '_') return [x.length === 1 ? HoleN : Hole(x.slice(1)), false];
     if (x.includes('@')) return serr(`invalid name: ${x}`);
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
@@ -151,14 +150,14 @@ const expr = (t: Token): [Term, boolean] => {
       const s1 = Var('B1');
       let c: Term = Var('BE');
       const s = n.toString(2);
-      for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, PlicityR, c);
+      for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, false, c);
       return [c, false];
     } else {
       const n = +t.num;
       if (isNaN(n)) return serr(`invalid number: ${t.num}`);
       const s = Var('S');
       let c: Term = Var('Z');
-      for (let i = 0; i < n; i++) c = App(s, PlicityR, c);
+      for (let i = 0; i < n; i++) c = App(s, false, c);
       return [c, false];
     }
   }
@@ -189,7 +188,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     }
     if (!found) return serr(`. not found after \\`);
     const body = exprs(ts.slice(i + 1), '(');
-    return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? PlicityE : PlicityR, name, ty, x), body);
+    return args.reduceRight((x, [name, impl, ty]) => Abs(impl, name, ty, x), body);
   }
   if (isName(ts[0], 'unroll')) {
     if (ts.length < 2) return serr(`something went wrong when parsing unroll`);
@@ -213,40 +212,6 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       return Roll(null, body);
     }
   }
-  if (isName(ts[0], 'induction')) {
-    if (ts.length < 2) return serr(`something went wrong when parsing induction`);
-    if (ts.length === 2) {
-      const [term, tb] = expr(ts[1]);
-      if (tb) return serr(`something went wrong when parsing induction`);
-      return Ind(null, term);
-    }
-    if (ts.length === 3) {
-      const [type, tb1] = expr(ts[1]);
-      if (!tb1) return serr(`something went wrong when parsing induction`);
-      const [term, tb2] = expr(ts[2]);
-      if (tb2) return serr(`something went wrong when parsing induction`);
-      return Ind(type, term);
-    }
-    const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
-    const indPart = ts.slice(0, hasType ? 3 : 2);
-    const rest = ts.slice(hasType ? 3 : 2);
-    return exprs([TList(indPart, '(')].concat(rest), '(');
-  }
-  
-  if (isName(ts[0], 'inductionFix')) {
-    if (ts.length < 3) return serr(`something went wrong when parsing inductionFix`);
-    if (ts.length === 3) {
-      const [type, tb1] = expr(ts[1]);
-      if (!tb1) return serr(`something went wrong when parsing inductionFix`);
-      const [term, tb2] = expr(ts[2]);
-      if (tb2) return serr(`something went wrong when parsing inductionFix`);
-      return IndFix(type, term);
-    }
-    const hasType = ts[1].tag === 'List' && ts[1].bracket === '{';
-    const indPart = ts.slice(0, hasType ? 3 : 2);
-    const rest = ts.slice(hasType ? 3 : 2);
-    return exprs([TList(indPart, '(')].concat(rest), '(');
-  }
   if (isName(ts[0], 'fix')) {
     const args: [Name, boolean, Term | null][] = [];
     let found = false;
@@ -267,7 +232,8 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       return rargs.push([x, t]);
     });
     const body = exprs(ts.slice(i + 1), '(');
-    return rargs.reduceRight((x, [name, ty]) => Fix(name, ty, x), body);
+    // TODO: add fix (self @ ...) syntax
+    return rargs.reduceRight((x, [name, ty]) => Fix('self', name, ty, x), body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];
@@ -299,7 +265,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     if (vals.length === 0) return serr(`empty val in let`);
     const val = exprs(vals, '(');
     const body = exprs(ts.slice(i + 1), '(');
-    return Let(impl ? PlicityE : PlicityR, name, val, body);
+    return Let(impl, name, val, body);
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {
@@ -309,7 +275,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')] as [Name, boolean, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(');
-    return args.reduceRight((x, [name, impl, ty]) => Pi(impl ? PlicityE : PlicityR, name, ty, x), body);
+    return args.reduceRight((x, [name, impl, ty]) => Pi(impl, name, ty, x), body);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];
@@ -322,7 +288,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
   }
   if (all.length === 0) return serr(`empty application`);
   if (all[0] && all[0][1]) return serr(`in application function cannot be between {}`);
-  return all.slice(1).reduce((x, [y, impl]) => App(x, impl ? PlicityE : PlicityR, y), all[0][0]);
+  return all.slice(1).reduce((x, [y, impl]) => App(x, impl, y), all[0][0]);
 };
 
 export const parse = (s: string): Term => {

@@ -1,6 +1,6 @@
 import { Val } from './domain';
 import { Term } from './syntax';
-import { Name } from '../names';
+import { Name } from './names';
 
 export type EnvGEntry = { term: Term, val: Val, type: Val };
 export type EnvG = { [key: string]: EnvGEntry };
@@ -13,7 +13,7 @@ export const globalReset = () => {
 export const globalMap = (): EnvG => env;
 export const globalGet = (name: Name): EnvGEntry | null =>
   env[name] || null;
-export const globalSet = (term: Term, name: Name, val: Val, type: Val): void => {
+export const globalSet = (name: Name, term: Term, val: Val, type: Val): void => {
   env[name] = { term, val, type };
 };
 export const globalDelete = (name: Name): void => {

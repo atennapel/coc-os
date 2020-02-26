@@ -17,7 +17,7 @@ export const listFrom = <T>(a: T[]): List<T> =>
   a.reduceRight((x, y) => Cons(y, x), Nil as List<T>);
 export const list = <T>(...a: T[]): List<T> => listFrom(a);
 
-export const toString = <T>(l: List<T>, fn: (val: T) => string = x => `${x}`): string => {
+export const listToString = <T>(l: List<T>, fn: (val: T) => string = x => `${x}`): string => {
   const r: string[] = [];
   let c = l;
   while (c.tag === 'Cons') {

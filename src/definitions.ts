@@ -1,5 +1,6 @@
 import { Name } from './names';
-import { Term, showTerm } from './syntax';
+import { Term, showTerm, toInternal } from './syntax';
+import * as S from './surface';
 
 export type Def = DDef;
 
@@ -10,3 +11,9 @@ export const showDef = (d: Def): string => {
   if (d.tag === 'DDef') return `def ${d.name} = ${showTerm(d.value)}`;
   return d.tag;
 };
+
+export const toInternalDef = (d: S.Def): Def => {
+  if (d.tag === 'DDef') return DDef(d.name, toInternal(d.value));
+  return d.tag;
+};
+export const toInternalDefs = (d: S.Def[]): Def[] => d.map(toInternalDef);
