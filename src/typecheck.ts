@@ -74,7 +74,9 @@ const check = (local: Local, tm: Term, ty: Val): void => {
   }
   const ty2 = synth(local, tm);
   try {
-    unify(local.indexErased, ty2, ty);
+    log(() => `unify ${showTermU(ty2, local.names, local.index)} ~ ${showTermU(ty, local.names, local.index)}`);
+    unify(local.index, ty2, ty);
+    return;
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
     return terr(`failed to unify ${showTermU(ty2, local.names, local.index)} ~ ${showTermU(ty, local.names, local.index)}: ${err.message}`);

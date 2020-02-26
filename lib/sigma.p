@@ -5,6 +5,5 @@ def indSigma : {a : *} -> {b : a -> *} -> {P : Sigma a b -> *} -> ((x : a) -> (y
 def caseSigma : {a : *} -> {b : a -> *} -> {t : *} -> Sigma a b -> ((x : a) -> b x -> t) -> t = \{a b} {t} x f. indSigma {a} {b} {\_. t} f x
 
 def fstSigma : {a : *} -> {b : a -> *} -> Sigma a b -> a = \{a b} p. caseSigma {a} {b} {a} p \x y. x
--- def sndSigma : {a : *} -> {b : a -> *} -> (x : Sigma a b) -> b (fstSigma {a} {b} x) = \{a b} p. caseSigma {a} {b} {fstSigma {a} {b} p} p \x y. y
 def sndSigma : {a : *} -> {b : a -> *} -> (x : Sigma a b) -> b (fstSigma {a} {b} x)
-  = \{a b} p. indSigma {a} {b} {\s. fstSigma {a} {b} s} (\x y. y) p
+  = \{a b} p. indSigma {a} {b} {\s. b (fstSigma {a} {b} s)} (\x y. y) p

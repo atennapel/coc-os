@@ -18,7 +18,4 @@ yarn start lib/nat.coc
 TODO:
 - fix TODOS
 - implement some more type inference
-
-BUGS:
-- fix sndSigma
 ```

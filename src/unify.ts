@@ -3,6 +3,7 @@ import { Ix } from './names';
 import { terr } from './utils/util';
 import { forceLazy } from './utils/lazy';
 import { zipWithR_, length } from './utils/list';
+import { log } from './config';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -16,6 +17,7 @@ const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   return terr(`unify failed (${k}): ${showTermQ(x, k)} ~ ${showTermQ(y, k)}`);
 };
 export const unify = (k: Ix, a: Val, b: Val): void => {
+  log(() => `unify ${showTermQ(a, k)} ~ ${showTermQ(b, k)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.plicity === b.plicity) {

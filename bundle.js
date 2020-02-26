@@ -1035,7 +1035,9 @@ const check = (local, tm, ty) => {
     }
     const ty2 = synth(local, tm);
     try {
-        unify_1.unify(local.indexErased, ty2, ty);
+        config_1.log(() => `unify ${domain_1.showTermU(ty2, local.names, local.index)} ~ ${domain_1.showTermU(ty, local.names, local.index)}`);
+        unify_1.unify(local.index, ty2, ty);
+        return;
     }
     catch (err) {
         if (!(err instanceof TypeError))
@@ -1164,6 +1166,7 @@ const domain_1 = require("./domain");
 const util_1 = require("./utils/util");
 const lazy_1 = require("./utils/lazy");
 const list_1 = require("./utils/list");
+const config_1 = require("./config");
 const eqHead = (a, b) => {
     if (a === b)
         return true;
@@ -1181,6 +1184,7 @@ const unifyElim = (k, a, b, x, y) => {
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(x, k)} ~ ${domain_1.showTermQ(y, k)}`);
 };
 exports.unify = (k, a, b) => {
+    config_1.log(() => `unify ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
     if (a === b)
         return;
     if (a.tag === 'VType' && b.tag === 'VType')
@@ -1227,7 +1231,7 @@ exports.unify = (k, a, b) => {
     return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
 };
 
-},{"./domain":3,"./utils/lazy":12,"./utils/list":13,"./utils/util":14}],12:[function(require,module,exports){
+},{"./config":1,"./domain":3,"./utils/lazy":12,"./utils/list":13,"./utils/util":14}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Lazy = (fn) => ({ fn, val: null, forced: false });
