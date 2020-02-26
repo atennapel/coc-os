@@ -60,7 +60,7 @@ const check = (local: Local, tm: Term, ty: Val): void => {
     return;
   }
   if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
-    check(local, tm.term, tyf.body(ty));
+    check(local, tm.term, tyf.body(evaluate(tm, local.vs), ty));
     return;
   }
   const ty2 = synth(local, tm);
@@ -87,7 +87,7 @@ const synth = (local: Local, tm: Term): Val => {
   }
   if (tm.tag === 'App') {
     const fn = synth(local, tm.left);
-    const rt = synthapp(local, fn, tm.plicity, tm.right);
+    const rt = synthapp(local, tm.left, fn, tm.plicity, tm.right);
     return rt;
   }
   if (tm.tag === 'Abs' && tm.type) {
@@ -112,17 +112,23 @@ const synth = (local: Local, tm: Term): Val => {
     check(extend(local, tm.name, evaluate(tm.type, local.vs), true, VVar(local.indexErased), false), tm.body, VType);
     return VType;
   }
-  if (tm.tag === 'Fix') {
-    check(local, tm.type, VType);
-    const vty = evaluate(tm.type, local.vs);
-    check(extend(local, tm.name, evaluate(tm.type, local.vs), false, evaluate(tm, local.vs), false), tm.body, vty);
-    return vty;
-  }
   if (tm.tag === 'Ann') {
     check(local, tm.type, VType);
     const vt = evaluate(tm.type, local.vs);
     check(local, tm.term, vt);
     return vt;
+  }
+  if (tm.tag === 'Fix') {
+    check(local, tm.type, VType);
+    const vty = evaluate(tm.type, local.vs);
+    // TODO: is this correct?
+    check(
+      extend(
+        extend(local, tm.self, VVar(local.indexErased - 1), true, VVar(local.indexErased), false),
+          tm.name, evaluate(tm.type, local.vs), false, evaluate(tm, local.vs), false),
+      tm.body, vty
+    );
+    return vty;
   }
   if (tm.tag === 'Roll' && tm.type) {
     check(local, tm.type, VType);
@@ -130,7 +136,7 @@ const synth = (local: Local, tm: Term): Val => {
     const vtf = force(vt);
     if (vtf.tag !== 'VFix')
       return terr(`fix type expected in ${showSurface(tm, local.names)}: ${showTermU(vt, local.names, local.index)}`);
-    check(local, tm.term, vtf.body(vt));
+    check(local, tm.term, vtf.body(evaluate(tm, local.vs), vt));
     return vt;
   }
   if (tm.tag === 'Unroll') {
@@ -138,15 +144,15 @@ const synth = (local: Local, tm: Term): Val => {
     const vt = force(ty);
     if (vt.tag !== 'VFix') 
       return terr(`fix type expected in ${showSurface(tm, local.names)}: ${showTermU(vt, local.names, local.index)}`);
-    return vt.body(ty);
+    return vt.body(evaluate(tm.term, local.vs), ty);
   }
   return terr(`cannot synth ${showSurface(tm, local.names)}`);
 };
 
-const synthapp = (local: Local, ty_: Val, plicity: Plicity, arg: Term): Val => {
+const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Term): Val => {
   const ty = force(ty_);
   log(() => `synthapp ${showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${showSurface(arg, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
-  if (ty.tag === 'VFix') return synthapp(local, ty.body(ty), plicity, arg);
+  if (ty.tag === 'VFix') return synthapp(local, fntm, ty.body(evaluate(fntm, local.vs), ty), plicity, arg);
   if (ty.tag === 'VPi' && ty.plicity === plicity) {
     check(local, arg, ty.type);
     const vm = evaluate(arg, local.vs);

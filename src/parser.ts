@@ -232,7 +232,8 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       return rargs.push([x, t]);
     });
     const body = exprs(ts.slice(i + 1), '(');
-    return rargs.reduceRight((x, [name, ty]) => Fix(name, ty, x), body);
+    // TODO: add fix (self @ ...) syntax
+    return rargs.reduceRight((x, [name, ty]) => Fix('self', name, ty, x), body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

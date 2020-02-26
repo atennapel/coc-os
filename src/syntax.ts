@@ -22,8 +22,8 @@ export type Unroll = { tag: 'Unroll', term: Term };
 export const Unroll = (term: Term): Unroll => ({ tag: 'Unroll', term });
 export type Pi = { tag: 'Pi', plicity: Plicity, name: Name, type: Term, body: Term };
 export const Pi = (plicity: Plicity, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', plicity, name, type, body });
-export type Fix = { tag: 'Fix', name: Name, type: Term, body: Term };
-export const Fix = (name: Name, type: Term, body: Term): Fix => ({ tag: 'Fix', name, type, body });
+export type Fix = { tag: 'Fix', self: Name, name: Name, type: Term, body: Term };
+export const Fix = (self: Name, name: Name, type: Term, body: Term): Fix => ({ tag: 'Fix', self, name, type, body });
 export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
@@ -39,7 +39,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Roll') return t.type ? `(roll {${showTerm(t.type)}} ${showTerm(t.term)})` : `(roll ${showTerm(t.term)})`;
   if (t.tag === 'Unroll') return `(unroll ${showTerm(t.term)})`;
   if (t.tag === 'Pi') return `(/(${t.plicity ? '-' : ''}${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
-  if (t.tag === 'Fix') return `(fix (${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
+  if (t.tag === 'Fix') return `(fix (${t.self} @ ${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
   return t;
@@ -56,7 +56,7 @@ export const toInternal = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Te
   if (t.tag === 'Roll') return Roll(t.type && toInternal(t.type, ns, k), toInternal(t.term, ns, k));
   if (t.tag === 'Unroll') return Unroll(toInternal(t.term, ns, k));
   if (t.tag === 'Pi') return Pi(t.plicity, t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
-  if (t.tag === 'Fix') return Fix(t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
+  if (t.tag === 'Fix') return Fix(t.self, t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], Cons([t.self, k], ns)), k + 2));
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return Ann(toInternal(t.term, ns, k), toInternal(t.type, ns, k));
   return t;
@@ -82,7 +82,7 @@ export const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Roll') return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
   if (t.tag === 'Unroll') return indexUsed(k, t.term);
   if (t.tag === 'Pi') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
-  if (t.tag === 'Fix') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
+  if (t.tag === 'Fix') return indexUsed(k, t.type) || indexUsed(k + 2, t.body);
   if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
   return false;
 };
@@ -117,8 +117,10 @@ export const toSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
     return S.Pi(t.plicity, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Fix') {
+    // TODO: is this correct?
     const x = decideName(t.name, t.body, ns);
-    return S.Fix(x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
+    const self = decideName(t.self, t.body, Cons(t.name, ns));
+    return S.Fix(self, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, Cons(self, ns))));
   }
   return t;
 };
