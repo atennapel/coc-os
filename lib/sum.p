@@ -1,4 +1,4 @@
-def Sum = \(a b : *). fix (SumAB : *). {P : SumAB -> *} -> ((x : a) -> P (\{P} f g. f x)) -> ((x : b) -> P (\{P} f g. g x)) -> P self
+def Sum = \(a b : *). fix (self @ SumAB : *). {P : SumAB -> *} -> ((x : a) -> P (\{P} f g. f x)) -> ((x : b) -> P (\{P} f g. g x)) -> P self
 def L : {a b : *} -> a -> Sum a b = \{a b} x {P} f g. f x
 def R : {a b : *} -> b -> Sum a b = \{a b} x {P} f g. g x
 

@@ -1,4 +1,4 @@
-def Pair = \(a b : *). fix (PairAB : *). {P : PairAB -> *} -> ((x : a) -> (y : b) -> P (\{P} f. f x y)) -> P self
+def Pair = \(a b : *). fix (self @ PairAB : *). {P : PairAB -> *} -> ((x : a) -> (y : b) -> P (\{P} f. f x y)) -> P self
 def MkPair : {a b : *} -> a -> b -> Pair a b = \{a b} x y. \{P} f. f x y
 
 def indPair : {a b : *} -> {P : Pair a b -> *} -> ((x : a) -> (y : b) -> P (MkPair {a} {b} x y)) -> (x : Pair a b) -> P x = \{a b} {P} f x. x {P} f

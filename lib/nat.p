@@ -1,4 +1,4 @@
-def Nat = fix (Nat : *). {P : Nat -> *} -> P (\{P} z s. z) -> ({m : Nat} -> P m -> P (\{P} z s. s {m} (m {P} z s))) -> P self
+def Nat = fix (self @ Nat : *). {P : Nat -> *} -> P (\{P} z s. z) -> ({m : Nat} -> P m -> P (\{P} z s. s {m} (m {P} z s))) -> P self
 def Z : Nat = \{P} z s. z
 def S : Nat -> Nat = \n {P} z s. s {n} (n {P} z s)
 

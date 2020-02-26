@@ -22,7 +22,7 @@ const TName = (name: string): Token => ({ tag: 'Name', name });
 const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 
-const SYM1: string[] = ['\\', ':', '/', '.', '*', '='];
+const SYM1: string[] = ['\\', ':', '/', '.', '*', '=', '@'];
 const SYM2: string[] = ['->'];
 
 const START = 0;
@@ -213,27 +213,27 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     }
   }
   if (isName(ts[0], 'fix')) {
-    const args: [Name, boolean, Term | null][] = [];
-    let found = false;
-    let i = 1;
-    for (; i < ts.length; i++) {
-      const c = ts[i];
-      if (isName(c, '.')) {
-        found = true;
-        break;
-      }
-      lambdaParams(c).forEach(x => args.push(x));
-    }
-    if (!found) return serr(`. not found after fix`);
-    const rargs: [Name, Term][] = [];
-    args.forEach(([x, i, t]) => {
-      if (i) return serr(`fix arg cannot be implicit`);
-      if (!t) return serr(`fix arg must have a type annotation`);
-      return rargs.push([x, t]);
-    });
-    const body = exprs(ts.slice(i + 1), '(');
-    // TODO: add fix (self @ ...) syntax
-    return rargs.reduceRight((x, [name, ty]) => Fix('self', name, ty, x), body);
+    const args = ts[1];
+    if (args.tag !== 'List' || args.bracket !== '(') return serr(`fix missing params`);
+    const content = args.list;
+    let ty: Term = Type;
+    let name = '_';
+    let self = '_';
+    if (isName(content[1], '@')) {
+      if (content[0].tag !== 'Name') return serr(`invalid self name in fix`);
+      self = content[0].name;
+      if (content[2].tag !== 'Name') return serr(`invalid type name in fix`);
+      name = content[2].name;
+      if (!isName(content[3], ':')) return serr(`: expected in Fix`);
+      ty = exprs(content.slice(4), '(');
+    } else if (isName(content[1], ':')) {
+      if (content[0].tag !== 'Name') return serr(`invalid type name in fix`);
+      name = content[0].name;
+      ty = exprs(content.slice(2), '(');
+    } else serr(`invalid params for fix`);
+    if (!isName(ts[2], '.')) return serr(`. expected after fix params`);
+    const body = exprs(ts.slice(3), '(');
+    return Fix(self, name, ty, body);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

@@ -1,4 +1,4 @@
-def Fix = \(f : * -> *). fix (FixF : *). {P : FixF -> *} -> (((x : FixF) -> P x) -> (y : f FixF) -> P (\{p} alg. alg (\r. r {p} alg) y)) -> P self
+def Fix = \(f : * -> *). fix (self @ FixF : *). {P : FixF -> *} -> (((x : FixF) -> P x) -> (y : f FixF) -> P (\{p} alg. alg (\r. r {p} alg) y)) -> P self
 def In : {f : * -> *} -> f (Fix f) -> Fix f
   = \{f} x {P} alg. alg (\r. r {P} alg) x
 

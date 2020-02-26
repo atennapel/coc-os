@@ -17,6 +17,7 @@ yarn start lib/nat.p
 
 ```
 TODO:
-- fix TODOS
+- clean up libs
 - implement some more type inference
+- implement core language
 ```

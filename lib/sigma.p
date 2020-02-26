@@ -1,4 +1,4 @@
-def Sigma = \(a : *) (b : a -> *). fix (SigmaAB : *). {P : SigmaAB -> *} -> ((x : a) -> (y : b x) -> P (\{P} f. f x y)) -> P self
+def Sigma = \(a : *) (b : a -> *). fix (self @ SigmaAB : *). {P : SigmaAB -> *} -> ((x : a) -> (y : b x) -> P (\{P} f. f x y)) -> P self
 def MkSigma : {a : *} -> {b : a -> *} -> (x : a) -> b x -> Sigma a b = \{a b} x y. \{P} f. f x y
 
 def indSigma : {a : *} -> {b : a -> *} -> {P : Sigma a b -> *} -> ((x : a) -> (y : b x) -> P (MkSigma {a} {b} x y)) -> (x : Sigma a b) -> P x = \{a b} {P} f x. x {P} f

@@ -183,7 +183,7 @@ const matchingBracket = (c) => {
 const TName = (name) => ({ tag: 'Name', name });
 const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list, bracket) => ({ tag: 'List', list, bracket });
-const SYM1 = ['\\', ':', '/', '.', '*', '='];
+const SYM1 = ['\\', ':', '/', '.', '*', '=', '@'];
 const SYM2 = ['->'];
 const START = 0;
 const NAME = 1;
@@ -410,30 +410,36 @@ const exprs = (ts, br) => {
         }
     }
     if (isName(ts[0], 'fix')) {
-        const args = [];
-        let found = false;
-        let i = 1;
-        for (; i < ts.length; i++) {
-            const c = ts[i];
-            if (isName(c, '.')) {
-                found = true;
-                break;
-            }
-            lambdaParams(c).forEach(x => args.push(x));
+        const args = ts[1];
+        if (args.tag !== 'List' || args.bracket !== '(')
+            return util_1.serr(`fix missing params`);
+        const content = args.list;
+        let ty = surface_1.Type;
+        let name = '_';
+        let self = '_';
+        if (isName(content[1], '@')) {
+            if (content[0].tag !== 'Name')
+                return util_1.serr(`invalid self name in fix`);
+            self = content[0].name;
+            if (content[2].tag !== 'Name')
+                return util_1.serr(`invalid type name in fix`);
+            name = content[2].name;
+            if (!isName(content[3], ':'))
+                return util_1.serr(`: expected in Fix`);
+            ty = exprs(content.slice(4), '(');
         }
-        if (!found)
-            return util_1.serr(`. not found after fix`);
-        const rargs = [];
-        args.forEach(([x, i, t]) => {
-            if (i)
-                return util_1.serr(`fix arg cannot be implicit`);
-            if (!t)
-                return util_1.serr(`fix arg must have a type annotation`);
-            return rargs.push([x, t]);
-        });
-        const body = exprs(ts.slice(i + 1), '(');
-        // TODO: add fix (self @ ...) syntax
-        return rargs.reduceRight((x, [name, ty]) => surface_1.Fix('self', name, ty, x), body);
+        else if (isName(content[1], ':')) {
+            if (content[0].tag !== 'Name')
+                return util_1.serr(`invalid type name in fix`);
+            name = content[0].name;
+            ty = exprs(content.slice(2), '(');
+        }
+        else
+            util_1.serr(`invalid params for fix`);
+        if (!isName(ts[2], '.'))
+            return util_1.serr(`. expected after fix params`);
+        const body = exprs(ts.slice(3), '(');
+        return surface_1.Fix(self, name, ty, body);
     }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
