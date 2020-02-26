@@ -20,5 +20,5 @@ TODO:
 - implement some more type inference
 
 BUGS:
-- \{a b} x y. x : {a : *} -> {b : a -> *} -> (x : a) -> b x -> a
+- fix sndSigma
 ```
