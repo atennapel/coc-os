@@ -16,6 +16,9 @@ yarn start lib/nat.coc
 
 ```
 TODO:
-- implement curry-style typechecking
-- add self-types
-``` 
+- fix TODOS
+- implement some more type inference
+
+BUGS:
+- \{a b} x y. x : {a : *} -> {b : a -> *} -> (x : a) -> b x -> a
+```
