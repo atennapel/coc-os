@@ -1,6 +1,7 @@
 Try it out at https://atennapel.github.io/coc-os
 
-Currently I am working on rewriting everything.
+An implementation of a Curry-style Calculus of Constructions with Type-in-Type and Self-types.
+See `lib` directory for examples.
 
 Run CLI REPL:
 ```
@@ -11,7 +12,7 @@ yarn start
 Typecheck file:
 ```
 yarn install
-yarn start lib/nat.coc
+yarn start lib/nat.p
 ```
 
 ```
