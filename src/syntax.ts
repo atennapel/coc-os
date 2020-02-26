@@ -56,7 +56,7 @@ export const toInternal = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Te
   if (t.tag === 'Roll') return Roll(t.type && toInternal(t.type, ns, k), toInternal(t.term, ns, k));
   if (t.tag === 'Unroll') return Unroll(toInternal(t.term, ns, k));
   if (t.tag === 'Pi') return Pi(t.plicity, t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
-  if (t.tag === 'Fix') return Fix(t.self, t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], Cons([t.self, k], ns)), k + 2));
+  if (t.tag === 'Fix') return Fix(t.self, t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k + 1], Cons([t.self, k], ns)), k + 2));
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return Ann(toInternal(t.term, ns, k), toInternal(t.type, ns, k));
   return t;

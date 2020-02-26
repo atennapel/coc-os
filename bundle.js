@@ -871,7 +871,7 @@ exports.toInternal = (t, ns = list_1.Nil, k = 0) => {
     if (t.tag === 'Pi')
         return exports.Pi(t.plicity, t.name, exports.toInternal(t.type, ns, k), exports.toInternal(t.body, list_1.Cons([t.name, k], ns), k + 1));
     if (t.tag === 'Fix')
-        return exports.Fix(t.self, t.name, exports.toInternal(t.type, ns, k), exports.toInternal(t.body, list_1.Cons([t.name, k], list_1.Cons([t.self, k], ns)), k + 2));
+        return exports.Fix(t.self, t.name, exports.toInternal(t.type, ns, k), exports.toInternal(t.body, list_1.Cons([t.name, k + 1], list_1.Cons([t.self, k], ns)), k + 2));
     if (t.tag === 'Type')
         return exports.Type;
     if (t.tag === 'Ann')
@@ -1086,6 +1086,7 @@ const synth = (local, tm) => {
     if (tm.tag === 'Fix') {
         check(local, tm.type, domain_1.VType);
         const vty = domain_1.evaluate(tm.type, local.vs);
+        // TODO: is this correct?
         check(extend(extend(local, tm.self, domain_1.VVar(local.indexErased - 1), true, domain_1.VVar(local.indexErased), false), tm.name, domain_1.evaluate(tm.type, local.vs), false, domain_1.evaluate(tm, local.vs), false), tm.body, vty);
         return vty;
     }
