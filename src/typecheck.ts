@@ -52,6 +52,11 @@ const check = (local: Local, tm: Term, ty: Val): void => {
       return terr(`erased argument used in ${showSurface(tm, local.names)}`);
     return;
   }
+  if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
+    const v = VVar(local.indexErased);
+    check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
+    return;
+  }
   if (tm.tag === 'Let') {
     const vty = synth(local, tm.val);
     check(extend(local, tm.name, vty, false, evaluate(tm.val, local.vs), tm.plicity), tm.body, ty);
@@ -125,11 +130,12 @@ const synth = (local: Local, tm: Term): Val => {
   if (tm.tag === 'Fix') {
     check(local, tm.type, VType);
     const vty = evaluate(tm.type, local.vs);
+    const vfix = evaluate(tm, local.vs);
     // TODO: is this correct?
     check(
       extend(
-        extend(local, tm.self, VVar(local.indexErased - 1), true, VVar(local.indexErased), false),
-          tm.name, evaluate(tm.type, local.vs), false, evaluate(tm, local.vs), false),
+        extend(local, tm.self, vfix, true, VVar(local.indexErased), false),
+          tm.name, vty, false, vfix, false),
       tm.body, vty
     );
     return vty;

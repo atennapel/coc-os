@@ -1013,6 +1013,11 @@ const check = (local, tm, ty) => {
             return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
         return;
     }
+    if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
+        const v = domain_1.VVar(local.indexErased);
+        check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
+        return;
+    }
     if (tm.tag === 'Let') {
         const vty = synth(local, tm.val);
         check(extend(local, tm.name, vty, false, domain_1.evaluate(tm.val, local.vs), tm.plicity), tm.body, ty);
@@ -1090,8 +1095,9 @@ const synth = (local, tm) => {
     if (tm.tag === 'Fix') {
         check(local, tm.type, domain_1.VType);
         const vty = domain_1.evaluate(tm.type, local.vs);
+        const vfix = domain_1.evaluate(tm, local.vs);
         // TODO: is this correct?
-        check(extend(extend(local, tm.self, domain_1.VVar(local.indexErased - 1), true, domain_1.VVar(local.indexErased), false), tm.name, domain_1.evaluate(tm.type, local.vs), false, domain_1.evaluate(tm, local.vs), false), tm.body, vty);
+        check(extend(extend(local, tm.self, vfix, true, domain_1.VVar(local.indexErased), false), tm.name, vty, false, vfix, false), tm.body, vty);
         return vty;
     }
     if (tm.tag === 'Roll' && tm.type) {
