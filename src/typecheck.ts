@@ -52,11 +52,14 @@ const check = (local: Local, tm: Term, ty: Val): void => {
       return terr(`erased argument used in ${showSurface(tm, local.names)}`);
     return;
   }
+  // TODO: the following is broken:
+  /*
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
     const v = VVar(local.indexErased);
     check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
     return;
   }
+  */
   if (tm.tag === 'Let') {
     const vty = synth(local, tm.val);
     check(extend(local, tm.name, vty, false, evaluate(tm.val, local.vs), tm.plicity), tm.body, ty);
