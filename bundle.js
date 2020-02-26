@@ -1024,6 +1024,10 @@ const check = (local, tm, ty) => {
         check(local, tm.term, tyf.body(domain_1.evaluate(tm, local.vs), ty));
         return;
     }
+    if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
+        check(local, tm, tyf.body(domain_1.evaluate(tm, local.vs), ty));
+        return;
+    }
     const ty2 = synth(local, tm);
     try {
         unify_1.unify(local.indexErased, ty2, ty);

@@ -63,6 +63,10 @@ const check = (local: Local, tm: Term, ty: Val): void => {
     check(local, tm.term, tyf.body(evaluate(tm, local.vs), ty));
     return;
   }
+  if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
+    check(local, tm, tyf.body(evaluate(tm, local.vs), ty));
+    return;
+  }
   const ty2 = synth(local, tm);
   try {
     unify(local.indexErased, ty2, ty);
