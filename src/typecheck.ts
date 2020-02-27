@@ -1,13 +1,14 @@
-import { Term, showSurface, showTerm, Pi } from './syntax';
+import { Term, showSurface, showTerm, Pi, Var, App } from './syntax';
 import { Ix, Name } from './names';
-import { List, Cons, listToString, Nil, index } from './utils/list';
-import { Val, showTermQ, EnvV, extendV, force, showTermU, VVar, evaluate, quote, showEnvV, VType } from './domain';
+import { List, Cons, listToString, Nil, index, filter, mapIndex, foldr } from './utils/list';
+import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe, HMeta } from './domain';
 import { log } from './config';
 import { terr } from './utils/util';
 import { Def, showDef } from './definitions';
 import { globalGet, globalSet } from './globalenv';
 import { unify } from './unify';
 import { Plicity } from './surface';
+import { freshMeta, freshMetaId, metaUnsolved } from './metas';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -39,6 +40,11 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity && erasedUsed(k, t.val));
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
   return false;
+};
+
+const newMeta = (ts: EnvT): Term => {
+  const spine = filter(mapIndex(ts, (i, [bound, _]) => bound ? Var(i) : null), x => x !== null) as List<Var>;
+  return foldr((x, y) => App(y, false, x), freshMeta() as Term, spine);
 };
 
 const check = (local: Local, tm: Term, ty: Val): void => {
@@ -85,6 +91,13 @@ const check = (local: Local, tm: Term, ty: Val): void => {
   }
 };
 
+const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
+  const a = newMeta(ts);
+  const va = evaluate(a, vs);
+  const b = newMeta(Cons([true, va], ts));
+  return VPi(impl, x, va, v => evaluate(b, extendV(vs, v)));
+};
+
 const synth = (local: Local, tm: Term): Val => {
   log(() => `synth ${showSurface(tm, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
   if (tm.tag === 'Type') return VType;
@@ -98,20 +111,30 @@ const synth = (local: Local, tm: Term): Val => {
     if (!entry) return terr(`global ${tm.name} not found`);
     return entry.type;
   }
+  if (tm.tag === 'Hole') {
+    const vt = evaluate(newMeta(local.ts), local.vs);
+    return vt;
+  }
   if (tm.tag === 'App') {
     const fn = synth(local, tm.left);
     const rt = synthapp(local, tm.left, fn, tm.plicity, tm.right);
     return rt;
   }
-  if (tm.tag === 'Abs' && tm.type) {
-    check(local, tm.type, VType);
-    const vtype = evaluate(tm.type, local.vs);
-    const rt = synth(extend(local, tm.name, vtype, true, VVar(local.indexErased), tm.plicity), tm.body);
-    if (tm.plicity && erasedUsed(0, tm.body))
-      return terr(`erased argument used in ${showSurface(tm, local.names)}`);
-    // TODO: avoid quote here
-    const pi = evaluate(Pi(tm.plicity, tm.name, tm.type, quote(rt, local.indexErased + 1, false)), local.vs);
-    return pi;
+  if (tm.tag === 'Abs') {
+    if (tm.type) {
+      check(local, tm.type, VType);
+      const vtype = evaluate(tm.type, local.vs);
+      const rt = synth(extend(local, tm.name, vtype, true, VVar(local.indexErased), tm.plicity), tm.body);
+      if (tm.plicity && erasedUsed(0, tm.body))
+        return terr(`erased argument used in ${showSurface(tm, local.names)}`);
+      // TODO: avoid quote here
+      const pi = evaluate(Pi(tm.plicity, tm.name, tm.type, quote(rt, local.indexErased + 1, false)), local.vs);
+      return pi;
+    } else {
+      const pi = freshPi(local.ts, local.vs, tm.name, tm.plicity);
+      check(local, tm, pi);
+      return pi;
+    }
   }
   if (tm.tag === 'Let') {
     const vty = synth(local, tm.val);
@@ -172,11 +195,20 @@ const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Ter
     const vm = evaluate(arg, local.vs);
     return ty.body(vm);
   }
+  // TODO: fix the following
+  if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
+    const a = freshMetaId();
+    const b = freshMetaId();
+    const pi = VPi(plicity, '_', VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
+    unify(local.indexErased, ty, pi);
+    return synthapp(local, fntm, pi, plicity, arg);
+  }
   return terr(`invalid type or plicity mismatch in synthapp in ${showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${showSurface(arg, local.names)}`);
 };
 
 export const typecheck = (tm: Term): Val => {
   const ty = synth(localEmpty, tm);
+  if (metaUnsolved()) return terr(`there are unsolved metas`);
   return ty;
 };
 

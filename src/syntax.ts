@@ -4,7 +4,7 @@ import * as S from './surface';
 import { List, lookup, Cons, Nil, indecesOf, index } from './utils/list';
 import { impossible } from './utils/util';
 
-export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -30,9 +30,12 @@ export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
 export type Hole = { tag: 'Hole', name: Name | null };
 export const Hole = (name: Name | null = null): Hole => ({ tag: 'Hole', name });
+export type Meta = { tag: 'Meta', index: Ix };
+export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'Global') return t.name;
   if (t.tag === 'App') return `(${showTerm(t.left)} ${t.plicity ? '-' : ''}${showTerm(t.right)})`;
   if (t.tag === 'Abs')
@@ -53,6 +56,7 @@ export const toInternal = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Te
     const l = lookup(ns, t.name);
     return l === null ? Global(t.name) : Var(k - l - 1);
   }
+  if (t.tag === 'Meta') return Meta(t.index);
   if (t.tag === 'App') return App(toInternal(t.left, ns, k), t.plicity, toInternal(t.right, ns, k));
   if (t.tag === 'Abs') return Abs(t.plicity, t.name, t.type && toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
   if (t.tag === 'Let') return Let(t.plicity, t.name, toInternal(t.val, ns, k), toInternal(t.body, Cons([t.name, k], ns), k + 1));
@@ -104,6 +108,7 @@ export const toSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   }
   if (t.tag === 'Type') return S.Type;
   if (t.tag === 'Global') return S.Var(t.name);
+  if (t.tag === 'Meta') return S.Meta(t.index);
   if (t.tag === 'App') return S.App(toSurface(t.left, ns), t.plicity, toSurface(t.right, ns));
   if (t.tag === 'Ann') return S.Ann(toSurface(t.term, ns), toSurface(t.type, ns));
   if (t.tag === 'Roll') return S.Roll(t.type && toSurface(t.type, ns), toSurface(t.term, ns));

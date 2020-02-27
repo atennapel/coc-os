@@ -2,16 +2,19 @@ import { Name, Ix } from './names';
 import { List, Nil, Cons, listToString, index, foldr } from './utils/list';
 import { Lazy, mapLazy, forceLazy } from './utils/lazy';
 import { Plicity, showTerm as surfaceShowterm } from './surface';
-import { showTerm, Term, Var, Global, App, Type, Abs, Pi, toSurface, Fix } from './syntax';
+import { showTerm, Term, Var, Global, App, Type, Abs, Pi, toSurface, Fix, Meta } from './syntax';
 import { impossible } from './utils/util';
 import { globalGet } from './globalenv';
+import { metaGet } from './metas';
 
-export type Head = HVar | HGlobal;
+export type Head = HVar | HGlobal | HMeta;
 
 export type HVar = { tag: 'HVar', index: Ix };
 export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
 export type HGlobal = { tag: 'HGlobal', name: Name };
 export const HGlobal = (name: Name): HGlobal => ({ tag: 'HGlobal', name });
+export type HMeta = { tag: 'HMeta', index: Ix };
+export const HMeta = (index: Ix): HMeta => ({ tag: 'HMeta', index });
 
 export type Elim = EApp;
 
@@ -37,6 +40,7 @@ export const VType: VType = { tag: 'VType' };
 
 export const VVar = (index: Ix): VNe => VNe(HVar(index), Nil);
 export const VGlobal = (name: Name): VNe => VNe(HGlobal(name), Nil);
+export const VMeta = (index: Ix): VNe => VNe(HMeta(index), Nil);
 
 export type EnvV = List<Val>;
 export const extendV = (vs: EnvV, val: Val): EnvV => Cons(val, vs);
@@ -45,6 +49,21 @@ export const showEnvV = (l: EnvV, k: Ix = 0, full: boolean = false): string =>
 
 export const force = (v: Val): Val => {
   if (v.tag === 'VGlued') return force(forceLazy(v.val));
+  if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
+    const val = metaGet(v.head.index);
+    if (val.tag === 'Unsolved') return v;
+    return force(foldr((elim, y) => vapp(y, elim.arg), val.val, v.args));
+  }
+  return v;
+};
+export const forceGlue = (v: Val): Val => {
+  if (v.tag === 'VGlued') return VGlued(v.head, v.args, mapLazy(v.val, forceGlue));
+  if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
+    const val = metaGet(v.head.index);
+    if (val.tag === 'Unsolved') return v;
+    const delayed = Lazy(() => forceGlue(foldr((elim, y) => vapp(y, elim.arg), val.val, v.args)));
+    return VGlued(v.head, v.args, delayed);
+  }
   return v;
 };
 
@@ -61,6 +80,10 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Global') {
     const entry = globalGet(t.name) || impossible(`evaluate: global ${t.name} has no value`);
     return VGlued(HGlobal(t.name), Nil, Lazy(() => entry.val));
+  }
+  if (t.tag === 'Meta') {
+    const s = metaGet(t.index);
+    return s.tag === 'Solved' ? s.val : VMeta(t.index);
   }
   if (t.tag === 'App')
     return t.plicity ? evaluate(t.left, vs) : vapp(evaluate(t.left, vs), evaluate(t.right, vs));
@@ -83,13 +106,15 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
 const quoteHead = (h: Head, k: Ix): Term => {
   if (h.tag === 'HVar') return Var(k - (h.index + 1));
   if (h.tag === 'HGlobal') return Global(h.name);
+  if (h.tag === 'HMeta') return Meta(h.index);
   return h;
 };
 const quoteElim = (t: Term, e: Elim, k: Ix, full: boolean): Term => {
   if (e.tag === 'EApp') return App(t, false, quote(e.arg, k, full));
   return e.tag;
 };
-export const quote = (v: Val, k: Ix, full: boolean): Term => {
+export const quote = (v_: Val, k: Ix, full: boolean): Term => {
+  const v = forceGlue(v_);
   if (v.tag === 'VType') return Type;
   if (v.tag === 'VNe')
     return foldr(
@@ -117,6 +142,10 @@ export const showTermU = (v: Val, ns: List<Name> = Nil, k: number = 0, full: boo
   const term = quote(v, k, full);
   const surface = toSurface(term, ns);
   return surfaceShowterm(surface);
+};
+export const showElimQ = (e: Elim, k: number = 0, full: boolean = false): string => {
+  if (e.tag === 'EApp') return showTermQ(e.arg, k, full);
+  return e.tag;
 };
 export const showElimU = (e: Elim, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string => {
   if (e.tag === 'EApp') return showTermU(e.arg, ns, k, full);

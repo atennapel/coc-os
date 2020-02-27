@@ -1,14 +1,16 @@
-import { Head, Elim, Val, vapp, showTermQ, VVar } from './domain';
+import { Head, Elim, Val, vapp, showTermQ, VVar, forceGlue, showElimQ } from './domain';
 import { Ix } from './names';
 import { terr } from './utils/util';
 import { forceLazy } from './utils/lazy';
-import { zipWithR_, length } from './utils/list';
+import { zipWithR_, length, List, listToString } from './utils/list';
 import { log } from './config';
+import { metaPop, metaDiscard, metaPush } from './metas';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
   if (a.tag === 'HVar') return b.tag === 'HVar' && a.index === b.index;
   if (a.tag === 'HGlobal') return b.tag === 'HGlobal' && a.name === b.name;
+  if (a.tag === 'HMeta') return b.tag === 'HMeta' && a.index === b.index;
   return a;
 };
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
@@ -16,7 +18,9 @@ const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a.tag === 'EApp' && b.tag === 'EApp') return unify(k, a.arg, b.arg);
   return terr(`unify failed (${k}): ${showTermQ(x, k)} ~ ${showTermQ(y, k)}`);
 };
-export const unify = (k: Ix, a: Val, b: Val): void => {
+export const unify = (k: Ix, a_: Val, b_: Val): void => {
+  const a = forceGlue(a_);
+  const b = forceGlue(b_);
   log(() => `unify ${showTermQ(a, k)} ~ ${showTermQ(b, k)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
@@ -45,15 +49,32 @@ export const unify = (k: Ix, a: Val, b: Val): void => {
   }
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && length(a.args) === length(b.args))
     return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+  if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
+    return length(a.args) > length(b.args) ?
+      solve(k, a.head.index, a.args, b) :
+      solve(k, b.head.index, b.args, a);
+  if (a.tag === 'VNe' && a.head.tag === 'HMeta')
+    return solve(k, a.head.index, a.args, b);
+  if (b.tag === 'VNe' && b.head.tag === 'HMeta')
+    return solve(k, b.head.index, b.args, a);
   if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && length(a.args) === length(b.args)) {
     try {
-      return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+      metaPush();
+      zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+      metaDiscard();
+      return;
     } catch(err) {
       if (!(err instanceof TypeError)) throw err;
+      metaPop();
       return unify(k, forceLazy(a.val), forceLazy(b.val));
     }
   }
   if (a.tag === 'VGlued') return unify(k, forceLazy(a.val), b);
   if (b.tag === 'VGlued') return unify(k, a, forceLazy(b.val));
   return terr(`unify failed (${k}): ${showTermQ(a, k)} ~ ${showTermQ(b, k)}`);
+};
+
+const solve = (k: Ix, m: Ix, spine: List<Elim>, val: Val): void => {
+  log(() => `solve ?${m} ${listToString(spine, e => showElimQ(e, k, false))} := ${showTermQ(val, k)}`);
+  return terr(`unimplemented solev`);
 };
