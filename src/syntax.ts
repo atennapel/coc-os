@@ -4,7 +4,7 @@ import * as S from './surface';
 import { List, lookup, Cons, Nil, indecesOf, index } from './utils/list';
 import { impossible } from './utils/util';
 
-export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Type | Ann | Fix;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -28,6 +28,8 @@ export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Ann = { tag: 'Ann', term: Term, type: Term };
 export const Ann = (term: Term, type: Term): Ann => ({ tag: 'Ann', term, type });
+export type Hole = { tag: 'Hole', name: Name | null };
+export const Hole = (name: Name | null = null): Hole => ({ tag: 'Hole', name });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
@@ -42,6 +44,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Fix') return `(fix (${t.self} @ ${t.name} : ${showTerm(t.type)}). ${showTerm(t.body)})`;
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
+  if (t.tag === 'Hole') return `_${t.name || ''}`;
   return t;
 };
 
@@ -59,6 +62,7 @@ export const toInternal = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Te
   if (t.tag === 'Fix') return Fix(t.self, t.name, toInternal(t.type, ns, k), toInternal(t.body, Cons([t.name, k + 1], Cons([t.self, k], ns)), k + 2));
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return Ann(toInternal(t.term, ns, k), toInternal(t.type, ns, k));
+  if (t.tag === 'Hole') return Hole(t.name);
   return t;
 };
 
@@ -104,6 +108,7 @@ export const toSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'Ann') return S.Ann(toSurface(t.term, ns), toSurface(t.type, ns));
   if (t.tag === 'Roll') return S.Roll(t.type && toSurface(t.type, ns), toSurface(t.term, ns));
   if (t.tag === 'Unroll') return S.Unroll(toSurface(t.term, ns));
+  if (t.tag === 'Hole') return S.Hole(t.name);
   if (t.tag === 'Abs') {
     const x = decideName(t.name, t.body, ns);
     return S.Abs(t.plicity, x, t.type && toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));

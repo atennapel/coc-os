@@ -1,5 +1,5 @@
 import { serr, loadFile } from './utils/util';
-import { Term, Var, App, Type, Abs, Pi, Let, Ann, Fix, Roll, Unroll } from './surface';
+import { Term, Var, App, Type, Abs, Pi, Let, Ann, Fix, Roll, Unroll, Hole } from './surface';
 import { Name } from './names';
 import { Def, DDef } from './surface';
 import { log } from './config';
@@ -139,6 +139,7 @@ const expr = (t: Token): [Term, boolean] => {
     const x = t.name;
     if (x === '*') return [Type, false];
     if (x.includes('@')) return serr(`invalid name: ${x}`);
+    if (x.startsWith('_')) return [Hole(x.slice(1) || null), false];
     if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
   }

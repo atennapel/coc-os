@@ -92,6 +92,8 @@ exports.evaluate = (t, vs) => {
         return exports.evaluate(t.term, vs);
     if (t.tag === 'Unroll')
         return exports.evaluate(t.term, vs);
+    if (t.tag === 'Hole')
+        return util_1.impossible(`cannot evaluate ${syntax_1.showTerm(t)}`);
     return t;
 };
 const quoteHead = (h, k) => {
@@ -323,6 +325,8 @@ const expr = (t) => {
             return [surface_1.Type, false];
         if (x.includes('@'))
             return util_1.serr(`invalid name: ${x}`);
+        if (x.startsWith('_'))
+            return [surface_1.Hole(x.slice(1) || null), false];
         if (/[a-z]/i.test(x[0]))
             return [surface_1.Var(x), false];
         return util_1.serr(`invalid name: ${x}`);
@@ -731,6 +735,7 @@ exports.Pi = (plicity, name, type, body) => ({ tag: 'Pi', plicity, name, type, b
 exports.Fix = (self, name, type, body) => ({ tag: 'Fix', self, name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
+exports.Hole = (name = null) => ({ tag: 'Hole', name });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -752,6 +757,8 @@ exports.showTermS = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTermS(t.term)} : ${exports.showTermS(t.type)})`;
+    if (t.tag === 'Hole')
+        return `_${t.name || ''}`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -807,6 +814,8 @@ exports.showTerm = (t) => {
         return `unroll ${exports.showTermP(t.term.tag !== 'Var', t.term)}`;
     if (t.tag === 'Roll')
         return !t.type ? `roll ${exports.showTermP(t.term.tag !== 'Var', t.term)}` : `roll {${exports.showTerm(t.type)}} ${exports.showTermP(t.term.tag !== 'Var', t.term)}`;
+    if (t.tag === 'Hole')
+        return `_${t.name || ''}`;
     return t;
 };
 exports.DDef = (name, value) => ({ tag: 'DDef', name, value });
@@ -834,6 +843,7 @@ exports.Pi = (plicity, name, type, body) => ({ tag: 'Pi', plicity, name, type, b
 exports.Fix = (self, name, type, body) => ({ tag: 'Fix', self, name, type, body });
 exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
+exports.Hole = (name = null) => ({ tag: 'Hole', name });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -857,6 +867,8 @@ exports.showTerm = (t) => {
         return '*';
     if (t.tag === 'Ann')
         return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
+    if (t.tag === 'Hole')
+        return `_${t.name || ''}`;
     return t;
 };
 exports.toInternal = (t, ns = list_1.Nil, k = 0) => {
@@ -882,6 +894,8 @@ exports.toInternal = (t, ns = list_1.Nil, k = 0) => {
         return exports.Type;
     if (t.tag === 'Ann')
         return exports.Ann(exports.toInternal(t.term, ns, k), exports.toInternal(t.type, ns, k));
+    if (t.tag === 'Hole')
+        return exports.Hole(t.name);
     return t;
 };
 exports.globalUsed = (k, t) => {
@@ -950,6 +964,8 @@ exports.toSurface = (t, ns = list_1.Nil) => {
         return S.Roll(t.type && exports.toSurface(t.type, ns), exports.toSurface(t.term, ns));
     if (t.tag === 'Unroll')
         return S.Unroll(exports.toSurface(t.term, ns));
+    if (t.tag === 'Hole')
+        return S.Hole(t.name);
     if (t.tag === 'Abs') {
         const x = decideName(t.name, t.body, ns);
         return S.Abs(t.plicity, x, t.type && exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
@@ -1012,6 +1028,8 @@ const check = (local, tm, ty) => {
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return;
     const tyf = domain_1.force(ty);
+    if (tm.tag === 'Hole')
+        return util_1.terr(`found hole ${syntax_1.showTerm(tm)}, expected type ${domain_1.showTermU(ty, local.names, local.index)}, forced: ${domain_1.showTermU(tyf, local.names, local.index)}`);
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && tm.plicity === tyf.plicity) {
         const v = domain_1.VVar(local.index);
         check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));

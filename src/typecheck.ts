@@ -45,6 +45,8 @@ const check = (local: Local, tm: Term, ty: Val): void => {
   log(() => `check ${showSurface(tm, local.names)} : ${showTermU(ty, local.names, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return;
   const tyf = force(ty);
+  if (tm.tag === 'Hole')
+    return terr(`found hole ${showTerm(tm)}, expected type ${showTermU(ty, local.names, local.index)}, forced: ${showTermU(tyf, local.names, local.index)}`);
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && tm.plicity === tyf.plicity) {
     const v = VVar(local.index);
     check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));

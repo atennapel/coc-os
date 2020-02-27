@@ -17,7 +17,6 @@ yarn start lib/nat.p
 
 ```
 TODO:
-- holes
 - implement some more type inference
 - implement core language
 ```
