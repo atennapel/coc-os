@@ -2,7 +2,10 @@ def Fix = \(f : * -> *). fix (self @ FixF : *). {P : FixF -> *} -> (((x : FixF) 
 def In : {f : * -> *} -> f (Fix f) -> Fix f
   = \{f} x {P} alg. alg (\r. r {P} alg) x
 
-def indFix : {f : * -> *} -> {P : Fix f -> *} -> (((x : Fix f) -> P x) -> (y : f (Fix f)) -> P (In {f} y)) -> (x : Fix f) -> P x
+def indFix
+  : {f : * -> *} -> {P : Fix f -> *}
+    -> (((x : Fix f) -> P x) -> (y : f (Fix f)) -> P (In {f} y))
+    -> (x : Fix f) -> P x
   = \{f} {P} alg x. x {P} alg
 
 def fold : {f : * -> *} -> {x : *} -> ((Fix f -> x) -> f (Fix f) -> x) -> Fix f -> x

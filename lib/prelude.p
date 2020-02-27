@@ -1,3 +1,5 @@
+import lib/prelude/eq.p
+
 import lib/prelude/unit.p
 import lib/prelude/sum.p
 import lib/prelude/pair.p
