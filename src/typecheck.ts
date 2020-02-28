@@ -200,6 +200,14 @@ const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Ter
     const vm = evaluate(argtm, local.vs);
     return [argtm, ty.body(vm)];
   }
+  if (ty.tag === 'VPi' && ty.plicity && !plicity) {
+    // {a} -> b @ c (instantiate with meta then b @ c)
+    const m = newMeta(local.ts);
+    const vm = evaluate(m, local.vs);
+    // TODO: fntm should probably be updated?
+    const [argtm, rt] = synthapp(local, fntm, ty.body(vm), plicity, arg);
+    return [argtm, rt];
+  }
   // TODO: fix the following
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
     const a = freshMetaId();

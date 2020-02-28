@@ -1311,6 +1311,13 @@ const synthapp = (local, fntm, ty_, plicity, arg) => {
         const vm = domain_1.evaluate(argtm, local.vs);
         return [argtm, ty.body(vm)];
     }
+    if (ty.tag === 'VPi' && ty.plicity && !plicity) {
+        // {a} -> b @ c (instantiate with meta then b @ c)
+        const m = newMeta(local.ts);
+        const vm = domain_1.evaluate(m, local.vs);
+        const [argtm, rt] = synthapp(local, fntm, ty.body(vm), plicity, arg);
+        return [argtm, rt];
+    }
     // TODO: fix the following
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
         const a = metas_1.freshMetaId();
