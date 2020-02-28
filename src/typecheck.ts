@@ -1,4 +1,4 @@
-import { Term, showSurface, showTerm, Pi, Var, App } from './syntax';
+import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Ann } from './syntax';
 import { Ix, Name } from './names';
 import { List, Cons, listToString, Nil, index, filter, mapIndex, foldr } from './utils/list';
 import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe, HMeta } from './domain';
@@ -47,12 +47,16 @@ const newMeta = (ts: EnvT): Term => {
   return foldr((x, y) => App(y, false, x), freshMeta() as Term, spine);
 };
 
-const check = (local: Local, tm: Term, ty: Val): void => {
+const check = (local: Local, tm: Term, ty: Val): Term => {
   log(() => `check ${showSurface(tm, local.names)} : ${showTermU(ty, local.names, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
-  if (ty.tag === 'VType' && tm.tag === 'Type') return;
+  if (ty.tag === 'VType' && tm.tag === 'Type') return tm;
   const tyf = force(ty);
-  if (tm.tag === 'Hole')
-    return terr(`found hole ${showTerm(tm)}, expected type ${showTermU(ty, local.names, local.index)}, forced: ${showTermU(tyf, local.names, local.index)}`);
+  if (tm.tag === 'Hole' && tm.name) {
+    if (tm.name)
+      return terr(`found hole ${showTerm(tm)}, expected type ${showTermU(ty, local.names, local.index)}, forced: ${showTermU(tyf, local.names, local.index)}`);
+    const x = newMeta(local.ts);
+    return x;
+  }
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && tm.plicity === tyf.plicity) {
     const v = VVar(local.index);
     check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));
@@ -66,25 +70,25 @@ const check = (local: Local, tm: Term, ty: Val): void => {
     return;
   }
   if (tm.tag === 'Let') {
-    const vty = synth(local, tm.val);
-    check(extend(local, tm.name, vty, false, evaluate(tm.val, local.vs), tm.plicity), tm.body, ty);
+    const [val, vty] = synth(local, tm.val);
+    const body = check(extend(local, tm.name, vty, false, evaluate(val, local.vs), tm.plicity), tm.body, ty);
     if (tm.plicity && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showSurface(tm, local.names)}`);
-    return;
+    return Let(tm.plicity, tm.name, val, body);
   }
   if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
-    check(local, tm.term, tyf.body(evaluate(tm, local.vs), ty));
-    return;
+    const term = check(local, tm.term, tyf.body(evaluate(tm, local.vs), ty));
+    return Roll(null, term);
   }
   if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
-    check(local, tm, tyf.body(evaluate(tm, local.vs), ty));
-    return;
+    const term = check(local, tm, tyf.body(evaluate(tm, local.vs), ty));
+    return term;
   }
-  const ty2 = synth(local, tm);
+  const [term, ty2] = synth(local, tm);
   try {
     log(() => `unify ${showTermU(ty2, local.names, local.index)} ~ ${showTermU(ty, local.names, local.index)}`);
     unify(local.index, ty2, ty);
-    return;
+    return term;
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
     return terr(`failed to unify ${showTermU(ty2, local.names, local.index)} ~ ${showTermU(ty, local.names, local.index)}: ${err.message}`);
@@ -98,26 +102,27 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
   return VPi(impl, x, va, v => evaluate(b, extendV(vs, v)));
 };
 
-const synth = (local: Local, tm: Term): Val => {
+const synth = (local: Local, tm: Term): [Term, Val] => {
   log(() => `synth ${showSurface(tm, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
-  if (tm.tag === 'Type') return VType;
+  if (tm.tag === 'Type') return [tm, VType];
   if (tm.tag === 'Var') {
     const res = index(local.ts, tm.index);
     if (!res) return terr(`var out of scope ${showSurface(tm, local.names)}`);
-    return res[1];
+    return [tm, res[1]];
   }
   if (tm.tag === 'Global') {
     const entry = globalGet(tm.name);
     if (!entry) return terr(`global ${tm.name} not found`);
-    return entry.type;
+    return [tm, entry.type];
   }
-  if (tm.tag === 'Hole') {
+  if (tm.tag === 'Hole' && !tm.name) {
+    const t = newMeta(local.ts);
     const vt = evaluate(newMeta(local.ts), local.vs);
-    return vt;
+    return [t, vt];
   }
   if (tm.tag === 'App') {
-    const fn = synth(local, tm.left);
-    const rt = synthapp(local, tm.left, fn, tm.plicity, tm.right);
+    const [fntm, fn] = synth(local, tm.left);
+    const rt = synthapp(local, fntm, fn, tm.plicity, tm.right);
     return rt;
   }
   if (tm.tag === 'Abs') {
@@ -132,27 +137,27 @@ const synth = (local: Local, tm: Term): Val => {
       return pi;
     } else {
       const pi = freshPi(local.ts, local.vs, tm.name, tm.plicity);
-      check(local, tm, pi);
-      return pi;
+      const term = check(local, tm, pi);
+      return [term, pi];
     }
   }
   if (tm.tag === 'Let') {
-    const vty = synth(local, tm.val);
-    const rt = synth(extend(local, tm.name, vty, false, evaluate(tm.val, local.vs), tm.plicity), tm.body);
+    const [valtm, vty] = synth(local, tm.val);
+    const [bodytm, rt] = synth(extend(local, tm.name, vty, false, evaluate(valtm, local.vs), tm.plicity), tm.body);
     if (tm.plicity && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showSurface(tm, local.names)}`);
-    return rt;
+    return [Let(tm.plicity, tm.name, valtm, bodytm), rt];
   }
   if (tm.tag === 'Pi') {
-    check(local, tm.type, VType);
-    check(extend(local, tm.name, evaluate(tm.type, local.vs), true, VVar(local.indexErased), false), tm.body, VType);
-    return VType;
+    const type = check(local, tm.type, VType);
+    const body = check(extend(local, tm.name, evaluate(type, local.vs), true, VVar(local.indexErased), false), tm.body, VType);
+    return [Pi(tm.plicity, tm.name, type, body), VType];
   }
   if (tm.tag === 'Ann') {
-    check(local, tm.type, VType);
-    const vt = evaluate(tm.type, local.vs);
-    check(local, tm.term, vt);
-    return vt;
+    const type = check(local, tm.type, VType);
+    const vt = evaluate(type, local.vs);
+    const term = check(local, tm.term, vt);
+    return [Ann(term, type), vt];
   }
   if (tm.tag === 'Fix') {
     check(local, tm.type, VType);
@@ -168,32 +173,32 @@ const synth = (local: Local, tm: Term): Val => {
     return vty;
   }
   if (tm.tag === 'Roll' && tm.type) {
-    check(local, tm.type, VType);
+    const type = check(local, tm.type, VType);
     const vt = evaluate(tm.type, local.vs);
     const vtf = force(vt);
     if (vtf.tag !== 'VFix')
       return terr(`fix type expected in ${showSurface(tm, local.names)}: ${showTermU(vt, local.names, local.index)}`);
-    check(local, tm.term, vtf.body(evaluate(tm, local.vs), vt));
-    return vt;
+    const term = check(local, tm.term, vtf.body(evaluate(tm, local.vs), vt));
+    return [Roll(type, term), vt];
   }
   if (tm.tag === 'Unroll') {
-    const ty = synth(local, tm.term);
+    const [term, ty] = synth(local, tm.term);
     const vt = force(ty);
     if (vt.tag !== 'VFix') 
       return terr(`fix type expected in ${showSurface(tm, local.names)}: ${showTermU(vt, local.names, local.index)}`);
-    return vt.body(evaluate(tm.term, local.vs), ty);
+    return [Unroll(term), vt.body(evaluate(term, local.vs), ty)];
   }
   return terr(`cannot synth ${showSurface(tm, local.names)}`);
 };
 
-const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Term): Val => {
+const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Term): [Term, Val] => {
   const ty = force(ty_);
   log(() => `synthapp ${showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${showSurface(arg, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
   if (ty.tag === 'VFix') return synthapp(local, fntm, ty.body(evaluate(fntm, local.vs), ty), plicity, arg);
   if (ty.tag === 'VPi' && ty.plicity === plicity) {
-    check(local, arg, ty.type);
-    const vm = evaluate(arg, local.vs);
-    return ty.body(vm);
+    const argtm = check(local, arg, ty.type);
+    const vm = evaluate(argtm, local.vs);
+    return [argtm, ty.body(vm)];
   }
   // TODO: fix the following
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
@@ -207,9 +212,9 @@ const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Ter
 };
 
 export const typecheck = (tm: Term): Val => {
-  const ty = synth(localEmpty, tm);
+  const res = synth(localEmpty, tm);
   if (metaUnsolved()) return terr(`there are unsolved metas`);
-  return ty;
+  return res[1];
 };
 
 export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Name[] => {

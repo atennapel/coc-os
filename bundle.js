@@ -1116,7 +1116,7 @@ const check = (local, tm, ty) => {
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return;
     const tyf = domain_1.force(ty);
-    if (tm.tag === 'Hole')
+    if (tm.tag === 'Hole' && tm.name)
         return util_1.terr(`found hole ${syntax_1.showTerm(tm)}, expected type ${domain_1.showTermU(ty, local.names, local.index)}, forced: ${domain_1.showTermU(tyf, local.names, local.index)}`);
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && tm.plicity === tyf.plicity) {
         const v = domain_1.VVar(local.index);
@@ -1179,7 +1179,7 @@ const synth = (local, tm) => {
             return util_1.terr(`global ${tm.name} not found`);
         return entry.type;
     }
-    if (tm.tag === 'Hole') {
+    if (tm.tag === 'Hole' && !tm.name) {
         const vt = domain_1.evaluate(newMeta(local.ts), local.vs);
         return vt;
     }
