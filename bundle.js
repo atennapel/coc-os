@@ -1307,6 +1307,7 @@ const lazy_1 = require("./utils/lazy");
 const list_1 = require("./utils/list");
 const config_1 = require("./config");
 const metas_1 = require("./metas");
+const syntax_1 = require("./syntax");
 const eqHead = (a, b) => {
     if (a === b)
         return true;
@@ -1388,10 +1389,77 @@ exports.unify = (k, a_, b_) => {
 };
 const solve = (k, m, spine, val) => {
     config_1.log(() => `solve ?${m} ${list_1.listToString(spine, e => domain_1.showElimQ(e, k, false))} := ${domain_1.showTermQ(val, k)}`);
-    return util_1.terr(`unimplemented solev`);
+    try {
+        const spinex = checkSpine(k, spine);
+        const rhs = domain_1.quote(val, k, false);
+        const body = checkSolution(k, m, spinex, rhs);
+        const solution = list_1.foldl((body, y) => {
+            if (typeof y === 'string')
+                return syntax_1.Abs(false, '_', null, body);
+            const x = `v\$${y}`;
+            return syntax_1.Abs(false, x, null, body);
+        }, body, spinex);
+        config_1.log(() => `solution ?${m} := ${syntax_1.showSurface(solution, list_1.Nil)} | ${syntax_1.showTerm(solution)}`);
+        const vsolution = domain_1.evaluate(solution, list_1.Nil);
+        metas_1.metaSet(m, vsolution);
+    }
+    catch (err) {
+        if (!(err instanceof TypeError))
+            throw err;
+        const a = list_1.toArray(spine, e => domain_1.showElimQ(e, k));
+        util_1.terr(`failed to solve meta (?${m}${a.length > 0 ? ' ' : ''}${a.join(' ')}) := ${domain_1.showTermQ(val, k)}: ${err.message}`);
+    }
+};
+const checkSpine = (k, spine) => list_1.map(spine, elim => {
+    if (elim.tag === 'EApp') {
+        const v = domain_1.forceGlue(elim.arg);
+        if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && list_1.length(v.args) === 0)
+            return v.head.index;
+        if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HGlobal' && list_1.length(v.args) === 0)
+            return v.head.name;
+        return util_1.terr(`not a var in spine: ${domain_1.showTermQ(v, k)}`);
+    }
+    return elim.tag;
+});
+const checkSolution = (k, m, is, t) => {
+    if (t.tag === 'Type')
+        return t;
+    if (t.tag === 'Global')
+        return t;
+    if (t.tag === 'Var') {
+        const i = k - t.index - 1;
+        if (list_1.contains(is, i))
+            return syntax_1.Var(list_1.indexOf(is, i));
+        return util_1.terr(`scope error ${t.index} (${i})`);
+    }
+    if (t.tag === 'Meta') {
+        if (m === t.index)
+            return util_1.terr(`occurs check failed: ${syntax_1.showTerm(t)}`);
+        return t;
+    }
+    if (t.tag === 'App') {
+        const l = checkSolution(k, m, is, t.left);
+        const r = checkSolution(k, m, is, t.right);
+        return syntax_1.App(l, t.plicity, r);
+    }
+    if (t.tag === 'Abs') {
+        const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
+        return syntax_1.Abs(t.plicity, t.name, null, body);
+    }
+    if (t.tag === 'Pi') {
+        const ty = checkSolution(k, m, is, t.type);
+        const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
+        return syntax_1.Pi(t.plicity, t.name, ty, body);
+    }
+    if (t.tag === 'Fix') {
+        const ty = checkSolution(k, m, is, t.type);
+        const body = checkSolution(k + 2, m, list_1.Cons(k + 1, list_1.Cons(k, is)), t.body);
+        return syntax_1.Fix(t.self, t.name, ty, body);
+    }
+    return util_1.impossible(`checkSolution ?${m}: non-normal term: ${syntax_1.showTerm(t)}`);
 };
 
-},{"./config":1,"./domain":3,"./metas":5,"./utils/lazy":13,"./utils/list":14,"./utils/util":15}],13:[function(require,module,exports){
+},{"./config":1,"./domain":3,"./metas":5,"./syntax":10,"./utils/lazy":13,"./utils/list":14,"./utils/util":15}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Lazy = (fn) => ({ fn, val: null, forced: false });

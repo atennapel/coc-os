@@ -1,10 +1,11 @@
-import { Head, Elim, Val, vapp, showTermQ, VVar, forceGlue, showElimQ } from './domain';
-import { Ix } from './names';
-import { terr } from './utils/util';
+import { Head, Elim, Val, vapp, showTermQ, VVar, forceGlue, showElimQ, quote, evaluate } from './domain';
+import { Ix, Name } from './names';
+import { terr, impossible } from './utils/util';
 import { forceLazy } from './utils/lazy';
-import { zipWithR_, length, List, listToString } from './utils/list';
+import { zipWithR_, length, List, listToString, map, foldl, toArray, Nil, contains, indexOf, Cons } from './utils/list';
 import { log } from './config';
-import { metaPop, metaDiscard, metaPush } from './metas';
+import { metaPop, metaDiscard, metaPush, metaSet } from './metas';
+import { Term, showSurface, showTerm, Abs, Var, App, Pi, Fix } from './syntax';
 
 const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -76,5 +77,70 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
 
 const solve = (k: Ix, m: Ix, spine: List<Elim>, val: Val): void => {
   log(() => `solve ?${m} ${listToString(spine, e => showElimQ(e, k, false))} := ${showTermQ(val, k)}`);
-  return terr(`unimplemented solev`);
+  try {
+    const spinex = checkSpine(k, spine);
+    const rhs = quote(val, k, false);
+    const body = checkSolution(k, m, spinex, rhs);
+    const solution = foldl((body, y) => {
+      if (typeof y === 'string') return Abs(false, '_', null, body);
+      const x = `v\$${y}`;
+      return Abs(false, x, null, body);
+    }, body, spinex);
+    log(() => `solution ?${m} := ${showSurface(solution, Nil)} | ${showTerm(solution)}`);
+    const vsolution = evaluate(solution, Nil);
+    metaSet(m, vsolution);
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    const a = toArray(spine, e => showElimQ(e, k));
+    terr(`failed to solve meta (?${m}${a.length > 0 ? ' ': ''}${a.join(' ')}) := ${showTermQ(val, k)}: ${err.message}`);
+  }
+};
+
+const checkSpine = (k: Ix, spine: List<Elim>): List<Ix | Name> =>
+  map(spine, elim => {
+    if (elim.tag === 'EApp') {
+      const v = forceGlue(elim.arg);
+      if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HVar' && length(v.args) === 0)
+        return v.head.index;
+      if ((v.tag === 'VNe' || v.tag === 'VGlued') && v.head.tag === 'HGlobal' && length(v.args) === 0)
+        return v.head.name;
+      return terr(`not a var in spine: ${showTermQ(v, k)}`);
+    }
+    return elim.tag;
+  });
+
+const checkSolution = (k: Ix, m: Ix, is: List<Ix | Name>, t: Term): Term => {
+  if (t.tag === 'Type') return t;
+  if (t.tag === 'Global') return t;
+  if (t.tag === 'Var') {
+    const i = k - t.index - 1;
+    if (contains(is, i))
+      return Var(indexOf(is, i));
+    return terr(`scope error ${t.index} (${i})`);
+  }
+  if (t.tag === 'Meta') {
+    if (m === t.index)
+      return terr(`occurs check failed: ${showTerm(t)}`);
+    return t;
+  }
+  if (t.tag === 'App') {
+    const l = checkSolution(k, m, is, t.left);
+    const r = checkSolution(k, m, is, t.right);
+    return App(l, t.plicity, r);
+  }
+  if (t.tag === 'Abs') {
+    const body = checkSolution(k + 1, m, Cons(k, is), t.body);
+    return Abs(t.plicity, t.name, null, body);
+  }
+  if (t.tag === 'Pi') {
+    const ty = checkSolution(k, m, is, t.type);
+    const body = checkSolution(k + 1, m, Cons(k, is), t.body);
+    return Pi(t.plicity, t.name, ty, body);
+  }
+  if (t.tag === 'Fix') {
+    const ty = checkSolution(k, m, is, t.type);
+    const body = checkSolution(k + 2, m, Cons(k + 1, Cons(k, is)), t.body);
+    return Fix(t.self, t.name, ty, body);
+  }
+  return impossible(`checkSolution ?${m}: non-normal term: ${showTerm(t)}`);
 };
