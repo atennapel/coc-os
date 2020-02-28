@@ -158,6 +158,11 @@ exports.showTermU = (v, ns = list_1.Nil, k = 0, full = false) => {
     const surface = syntax_1.toSurface(term, ns);
     return surface_1.showTerm(surface);
 };
+exports.showTermUZ = (v, ns = list_1.Nil, vs = list_1.Nil, k = 0, full = false) => {
+    const term = exports.zonk(exports.quote(v, k, full), vs, k, full);
+    const surface = syntax_1.toSurface(term, ns);
+    return surface_1.showTerm(surface);
+};
 exports.showElimQ = (e, k = 0, full = false) => {
     if (e.tag === 'EApp')
         return exports.showTermQ(e.arg, k, full);
@@ -167,6 +172,48 @@ exports.showElimU = (e, ns = list_1.Nil, k = 0, full = false) => {
     if (e.tag === 'EApp')
         return exports.showTermU(e.arg, ns, k, full);
     return e.tag;
+};
+const zonkSpine = (tm, vs, k, full) => {
+    if (tm.tag === 'Meta') {
+        const s = metas_1.metaGet(tm.index);
+        if (s.tag === 'Unsolved')
+            return [true, exports.zonk(tm, vs, k, full)];
+        return [false, s.val];
+    }
+    if (tm.tag === 'App') {
+        const spine = zonkSpine(tm.left, vs, k, full);
+        return spine[0] ?
+            [true, syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, vs, k, full))] :
+            [false, exports.vapp(spine[1], exports.evaluate(tm.right, vs))];
+    }
+    return [true, exports.zonk(tm, vs, k, full)];
+};
+exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
+    if (tm.tag === 'Meta') {
+        const s = metas_1.metaGet(tm.index);
+        return s.tag === 'Solved' ? exports.quote(s.val, k, full) : tm;
+    }
+    if (tm.tag === 'Pi')
+        return syntax_1.Pi(tm.plicity, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
+    if (tm.tag === 'Fix')
+        return syntax_1.Fix(tm.self, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(exports.extendV(vs, exports.VVar(k)), exports.VVar(k + 1)), k + 2, full));
+    if (tm.tag === 'Let')
+        return syntax_1.Let(tm.plicity, tm.name, exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
+    if (tm.tag === 'Ann')
+        return syntax_1.Ann(exports.zonk(tm.term, vs, k, full), exports.zonk(tm.type, vs, k, full));
+    if (tm.tag === 'Unroll')
+        return syntax_1.Unroll(exports.zonk(tm.term, vs, k, full));
+    if (tm.tag === 'Roll')
+        return syntax_1.Roll(tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.term, vs, k, full));
+    if (tm.tag === 'Abs')
+        return syntax_1.Abs(tm.plicity, tm.name, tm.type && exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));
+    if (tm.tag === 'App') {
+        const spine = zonkSpine(tm.left, vs, k, full);
+        return spine[0] ?
+            syntax_1.App(spine[1], tm.plicity, exports.zonk(tm.right, vs, k, full)) :
+            exports.quote(exports.vapp(spine[1], exports.evaluate(tm.right, vs)), k, full);
+    }
+    return tm;
 };
 
 },{"./globalenv":4,"./metas":5,"./surface":9,"./syntax":10,"./utils/lazy":13,"./utils/list":14,"./utils/util":15}],4:[function(require,module,exports){
@@ -699,7 +746,7 @@ exports.runREPL = (_s, _cb) => {
         }
         if (_s === ':defs') {
             const e = globalenv_1.globalMap();
-            const msg = Object.keys(e).map(k => `def ${k} : ${domain_1.showTermU(e[k].type)} = ${syntax_1.showSurface(e[k].term)} ~> ${domain_1.showTermU(e[k].val)}`).join('\n');
+            const msg = Object.keys(e).map(k => `def ${k} : ${domain_1.showTermUZ(e[k].type)} = ${syntax_1.showSurface(e[k].term)} ~> ${domain_1.showTermUZ(e[k].val)}`).join('\n');
             return _cb(msg || 'no definitions');
         }
         if (_s.startsWith(':del')) {
@@ -721,7 +768,7 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            return _cb(domain_1.showTermU(res.type, list_1.Nil, 0, true));
+            return _cb(domain_1.showTermUZ(res.type, list_1.Nil, list_1.Nil, 0, true));
         }
         if (_s.startsWith(':gelab')) {
             const name = _s.slice(6).trim();
@@ -735,14 +782,14 @@ exports.runREPL = (_s, _cb) => {
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            return _cb(domain_1.showTermU(res.val));
+            return _cb(domain_1.showTermUZ(res.val));
         }
         if (_s.startsWith(':gnorm')) {
             const name = _s.slice(7).trim();
             const res = globalenv_1.globalGet(name);
             if (!res)
                 return _cb(`undefined global: ${name}`, true);
-            return _cb(domain_1.showTermU(res.val, list_1.Nil, 0, true));
+            return _cb(domain_1.showTermUZ(res.val, list_1.Nil, list_1.Nil, 0, true));
         }
         if (_s.startsWith(':view')) {
             const files = _s.slice(5).trim().split(/\s+/g);
@@ -766,9 +813,9 @@ exports.runREPL = (_s, _cb) => {
             const tt = syntax_1.toInternal(t);
             const vty = typecheck_1.typecheck(tt);
             tm_ = tt;
-            config_1.log(() => domain_1.showTermU(vty));
+            config_1.log(() => domain_1.showTermUZ(vty));
             config_1.log(() => syntax_1.showSurface(tt));
-            msg += `type: ${domain_1.showTermU(vty)}\nterm: ${syntax_1.showSurface(tm_)}`;
+            msg += `type: ${domain_1.showTermUZ(vty)}\nterm: ${syntax_1.showSurface(tm_)}`;
             if (typeOnly)
                 return _cb(msg);
         }

@@ -6,7 +6,7 @@ import { loadFile } from './utils/util';
 import { globalReset, globalMap, globalDelete, globalGet } from './globalenv';
 import { toInternalDefs } from './definitions';
 import { typecheckDefs, typecheck } from './typecheck';
-import { showTermU, normalize } from './domain';
+import { showTermUZ, normalize } from './domain';
 import { showSurface, toInternal } from './syntax';
 
 const help = `
@@ -47,7 +47,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     }
     if (_s === ':defs') {
       const e = globalMap();
-      const msg = Object.keys(e).map(k => `def ${k} : ${showTermU(e[k].type)} = ${showSurface(e[k].term)} ~> ${showTermU(e[k].val)}`).join('\n');
+      const msg = Object.keys(e).map(k => `def ${k} : ${showTermUZ(e[k].type)} = ${showSurface(e[k].term)} ~> ${showTermUZ(e[k].val)}`).join('\n');
       return _cb(msg || 'no definitions');
     }
     if (_s.startsWith(':del')) {
@@ -68,7 +68,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const name = _s.slice(6).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      return _cb(showTermU(res.type, Nil, 0, true));
+      return _cb(showTermUZ(res.type, Nil, Nil, 0, true));
     }
     if (_s.startsWith(':gelab')) {
       const name = _s.slice(6).trim();
@@ -80,13 +80,13 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      return _cb(showTermU(res.val));
+      return _cb(showTermUZ(res.val));
     }
     if (_s.startsWith(':gnorm')) {
       const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
-      return _cb(showTermU(res.val, Nil, 0, true));
+      return _cb(showTermUZ(res.val, Nil, Nil, 0, true));
     }
     if (_s.startsWith(':view')) {
       const files = _s.slice(5).trim().split(/\s+/g);
@@ -108,9 +108,9 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const tt = toInternal(t);
       const vty = typecheck(tt);
       tm_ = tt;
-      log(() => showTermU(vty));
+      log(() => showTermUZ(vty));
       log(() => showSurface(tt));
-      msg += `type: ${showTermU(vty)}\nterm: ${showSurface(tm_)}`;
+      msg += `type: ${showTermUZ(vty)}\nterm: ${showSurface(tm_)}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);

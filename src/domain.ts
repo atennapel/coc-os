@@ -2,7 +2,7 @@ import { Name, Ix } from './names';
 import { List, Nil, Cons, listToString, index, foldr } from './utils/list';
 import { Lazy, mapLazy, forceLazy } from './utils/lazy';
 import { Plicity, showTerm as surfaceShowterm } from './surface';
-import { showTerm, Term, Var, Global, App, Type, Abs, Pi, toSurface, Fix, Meta } from './syntax';
+import { showTerm, Term, Var, Global, App, Type, Abs, Pi, toSurface, Fix, Meta, Let, Ann, Unroll, Roll } from './syntax';
 import { impossible } from './utils/util';
 import { globalGet } from './globalenv';
 import { metaGet } from './metas';
@@ -143,6 +143,11 @@ export const showTermU = (v: Val, ns: List<Name> = Nil, k: number = 0, full: boo
   const surface = toSurface(term, ns);
   return surfaceShowterm(surface);
 };
+export const showTermUZ = (v: Val, ns: List<Name> = Nil, vs: EnvV = Nil, k: number = 0, full: boolean = false): string => {
+  const term = zonk(quote(v, k, full), vs, k, full);
+  const surface = toSurface(term, ns);
+  return surfaceShowterm(surface);
+};
 export const showElimQ = (e: Elim, k: number = 0, full: boolean = false): string => {
   if (e.tag === 'EApp') return showTermQ(e.arg, k, full);
   return e.tag;
@@ -150,4 +155,46 @@ export const showElimQ = (e: Elim, k: number = 0, full: boolean = false): string
 export const showElimU = (e: Elim, ns: List<Name> = Nil, k: number = 0, full: boolean = false): string => {
   if (e.tag === 'EApp') return showTermU(e.arg, ns, k, full);
   return e.tag;
+};
+
+type S = [false, Val] | [true, Term];
+const zonkSpine = (tm: Term, vs: EnvV, k: Ix, full: boolean): S => {
+  if (tm.tag === 'Meta') {
+    const s = metaGet(tm.index);
+    if (s.tag === 'Unsolved') return [true, zonk(tm, vs, k, full)];
+    return [false, s.val];
+  }
+  if (tm.tag === 'App') {
+    const spine = zonkSpine(tm.left, vs, k, full);
+    return spine[0] ?
+      [true, App(spine[1], tm.plicity, zonk(tm.right, vs, k, full))] :
+      [false, vapp(spine[1], evaluate(tm.right, vs))];
+  }
+  return [true, zonk(tm, vs, k, full)];
+};
+export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term => {
+  if (tm.tag === 'Meta') {
+    const s = metaGet(tm.index);
+    return s.tag === 'Solved' ? quote(s.val, k, full) : tm;
+  }
+  if (tm.tag === 'Pi')
+    return Pi(tm.plicity, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
+  if (tm.tag === 'Fix')
+    return Fix(tm.self, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, extendV(extendV(vs, VVar(k)), VVar(k + 1)), k + 2, full));
+  if (tm.tag === 'Let')
+    return Let(tm.plicity, tm.name, zonk(tm.val, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
+  if (tm.tag === 'Ann') return Ann(zonk(tm.term, vs, k, full), zonk(tm.type, vs, k, full));
+  if (tm.tag === 'Unroll')
+    return Unroll(zonk(tm.term, vs, k, full));
+  if (tm.tag === 'Roll')
+    return Roll(tm.type && zonk(tm.type, vs, k, full), zonk(tm.term, vs, k, full));
+  if (tm.tag === 'Abs')
+    return Abs(tm.plicity, tm.name, tm.type && zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
+  if (tm.tag === 'App') {
+    const spine = zonkSpine(tm.left, vs, k, full);
+    return spine[0] ?
+      App(spine[1], tm.plicity, zonk(tm.right, vs, k, full)) :
+      quote(vapp(spine[1], evaluate(tm.right, vs)), k, full);
+  }
+  return tm;
 };

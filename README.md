@@ -17,7 +17,6 @@ yarn start lib/nat.p
 
 ```
 TODO:
-- zonk types
 - fix named holes
 - implement some more type inference
 - implement core language

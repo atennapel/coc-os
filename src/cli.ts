@@ -5,7 +5,7 @@ import { globalReset, globalMap } from './globalenv';
 import { toInternalDefs } from './definitions';
 import { typecheckDefs } from './typecheck';
 import { showSurface } from './syntax';
-import { showTermU } from './domain';
+import { showTermUZ } from './domain';
 
 if (process.argv[2]) {
   if (process.argv[3] === '-d') setConfig({ debug: true });
@@ -19,7 +19,7 @@ if (process.argv[2]) {
       const main = m.main;
       if (!main) console.log(`defined ${ns.join(' ')}`);
       else {
-        console.log(`${showSurface(main.term)} : ${showTermU(main.type)}`);
+        console.log(`${showSurface(main.term)} : ${showTermUZ(main.type)}`);
       }
       process.exit();
     }).catch(err => {
