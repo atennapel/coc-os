@@ -1158,6 +1158,16 @@ const newMeta = (ts) => {
     const spine = list_1.filter(list_1.mapIndex(ts, (i, [bound, _]) => bound ? syntax_1.Var(i) : null), x => x !== null);
     return list_1.foldr((x, y) => syntax_1.App(y, false, x), metas_1.freshMeta(), spine);
 };
+const inst = (ts, vs, ty_) => {
+    const ty = domain_1.force(ty_);
+    if (ty.tag === 'VPi' && ty.plicity) {
+        const m = newMeta(ts);
+        const vm = domain_1.evaluate(m, vs);
+        const res = inst(ts, vs, ty.body(vm));
+        return res;
+    }
+    return ty;
+};
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showSurface(tm, local.names)} : ${domain_1.showTermU(ty, local.names, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
@@ -1199,13 +1209,28 @@ const check = (local, tm, ty) => {
     const [term, ty2] = synth(local, tm);
     try {
         config_1.log(() => `unify ${domain_1.showTermU(ty2, local.names, local.index)} ~ ${domain_1.showTermU(ty, local.names, local.index)}`);
+        metas_1.metaPush();
         unify_1.unify(local.index, ty2, ty);
+        metas_1.metaDiscard();
         return term;
     }
     catch (err) {
         if (!(err instanceof TypeError))
             throw err;
-        return util_1.terr(`failed to unify ${domain_1.showTermU(ty2, local.names, local.index)} ~ ${domain_1.showTermU(ty, local.names, local.index)}: ${err.message}`);
+        try {
+            metas_1.metaPop();
+            metas_1.metaPush();
+            const ty2inst = inst(local.ts, local.vs, ty2);
+            unify_1.unify(local.index, ty2inst, ty);
+            metas_1.metaDiscard();
+            return term;
+        }
+        catch {
+            if (!(err instanceof TypeError))
+                throw err;
+            metas_1.metaPop();
+            return util_1.terr(`failed to unify ${domain_1.showTermU(ty2, local.names, local.index)} ~ ${domain_1.showTermU(ty, local.names, local.index)}: ${err.message}`);
+        }
     }
 };
 const freshPi = (ts, vs, x, impl) => {
@@ -1315,6 +1340,7 @@ const synthapp = (local, fntm, ty_, plicity, arg) => {
         // {a} -> b @ c (instantiate with meta then b @ c)
         const m = newMeta(local.ts);
         const vm = domain_1.evaluate(m, local.vs);
+        // TODO: fntm should probably be updated?
         const [argtm, rt] = synthapp(local, fntm, ty.body(vm), plicity, arg);
         return [argtm, rt];
     }

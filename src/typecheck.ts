@@ -8,7 +8,7 @@ import { Def, showDef } from './definitions';
 import { globalGet, globalSet } from './globalenv';
 import { unify } from './unify';
 import { Plicity } from './surface';
-import { freshMeta, freshMetaId, metaUnsolved } from './metas';
+import { freshMeta, freshMetaId, metaUnsolved, metaPush, metaDiscard, metaPop } from './metas';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -45,6 +45,17 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
 const newMeta = (ts: EnvT): Term => {
   const spine = filter(mapIndex(ts, (i, [bound, _]) => bound ? Var(i) : null), x => x !== null) as List<Var>;
   return foldr((x, y) => App(y, false, x), freshMeta() as Term, spine);
+};
+
+const inst = (ts: EnvT, vs: EnvV, ty_: Val): Val => {
+  const ty = force(ty_);
+  if (ty.tag === 'VPi' && ty.plicity) {
+    const m = newMeta(ts);
+    const vm = evaluate(m, vs);
+    const res = inst(ts, vs, ty.body(vm));
+    return res;
+  }
+  return ty;
 };
 
 const check = (local: Local, tm: Term, ty: Val): Term => {
@@ -87,11 +98,24 @@ const check = (local: Local, tm: Term, ty: Val): Term => {
   const [term, ty2] = synth(local, tm);
   try {
     log(() => `unify ${showTermU(ty2, local.names, local.index)} ~ ${showTermU(ty, local.names, local.index)}`);
+    metaPush();
     unify(local.index, ty2, ty);
+    metaDiscard();
     return term;
   } catch(err) {
     if (!(err instanceof TypeError)) throw err;
-    return terr(`failed to unify ${showTermU(ty2, local.names, local.index)} ~ ${showTermU(ty, local.names, local.index)}: ${err.message}`);
+    try {
+      metaPop();
+      metaPush();
+      const ty2inst = inst(local.ts, local.vs, ty2);
+      unify(local.index, ty2inst, ty);
+      metaDiscard();
+      return term;
+    } catch {
+      if (!(err instanceof TypeError)) throw err;
+      metaPop();
+      return terr(`failed to unify ${showTermU(ty2, local.names, local.index)} ~ ${showTermU(ty, local.names, local.index)}: ${err.message}`);
+    }
   }
 };
 
