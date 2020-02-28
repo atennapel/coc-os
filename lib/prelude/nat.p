@@ -8,10 +8,10 @@ def Nat = Fix NatF
 def Z : Nat = In {NatF} (L {UnitType} {Nat} Unit)
 def S : Nat -> Nat = \n. In {NatF} (R {UnitType} {Nat} n)
 
-def foldNat : {t : *} -> Nat -> t -> (t -> t) -> t
-  = \{t} n z s. fold {NatF} {t} (\rec m. caseSum {UnitType} {Nat} {t} m (\_. z) (\x. s (rec x))) n
 def caseNat : {t : *} -> Nat -> t -> (Nat -> t) -> t
   = \{t} n z s. caseSum {UnitType} {Nat} {t} (case {NatF} n) (\_. z) s
+def foldNat : {t : *} -> Nat -> t -> (t -> t) -> t
+  = \{t} n z s. fold {NatF} {t} (\rec m. caseSum {UnitType} {Nat} {t} m (\_. z) (\x. s (rec x))) n
 
 def indNat
   : {P : Nat -> *} -> P Z -> ({m : Nat} -> P m -> P (S m)) -> (n : Nat) -> P n
