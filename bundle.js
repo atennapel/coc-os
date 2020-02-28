@@ -1114,42 +1114,46 @@ const newMeta = (ts) => {
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showSurface(tm, local.names)} : ${domain_1.showTermU(ty, local.names, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
-        return;
+        return tm;
     const tyf = domain_1.force(ty);
-    if (tm.tag === 'Hole' && tm.name)
-        return util_1.terr(`found hole ${syntax_1.showTerm(tm)}, expected type ${domain_1.showTermU(ty, local.names, local.index)}, forced: ${domain_1.showTermU(tyf, local.names, local.index)}`);
+    if (tm.tag === 'Hole' && tm.name) {
+        if (tm.name)
+            return util_1.terr(`found hole ${syntax_1.showTerm(tm)}, expected type ${domain_1.showTermU(ty, local.names, local.index)}, forced: ${domain_1.showTermU(tyf, local.names, local.index)}`);
+        const x = newMeta(local.ts);
+        return x;
+    }
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && tm.plicity === tyf.plicity) {
         const v = domain_1.VVar(local.index);
-        check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));
+        const body = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));
         if (tm.plicity && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
-        return;
+        return syntax_1.Abs(tm.plicity, tm.name, null, body);
     }
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
         const v = domain_1.VVar(local.index);
-        check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
-        return;
+        const term = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
+        return term;
     }
     if (tm.tag === 'Let') {
-        const vty = synth(local, tm.val);
-        check(extend(local, tm.name, vty, false, domain_1.evaluate(tm.val, local.vs), tm.plicity), tm.body, ty);
+        const [val, vty] = synth(local, tm.val);
+        const body = check(extend(local, tm.name, vty, false, domain_1.evaluate(val, local.vs), tm.plicity), tm.body, ty);
         if (tm.plicity && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
-        return;
+        return syntax_1.Let(tm.plicity, tm.name, val, body);
     }
     if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
-        check(local, tm.term, tyf.body(domain_1.evaluate(tm, local.vs), ty));
-        return;
+        const term = check(local, tm.term, tyf.body(domain_1.evaluate(tm, local.vs), ty));
+        return syntax_1.Roll(null, term);
     }
     if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
-        check(local, tm, tyf.body(domain_1.evaluate(tm, local.vs), ty));
-        return;
+        const term = check(local, tm, tyf.body(domain_1.evaluate(tm, local.vs), ty));
+        return term;
     }
-    const ty2 = synth(local, tm);
+    const [term, ty2] = synth(local, tm);
     try {
         config_1.log(() => `unify ${domain_1.showTermU(ty2, local.names, local.index)} ~ ${domain_1.showTermU(ty, local.names, local.index)}`);
         unify_1.unify(local.index, ty2, ty);
-        return;
+        return term;
     }
     catch (err) {
         if (!(err instanceof TypeError))
@@ -1166,86 +1170,87 @@ const freshPi = (ts, vs, x, impl) => {
 const synth = (local, tm) => {
     config_1.log(() => `synth ${syntax_1.showSurface(tm, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
     if (tm.tag === 'Type')
-        return domain_1.VType;
+        return [tm, domain_1.VType];
     if (tm.tag === 'Var') {
         const res = list_1.index(local.ts, tm.index);
         if (!res)
             return util_1.terr(`var out of scope ${syntax_1.showSurface(tm, local.names)}`);
-        return res[1];
+        return [tm, res[1]];
     }
     if (tm.tag === 'Global') {
         const entry = globalenv_1.globalGet(tm.name);
         if (!entry)
             return util_1.terr(`global ${tm.name} not found`);
-        return entry.type;
+        return [tm, entry.type];
     }
     if (tm.tag === 'Hole' && !tm.name) {
+        const t = newMeta(local.ts);
         const vt = domain_1.evaluate(newMeta(local.ts), local.vs);
-        return vt;
+        return [t, vt];
     }
     if (tm.tag === 'App') {
-        const fn = synth(local, tm.left);
-        const rt = synthapp(local, tm.left, fn, tm.plicity, tm.right);
-        return rt;
+        const [fntm, fn] = synth(local, tm.left);
+        const [argtm, rt] = synthapp(local, fntm, fn, tm.plicity, tm.right);
+        return [syntax_1.App(fntm, tm.plicity, argtm), rt];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
-            check(local, tm.type, domain_1.VType);
-            const vtype = domain_1.evaluate(tm.type, local.vs);
-            const rt = synth(extend(local, tm.name, vtype, true, domain_1.VVar(local.indexErased), tm.plicity), tm.body);
+            const type = check(local, tm.type, domain_1.VType);
+            const vtype = domain_1.evaluate(type, local.vs);
+            const [body, rt] = synth(extend(local, tm.name, vtype, true, domain_1.VVar(local.indexErased), tm.plicity), tm.body);
             if (tm.plicity && erasedUsed(0, tm.body))
                 return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
             // TODO: avoid quote here
             const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, tm.type, domain_1.quote(rt, local.indexErased + 1, false)), local.vs);
-            return pi;
+            return [syntax_1.Abs(tm.plicity, tm.name, type, body), pi];
         }
         else {
             const pi = freshPi(local.ts, local.vs, tm.name, tm.plicity);
-            check(local, tm, pi);
-            return pi;
+            const term = check(local, tm, pi);
+            return [term, pi];
         }
     }
     if (tm.tag === 'Let') {
-        const vty = synth(local, tm.val);
-        const rt = synth(extend(local, tm.name, vty, false, domain_1.evaluate(tm.val, local.vs), tm.plicity), tm.body);
+        const [valtm, vty] = synth(local, tm.val);
+        const [bodytm, rt] = synth(extend(local, tm.name, vty, false, domain_1.evaluate(valtm, local.vs), tm.plicity), tm.body);
         if (tm.plicity && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
-        return rt;
+        return [syntax_1.Let(tm.plicity, tm.name, valtm, bodytm), rt];
     }
     if (tm.tag === 'Pi') {
-        check(local, tm.type, domain_1.VType);
-        check(extend(local, tm.name, domain_1.evaluate(tm.type, local.vs), true, domain_1.VVar(local.indexErased), false), tm.body, domain_1.VType);
-        return domain_1.VType;
+        const type = check(local, tm.type, domain_1.VType);
+        const body = check(extend(local, tm.name, domain_1.evaluate(type, local.vs), true, domain_1.VVar(local.indexErased), false), tm.body, domain_1.VType);
+        return [syntax_1.Pi(tm.plicity, tm.name, type, body), domain_1.VType];
     }
     if (tm.tag === 'Ann') {
-        check(local, tm.type, domain_1.VType);
-        const vt = domain_1.evaluate(tm.type, local.vs);
-        check(local, tm.term, vt);
-        return vt;
+        const type = check(local, tm.type, domain_1.VType);
+        const vt = domain_1.evaluate(type, local.vs);
+        const term = check(local, tm.term, vt);
+        return [syntax_1.Ann(term, type), vt];
     }
     if (tm.tag === 'Fix') {
-        check(local, tm.type, domain_1.VType);
-        const vty = domain_1.evaluate(tm.type, local.vs);
+        const type = check(local, tm.type, domain_1.VType);
+        const vty = domain_1.evaluate(type, local.vs);
         const vfix = domain_1.evaluate(tm, local.vs);
         // TODO: is this correct?
-        check(extend(extend(local, tm.self, vfix, true, domain_1.VVar(local.indexErased), false), tm.name, vty, false, vfix, false), tm.body, vty);
-        return vty;
+        const body = check(extend(extend(local, tm.self, vfix, true, domain_1.VVar(local.indexErased), false), tm.name, vty, false, vfix, false), tm.body, vty);
+        return [syntax_1.Fix(tm.self, tm.name, type, body), vty];
     }
     if (tm.tag === 'Roll' && tm.type) {
-        check(local, tm.type, domain_1.VType);
+        const type = check(local, tm.type, domain_1.VType);
         const vt = domain_1.evaluate(tm.type, local.vs);
         const vtf = domain_1.force(vt);
         if (vtf.tag !== 'VFix')
             return util_1.terr(`fix type expected in ${syntax_1.showSurface(tm, local.names)}: ${domain_1.showTermU(vt, local.names, local.index)}`);
-        check(local, tm.term, vtf.body(domain_1.evaluate(tm, local.vs), vt));
-        return vt;
+        const term = check(local, tm.term, vtf.body(domain_1.evaluate(tm, local.vs), vt));
+        return [syntax_1.Roll(type, term), vt];
     }
     if (tm.tag === 'Unroll') {
-        const ty = synth(local, tm.term);
+        const [term, ty] = synth(local, tm.term);
         const vt = domain_1.force(ty);
         if (vt.tag !== 'VFix')
             return util_1.terr(`fix type expected in ${syntax_1.showSurface(tm, local.names)}: ${domain_1.showTermU(vt, local.names, local.index)}`);
-        return vt.body(domain_1.evaluate(tm.term, local.vs), ty);
+        return [syntax_1.Unroll(term), vt.body(domain_1.evaluate(term, local.vs), ty)];
     }
     return util_1.terr(`cannot synth ${syntax_1.showSurface(tm, local.names)}`);
 };
@@ -1255,9 +1260,9 @@ const synthapp = (local, fntm, ty_, plicity, arg) => {
     if (ty.tag === 'VFix')
         return synthapp(local, fntm, ty.body(domain_1.evaluate(fntm, local.vs), ty), plicity, arg);
     if (ty.tag === 'VPi' && ty.plicity === plicity) {
-        check(local, arg, ty.type);
-        const vm = domain_1.evaluate(arg, local.vs);
-        return ty.body(vm);
+        const argtm = check(local, arg, ty.type);
+        const vm = domain_1.evaluate(argtm, local.vs);
+        return [argtm, ty.body(vm)];
     }
     // TODO: fix the following
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
@@ -1270,10 +1275,10 @@ const synthapp = (local, fntm, ty_, plicity, arg) => {
     return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${syntax_1.showSurface(arg, local.names)}`);
 };
 exports.typecheck = (tm) => {
-    const ty = synth(localEmpty, tm);
+    const res = synth(localEmpty, tm);
     if (metas_1.metaUnsolved())
         return util_1.terr(`there are unsolved metas`);
-    return ty;
+    return res[1];
 };
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
     config_1.log(() => `typecheckDefs ${ds.map(x => x.name).join(' ')}`);
