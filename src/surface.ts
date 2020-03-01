@@ -1,7 +1,7 @@
 import { Name, Ix } from './names';
 
 export type Plicity = boolean;
-export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta;
+export type Term = Var | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Rigid;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -27,6 +27,8 @@ export type Hole = { tag: 'Hole', name: Name | null };
 export const Hole = (name: Name | null = null): Hole => ({ tag: 'Hole', name });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
+export type Rigid = { tag: 'Rigid', term: Term };
+export const Rigid = (term: Term): Rigid => ({ tag: 'Rigid', term });
 
 export const showTermS = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
@@ -42,6 +44,7 @@ export const showTermS = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTermS(t.term)} : ${showTermS(t.type)})`;
   if (t.tag === 'Hole') return `_${t.name || ''}`;
+  if (t.tag === 'Rigid') return `(rigid ${showTermS(t.term)})`;
   return t;
 };
 
@@ -78,10 +81,10 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
-    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'Fix' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll', f)} ${
+    return `${showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'Fix' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Rigid', f)} ${
       as.map(([im, t], i) =>
         im ? `{${showTerm(t)}}` :
-          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
+          `${showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Rigid' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
@@ -102,6 +105,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Roll')
     return !t.type ? `roll ${showTermP(t.term.tag !== 'Var', t.term)}` : `roll {${showTerm(t.type)}} ${showTermP(t.term.tag !== 'Var', t.term)}`;
   if (t.tag === 'Hole') return `_${t.name || ''}`;
+  if (t.tag === 'Rigid') return `rigid ${showTermP(t.term.tag !== 'Var' && t.term.tag !== 'Abs', t.term)}`;
   return t;
 };
 

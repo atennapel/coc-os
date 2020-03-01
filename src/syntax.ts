@@ -4,7 +4,7 @@ import * as S from './surface';
 import { List, lookup, Cons, Nil, indecesOf, index } from './utils/list';
 import { impossible } from './utils/util';
 
-export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta;
+export type Term = Var | Global | App | Abs | Let | Roll | Unroll | Pi | Fix | Type | Ann | Hole | Meta | Rigid;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -32,6 +32,8 @@ export type Hole = { tag: 'Hole', name: Name | null };
 export const Hole = (name: Name | null = null): Hole => ({ tag: 'Hole', name });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
+export type Rigid = { tag: 'Rigid', term: Term };
+export const Rigid = (term: Term): Rigid => ({ tag: 'Rigid', term });
 
 export const showTerm = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
@@ -48,6 +50,7 @@ export const showTerm = (t: Term): string => {
   if (t.tag === 'Type') return '*';
   if (t.tag === 'Ann') return `(${showTerm(t.term)} : ${showTerm(t.type)})`;
   if (t.tag === 'Hole') return `_${t.name || ''}`;
+  if (t.tag === 'Rigid') return `(rigid ${showTerm(t.term)})`;
   return t;
 };
 
@@ -67,6 +70,7 @@ export const toInternal = (t: S.Term, ns: List<[Name, Ix]> = Nil, k: Ix = 0): Te
   if (t.tag === 'Type') return Type;
   if (t.tag === 'Ann') return Ann(toInternal(t.term, ns, k), toInternal(t.type, ns, k));
   if (t.tag === 'Hole') return Hole(t.name);
+  if (t.tag === 'Rigid') return Rigid(toInternal(t.term, ns, k));
   return t;
 };
 
@@ -77,6 +81,7 @@ export const globalUsed = (k: Name, t: Term): boolean => {
   if (t.tag === 'Let') return globalUsed(k, t.val) || globalUsed(k, t.body);
   if (t.tag === 'Roll') return (t.type && globalUsed(k, t.type)) || globalUsed(k, t.term);
   if (t.tag === 'Unroll') return globalUsed(k, t.term);
+  if (t.tag === 'Rigid') return globalUsed(k, t.term);
   if (t.tag === 'Pi') return globalUsed(k, t.type) || globalUsed(k, t.body);
   if (t.tag === 'Fix') return globalUsed(k, t.type) || globalUsed(k, t.body);
   if (t.tag === 'Ann') return globalUsed(k, t.term) || globalUsed(k, t.type);
@@ -89,9 +94,25 @@ export const indexUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Let') return indexUsed(k, t.val) || indexUsed(k + 1, t.body);
   if (t.tag === 'Roll') return (t.type && indexUsed(k, t.type)) || indexUsed(k, t.term);
   if (t.tag === 'Unroll') return indexUsed(k, t.term);
+  if (t.tag === 'Rigid') return indexUsed(k, t.term);
   if (t.tag === 'Pi') return indexUsed(k, t.type) || indexUsed(k + 1, t.body);
   if (t.tag === 'Fix') return indexUsed(k, t.type) || indexUsed(k + 2, t.body);
   if (t.tag === 'Ann') return indexUsed(k, t.term) || indexUsed(k, t.type);
+  return false;
+};
+
+export const isUnsolved = (t: Term): boolean => {
+  if (t.tag === 'Meta') return true;
+  if (t.tag === 'Hole') return true;
+  if (t.tag === 'App') return isUnsolved(t.left) || isUnsolved(t.right);
+  if (t.tag === 'Abs') return (t.type && isUnsolved(t.type)) || isUnsolved(t.body);
+  if (t.tag === 'Let') return isUnsolved(t.val) || isUnsolved(t.body);
+  if (t.tag === 'Roll') return (t.type && isUnsolved(t.type)) || isUnsolved(t.term);
+  if (t.tag === 'Unroll') return isUnsolved(t.term);
+  if (t.tag === 'Rigid') return isUnsolved(t.term);
+  if (t.tag === 'Pi') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Fix') return isUnsolved(t.type) || isUnsolved(t.body);
+  if (t.tag === 'Ann') return isUnsolved(t.term) || isUnsolved(t.type);
   return false;
 };
 
@@ -113,6 +134,7 @@ export const toSurface = (t: Term, ns: List<Name> = Nil): S.Term => {
   if (t.tag === 'Ann') return S.Ann(toSurface(t.term, ns), toSurface(t.type, ns));
   if (t.tag === 'Roll') return S.Roll(t.type && toSurface(t.type, ns), toSurface(t.term, ns));
   if (t.tag === 'Unroll') return S.Unroll(toSurface(t.term, ns));
+  if (t.tag === 'Rigid') return S.Rigid(toSurface(t.term, ns));
   if (t.tag === 'Hole') return S.Hole(t.name);
   if (t.tag === 'Abs') {
     const x = decideName(t.name, t.body, ns);

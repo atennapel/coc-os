@@ -1,5 +1,5 @@
 import { serr, loadFile } from './utils/util';
-import { Term, Var, App, Type, Abs, Pi, Let, Ann, Fix, Roll, Unroll, Hole } from './surface';
+import { Term, Var, App, Type, Abs, Pi, Let, Ann, Fix, Roll, Unroll, Hole, Rigid } from './surface';
 import { Name } from './names';
 import { Def, DDef } from './surface';
 import { log } from './config';
@@ -212,6 +212,10 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       const body = exprs(ts.slice(1), '(');
       return Roll(null, body);
     }
+  }
+  if (isName(ts[0], 'rigid')) {
+    const body = exprs(ts.slice(1), '(');
+    return Rigid(body);
   }
   if (isName(ts[0], 'fix')) {
     const args = ts[1];

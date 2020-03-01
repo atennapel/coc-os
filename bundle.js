@@ -117,6 +117,8 @@ exports.evaluate = (t, vs) => {
         return exports.evaluate(t.term, vs);
     if (t.tag === 'Unroll')
         return exports.evaluate(t.term, vs);
+    if (t.tag === 'Rigid')
+        return exports.evaluate(t.term, vs);
     if (t.tag === 'Hole')
         return util_1.impossible(`cannot evaluate ${syntax_1.showTerm(t)}`);
     return t;
@@ -531,6 +533,10 @@ const exprs = (ts, br) => {
             return surface_1.Roll(null, body);
         }
     }
+    if (isName(ts[0], 'rigid')) {
+        const body = exprs(ts.slice(1), '(');
+        return surface_1.Rigid(body);
+    }
     if (isName(ts[0], 'fix')) {
         const args = ts[1];
         if (args.tag !== 'List' || args.bracket !== '(')
@@ -856,6 +862,7 @@ exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = (name = null) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
+exports.Rigid = (term) => ({ tag: 'Rigid', term });
 exports.showTermS = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -881,6 +888,8 @@ exports.showTermS = (t) => {
         return `(${exports.showTermS(t.term)} : ${exports.showTermS(t.type)})`;
     if (t.tag === 'Hole')
         return `_${t.name || ''}`;
+    if (t.tag === 'Rigid')
+        return `(rigid ${exports.showTermS(t.term)})`;
     return t;
 };
 exports.flattenApp = (t) => {
@@ -917,8 +926,8 @@ exports.showTerm = (t) => {
         return `?${t.index}`;
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
-        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'Fix' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll', f)} ${as.map(([im, t], i) => im ? `{${exports.showTerm(t)}}` :
-            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
+        return `${exports.showTermP(f.tag === 'Abs' || f.tag === 'Pi' || f.tag === 'Fix' || f.tag === 'App' || f.tag === 'Let' || f.tag === 'Ann' || f.tag === 'Roll' || f.tag === 'Rigid', f)} ${as.map(([im, t], i) => im ? `{${exports.showTerm(t)}}` :
+            `${exports.showTermP(t.tag === 'App' || t.tag === 'Ann' || t.tag === 'Let' || (t.tag === 'Abs' && i < as.length - 1) || t.tag === 'Pi' || t.tag === 'Rigid' || t.tag === 'Fix' || t.tag === 'Unroll' || t.tag === 'Roll', t)}`).join(' ')}`;
     }
     if (t.tag === 'Abs') {
         const [as, b] = exports.flattenAbs(t);
@@ -940,6 +949,8 @@ exports.showTerm = (t) => {
         return !t.type ? `roll ${exports.showTermP(t.term.tag !== 'Var', t.term)}` : `roll {${exports.showTerm(t.type)}} ${exports.showTermP(t.term.tag !== 'Var', t.term)}`;
     if (t.tag === 'Hole')
         return `_${t.name || ''}`;
+    if (t.tag === 'Rigid')
+        return `rigid ${exports.showTermP(t.term.tag !== 'Var' && t.term.tag !== 'Abs', t.term)}`;
     return t;
 };
 exports.DDef = (name, value) => ({ tag: 'DDef', name, value });
@@ -969,6 +980,7 @@ exports.Type = { tag: 'Type' };
 exports.Ann = (term, type) => ({ tag: 'Ann', term, type });
 exports.Hole = (name = null) => ({ tag: 'Hole', name });
 exports.Meta = (index) => ({ tag: 'Meta', index });
+exports.Rigid = (term) => ({ tag: 'Rigid', term });
 exports.showTerm = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -996,6 +1008,8 @@ exports.showTerm = (t) => {
         return `(${exports.showTerm(t.term)} : ${exports.showTerm(t.type)})`;
     if (t.tag === 'Hole')
         return `_${t.name || ''}`;
+    if (t.tag === 'Rigid')
+        return `(rigid ${exports.showTerm(t.term)})`;
     return t;
 };
 exports.toInternal = (t, ns = list_1.Nil, k = 0) => {
@@ -1025,6 +1039,8 @@ exports.toInternal = (t, ns = list_1.Nil, k = 0) => {
         return exports.Ann(exports.toInternal(t.term, ns, k), exports.toInternal(t.type, ns, k));
     if (t.tag === 'Hole')
         return exports.Hole(t.name);
+    if (t.tag === 'Rigid')
+        return exports.Rigid(exports.toInternal(t.term, ns, k));
     return t;
 };
 exports.globalUsed = (k, t) => {
@@ -1039,6 +1055,8 @@ exports.globalUsed = (k, t) => {
     if (t.tag === 'Roll')
         return (t.type && exports.globalUsed(k, t.type)) || exports.globalUsed(k, t.term);
     if (t.tag === 'Unroll')
+        return exports.globalUsed(k, t.term);
+    if (t.tag === 'Rigid')
         return exports.globalUsed(k, t.term);
     if (t.tag === 'Pi')
         return exports.globalUsed(k, t.type) || exports.globalUsed(k, t.body);
@@ -1061,12 +1079,39 @@ exports.indexUsed = (k, t) => {
         return (t.type && exports.indexUsed(k, t.type)) || exports.indexUsed(k, t.term);
     if (t.tag === 'Unroll')
         return exports.indexUsed(k, t.term);
+    if (t.tag === 'Rigid')
+        return exports.indexUsed(k, t.term);
     if (t.tag === 'Pi')
         return exports.indexUsed(k, t.type) || exports.indexUsed(k + 1, t.body);
     if (t.tag === 'Fix')
         return exports.indexUsed(k, t.type) || exports.indexUsed(k + 2, t.body);
     if (t.tag === 'Ann')
         return exports.indexUsed(k, t.term) || exports.indexUsed(k, t.type);
+    return false;
+};
+exports.isUnsolved = (t) => {
+    if (t.tag === 'Meta')
+        return true;
+    if (t.tag === 'Hole')
+        return true;
+    if (t.tag === 'App')
+        return exports.isUnsolved(t.left) || exports.isUnsolved(t.right);
+    if (t.tag === 'Abs')
+        return (t.type && exports.isUnsolved(t.type)) || exports.isUnsolved(t.body);
+    if (t.tag === 'Let')
+        return exports.isUnsolved(t.val) || exports.isUnsolved(t.body);
+    if (t.tag === 'Roll')
+        return (t.type && exports.isUnsolved(t.type)) || exports.isUnsolved(t.term);
+    if (t.tag === 'Unroll')
+        return exports.isUnsolved(t.term);
+    if (t.tag === 'Rigid')
+        return exports.isUnsolved(t.term);
+    if (t.tag === 'Pi')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
+    if (t.tag === 'Fix')
+        return exports.isUnsolved(t.type) || exports.isUnsolved(t.body);
+    if (t.tag === 'Ann')
+        return exports.isUnsolved(t.term) || exports.isUnsolved(t.type);
     return false;
 };
 const decideName = (x, t, ns) => {
@@ -1095,6 +1140,8 @@ exports.toSurface = (t, ns = list_1.Nil) => {
         return S.Roll(t.type && exports.toSurface(t.type, ns), exports.toSurface(t.term, ns));
     if (t.tag === 'Unroll')
         return S.Unroll(exports.toSurface(t.term, ns));
+    if (t.tag === 'Rigid')
+        return S.Rigid(exports.toSurface(t.term, ns));
     if (t.tag === 'Hole')
         return S.Hole(t.name);
     if (t.tag === 'Abs') {
@@ -1153,6 +1200,12 @@ const erasedUsed = (k, t) => {
         return erasedUsed(k + 1, t.body) || (!t.plicity && erasedUsed(k, t.val));
     if (t.tag === 'Ann')
         return erasedUsed(k, t.term);
+    if (t.tag === 'Rigid')
+        return erasedUsed(k, t.term);
+    if (t.tag === 'Roll')
+        return erasedUsed(k, t.term);
+    if (t.tag === 'Unroll')
+        return erasedUsed(k, t.term);
     return false;
 };
 const newMeta = (ts) => {
@@ -1209,6 +1262,11 @@ const check = (local, tm, ty) => {
     if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
         const term = check(local, tm, tyf.body(domain_1.evaluate(tm, local.vs), ty));
         return syntax_1.Roll(domain_1.quote(ty, local.index, false), term);
+    }
+    if (tm.tag === 'Rigid') {
+        const [term, ty2] = synth(local, tm);
+        unify_1.unify(local.index, ty2, ty);
+        return term;
     }
     const [term, ty2] = synth(local, tm);
     try {
@@ -1339,6 +1397,8 @@ const synth = (local, tm) => {
             return util_1.terr(`fix type expected in ${syntax_1.showSurface(tm, local.names)}: ${domain_1.showTermU(vt, local.names, local.index)}`);
         return [syntax_1.Unroll(term), vt.body(domain_1.evaluate(term, local.vs), ty)];
     }
+    if (tm.tag === 'Rigid')
+        return synth(local, tm.term);
     return util_1.terr(`cannot synth ${syntax_1.showSurface(tm, local.names)}`);
 };
 const synthapp = (local, fntm, ty_, plicity, arg) => {
@@ -1399,8 +1459,9 @@ exports.typecheck = (tm_) => {
         }).join('\n');
         return util_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
     }
-    if (metas_1.metaUnsolved())
-        return util_1.terr(`there are unsolved metas: ${syntax_1.showSurface(ztm)} : ${domain_1.showTermU(ty)}`);
+    const tyq = domain_1.zonk(domain_1.quote(ty, 0, false));
+    if (syntax_1.isUnsolved(ztm) || syntax_1.isUnsolved(tyq))
+        return util_1.terr(`there are unsolved metas: ${syntax_1.showSurface(ztm)} : ${syntax_1.showSurface(tyq)}`);
     return [ztm, ty];
 };
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
@@ -1418,8 +1479,8 @@ exports.typecheckDefs = (ds, allowRedefinition = false) => {
         config_1.log(() => `typecheckDefs ${definitions_1.showDef(d)}`);
         if (d.tag === 'DDef') {
             const [tm, ty] = exports.typecheck(d.value);
-            config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(d.value)}`);
-            globalenv_1.globalSet(d.name, d.value, domain_1.evaluate(tm, list_1.Nil), ty);
+            config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(tm)}`);
+            globalenv_1.globalSet(d.name, tm, domain_1.evaluate(tm, list_1.Nil), ty);
             xs.push(d.name);
         }
     }

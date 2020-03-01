@@ -1,4 +1,4 @@
-import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Abs, Fix } from './syntax';
+import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Abs, Fix, isUnsolved } from './syntax';
 import { Ix, Name } from './names';
 import { List, Cons, listToString, Nil, index, filter, mapIndex, foldr, zipWith, toArray, foldl } from './utils/list';
 import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe, HMeta, zonk, showTermUZ } from './domain';
@@ -8,7 +8,7 @@ import { Def, showDef } from './definitions';
 import { globalGet, globalSet } from './globalenv';
 import { unify } from './unify';
 import { Plicity } from './surface';
-import { freshMeta, freshMetaId, metaUnsolved, metaPush, metaDiscard, metaPop } from './metas';
+import { freshMeta, freshMetaId, metaPush, metaDiscard, metaPop } from './metas';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -39,6 +39,9 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'Abs') return erasedUsed(k + 1, t.body);
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity && erasedUsed(k, t.val));
   if (t.tag === 'Ann') return erasedUsed(k, t.term);
+  if (t.tag === 'Rigid') return erasedUsed(k, t.term);
+  if (t.tag === 'Roll') return erasedUsed(k, t.term);
+  if (t.tag === 'Unroll') return erasedUsed(k, t.term);
   return false;
 };
 
@@ -96,6 +99,11 @@ const check = (local: Local, tm: Term, ty: Val): Term => {
   if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
     const term = check(local, tm, tyf.body(evaluate(tm, local.vs), ty));
     return Roll(quote(ty, local.index, false), term);
+  }
+  if (tm.tag === 'Rigid') {
+    const [term, ty2] = synth(local, tm);
+    unify(local.index, ty2, ty);
+    return term;
   }
   const [term, ty2] = synth(local, tm);
   try {
@@ -224,6 +232,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
       return terr(`fix type expected in ${showSurface(tm, local.names)}: ${showTermU(vt, local.names, local.index)}`);
     return [Unroll(term), vt.body(evaluate(term, local.vs), ty)];
   }
+  if (tm.tag === 'Rigid') return synth(local, tm.term);
   return terr(`cannot synth ${showSurface(tm, local.names)}`);
 };
 
@@ -285,8 +294,9 @@ export const typecheck = (tm_: Term): [Term, Val] => {
     }).join('\n');
     return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
   }
-  if (metaUnsolved())
-    return terr(`there are unsolved metas: ${showSurface(ztm)} : ${showTermU(ty)}`);
+  const tyq = zonk(quote(ty, 0, false));
+  if (isUnsolved(ztm) || isUnsolved(tyq))
+    return terr(`there are unsolved metas: ${showSurface(ztm)} : ${showSurface(tyq)}`);
   return [ztm, ty];
 };
 
@@ -305,8 +315,8 @@ export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Na
     log(() => `typecheckDefs ${showDef(d)}`);
     if (d.tag === 'DDef') {
       const [tm, ty] = typecheck(d.value);
-      log(() => `set ${d.name} = ${showTerm(d.value)}`);
-      globalSet(d.name, d.value, evaluate(tm, Nil), ty);
+      log(() => `set ${d.name} = ${showTerm(tm)}`);
+      globalSet(d.name, tm, evaluate(tm, Nil), ty);
       xs.push(d.name);
     }
   }

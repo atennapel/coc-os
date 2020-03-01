@@ -99,6 +99,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Ann') return evaluate(t.term, vs);
   if (t.tag === 'Roll') return evaluate(t.term, vs);
   if (t.tag === 'Unroll') return evaluate(t.term, vs);
+  if (t.tag === 'Rigid') return evaluate(t.term, vs);
   if (t.tag === 'Hole') return impossible(`cannot evaluate ${showTerm(t)}`);
   return t;
 };
