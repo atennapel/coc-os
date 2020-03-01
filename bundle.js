@@ -193,7 +193,7 @@ const zonkSpine = (tm, vs, k, full) => {
 exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
     if (tm.tag === 'Meta') {
         const s = metas_1.metaGet(tm.index);
-        return s.tag === 'Solved' ? exports.quote(s.val, k, full) : tm;
+        return s.tag === 'Solved' ? exports.zonk(exports.quote(s.val, k, full), vs, k, full) : tm;
     }
     if (tm.tag === 'Pi')
         return syntax_1.Pi(tm.plicity, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, exports.extendV(vs, exports.VVar(k)), k + 1, full));

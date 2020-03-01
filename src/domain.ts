@@ -176,7 +176,7 @@ const zonkSpine = (tm: Term, vs: EnvV, k: Ix, full: boolean): S => {
 export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term => {
   if (tm.tag === 'Meta') {
     const s = metaGet(tm.index);
-    return s.tag === 'Solved' ? quote(s.val, k, full) : tm;
+    return s.tag === 'Solved' ? zonk(quote(s.val, k, full), vs, k, full) : tm;
   }
   if (tm.tag === 'Pi')
     return Pi(tm.plicity, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, extendV(vs, VVar(k)), k + 1, full));
