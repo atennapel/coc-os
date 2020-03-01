@@ -9,6 +9,7 @@ import { globalGet, globalSet } from './globalenv';
 import { unify } from './unify';
 import { Plicity } from './surface';
 import { freshMeta, freshMetaId, metaPush, metaDiscard, metaPop } from './metas';
+import { VType as CVType } from './core/domain';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -306,7 +307,7 @@ export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Na
   if (!allowRedefinition) {
     for (let i = 0; i < ds.length; i++) {
       const d = ds[i];
-      if (d.tag === 'DDef'&& globalGet(d.name))
+      if (d.tag === 'DDef' && globalGet(d.name))
         return terr(`cannot redefine global ${d.name}`);
     }
   }
@@ -316,7 +317,8 @@ export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Na
     if (d.tag === 'DDef') {
       const [tm, ty] = typecheck(d.value);
       log(() => `set ${d.name} = ${showTerm(tm)}`);
-      globalSet(d.name, tm, evaluate(tm, Nil), ty);
+      // TODO: core val and type
+      globalSet(d.name, tm, evaluate(tm, Nil), ty, CVType, CVType);
       xs.push(d.name);
     }
   }

@@ -17,5 +17,8 @@ yarn start lib/nat.p
 
 ```
 TODO:
-- implement core language
+- fix core
+- synthapp should insert unroll (for core)
+- recheck in core
+- fix core typechecking (abs without type)
 ```
