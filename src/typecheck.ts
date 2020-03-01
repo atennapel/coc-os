@@ -1,4 +1,4 @@
-import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Ann, Abs, Fix } from './syntax';
+import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Abs, Fix } from './syntax';
 import { Ix, Name } from './names';
 import { List, Cons, listToString, Nil, index, filter, mapIndex, foldr, zipWith, toArray, foldl } from './utils/list';
 import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe, HMeta, zonk, showTermUZ } from './domain';
@@ -75,12 +75,12 @@ const check = (local: Local, tm: Term, ty: Val): Term => {
     const body = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));
     if (tm.plicity && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showSurface(tm, local.names)}`);
-    return Abs(tm.plicity, tm.name, quote(tyf.type, local.indexErased, false), body);
+    return Abs(tm.plicity, tm.name, quote(tyf.type, local.index, false), body);
   }
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
     const v = VVar(local.index);
     const term = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
-    return Abs(tyf.plicity, tyf.name, quote(tyf.type, local.indexErased, false), term);
+    return Abs(tyf.plicity, tyf.name, quote(tyf.type, local.index, false), term);
   }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(local, tm.val);
@@ -91,11 +91,11 @@ const check = (local: Local, tm: Term, ty: Val): Term => {
   }
   if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
     const term = check(local, tm.term, tyf.body(evaluate(tm, local.vs), ty));
-    return Roll(quote(ty, local.indexErased, false), term);
+    return Roll(quote(ty, local.index, false), term);
   }
   if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
     const term = check(local, tm, tyf.body(evaluate(tm, local.vs), ty));
-    return Roll(quote(ty, local.indexErased, false), term);
+    return Roll(quote(ty, local.index, false), term);
   }
   const [term, ty2] = synth(local, tm);
   try {
@@ -169,7 +169,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
       if (tm.plicity && erasedUsed(0, tm.body))
         return terr(`erased argument used in ${showSurface(tm, local.names)}`);
       // TODO: avoid quote here
-      const pi = evaluate(Pi(tm.plicity, tm.name, tm.type, quote(rt, local.indexErased + 1, false)), local.vs);
+      const pi = evaluate(Pi(tm.plicity, tm.name, tm.type, quote(rt, local.index + 1, false)), local.vs);
       return [Abs(tm.plicity, tm.name, type, body), pi];
     } else {
       const pi = freshPi(local.ts, local.vs, tm.name, tm.plicity);
@@ -193,7 +193,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
     const type = check(local, tm.type, VType);
     const vt = evaluate(type, local.vs);
     const term = check(local, tm.term, vt);
-    return [Ann(term, type), vt];
+    return [term, vt];
   }
   if (tm.tag === 'Fix') {
     const type = check(local, tm.type, VType);

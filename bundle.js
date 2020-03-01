@@ -1188,12 +1188,12 @@ const check = (local, tm, ty) => {
         const body = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));
         if (tm.plicity && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
-        return syntax_1.Abs(tm.plicity, tm.name, domain_1.quote(tyf.type, local.indexErased, false), body);
+        return syntax_1.Abs(tm.plicity, tm.name, domain_1.quote(tyf.type, local.index, false), body);
     }
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
         const v = domain_1.VVar(local.index);
         const term = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
-        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, local.indexErased, false), term);
+        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, local.index, false), term);
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(local, tm.val);
@@ -1204,11 +1204,11 @@ const check = (local, tm, ty) => {
     }
     if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
         const term = check(local, tm.term, tyf.body(domain_1.evaluate(tm, local.vs), ty));
-        return syntax_1.Roll(domain_1.quote(ty, local.indexErased, false), term);
+        return syntax_1.Roll(domain_1.quote(ty, local.index, false), term);
     }
     if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
         const term = check(local, tm, tyf.body(domain_1.evaluate(tm, local.vs), ty));
-        return syntax_1.Roll(domain_1.quote(ty, local.indexErased, false), term);
+        return syntax_1.Roll(domain_1.quote(ty, local.index, false), term);
     }
     const [term, ty2] = synth(local, tm);
     try {
@@ -1288,7 +1288,7 @@ const synth = (local, tm) => {
             if (tm.plicity && erasedUsed(0, tm.body))
                 return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
             // TODO: avoid quote here
-            const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, tm.type, domain_1.quote(rt, local.indexErased + 1, false)), local.vs);
+            const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, tm.type, domain_1.quote(rt, local.index + 1, false)), local.vs);
             return [syntax_1.Abs(tm.plicity, tm.name, type, body), pi];
         }
         else {
@@ -1313,7 +1313,7 @@ const synth = (local, tm) => {
         const type = check(local, tm.type, domain_1.VType);
         const vt = domain_1.evaluate(type, local.vs);
         const term = check(local, tm.term, vt);
-        return [syntax_1.Ann(term, type), vt];
+        return [term, vt];
     }
     if (tm.tag === 'Fix') {
         const type = check(local, tm.type, domain_1.VType);
