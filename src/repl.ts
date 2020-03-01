@@ -7,7 +7,7 @@ import { globalReset, globalMap, globalDelete, globalGet } from './globalenv';
 import { toInternalDefs } from './definitions';
 import { typecheckDefs, typecheck } from './typecheck';
 import { showTermUZ, normalize } from './domain';
-import { showSurface, toInternal } from './syntax';
+import { showSurface, toInternal, Term } from './syntax';
 
 const help = `
 EXAMPLES
@@ -101,15 +101,16 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       typeOnly = true;
     } else if (_s.startsWith(':')) return _cb('invalid command', true);
     let msg = '';
-    let tm_;
+    let tm_: Term;
     try {
       const t = parse(_s);
       log(() => showTerm(t));
       const tt = toInternal(t);
-      const vty = typecheck(tt);
-      tm_ = tt;
+      const [ztm, vty] = typecheck(tt);
+      tm_ = ztm;
       log(() => showTermUZ(vty));
       log(() => showSurface(tt));
+      log(() => showSurface(tm_));
       msg += `type: ${showTermUZ(vty)}\nterm: ${showSurface(tm_)}`;
       if (typeOnly) return _cb(msg);
     } catch (err) {

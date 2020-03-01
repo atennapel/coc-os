@@ -811,10 +811,11 @@ exports.runREPL = (_s, _cb) => {
             const t = parser_1.parse(_s);
             config_1.log(() => surface_1.showTerm(t));
             const tt = syntax_1.toInternal(t);
-            const vty = typecheck_1.typecheck(tt);
-            tm_ = tt;
+            const [ztm, vty] = typecheck_1.typecheck(tt);
+            tm_ = ztm;
             config_1.log(() => domain_1.showTermUZ(vty));
             config_1.log(() => syntax_1.showSurface(tt));
+            config_1.log(() => syntax_1.showSurface(tm_));
             msg += `type: ${domain_1.showTermUZ(vty)}\nterm: ${syntax_1.showSurface(tm_)}`;
             if (typeOnly)
                 return _cb(msg);
@@ -1173,10 +1174,13 @@ const check = (local, tm, ty) => {
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return tm;
     const tyf = domain_1.force(ty);
-    if (tm.tag === 'Hole' && tm.name) {
-        if (tm.name)
-            return util_1.terr(`found hole ${syntax_1.showTerm(tm)}, expected type ${domain_1.showTermU(ty, local.names, local.index)}, forced: ${domain_1.showTermU(tyf, local.names, local.index)}`);
+    if (tm.tag === 'Hole') {
         const x = newMeta(local.ts);
+        if (tm.name) {
+            if (holes[tm.name])
+                return util_1.terr(`named hole used more than once: _${tm.name}`);
+            holes[tm.name] = [domain_1.evaluate(x, local.vs), ty, local];
+        }
         return x;
     }
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && tm.plicity === tyf.plicity) {
@@ -1210,8 +1214,10 @@ const check = (local, tm, ty) => {
     try {
         config_1.log(() => `unify ${domain_1.showTermU(ty2, local.names, local.index)} ~ ${domain_1.showTermU(ty, local.names, local.index)}`);
         metas_1.metaPush();
+        holesPush();
         unify_1.unify(local.index, ty2, ty);
         metas_1.metaDiscard();
+        holesDiscard();
         return term;
     }
     catch (err) {
@@ -1219,16 +1225,20 @@ const check = (local, tm, ty) => {
             throw err;
         try {
             metas_1.metaPop();
+            holesPop();
             metas_1.metaPush();
+            holesPush();
             const ty2inst = inst(local.ts, local.vs, ty2);
             unify_1.unify(local.index, ty2inst, ty);
             metas_1.metaDiscard();
+            holesDiscard();
             return term;
         }
         catch {
             if (!(err instanceof TypeError))
                 throw err;
             metas_1.metaPop();
+            holesPop();
             return util_1.terr(`failed to unify ${domain_1.showTermU(ty2, local.names, local.index)} ~ ${domain_1.showTermU(ty, local.names, local.index)}: ${err.message}`);
         }
     }
@@ -1258,6 +1268,11 @@ const synth = (local, tm) => {
     if (tm.tag === 'Hole' && !tm.name) {
         const t = newMeta(local.ts);
         const vt = domain_1.evaluate(newMeta(local.ts), local.vs);
+        if (tm.name) {
+            if (holes[tm.name])
+                return util_1.terr(`named hole used more than once: _${tm.name}`);
+            holes[tm.name] = [domain_1.evaluate(t, local.vs), vt, local];
+        }
         return [t, vt];
     }
     if (tm.tag === 'App') {
@@ -1354,11 +1369,39 @@ const synthapp = (local, fntm, ty_, plicity, arg) => {
     }
     return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${syntax_1.showSurface(arg, local.names)}`);
 };
-exports.typecheck = (tm) => {
-    const res = synth(localEmpty, tm);
+let holesStack = [];
+let holes = {};
+const holesPush = () => {
+    const old = holes;
+    holesStack.push(holes);
+    holes = {};
+    for (let k in old)
+        holes[k] = old[k];
+};
+const holesPop = () => {
+    const x = holesStack.pop();
+    if (!x)
+        return;
+    holes = x;
+};
+const holesDiscard = () => { holesStack.pop(); };
+exports.typecheck = (tm_) => {
+    const [tm, ty] = synth(localEmpty, tm_);
+    const ztm = domain_1.zonk(tm);
+    const holeprops = Object.entries(holes);
+    if (holeprops.length > 0) {
+        const strtype = domain_1.showTermUZ(ty);
+        const strterm = syntax_1.showSurface(ztm);
+        const str = holeprops.map(([x, [t, v, local]]) => {
+            const all = list_1.zipWith(([x, v], [def, ty]) => [x, v, def, ty], list_1.zipWith((x, v) => [x, v], local.names, local.vs), local.ts);
+            const allstr = list_1.toArray(all, ([x, v, b, t]) => `${x} : ${domain_1.showTermUZ(t, local.names, local.vs, local.index)}${b ? '' : ` = ${domain_1.showTermUZ(v, local.names, local.vs, local.index)}`}`).join('\n');
+            return `\n_${x} : ${domain_1.showTermUZ(v, local.names, local.vs, local.index)} = ${domain_1.showTermUZ(t, local.names, local.vs, local.index)}\nlocal:\n${allstr}\n`;
+        }).join('\n');
+        return util_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
+    }
     if (metas_1.metaUnsolved())
-        return util_1.terr(`there are unsolved metas`);
-    return res[1];
+        return util_1.terr(`there are unsolved metas: ${syntax_1.showSurface(ztm)} : ${domain_1.showTermU(ty)}`);
+    return [ztm, ty];
 };
 exports.typecheckDefs = (ds, allowRedefinition = false) => {
     config_1.log(() => `typecheckDefs ${ds.map(x => x.name).join(' ')}`);
@@ -1374,9 +1417,9 @@ exports.typecheckDefs = (ds, allowRedefinition = false) => {
         const d = ds[i];
         config_1.log(() => `typecheckDefs ${definitions_1.showDef(d)}`);
         if (d.tag === 'DDef') {
-            const ty = exports.typecheck(d.value);
+            const [tm, ty] = exports.typecheck(d.value);
             config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(d.value)}`);
-            globalenv_1.globalSet(d.name, d.value, domain_1.evaluate(d.value, list_1.Nil), ty);
+            globalenv_1.globalSet(d.name, d.value, domain_1.evaluate(tm, list_1.Nil), ty);
             xs.push(d.name);
         }
     }
