@@ -1164,10 +1164,10 @@ const inst = (ts, vs, ty_) => {
     if (ty.tag === 'VPi' && ty.plicity) {
         const m = newMeta(ts);
         const vm = domain_1.evaluate(m, vs);
-        const res = inst(ts, vs, ty.body(vm));
-        return res;
+        const [res, args] = inst(ts, vs, ty.body(vm));
+        return [res, list_1.Cons(m, args)];
     }
-    return ty;
+    return [ty, list_1.Nil];
 };
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${syntax_1.showSurface(tm, local.names)} : ${domain_1.showTermU(ty, local.names, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
@@ -1188,12 +1188,12 @@ const check = (local, tm, ty) => {
         const body = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));
         if (tm.plicity && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
-        return syntax_1.Abs(tm.plicity, tm.name, null, body);
+        return syntax_1.Abs(tm.plicity, tm.name, domain_1.quote(tyf.type, local.indexErased, false), body);
     }
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
         const v = domain_1.VVar(local.index);
         const term = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
-        return term;
+        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, local.indexErased, false), term);
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(local, tm.val);
@@ -1204,11 +1204,11 @@ const check = (local, tm, ty) => {
     }
     if (tm.tag === 'Roll' && !tm.type && tyf.tag === 'VFix') {
         const term = check(local, tm.term, tyf.body(domain_1.evaluate(tm, local.vs), ty));
-        return syntax_1.Roll(null, term);
+        return syntax_1.Roll(domain_1.quote(ty, local.indexErased, false), term);
     }
     if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
         const term = check(local, tm, tyf.body(domain_1.evaluate(tm, local.vs), ty));
-        return term;
+        return syntax_1.Roll(domain_1.quote(ty, local.indexErased, false), term);
     }
     const [term, ty2] = synth(local, tm);
     try {
@@ -1228,11 +1228,11 @@ const check = (local, tm, ty) => {
             holesPop();
             metas_1.metaPush();
             holesPush();
-            const ty2inst = inst(local.ts, local.vs, ty2);
+            const [ty2inst, ms] = inst(local.ts, local.vs, ty2);
             unify_1.unify(local.index, ty2inst, ty);
             metas_1.metaDiscard();
             holesDiscard();
-            return term;
+            return list_1.foldl((a, m) => syntax_1.App(a, true, m), term, ms);
         }
         catch {
             if (!(err instanceof TypeError))
@@ -1277,8 +1277,8 @@ const synth = (local, tm) => {
     }
     if (tm.tag === 'App') {
         const [fntm, fn] = synth(local, tm.left);
-        const [argtm, rt] = synthapp(local, fntm, fn, tm.plicity, tm.right);
-        return [syntax_1.App(fntm, tm.plicity, argtm), rt];
+        const [argtm, rt, ms] = synthapp(local, fntm, fn, tm.plicity, tm.right);
+        return [syntax_1.App(list_1.foldl((f, a) => syntax_1.App(f, true, a), fntm, ms), tm.plicity, argtm), rt];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
@@ -1349,15 +1349,15 @@ const synthapp = (local, fntm, ty_, plicity, arg) => {
     if (ty.tag === 'VPi' && ty.plicity === plicity) {
         const argtm = check(local, arg, ty.type);
         const vm = domain_1.evaluate(argtm, local.vs);
-        return [argtm, ty.body(vm)];
+        return [argtm, ty.body(vm), list_1.Nil];
     }
     if (ty.tag === 'VPi' && ty.plicity && !plicity) {
         // {a} -> b @ c (instantiate with meta then b @ c)
         const m = newMeta(local.ts);
         const vm = domain_1.evaluate(m, local.vs);
         // TODO: fntm should probably be updated?
-        const [argtm, rt] = synthapp(local, fntm, ty.body(vm), plicity, arg);
-        return [argtm, rt];
+        const [argtm, rt, l] = synthapp(local, fntm, ty.body(vm), plicity, arg);
+        return [argtm, rt, list_1.Cons(m, l)];
     }
     // TODO: fix the following
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
