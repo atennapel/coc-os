@@ -39,6 +39,30 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
 
 const check = (local: Local, tm: Term, ty: Val): void => {
   log(() => `check ${showTerm(tm)} : ${showTermQ(ty, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
+  const tyf = force(ty);
+  if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && tm.plicity === tyf.plicity) {
+    const v = VVar(local.index);
+    check(extend(local, tyf.type, true, v, tyf.plicity), tm.body, tyf.body(v));
+    if (tm.plicity && erasedUsed(0, tm.body))
+      return terr(`erased argument used in ${showTerm(tm)}`);
+    return;
+  }
+  if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
+    const v = VVar(local.index);
+    check(extend(local, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
+    return;
+  }
+  if (tm.tag === 'Let') {
+    const vty = synth(local, tm.val);
+    check(extend(local, vty, false, evaluate(tm.val, local.vs), tm.plicity), tm.body, ty);
+    if (tm.plicity && erasedUsed(0, tm.body))
+      return terr(`erased argument used in ${showTerm(tm)}`);
+    return;
+  }
+  if (tyf.tag === 'VFix' && tm.tag === 'Abs') {
+    check(local, tm, tyf.body(evaluate(tm, local.vs), ty));
+    return;
+  }
   const ty2 = synth(local, tm);
   try {
     log(() => `unify ${showTermQ(ty2, local.index)} ~ ${showTermQ(ty, local.index)}`);
@@ -65,7 +89,7 @@ const synth = (local: Local, tm: Term): Val => {
   }
   if (tm.tag === 'App') {
     const fn = synth(local, tm.left);
-    const rt = synthapp(local, fn, tm.plicity, tm.right);
+    const rt = synthapp(local, tm.left, fn, tm.plicity, tm.right);
     return rt;
   }
   if (tm.tag === 'Abs' && tm.type) {
@@ -122,9 +146,10 @@ const synth = (local: Local, tm: Term): Val => {
   return terr(`cannot synth ${showTerm(tm)}`);
 };
 
-const synthapp = (local: Local, ty_: Val, plicity: Plicity, arg: Term): Val => {
+const synthapp = (local: Local, fn: Term, ty_: Val, plicity: Plicity, arg: Term): Val => {
   const ty = force(ty_);
   log(() => `synthapp ${showTermQ(ty, local.index)} ${plicity ? '-' : ''}@ ${showTerm(arg)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
+  if (ty.tag === 'VFix') return synthapp(local, fn, ty.body(evaluate(fn, local.vs), ty_), plicity, arg);
   if (ty.tag === 'VPi' && ty.plicity === plicity) {
     check(local, arg, ty.type);
     const vm = evaluate(arg, local.vs);
