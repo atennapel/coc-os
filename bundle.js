@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.config = {
     debug: false,
+    checkCore: false,
 };
 exports.setConfig = (c) => {
     for (let k in c)
@@ -1117,6 +1118,7 @@ zero = \\{t} z s. z : {t : *} -> t -> (t -> t) -> t
 COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
+[:checkcore] toggle rechecking of core terms
 [:def definitions] define names
 [:defs] show all defs
 [:import files] import a file
@@ -1147,6 +1149,10 @@ exports.runREPL = (_s, _cb) => {
         if (_s === ':debug' || _s === ':d') {
             config_1.setConfig({ debug: !config_1.config.debug });
             return _cb(`debug: ${config_1.config.debug}`);
+        }
+        if (_s === ':checkcore' || _s === ':checkCore') {
+            config_1.setConfig({ checkCore: !config_1.config.checkCore });
+            return _cb(`checkCore: ${config_1.config.checkCore}`);
         }
         if (_s === ':defs') {
             const e = globalenv_1.globalMap();
@@ -1628,6 +1634,7 @@ const unify_1 = require("./unify");
 const metas_1 = require("./metas");
 const domain_2 = require("./core/domain");
 const syntax_2 = require("./core/syntax");
+const typecheck_1 = require("./core/typecheck");
 const extendT = (ts, val, bound) => list_1.Cons([bound, val], ts);
 const showEnvT = (ts, k = 0, full = false) => list_1.listToString(ts, ([b, v]) => `${b ? '' : 'def '}${domain_1.showTermQ(v, k, full)}`);
 const localEmpty = { names: list_1.Nil, namesErased: list_1.Nil, ts: list_1.Nil, vs: list_1.Nil, index: 0, indexErased: 0 };
@@ -1932,14 +1939,22 @@ exports.typecheckDefs = (ds, allowRedefinition = false) => {
             config_1.log(() => `set ${d.name} = ${syntax_1.showTerm(tm)}`);
             const zty = domain_1.zonk(domain_1.quote(ty, 0, false));
             const ctm = syntax_2.toCore(tm);
-            globalenv_1.globalSet(d.name, tm, domain_1.evaluate(tm, list_1.Nil), ty, ctm, domain_2.evaluate(ctm, list_1.Nil), domain_2.evaluate(syntax_2.toCore(zty), list_1.Nil));
+            if (config_1.config.checkCore) {
+                config_1.log(() => `typecheck in core: ${syntax_2.showTerm(ctm)}`);
+                const cty = typecheck_1.typecheck(ctm);
+                config_1.log(() => `core type: ${syntax_2.showTerm(domain_2.quote(cty, 0, false))}`);
+                globalenv_1.globalSet(d.name, tm, domain_1.evaluate(tm, list_1.Nil), ty, ctm, domain_2.evaluate(ctm, list_1.Nil), cty);
+            }
+            else {
+                globalenv_1.globalSet(d.name, tm, domain_1.evaluate(tm, list_1.Nil), ty, ctm, domain_2.evaluate(ctm, list_1.Nil), domain_2.evaluate(syntax_2.toCore(zty), list_1.Nil));
+            }
             xs.push(d.name);
         }
     }
     return xs;
 };
 
-},{"./config":1,"./core/domain":2,"./core/syntax":3,"./definitions":6,"./domain":7,"./globalenv":8,"./metas":9,"./syntax":14,"./unify":16,"./utils/list":18,"./utils/util":19}],16:[function(require,module,exports){
+},{"./config":1,"./core/domain":2,"./core/syntax":3,"./core/typecheck":4,"./definitions":6,"./domain":7,"./globalenv":8,"./metas":9,"./syntax":14,"./unify":16,"./utils/list":18,"./utils/util":19}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const domain_1 = require("./domain");

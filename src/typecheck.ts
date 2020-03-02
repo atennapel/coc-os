@@ -2,15 +2,16 @@ import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Abs, Fix,
 import { Ix, Name } from './names';
 import { List, Cons, listToString, Nil, index, filter, mapIndex, foldr, zipWith, toArray, foldl } from './utils/list';
 import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe, HMeta, zonk, showTermUZ } from './domain';
-import { log } from './config';
+import { log, config } from './config';
 import { terr } from './utils/util';
 import { Def, showDef } from './definitions';
 import { globalGet, globalSet } from './globalenv';
 import { unify } from './unify';
 import { Plicity } from './surface';
 import { freshMeta, freshMetaId, metaPush, metaDiscard, metaPop } from './metas';
-import { evaluate as evaluateC } from './core/domain';
-import { toCore } from './core/syntax';
+import { evaluate as evaluateC, quote as quoteC } from './core/domain';
+import { toCore, showTerm as showTermC } from './core/syntax';
+import { typecheck as typecheckC } from './core/typecheck';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -320,7 +321,14 @@ export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Na
       log(() => `set ${d.name} = ${showTerm(tm)}`);
       const zty = zonk(quote(ty, 0, false));
       const ctm = toCore(tm);
-      globalSet(d.name, tm, evaluate(tm, Nil), ty, ctm, evaluateC(ctm, Nil), evaluateC(toCore(zty), Nil));
+      if (config.checkCore) {
+        log(() => `typecheck in core: ${showTermC(ctm)}`);
+        const cty = typecheckC(ctm);
+        log(() => `core type: ${showTermC(quoteC(cty, 0, false))}`);
+        globalSet(d.name, tm, evaluate(tm, Nil), ty, ctm, evaluateC(ctm, Nil), cty);
+      } else {
+        globalSet(d.name, tm, evaluate(tm, Nil), ty, ctm, evaluateC(ctm, Nil), evaluateC(toCore(zty), Nil));
+      }
       xs.push(d.name);
     }
   }

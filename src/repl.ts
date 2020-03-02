@@ -20,6 +20,7 @@ zero = \\{t} z s. z : {t : *} -> t -> (t -> t) -> t
 COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
+[:checkcore] toggle rechecking of core terms
 [:def definitions] define names
 [:defs] show all defs
 [:import files] import a file
@@ -53,6 +54,10 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     if (_s === ':debug' || _s === ':d') {
       setConfig({ debug: !config.debug });
       return _cb(`debug: ${config.debug}`);
+    }
+    if (_s === ':checkcore' || _s === ':checkCore') {
+      setConfig({ checkCore: !config.checkCore });
+      return _cb(`checkCore: ${config.checkCore}`);
     }
     if (_s === ':defs') {
       const e = globalMap();
