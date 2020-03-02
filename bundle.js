@@ -109,7 +109,7 @@ exports.showElimQ = (e, k = 0, full = false) => {
     return e.tag;
 };
 
-},{"../globalenv":6,"../utils/lazy":15,"../utils/list":16,"../utils/util":17,"./syntax":3}],3:[function(require,module,exports){
+},{"../globalenv":8,"../utils/lazy":17,"../utils/list":18,"../utils/util":19,"./syntax":3}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const S = require("../syntax");
@@ -171,7 +171,212 @@ exports.toCore = (t) => {
     return util_1.impossible(`toCore: ${S.showTerm(t)}`);
 };
 
-},{"../syntax":12,"../utils/util":17}],4:[function(require,module,exports){
+},{"../syntax":14,"../utils/util":19}],4:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const syntax_1 = require("./syntax");
+const list_1 = require("../utils/list");
+const domain_1 = require("./domain");
+const config_1 = require("../config");
+const util_1 = require("../utils/util");
+const unify_1 = require("./unify");
+const globalenv_1 = require("../globalenv");
+const extendT = (ts, val, bound) => list_1.Cons([bound, val], ts);
+const showEnvT = (ts, k = 0, full = false) => list_1.listToString(ts, ([b, v]) => `${b ? '' : 'def '}${domain_1.showTermQ(v, k, full)}`);
+const localEmpty = { ts: list_1.Nil, vs: list_1.Nil, index: 0, indexErased: 0 };
+const extend = (l, ty, bound, val, erased = false) => ({
+    ts: extendT(l.ts, ty, bound),
+    vs: domain_1.extendV(l.vs, val),
+    index: l.index + 1,
+    indexErased: erased ? l.indexErased : l.indexErased + 1,
+});
+const erasedUsed = (k, t) => {
+    if (t.tag === 'Var')
+        return t.index === k;
+    if (t.tag === 'App')
+        return erasedUsed(k, t.left) || (!t.plicity && erasedUsed(k, t.right));
+    if (t.tag === 'Abs')
+        return erasedUsed(k + 1, t.body);
+    if (t.tag === 'Let')
+        return erasedUsed(k + 1, t.body) || (!t.plicity && erasedUsed(k, t.val));
+    if (t.tag === 'Roll')
+        return erasedUsed(k, t.term);
+    if (t.tag === 'Unroll')
+        return erasedUsed(k, t.term);
+    return false;
+};
+const check = (local, tm, ty) => {
+    config_1.log(() => `check ${syntax_1.showTerm(tm)} : ${domain_1.showTermQ(ty, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
+    const ty2 = synth(local, tm);
+    try {
+        config_1.log(() => `unify ${domain_1.showTermQ(ty2, local.index)} ~ ${domain_1.showTermQ(ty, local.index)}`);
+        unify_1.unify(local.index, ty2, ty);
+        return;
+    }
+    catch (err) {
+        if (!(err instanceof TypeError))
+            throw err;
+        return util_1.terr(`failed to unify ${domain_1.showTermQ(ty2, local.index)} ~ ${domain_1.showTermQ(ty, local.index)}: ${err.message}`);
+    }
+};
+const synth = (local, tm) => {
+    config_1.log(() => `synth ${syntax_1.showTerm(tm)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
+    if (tm.tag === 'Type')
+        return domain_1.VType;
+    if (tm.tag === 'Var') {
+        const res = list_1.index(local.ts, tm.index);
+        if (!res)
+            return util_1.terr(`var out of scope ${syntax_1.showTerm(tm)}`);
+        return res[1];
+    }
+    if (tm.tag === 'Global') {
+        const entry = globalenv_1.globalGet(tm.name);
+        if (!entry)
+            return util_1.terr(`global ${tm.name} not found`);
+        return entry.coretype;
+    }
+    if (tm.tag === 'App') {
+        const fn = synth(local, tm.left);
+        const rt = synthapp(local, fn, tm.plicity, tm.right);
+        return rt;
+    }
+    if (tm.tag === 'Abs' && tm.type) {
+        check(local, tm.type, domain_1.VType);
+        const vtype = domain_1.evaluate(tm.type, local.vs);
+        const rt = synth(extend(local, vtype, true, domain_1.VVar(local.indexErased), tm.plicity), tm.body);
+        if (tm.plicity && erasedUsed(0, tm.body))
+            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+        // TODO: avoid quote here
+        const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.type, domain_1.quote(rt, local.index + 1, false)), local.vs);
+        return pi;
+    }
+    if (tm.tag === 'Let') {
+        const vty = synth(local, tm.val);
+        const rt = synth(extend(local, vty, false, domain_1.evaluate(tm.val, local.vs), tm.plicity), tm.body);
+        if (tm.plicity && erasedUsed(0, tm.body))
+            return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
+        return rt;
+    }
+    if (tm.tag === 'Pi') {
+        check(local, tm.type, domain_1.VType);
+        check(extend(local, domain_1.evaluate(tm.type, local.vs), true, domain_1.VVar(local.indexErased), false), tm.body, domain_1.VType);
+        return domain_1.VType;
+    }
+    if (tm.tag === 'Fix') {
+        check(local, tm.type, domain_1.VType);
+        const vty = domain_1.evaluate(tm.type, local.vs);
+        const vfix = domain_1.evaluate(tm, local.vs);
+        // TODO: is this correct?
+        check(extend(extend(local, vfix, true, domain_1.VVar(local.indexErased), false), vty, false, vfix, false), tm.body, vty);
+        return vty;
+    }
+    if (tm.tag === 'Roll') {
+        check(local, tm.type, domain_1.VType);
+        const vt = domain_1.evaluate(tm.type, local.vs);
+        const vtf = domain_1.force(vt);
+        if (vtf.tag !== 'VFix')
+            return util_1.terr(`fix type expected in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(vt, local.index)}`);
+        check(local, tm.term, vtf.body(domain_1.evaluate(tm, local.vs), vt));
+        return vt;
+    }
+    if (tm.tag === 'Unroll') {
+        const ty = synth(local, tm.term);
+        const vt = domain_1.force(ty);
+        if (vt.tag !== 'VFix')
+            return util_1.terr(`fix type expected in ${syntax_1.showTerm(tm)}: ${domain_1.showTermQ(vt, local.index)}`);
+        return vt.body(domain_1.evaluate(tm, local.vs), ty);
+    }
+    return util_1.terr(`cannot synth ${syntax_1.showTerm(tm)}`);
+};
+const synthapp = (local, ty_, plicity, arg) => {
+    const ty = domain_1.force(ty_);
+    config_1.log(() => `synthapp ${domain_1.showTermQ(ty, local.index)} ${plicity ? '-' : ''}@ ${syntax_1.showTerm(arg)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
+    if (ty.tag === 'VPi' && ty.plicity === plicity) {
+        check(local, arg, ty.type);
+        const vm = domain_1.evaluate(arg, local.vs);
+        return ty.body(vm);
+    }
+    return util_1.terr(`invalid type or plicity mismatch in synthapp in ${domain_1.showTermQ(ty, local.index)} ${plicity ? '-' : ''}@ ${syntax_1.showTerm(arg)}`);
+};
+exports.typecheck = (tm_) => {
+    const ty = synth(localEmpty, tm_);
+    return ty;
+};
+
+},{"../config":1,"../globalenv":8,"../utils/list":18,"../utils/util":19,"./domain":2,"./syntax":3,"./unify":5}],5:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const domain_1 = require("./domain");
+const util_1 = require("../utils/util");
+const lazy_1 = require("../utils/lazy");
+const list_1 = require("../utils/list");
+const config_1 = require("../config");
+const eqHead = (a, b) => {
+    if (a === b)
+        return true;
+    if (a.tag === 'HVar')
+        return b.tag === 'HVar' && a.index === b.index;
+    if (a.tag === 'HGlobal')
+        return b.tag === 'HGlobal' && a.name === b.name;
+    return a;
+};
+const unifyElim = (k, a, b, x, y) => {
+    if (a === b)
+        return;
+    if (a.tag === 'EApp' && b.tag === 'EApp')
+        return exports.unify(k, a.arg, b.arg);
+    return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(x, k)} ~ ${domain_1.showTermQ(y, k)}`);
+};
+exports.unify = (k, a, b) => {
+    config_1.log(() => `unify ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
+    if (a === b)
+        return;
+    if (a.tag === 'VType' && b.tag === 'VType')
+        return;
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.plicity === b.plicity) {
+        exports.unify(k, a.type, b.type);
+        const v = domain_1.VVar(k);
+        return exports.unify(k + 1, a.body(v), b.body(v));
+    }
+    if (a.tag === 'VFix' && b.tag === 'VFix') {
+        exports.unify(k, a.type, b.type);
+        const v = domain_1.VVar(k);
+        const w = domain_1.VVar(k + 1);
+        return exports.unify(k + 2, a.body(v, w), b.body(v, w));
+    }
+    if (a.tag === 'VAbs' && b.tag === 'VAbs') {
+        const v = domain_1.VVar(k);
+        return exports.unify(k + 1, a.body(v), b.body(v));
+    }
+    if (a.tag === 'VAbs') {
+        const v = domain_1.VVar(k);
+        return exports.unify(k + 1, a.body(v), domain_1.vapp(b, v));
+    }
+    if (b.tag === 'VAbs') {
+        const v = domain_1.VVar(k);
+        return exports.unify(k + 1, domain_1.vapp(a, v), b.body(v));
+    }
+    if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head) && list_1.length(a.args) === list_1.length(b.args))
+        return list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+    if (a.tag === 'VGlued' && b.tag === 'VGlued' && eqHead(a.head, b.head) && list_1.length(a.args) === list_1.length(b.args)) {
+        try {
+            list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+            return;
+        }
+        catch (err) {
+            if (!(err instanceof TypeError))
+                throw err;
+            return exports.unify(k, lazy_1.forceLazy(a.val), lazy_1.forceLazy(b.val));
+        }
+    }
+    if (a.tag === 'VGlued')
+        return exports.unify(k, lazy_1.forceLazy(a.val), b);
+    if (b.tag === 'VGlued')
+        return exports.unify(k, a, lazy_1.forceLazy(b.val));
+    return util_1.terr(`unify failed (${k}): ${domain_1.showTermQ(a, k)} ~ ${domain_1.showTermQ(b, k)}`);
+};
+
+},{"../config":1,"../utils/lazy":17,"../utils/list":18,"../utils/util":19,"./domain":2}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -188,7 +393,7 @@ exports.toInternalDef = (d) => {
 };
 exports.toInternalDefs = (d) => d.map(exports.toInternalDef);
 
-},{"./syntax":12}],5:[function(require,module,exports){
+},{"./syntax":14}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const list_1 = require("./utils/list");
@@ -376,7 +581,7 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
     return tm;
 };
 
-},{"./globalenv":6,"./metas":7,"./surface":11,"./syntax":12,"./utils/lazy":15,"./utils/list":16,"./utils/util":17}],6:[function(require,module,exports){
+},{"./globalenv":8,"./metas":9,"./surface":13,"./syntax":14,"./utils/lazy":17,"./utils/list":18,"./utils/util":19}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 let env = {};
@@ -392,7 +597,7 @@ exports.globalDelete = (name) => {
     delete env[name];
 };
 
-},{}],7:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -430,7 +635,7 @@ exports.metaPop = () => {
 };
 exports.metaDiscard = () => { stack.pop(); };
 
-},{"./syntax":12,"./utils/util":17}],8:[function(require,module,exports){
+},{"./syntax":14,"./utils/util":19}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.nextName = (x) => {
@@ -442,7 +647,7 @@ exports.nextName = (x) => {
     return `${x}\$0`;
 };
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("./utils/util");
@@ -862,7 +1067,7 @@ exports.parseDefs = async (s, importMap) => {
     return ds.reduce((x, y) => x.concat(y), []);
 };
 
-},{"./config":1,"./surface":11,"./utils/util":17}],10:[function(require,module,exports){
+},{"./config":1,"./surface":13,"./utils/util":19}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const config_1 = require("./config");
@@ -877,6 +1082,7 @@ const domain_1 = require("./domain");
 const syntax_1 = require("./syntax");
 const domain_2 = require("./core/domain");
 const syntax_2 = require("./core/syntax");
+const typecheck_2 = require("./core/typecheck");
 const help = `
 EXAMPLES
 identity = \\{t : *} (x : t). x
@@ -900,6 +1106,7 @@ COMMANDS
 [:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
+[:core term] also typecheck core term
 `.trim();
 let importMap = {};
 exports.initREPL = () => {
@@ -1005,14 +1212,20 @@ exports.runREPL = (_s, _cb) => {
             return;
         }
         let typeOnly = false;
+        let core = false;
         if (_s.startsWith(':t')) {
             _s = _s.slice(_s.startsWith(':type') ? 5 : 2);
             typeOnly = true;
         }
-        else if (_s.startsWith(':'))
+        if (_s.startsWith(':core')) {
+            _s = _s.slice(5);
+            core = true;
+        }
+        if (_s.startsWith(':'))
             return _cb('invalid command', true);
         let msg = '';
         let tm_;
+        let tmc_ = null;
         try {
             const t = parser_1.parse(_s);
             config_1.log(() => surface_1.showTerm(t));
@@ -1023,6 +1236,15 @@ exports.runREPL = (_s, _cb) => {
             config_1.log(() => syntax_1.showSurface(tt));
             config_1.log(() => syntax_1.showSurface(tm_));
             msg += `type: ${domain_1.showTermUZ(vty)}\nterm: ${syntax_1.showSurface(tm_)}`;
+            if (core) {
+                const ctm = syntax_2.toCore(ztm);
+                tmc_ = ctm;
+                config_1.log(() => syntax_2.showTerm(ctm));
+                const cty = typecheck_2.typecheck(ctm);
+                const ctyq = domain_2.quote(cty, 0, false);
+                config_1.log(() => syntax_2.showTerm(ctyq));
+                msg += `\nctyp: ${syntax_2.showTerm(ctyq)}\ncter: ${syntax_2.showTerm(tmc_)}`;
+            }
             if (typeOnly)
                 return _cb(msg);
         }
@@ -1033,7 +1255,7 @@ exports.runREPL = (_s, _cb) => {
         try {
             const n = domain_1.normalize(tm_, list_1.Nil, 0, true);
             config_1.log(() => syntax_1.showSurface(n));
-            return _cb(`${msg}\nnorm: ${syntax_1.showSurface(n)}`);
+            return _cb(`${msg}\nnorm: ${syntax_1.showSurface(n)}${core && tmc_ ? `\ncnor: ${syntax_2.showTerm(domain_2.normalize(tmc_, list_1.Nil, 0, true))}` : ''}`);
         }
         catch (err) {
             config_1.log(() => '' + err);
@@ -1047,7 +1269,7 @@ exports.runREPL = (_s, _cb) => {
     }
 };
 
-},{"./config":1,"./core/domain":2,"./core/syntax":3,"./definitions":4,"./domain":5,"./globalenv":6,"./parser":9,"./surface":11,"./syntax":12,"./typecheck":13,"./utils/list":16,"./utils/util":17}],11:[function(require,module,exports){
+},{"./config":1,"./core/domain":2,"./core/syntax":3,"./core/typecheck":4,"./definitions":6,"./domain":7,"./globalenv":8,"./parser":11,"./surface":13,"./syntax":14,"./typecheck":15,"./utils/list":18,"./utils/util":19}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Var = (name) => ({ tag: 'Var', name });
@@ -1160,7 +1382,7 @@ exports.showDef = (d) => {
     return d.tag;
 };
 
-},{}],12:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const names_1 = require("./names");
@@ -1366,7 +1588,7 @@ exports.toSurface = (t, ns = list_1.Nil) => {
 };
 exports.showSurface = (t, ns = list_1.Nil) => S.showTerm(exports.toSurface(t, ns));
 
-},{"./names":8,"./surface":11,"./utils/list":16,"./utils/util":17}],13:[function(require,module,exports){
+},{"./names":10,"./surface":13,"./utils/list":18,"./utils/util":19}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const syntax_1 = require("./syntax");
@@ -1691,7 +1913,7 @@ exports.typecheckDefs = (ds, allowRedefinition = false) => {
     return xs;
 };
 
-},{"./config":1,"./core/domain":2,"./core/syntax":3,"./definitions":4,"./domain":5,"./globalenv":6,"./metas":7,"./syntax":12,"./unify":14,"./utils/list":16,"./utils/util":17}],14:[function(require,module,exports){
+},{"./config":1,"./core/domain":2,"./core/syntax":3,"./definitions":6,"./domain":7,"./globalenv":8,"./metas":9,"./syntax":14,"./unify":16,"./utils/list":18,"./utils/util":19}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const domain_1 = require("./domain");
@@ -1852,7 +2074,7 @@ const checkSolution = (k, m, is, t) => {
     return util_1.impossible(`checkSolution ?${m}: non-normal term: ${syntax_1.showTerm(t)}`);
 };
 
-},{"./config":1,"./domain":5,"./metas":7,"./syntax":12,"./utils/lazy":15,"./utils/list":16,"./utils/util":17}],15:[function(require,module,exports){
+},{"./config":1,"./domain":7,"./metas":9,"./syntax":14,"./utils/lazy":17,"./utils/list":18,"./utils/util":19}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Lazy = (fn) => ({ fn, val: null, forced: false });
@@ -1866,7 +2088,7 @@ exports.forceLazy = (lazy) => {
 };
 exports.mapLazy = (lazy, fn) => exports.Lazy(() => fn(exports.forceLazy(lazy)));
 
-},{}],16:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Nil = { tag: 'Nil' };
@@ -1993,7 +2215,7 @@ exports.range = (n) => n <= 0 ? exports.Nil : exports.Cons(n - 1, exports.range(
 exports.contains = (l, v) => l.tag === 'Cons' ? (l.head === v || exports.contains(l.tail, v)) : false;
 exports.max = (l) => exports.foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTEGER, l);
 
-},{}],17:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.impossible = (msg) => {
@@ -2020,7 +2242,7 @@ exports.loadFile = (fn) => {
     }
 };
 
-},{"fs":19}],18:[function(require,module,exports){
+},{"fs":21}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -2076,6 +2298,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":10}],19:[function(require,module,exports){
+},{"./repl":12}],21:[function(require,module,exports){
 
-},{}]},{},[18]);
+},{}]},{},[20]);

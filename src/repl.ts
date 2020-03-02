@@ -8,8 +8,9 @@ import { toInternalDefs } from './definitions';
 import { typecheckDefs, typecheck } from './typecheck';
 import { showTermUZ, normalize } from './domain';
 import { showSurface, toInternal, Term } from './syntax';
-import { quote as quoteC } from './core/domain';
-import { showTerm as showTermC } from './core/syntax';
+import { quote as quoteC, normalize as normalizeC } from './core/domain';
+import { showTerm as showTermC, toCore, Term as CTerm } from './core/syntax';
+import { typecheck as typecheckC } from './core/typecheck';
 
 const help = `
 EXAMPLES
@@ -34,6 +35,7 @@ COMMANDS
 [:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
+[:core term] also typecheck core term
 `.trim();
 
 let importMap: ImportMap = {};
@@ -133,12 +135,19 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       return;
     }
     let typeOnly = false;
+    let core = false;
     if (_s.startsWith(':t')) {
       _s = _s.slice(_s.startsWith(':type') ? 5 : 2);
       typeOnly = true;
-    } else if (_s.startsWith(':')) return _cb('invalid command', true);
+    }
+    if (_s.startsWith(':core')) {
+      _s = _s.slice(5);
+      core = true;
+    }
+    if (_s.startsWith(':')) return _cb('invalid command', true);
     let msg = '';
     let tm_: Term;
+    let tmc_: CTerm | null = null;
     try {
       const t = parse(_s);
       log(() => showTerm(t));
@@ -149,6 +158,15 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       log(() => showSurface(tt));
       log(() => showSurface(tm_));
       msg += `type: ${showTermUZ(vty)}\nterm: ${showSurface(tm_)}`;
+      if (core) {
+        const ctm = toCore(ztm);
+        tmc_ = ctm;
+        log(() => showTermC(ctm));
+        const cty = typecheckC(ctm);
+        const ctyq = quoteC(cty, 0, false);
+        log(() => showTermC(ctyq));
+        msg += `\nctyp: ${showTermC(ctyq)}\ncter: ${showTermC(tmc_)}`;
+      }
       if (typeOnly) return _cb(msg);
     } catch (err) {
       log(() => ''+err);
@@ -157,7 +175,7 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     try {
       const n = normalize(tm_, Nil, 0, true);
       log(() => showSurface(n));
-      return _cb(`${msg}\nnorm: ${showSurface(n)}`);
+      return _cb(`${msg}\nnorm: ${showSurface(n)}${core && tmc_ ? `\ncnor: ${showTermC(normalizeC(tmc_, Nil, 0, true))}` : ''}`);
     } catch (err) {
       log(() => ''+err);
       msg += '\n'+err;
