@@ -89,7 +89,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return t.plicity ? evaluate(t.left, vs) : vapp(evaluate(t.left, vs), evaluate(t.right, vs));
   if (t.tag === 'Abs')
     return t.plicity ? evaluate(t.body, extendV(vs, VVar(-1))) :
-      VAbs(t.name, t.type && evaluate(t.type, vs), v => evaluate(t.body, extendV(vs, v)));
+      VAbs(t.name, null, v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Let')
     return t.plicity ? evaluate(t.body, extendV(vs, VVar(-1))) : evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
   if (t.tag === 'Pi')

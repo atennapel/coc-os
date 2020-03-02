@@ -9,7 +9,8 @@ import { globalGet, globalSet } from './globalenv';
 import { unify } from './unify';
 import { Plicity } from './surface';
 import { freshMeta, freshMetaId, metaPush, metaDiscard, metaPop } from './metas';
-import { VType as CVType } from './core/domain';
+import { evaluate as evaluateC } from './core/domain';
+import { toCore } from './core/syntax';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -317,8 +318,9 @@ export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Na
     if (d.tag === 'DDef') {
       const [tm, ty] = typecheck(d.value);
       log(() => `set ${d.name} = ${showTerm(tm)}`);
-      // TODO: core val and type
-      globalSet(d.name, tm, evaluate(tm, Nil), ty, CVType, CVType);
+      const zty = zonk(quote(ty, 0, false));
+      const ctm = toCore(tm);
+      globalSet(d.name, tm, evaluate(tm, Nil), ty, ctm, evaluateC(ctm, Nil), evaluateC(toCore(zty), Nil));
       xs.push(d.name);
     }
   }

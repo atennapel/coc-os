@@ -8,6 +8,8 @@ import { toInternalDefs } from './definitions';
 import { typecheckDefs, typecheck } from './typecheck';
 import { showTermUZ, normalize } from './domain';
 import { showSurface, toInternal, Term } from './syntax';
+import { quote as quoteC } from './core/domain';
+import { showTerm as showTermC } from './core/syntax';
 
 const help = `
 EXAMPLES
@@ -23,6 +25,11 @@ COMMANDS
 [:view files] view a file
 [:t term] or [:type term] show the type of an expressions
 [:del name] delete a name
+[:gtypec name] view the core type of a name
+[:gtypenormc name] view the fully normalized core type of a name
+[:gelabc name] view the core elaborated term of a name
+[:gtermc name] view the core term of a name
+[:gnormc name] view the fully normalized core term of a name
 [:gtype name] view the fully normalized type of a name
 [:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
@@ -64,11 +71,29 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       }).catch(err => _cb(''+err, true));
       return;
     }
+    if (_s.startsWith(':gtypenormc')) {
+      const name = _s.slice(11).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      return _cb(showTermC(quoteC(res.coretype, 0, true)));
+    }
+    if (_s.startsWith(':gtypec')) {
+      const name = _s.slice(7).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      return _cb(showTermC(quoteC(res.coretype, 0, false)));
+    }
     if (_s.startsWith(':gtype')) {
       const name = _s.slice(6).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
       return _cb(showTermUZ(res.type, Nil, Nil, 0, true));
+    }
+    if (_s.startsWith(':gelabc')) {
+      const name = _s.slice(7).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      return _cb(showTermC(res.coreterm));
     }
     if (_s.startsWith(':gelab')) {
       const name = _s.slice(6).trim();
@@ -76,11 +101,23 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       if (!res) return _cb(`undefined global: ${name}`, true);
       return _cb(showSurface(res.term));
     }
+    if (_s.startsWith(':gtermc')) {
+      const name = _s.slice(7).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      return _cb(showTermC(quoteC(res.coreval, 0, false)));
+    }
     if (_s.startsWith(':gterm')) {
       const name = _s.slice(7).trim();
       const res = globalGet(name);
       if (!res) return _cb(`undefined global: ${name}`, true);
       return _cb(showTermUZ(res.val));
+    }
+    if (_s.startsWith(':gnormc')) {
+      const name = _s.slice(7).trim();
+      const res = globalGet(name);
+      if (!res) return _cb(`undefined global: ${name}`, true);
+      return _cb(showTermC(quoteC(res.coreval, 0, true)));
     }
     if (_s.startsWith(':gnorm')) {
       const name = _s.slice(7).trim();
