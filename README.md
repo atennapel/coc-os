@@ -17,8 +17,7 @@ yarn start lib/nat.p
 
 ```
 TODO:
-- fix core
+- fix typechecking of Sum without {P}
+- fix typechecking of core
 - synthapp should insert unroll (for core)
-- recheck in core
-- fix core typechecking (abs without type)
 ```
