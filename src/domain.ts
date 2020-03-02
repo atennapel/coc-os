@@ -29,8 +29,8 @@ export type VNe = { tag: 'VNe', head: Head, args: List<Elim> };
 export const VNe = (head: Head, args: List<Elim>): VNe => ({ tag: 'VNe', head, args });
 export type VGlued = { tag: 'VGlued', head: Head, args: List<Elim>, val: Lazy<Val> };
 export const VGlued = (head: Head, args: List<Elim>, val: Lazy<Val>): VGlued => ({ tag: 'VGlued', head, args, val });
-export type VAbs = { tag: 'VAbs', name: Name, type: Val | null, body: Clos };
-export const VAbs = (name: Name, type: Val | null, body: Clos): VAbs => ({ tag: 'VAbs', type, name, body});
+export type VAbs = { tag: 'VAbs', name: Name, body: Clos };
+export const VAbs = (name: Name, body: Clos): VAbs => ({ tag: 'VAbs', name, body});
 export type VPi = { tag: 'VPi', plicity: Plicity, name: Name, type: Val, body: Clos };
 export const VPi = (plicity: Plicity, name: Name, type: Val, body: Clos): VPi => ({ tag: 'VPi', name, plicity, type, body});
 export type VFix = { tag: 'VFix', self: Name, name: Name, type: Val, body: Clos2 };
@@ -89,7 +89,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return t.plicity ? evaluate(t.left, vs) : vapp(evaluate(t.left, vs), evaluate(t.right, vs));
   if (t.tag === 'Abs')
     return t.plicity ? evaluate(t.body, extendV(vs, VVar(-1))) :
-      VAbs(t.name, null, v => evaluate(t.body, extendV(vs, v)));
+      VAbs(t.name, v => evaluate(t.body, extendV(vs, v)));
   if (t.tag === 'Let')
     return t.plicity ? evaluate(t.body, extendV(vs, VVar(-1))) : evaluate(t.body, extendV(vs, evaluate(t.val, vs)));
   if (t.tag === 'Pi')
@@ -129,7 +129,7 @@ export const quote = (v_: Val, k: Ix, full: boolean): Term => {
       quoteHead(v.head, k),
       v.args,
     );
-  if (v.tag === 'VAbs') return Abs(false, v.name, v.type && quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
+  if (v.tag === 'VAbs') return Abs(false, v.name, null, quote(v.body(VVar(k)), k + 1, full));
   if (v.tag === 'VPi') return Pi(v.plicity, v.name, quote(v.type, k, full), quote(v.body(VVar(k)), k + 1, full));
   if (v.tag === 'VFix') return Fix(v.self, v.name, quote(v.type, k, full), quote(v.body(VVar(k), VVar(k + 1)), k + 2, full));
   return v;

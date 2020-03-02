@@ -22,6 +22,7 @@ const lazy_1 = require("../utils/lazy");
 const syntax_1 = require("./syntax");
 const util_1 = require("../utils/util");
 const globalenv_1 = require("../globalenv");
+const config_1 = require("../config");
 exports.HVar = (index) => ({ tag: 'HVar', index });
 exports.HGlobal = (name) => ({ tag: 'HGlobal', name });
 exports.EApp = (arg) => ({ tag: 'EApp', arg });
@@ -50,6 +51,7 @@ exports.vapp = (a, b) => {
     return util_1.impossible(`vapp: ${a.tag}`);
 };
 exports.evaluate = (t, vs) => {
+    config_1.log(() => `evaluate core: ${syntax_1.showTerm(t)} in ${exports.showEnvV(vs)}`);
     if (t.tag === 'Type')
         return exports.VType;
     if (t.tag === 'Var')
@@ -110,7 +112,7 @@ exports.showElimQ = (e, k = 0, full = false) => {
     return e.tag;
 };
 
-},{"../globalenv":8,"../utils/lazy":17,"../utils/list":18,"../utils/util":19,"./syntax":3}],3:[function(require,module,exports){
+},{"../config":1,"../globalenv":8,"../utils/lazy":17,"../utils/list":18,"../utils/util":19,"./syntax":3}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const S = require("../syntax");
@@ -268,7 +270,7 @@ const synth = (local, tm) => {
     if (tm.tag === 'Abs' && tm.type) {
         check(local, tm.type, domain_1.VType);
         const vtype = domain_1.evaluate(tm.type, local.vs);
-        const rt = synth(extend(local, vtype, true, domain_1.VVar(local.indexErased), tm.plicity), tm.body);
+        const rt = synth(extend(local, vtype, true, domain_1.VVar(local.index), tm.plicity), tm.body);
         if (tm.plicity && erasedUsed(0, tm.body))
             return util_1.terr(`erased argument used in ${syntax_1.showTerm(tm)}`);
         // TODO: avoid quote here
@@ -284,7 +286,7 @@ const synth = (local, tm) => {
     }
     if (tm.tag === 'Pi') {
         check(local, tm.type, domain_1.VType);
-        check(extend(local, domain_1.evaluate(tm.type, local.vs), true, domain_1.VVar(local.indexErased), false), tm.body, domain_1.VType);
+        check(extend(local, domain_1.evaluate(tm.type, local.vs), true, domain_1.VVar(local.index), false), tm.body, domain_1.VType);
         return domain_1.VType;
     }
     if (tm.tag === 'Fix') {
@@ -292,7 +294,7 @@ const synth = (local, tm) => {
         const vty = domain_1.evaluate(tm.type, local.vs);
         const vfix = domain_1.evaluate(tm, local.vs);
         // TODO: is this correct?
-        check(extend(extend(local, vfix, true, domain_1.VVar(local.indexErased), false), vty, false, vfix, false), tm.body, vty);
+        check(extend(extend(local, vfix, true, domain_1.VVar(local.index), false), vty, false, vfix, false), tm.body, vty);
         return vty;
     }
     if (tm.tag === 'Roll') {
@@ -436,7 +438,7 @@ exports.HMeta = (index) => ({ tag: 'HMeta', index });
 exports.EApp = (arg) => ({ tag: 'EApp', arg });
 exports.VNe = (head, args) => ({ tag: 'VNe', head, args });
 exports.VGlued = (head, args, val) => ({ tag: 'VGlued', head, args, val });
-exports.VAbs = (name, type, body) => ({ tag: 'VAbs', type, name, body });
+exports.VAbs = (name, body) => ({ tag: 'VAbs', name, body });
 exports.VPi = (plicity, name, type, body) => ({ tag: 'VPi', name, plicity, type, body });
 exports.VFix = (self, name, type, body) => ({ tag: 'VFix', self, name, type, body });
 exports.VType = { tag: 'VType' };
@@ -494,7 +496,7 @@ exports.evaluate = (t, vs) => {
         return t.plicity ? exports.evaluate(t.left, vs) : exports.vapp(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
     if (t.tag === 'Abs')
         return t.plicity ? exports.evaluate(t.body, exports.extendV(vs, exports.VVar(-1))) :
-            exports.VAbs(t.name, null, v => exports.evaluate(t.body, exports.extendV(vs, v)));
+            exports.VAbs(t.name, v => exports.evaluate(t.body, exports.extendV(vs, v)));
     if (t.tag === 'Let')
         return t.plicity ? exports.evaluate(t.body, exports.extendV(vs, exports.VVar(-1))) : exports.evaluate(t.body, exports.extendV(vs, exports.evaluate(t.val, vs)));
     if (t.tag === 'Pi')
@@ -536,7 +538,7 @@ exports.quote = (v_, k, full) => {
     if (v.tag === 'VGlued')
         return full ? exports.quote(lazy_1.forceLazy(v.val), k, full) : list_1.foldr((x, y) => quoteElim(y, x, k, full), quoteHead(v.head, k), v.args);
     if (v.tag === 'VAbs')
-        return syntax_1.Abs(false, v.name, v.type && exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
+        return syntax_1.Abs(false, v.name, null, exports.quote(v.body(exports.VVar(k)), k + 1, full));
     if (v.tag === 'VPi')
         return syntax_1.Pi(v.plicity, v.name, exports.quote(v.type, k, full), exports.quote(v.body(exports.VVar(k)), k + 1, full));
     if (v.tag === 'VFix')
@@ -1799,7 +1801,7 @@ const synth = (local, tm) => {
         if (tm.type) {
             const type = check(local, tm.type, domain_1.VType);
             const vtype = domain_1.evaluate(type, local.vs);
-            const [body, rt] = synth(extend(local, tm.name, vtype, true, domain_1.VVar(local.indexErased), tm.plicity), tm.body);
+            const [body, rt] = synth(extend(local, tm.name, vtype, true, domain_1.VVar(local.index), tm.plicity), tm.body);
             if (tm.plicity && erasedUsed(0, tm.body))
                 return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
             // TODO: avoid quote here
@@ -1821,7 +1823,7 @@ const synth = (local, tm) => {
     }
     if (tm.tag === 'Pi') {
         const type = check(local, tm.type, domain_1.VType);
-        const body = check(extend(local, tm.name, domain_1.evaluate(type, local.vs), true, domain_1.VVar(local.indexErased), false), tm.body, domain_1.VType);
+        const body = check(extend(local, tm.name, domain_1.evaluate(type, local.vs), true, domain_1.VVar(local.index), false), tm.body, domain_1.VType);
         return [syntax_1.Pi(tm.plicity, tm.name, type, body), domain_1.VType];
     }
     if (tm.tag === 'Ann') {
@@ -1835,7 +1837,7 @@ const synth = (local, tm) => {
         const vty = domain_1.evaluate(type, local.vs);
         const vfix = domain_1.evaluate(tm, local.vs);
         // TODO: is this correct?
-        const body = check(extend(extend(local, tm.self, vfix, true, domain_1.VVar(local.indexErased), false), tm.name, vty, false, vfix, false), tm.body, vty);
+        const body = check(extend(extend(local, tm.self, vfix, true, domain_1.VVar(local.index), false), tm.name, vty, false, vfix, false), tm.body, vty);
         return [syntax_1.Fix(tm.self, tm.name, type, body), vty];
     }
     if (tm.tag === 'Roll' && tm.type) {

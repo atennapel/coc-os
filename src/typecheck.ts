@@ -176,7 +176,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
     if (tm.type) {
       const type = check(local, tm.type, VType);
       const vtype = evaluate(type, local.vs);
-      const [body, rt] = synth(extend(local, tm.name, vtype, true, VVar(local.indexErased), tm.plicity), tm.body);
+      const [body, rt] = synth(extend(local, tm.name, vtype, true, VVar(local.index), tm.plicity), tm.body);
       if (tm.plicity && erasedUsed(0, tm.body))
         return terr(`erased argument used in ${showSurface(tm, local.names)}`);
       // TODO: avoid quote here
@@ -197,7 +197,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
   }
   if (tm.tag === 'Pi') {
     const type = check(local, tm.type, VType);
-    const body = check(extend(local, tm.name, evaluate(type, local.vs), true, VVar(local.indexErased), false), tm.body, VType);
+    const body = check(extend(local, tm.name, evaluate(type, local.vs), true, VVar(local.index), false), tm.body, VType);
     return [Pi(tm.plicity, tm.name, type, body), VType];
   }
   if (tm.tag === 'Ann') {
@@ -213,7 +213,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
     // TODO: is this correct?
     const body = check(
       extend(
-        extend(local, tm.self, vfix, true, VVar(local.indexErased), false),
+        extend(local, tm.self, vfix, true, VVar(local.index), false),
           tm.name, vty, false, vfix, false),
       tm.body, vty
     );

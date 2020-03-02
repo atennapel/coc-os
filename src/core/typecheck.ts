@@ -95,7 +95,7 @@ const synth = (local: Local, tm: Term): Val => {
   if (tm.tag === 'Abs' && tm.type) {
     check(local, tm.type, VType);
     const vtype = evaluate(tm.type, local.vs);
-    const rt = synth(extend(local, vtype, true, VVar(local.indexErased), tm.plicity), tm.body);
+    const rt = synth(extend(local, vtype, true, VVar(local.index), tm.plicity), tm.body);
     if (tm.plicity && erasedUsed(0, tm.body))
       return terr(`erased argument used in ${showTerm(tm)}`);
     // TODO: avoid quote here
@@ -111,7 +111,7 @@ const synth = (local: Local, tm: Term): Val => {
   }
   if (tm.tag === 'Pi') {
     check(local, tm.type, VType);
-    check(extend(local, evaluate(tm.type, local.vs), true, VVar(local.indexErased), false), tm.body, VType);
+    check(extend(local, evaluate(tm.type, local.vs), true, VVar(local.index), false), tm.body, VType);
     return VType;
   }
   if (tm.tag === 'Fix') {
@@ -121,7 +121,7 @@ const synth = (local: Local, tm: Term): Val => {
     // TODO: is this correct?
     check(
       extend(
-        extend(local, vfix, true, VVar(local.indexErased), false),
+        extend(local, vfix, true, VVar(local.index), false),
           vty, false, vfix, false),
       tm.body, vty
     );
