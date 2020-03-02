@@ -8,7 +8,10 @@ import { showSurface } from './syntax';
 import { showTermUZ } from './domain';
 
 if (process.argv[2]) {
-  if (process.argv[3] === '-d') setConfig({ debug: true });
+  const option = process.argv[3];
+  if (option === '-d') setConfig({ debug: true });
+  else if (option === '-dc' || option === '-cd') setConfig({ debug: true, checkCore: true });
+  else if (option === '-c') setConfig({ checkCore: true });
   try {
     globalReset();
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
