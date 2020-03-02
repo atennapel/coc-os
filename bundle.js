@@ -22,7 +22,6 @@ const lazy_1 = require("../utils/lazy");
 const syntax_1 = require("./syntax");
 const util_1 = require("../utils/util");
 const globalenv_1 = require("../globalenv");
-const config_1 = require("../config");
 exports.HVar = (index) => ({ tag: 'HVar', index });
 exports.HGlobal = (name) => ({ tag: 'HGlobal', name });
 exports.EApp = (arg) => ({ tag: 'EApp', arg });
@@ -51,7 +50,6 @@ exports.vapp = (a, b) => {
     return util_1.impossible(`vapp: ${a.tag}`);
 };
 exports.evaluate = (t, vs) => {
-    config_1.log(() => `evaluate core: ${syntax_1.showTerm(t)} in ${exports.showEnvV(vs)}`);
     if (t.tag === 'Type')
         return exports.VType;
     if (t.tag === 'Var')
@@ -112,7 +110,7 @@ exports.showElimQ = (e, k = 0, full = false) => {
     return e.tag;
 };
 
-},{"../config":1,"../globalenv":8,"../utils/lazy":17,"../utils/list":18,"../utils/util":19,"./syntax":3}],3:[function(require,module,exports){
+},{"../globalenv":8,"../utils/lazy":17,"../utils/list":18,"../utils/util":19,"./syntax":3}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const S = require("../syntax");

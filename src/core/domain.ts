@@ -5,7 +5,6 @@ import { Plicity } from '../surface';
 import { showTerm, Term, Var, Global, App, Type, Abs, Pi, Fix } from './syntax';
 import { impossible } from '../utils/util';
 import { globalGet } from '../globalenv';
-import { log } from '../config';
 
 export type Head = HVar | HGlobal;
 
@@ -57,7 +56,6 @@ export const vapp = (a: Val, b: Val): Val => {
 };
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
-  log(() => `evaluate core: ${showTerm(t)} in ${showEnvV(vs)}`);
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Var') return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'Global') {
