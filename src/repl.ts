@@ -21,6 +21,7 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:checkcore] toggle rechecking of core terms
+[:showEnvs] show envs in log output
 [:def definitions] define names
 [:defs] show all defs
 [:import files] import a file
@@ -58,6 +59,10 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
     if (_s === ':checkcore' || _s === ':checkCore') {
       setConfig({ checkCore: !config.checkCore });
       return _cb(`checkCore: ${config.checkCore}`);
+    }
+    if (_s === ':showenvs' || _s === ':showEnvs') {
+      setConfig({ showEnvs: !config.showEnvs });
+      return _cb(`showEnvs: ${config.showEnvs}`);
     }
     if (_s === ':defs') {
       const e = globalMap();

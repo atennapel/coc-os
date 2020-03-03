@@ -1,4 +1,4 @@
-import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Abs, Fix, isUnsolved } from './syntax';
+import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Abs, Fix, isUnsolved, shift } from './syntax';
 import { Ix, Name } from './names';
 import { List, Cons, listToString, Nil, index, filter, mapIndex, foldr, zipWith, toArray, foldl } from './utils/list';
 import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe, HMeta, zonk, showTermUZ } from './domain';
@@ -65,7 +65,7 @@ const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
 };
 
 const check = (local: Local, tm: Term, ty: Val): Term => {
-  log(() => `check ${showSurface(tm, local.names)} : ${showTermU(ty, local.names, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
+  log(() => `check ${showSurface(tm, local.names)} : ${showTermU(ty, local.names, local.index)}${!config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`}`);
   if (ty.tag === 'VType' && tm.tag === 'Type') return tm;
   const tyf = force(ty);
   if (tm.tag === 'Hole') {
@@ -85,8 +85,8 @@ const check = (local: Local, tm: Term, ty: Val): Term => {
   }
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
     const v = VVar(local.index);
-    const term = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
-    return Abs(tyf.plicity, tyf.name, quote(tyf.type, local.index, false), term);
+    const term = check(extend(local, tyf.name, tyf.type, true, v, true), shift(1, 0, tm), tyf.body(v));
+    return Abs(tyf.plicity, tyf.name, quote(tyf.type, local.index, false), shift(1, 0, term));
   }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(local, tm.val);
@@ -146,7 +146,7 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
 };
 
 const synth = (local: Local, tm: Term): [Term, Val] => {
-  log(() => `synth ${showSurface(tm, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
+  log(() => `synth ${showSurface(tm, local.names)}${!config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`}`);
   if (tm.tag === 'Type') return [tm, VType];
   if (tm.tag === 'Var') {
     const res = index(local.ts, tm.index);
@@ -241,7 +241,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
 
 const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Term): [Term, Val, List<Term>] => {
   const ty = force(ty_);
-  log(() => `synthapp ${showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${showSurface(arg, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`);
+  log(() => `synthapp ${showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${showSurface(arg, local.names)}${!config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`}`);
   if (ty.tag === 'VFix') return synthapp(local, fntm, ty.body(evaluate(fntm, local.vs), ty), plicity, arg);
   if (ty.tag === 'VPi' && ty.plicity === plicity) {
     const argtm = check(local, arg, ty.type);

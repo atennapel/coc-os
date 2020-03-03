@@ -1,10 +1,12 @@
 export interface Config {
   debug: boolean;
   checkCore: boolean;
+  showEnvs: boolean;
 }
 export const config: Config = {
   debug: false,
   checkCore: false,
+  showEnvs: false,
 };
 export const setConfig = (c: Partial<Config>) => {
   for (let k in c) (config as any)[k] = (c as any)[k];

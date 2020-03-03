@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.config = {
     debug: false,
     checkCore: false,
+    showEnvs: false,
 };
 exports.setConfig = (c) => {
     for (let k in c)
@@ -170,6 +171,25 @@ exports.toCore = (t) => {
     if (t.tag === 'Type')
         return exports.Type;
     return util_1.impossible(`toCore: ${S.showTerm(t)}`);
+};
+exports.shift = (d, c, t) => {
+    if (t.tag === 'Var')
+        return t.index < c ? t : exports.Var(t.index + d);
+    if (t.tag === 'Abs')
+        return exports.Abs(t.plicity, t.type && exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'App')
+        return exports.App(exports.shift(d, c, t.left), t.plicity, exports.shift(d, c, t.right));
+    if (t.tag === 'Let')
+        return exports.Let(t.plicity, exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Roll')
+        return exports.Roll(t.type && exports.shift(d, c, t.type), exports.shift(d, c, t.term));
+    if (t.tag === 'Unroll')
+        return exports.Unroll(exports.shift(d, c, t.term));
+    if (t.tag === 'Pi')
+        return exports.Pi(t.plicity, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Fix')
+        return exports.Fix(exports.shift(d, c, t.type), exports.shift(d, c + 2, t.body));
+    return t;
 };
 
 },{"../syntax":14,"../utils/util":19}],4:[function(require,module,exports){
@@ -1119,6 +1139,7 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:checkcore] toggle rechecking of core terms
+[:showEnvs] show envs in log output
 [:def definitions] define names
 [:defs] show all defs
 [:import files] import a file
@@ -1153,6 +1174,10 @@ exports.runREPL = (_s, _cb) => {
         if (_s === ':checkcore' || _s === ':checkCore') {
             config_1.setConfig({ checkCore: !config_1.config.checkCore });
             return _cb(`checkCore: ${config_1.config.checkCore}`);
+        }
+        if (_s === ':showenvs' || _s === ':showEnvs') {
+            config_1.setConfig({ showEnvs: !config_1.config.showEnvs });
+            return _cb(`showEnvs: ${config_1.config.showEnvs}`);
         }
         if (_s === ':defs') {
             const e = globalenv_1.globalMap();
@@ -1619,6 +1644,29 @@ exports.toSurface = (t, ns = list_1.Nil) => {
     return t;
 };
 exports.showSurface = (t, ns = list_1.Nil) => S.showTerm(exports.toSurface(t, ns));
+exports.shift = (d, c, t) => {
+    if (t.tag === 'Var')
+        return t.index < c ? t : exports.Var(t.index + d);
+    if (t.tag === 'Abs')
+        return exports.Abs(t.plicity, t.name, t.type && exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'App')
+        return exports.App(exports.shift(d, c, t.left), t.plicity, exports.shift(d, c, t.right));
+    if (t.tag === 'Let')
+        return exports.Let(t.plicity, t.name, exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Roll')
+        return exports.Roll(t.type && exports.shift(d, c, t.type), exports.shift(d, c, t.term));
+    if (t.tag === 'Unroll')
+        return exports.Unroll(exports.shift(d, c, t.term));
+    if (t.tag === 'Pi')
+        return exports.Pi(t.plicity, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Fix')
+        return exports.Fix(t.self, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 2, t.body));
+    if (t.tag === 'Ann')
+        return exports.Ann(exports.shift(d, c, t.term), exports.shift(d, c, t.type));
+    if (t.tag === 'Rigid')
+        return exports.Rigid(exports.shift(d, c, t.term));
+    return t;
+};
 
 },{"./names":10,"./surface":13,"./utils/list":18,"./utils/util":19}],15:[function(require,module,exports){
 "use strict";
@@ -1680,7 +1728,7 @@ const inst = (ts, vs, ty_) => {
     return [ty, list_1.Nil];
 };
 const check = (local, tm, ty) => {
-    config_1.log(() => `check ${syntax_1.showSurface(tm, local.names)} : ${domain_1.showTermU(ty, local.names, local.index)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
+    config_1.log(() => `check ${syntax_1.showSurface(tm, local.names)} : ${domain_1.showTermU(ty, local.names, local.index)}${!config_1.config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`}`);
     if (ty.tag === 'VType' && tm.tag === 'Type')
         return tm;
     const tyf = domain_1.force(ty);
@@ -1702,8 +1750,8 @@ const check = (local, tm, ty) => {
     }
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
         const v = domain_1.VVar(local.index);
-        const term = check(extend(local, tm.name, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
-        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, local.index, false), term);
+        const term = check(extend(local, tyf.name, tyf.type, true, v, true), syntax_1.shift(1, 0, tm), tyf.body(v));
+        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, local.index, false), syntax_1.shift(1, 0, term));
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(local, tm.val);
@@ -1765,7 +1813,7 @@ const freshPi = (ts, vs, x, impl) => {
     return domain_1.VPi(impl, x, va, v => domain_1.evaluate(b, domain_1.extendV(vs, v)));
 };
 const synth = (local, tm) => {
-    config_1.log(() => `synth ${syntax_1.showSurface(tm, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
+    config_1.log(() => `synth ${syntax_1.showSurface(tm, local.names)}${!config_1.config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`}`);
     if (tm.tag === 'Type')
         return [tm, domain_1.VType];
     if (tm.tag === 'Var') {
@@ -1860,7 +1908,7 @@ const synth = (local, tm) => {
 };
 const synthapp = (local, fntm, ty_, plicity, arg) => {
     const ty = domain_1.force(ty_);
-    config_1.log(() => `synthapp ${domain_1.showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${syntax_1.showSurface(arg, local.names)} in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`);
+    config_1.log(() => `synthapp ${domain_1.showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${syntax_1.showSurface(arg, local.names)}${!config_1.config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${domain_1.showEnvV(local.vs, local.indexErased, false)}`}`);
     if (ty.tag === 'VFix')
         return synthapp(local, fntm, ty.body(domain_1.evaluate(fntm, local.vs), ty), plicity, arg);
     if (ty.tag === 'VPi' && ty.plicity === plicity) {
