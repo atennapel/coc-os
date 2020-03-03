@@ -1853,7 +1853,7 @@ const synth = (local, tm) => {
             if (tm.plicity && erasedUsed(0, tm.body))
                 return util_1.terr(`erased argument used in ${syntax_1.showSurface(tm, local.names)}`);
             // TODO: avoid quote here
-            const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, tm.type, domain_1.quote(rt, local.index + 1, false)), local.vs);
+            const pi = domain_1.evaluate(syntax_1.Pi(tm.plicity, tm.name, type, domain_1.quote(rt, local.index + 1, false)), local.vs);
             return [syntax_1.Abs(tm.plicity, tm.name, type, body), pi];
         }
         else {

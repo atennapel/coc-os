@@ -180,7 +180,7 @@ const synth = (local: Local, tm: Term): [Term, Val] => {
       if (tm.plicity && erasedUsed(0, tm.body))
         return terr(`erased argument used in ${showSurface(tm, local.names)}`);
       // TODO: avoid quote here
-      const pi = evaluate(Pi(tm.plicity, tm.name, tm.type, quote(rt, local.index + 1, false)), local.vs);
+      const pi = evaluate(Pi(tm.plicity, tm.name, type, quote(rt, local.index + 1, false)), local.vs);
       return [Abs(tm.plicity, tm.name, type, body), pi];
     } else {
       const pi = freshPi(local.ts, local.vs, tm.name, tm.plicity);
