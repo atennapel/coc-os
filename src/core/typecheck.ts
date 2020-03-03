@@ -1,4 +1,4 @@
-import { Term, showTerm, Pi } from './syntax';
+import { Term, showTerm, Pi, shift } from './syntax';
 import { Ix } from '../names';
 import { List, Cons, listToString, Nil, index } from '../utils/list';
 import { Val, showTermQ, EnvV, extendV, VVar, evaluate, quote, showEnvV, VType, force } from './domain';
@@ -49,7 +49,7 @@ const check = (local: Local, tm: Term, ty: Val): void => {
   }
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
     const v = VVar(local.index);
-    check(extend(local, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
+    check(extend(local, tyf.type, true, v, tyf.plicity), shift(1, 0, tm), tyf.body(v));
     return;
   }
   if (tm.tag === 'Let') {

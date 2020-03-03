@@ -238,7 +238,7 @@ const check = (local, tm, ty) => {
     }
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
         const v = domain_1.VVar(local.index);
-        check(extend(local, tyf.type, true, v, tyf.plicity), tm, tyf.body(v));
+        check(extend(local, tyf.type, true, v, tyf.plicity), syntax_1.shift(1, 0, tm), tyf.body(v));
         return;
     }
     if (tm.tag === 'Let') {
@@ -1287,10 +1287,12 @@ exports.runREPL = (_s, _cb) => {
             const t = parser_1.parse(_s);
             config_1.log(() => surface_1.showTerm(t));
             const tt = syntax_1.toInternal(t);
+            config_1.log(() => syntax_1.showSurface(tt));
             const [ztm, vty] = typecheck_1.typecheck(tt);
+            console.log('here');
             tm_ = ztm;
             config_1.log(() => domain_1.showTermUZ(vty));
-            config_1.log(() => syntax_1.showSurface(tt));
+            config_1.log(() => syntax_1.showTerm(tm_));
             config_1.log(() => syntax_1.showSurface(tm_));
             msg += `type: ${domain_1.showTermUZ(vty)}\nterm: ${syntax_1.showSurface(tm_)}`;
             if (core) {
@@ -1751,7 +1753,7 @@ const check = (local, tm, ty) => {
     if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
         const v = domain_1.VVar(local.index);
         const term = check(extend(local, tyf.name, tyf.type, true, v, true), syntax_1.shift(1, 0, tm), tyf.body(v));
-        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, local.index, false), syntax_1.shift(1, 0, term));
+        return syntax_1.Abs(tyf.plicity, tyf.name, domain_1.quote(tyf.type, local.index, false), term);
     }
     if (tm.tag === 'Let') {
         const [val, vty] = synth(local, tm.val);

@@ -7,7 +7,7 @@ import { globalReset, globalMap, globalDelete, globalGet } from './globalenv';
 import { toInternalDefs } from './definitions';
 import { typecheckDefs, typecheck } from './typecheck';
 import { showTermUZ, normalize } from './domain';
-import { showSurface, toInternal, Term } from './syntax';
+import { showSurface, showTerm as showTermS , toInternal, Term } from './syntax';
 import { quote as quoteC, normalize as normalizeC } from './core/domain';
 import { showTerm as showTermC, toCore, Term as CTerm } from './core/syntax';
 import { typecheck as typecheckC } from './core/typecheck';
@@ -162,10 +162,12 @@ export const runREPL = (_s: string, _cb: (msg: string, err?: boolean) => void) =
       const t = parse(_s);
       log(() => showTerm(t));
       const tt = toInternal(t);
+      log(() => showSurface(tt));
       const [ztm, vty] = typecheck(tt);
+      console.log('here');
       tm_ = ztm;
       log(() => showTermUZ(vty));
-      log(() => showSurface(tt));
+      log(() => showTermS(tm_));
       log(() => showSurface(tm_));
       msg += `type: ${showTermUZ(vty)}\nterm: ${showSurface(tm_)}`;
       if (core) {

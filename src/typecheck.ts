@@ -86,7 +86,7 @@ const check = (local: Local, tm: Term, ty: Val): Term => {
   if (tm.tag === 'Abs' && !tm.type && tyf.tag === 'VPi' && !tm.plicity && tyf.plicity) {
     const v = VVar(local.index);
     const term = check(extend(local, tyf.name, tyf.type, true, v, true), shift(1, 0, tm), tyf.body(v));
-    return Abs(tyf.plicity, tyf.name, quote(tyf.type, local.index, false), shift(1, 0, term));
+    return Abs(tyf.plicity, tyf.name, quote(tyf.type, local.index, false), term);
   }
   if (tm.tag === 'Let') {
     const [val, vty] = synth(local, tm.val);
