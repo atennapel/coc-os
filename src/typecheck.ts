@@ -1,17 +1,13 @@
-import { Term, showSurface, showTerm, Pi, Var, App, Let, Unroll, Roll, Abs, Fix, isUnsolved, shift } from './syntax';
+import { Term, showSurface, showTerm, Pi, Var, App, Let, Abs } from './syntax';
 import { Ix, Name } from './names';
 import { List, Cons, listToString, Nil, index, filter, mapIndex, foldr, zipWith, toArray, foldl } from './utils/list';
-import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe, HMeta, zonk, showTermUZ } from './domain';
+import { Val, showTermQ, EnvV, extendV, showTermU, VVar, evaluate, quote, showEnvV, VType, force, VPi, VNe } from './domain';
 import { log, config } from './config';
 import { terr } from './utils/util';
-import { Def, showDef } from './definitions';
 import { globalGet, globalSet } from './globalenv';
 import { unify } from './unify';
 import { Plicity } from './surface';
-import { freshMeta, freshMetaId, metaPush, metaDiscard, metaPop } from './metas';
-import { evaluate as evaluateC, quote as quoteC } from './core/domain';
-import { toCore, showTerm as showTermC } from './core/syntax';
-import { typecheck as typecheckC } from './core/typecheck';
+import * as S from './surface';
 
 type EnvT = List<[boolean, Val]>;
 const extendT = (ts: EnvT, val: Val, bound: boolean): EnvT => Cons([bound, val], ts);
@@ -41,27 +37,7 @@ const erasedUsed = (k: Ix, t: Term): boolean => {
   if (t.tag === 'App') return erasedUsed(k, t.left) || (!t.plicity && erasedUsed(k, t.right));
   if (t.tag === 'Abs') return erasedUsed(k + 1, t.body);
   if (t.tag === 'Let') return erasedUsed(k + 1, t.body) || (!t.plicity && erasedUsed(k, t.val));
-  if (t.tag === 'Ann') return erasedUsed(k, t.term);
-  if (t.tag === 'Rigid') return erasedUsed(k, t.term);
-  if (t.tag === 'Roll') return erasedUsed(k, t.term);
-  if (t.tag === 'Unroll') return erasedUsed(k, t.term);
   return false;
-};
-
-const newMeta = (ts: EnvT): Term => {
-  const spine = filter(mapIndex(ts, (i, [bound, _]) => bound ? Var(i) : null), x => x !== null) as List<Var>;
-  return foldr((x, y) => App(y, false, x), freshMeta() as Term, spine);
-};
-
-const inst = (ts: EnvT, vs: EnvV, ty_: Val): [Val, List<Term>] => {
-  const ty = force(ty_);
-  if (ty.tag === 'VPi' && ty.plicity) {
-    const m = newMeta(ts);
-    const vm = evaluate(m, vs);
-    const [res, args] = inst(ts, vs, ty.body(vm));
-    return [res, Cons(m, args)];
-  }
-  return [ty, Nil];
 };
 
 const check = (local: Local, tm: Term, ty: Val): Term => {
@@ -145,8 +121,8 @@ const freshPi = (ts: EnvT, vs: EnvV, x: Name, impl: Plicity): Val => {
   return VPi(impl, x, va, v => evaluate(b, extendV(vs, v)));
 };
 
-const synth = (local: Local, tm: Term): [Term, Val] => {
-  log(() => `synth ${showSurface(tm, local.names)}${!config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`}`);
+const synth = (local: Local, tm: S.Term): [Term, Val] => {
+  log(() => `synth ${S.showTerm(tm)}${!config.showEnvs ? '' : ` in ${showEnvT(local.ts, local.indexErased, false)} and ${showEnvV(local.vs, local.indexErased, false)}`}`);
   if (tm.tag === 'Type') return [tm, VType];
   if (tm.tag === 'Var') {
     const res = index(local.ts, tm.index);
@@ -256,54 +232,15 @@ const synthapp = (local: Local, fntm: Term, ty_: Val, plicity: Plicity, arg: Ter
     const [argtm, rt, l] = synthapp(local, fntm, ty.body(vm), plicity, arg);
     return [argtm, rt, Cons(m, l)];
   }
-  // TODO: fix the following
-  if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-    const a = freshMetaId();
-    const b = freshMetaId();
-    const pi = VPi(plicity, '_', VNe(HMeta(a), ty.args), () => VNe(HMeta(b), ty.args));
-    unify(local.indexErased, ty, pi);
-    return synthapp(local, fntm, pi, plicity, arg);
-  }
   return terr(`invalid type or plicity mismatch in synthapp in ${showTermU(ty, local.names, local.index)} ${plicity ? '-' : ''}@ ${showSurface(arg, local.names)}`);
 };
 
-type HoleInfo = [Val, Val, Local];
-let holesStack: { [key:string]: HoleInfo }[] = [];
-let holes: { [key:string]: HoleInfo } = {};
-const holesPush = (): void => {
-  const old = holes;
-  holesStack.push(holes);
-  holes = {};
-  for (let k in old) holes[k] = old[k];
-};
-const holesPop = (): void => {
-  const x = holesStack.pop();
-  if (!x) return;
-  holes = x;
-};
-const holesDiscard = (): void => { holesStack.pop() };
-
-export const typecheck = (tm_: Term): [Term, Val] => {
+export const typecheck = (tm_: S.Term): [Term, Val] => {
   const [tm, ty] = synth(localEmpty, tm_);
-  const ztm = zonk(tm);
-  const holeprops = Object.entries(holes);
-  if (holeprops.length > 0) {
-    const strtype = showTermUZ(ty);
-    const strterm = showSurface(ztm);
-    const str = holeprops.map(([x, [t, v, local]]) => {
-      const all = zipWith(([x, v], [def, ty]) => [x, v, def, ty] as [Name, Val, boolean, Val], zipWith((x, v) => [x, v] as [Name, Val], local.names, local.vs), local.ts);
-      const allstr = toArray(all, ([x, v, b, t]) => `${x} : ${showTermUZ(t, local.names, local.vs, local.index)}${b ? '' : ` = ${showTermUZ(v, local.names, local.vs, local.index)}`}`).join('\n');
-      return `\n_${x} : ${showTermUZ(v, local.names, local.vs, local.index)} = ${showTermUZ(t, local.names, local.vs, local.index)}\nlocal:\n${allstr}\n`;
-    }).join('\n');
-    return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
-  }
-  const tyq = zonk(quote(ty, 0, false));
-  if (isUnsolved(ztm) || isUnsolved(tyq))
-    return terr(`there are unsolved metas: ${showSurface(ztm)} : ${showSurface(tyq)}`);
-  return [ztm, ty];
+  return [tm, ty];
 };
 
-export const typecheckDefs = (ds: Def[], allowRedefinition: boolean = false): Name[] => {
+export const typecheckDefs = (ds: S.Def[], allowRedefinition: boolean = false): Name[] => {
   log(() => `typecheckDefs ${ds.map(x => x.name).join(' ')}`);
   const xs: Name[] = [];
   if (!allowRedefinition) {
