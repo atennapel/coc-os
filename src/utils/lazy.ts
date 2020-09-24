@@ -2,6 +2,7 @@ export type Lazy<T> = { fn: () => T } & ({ val: null, forced: false } | { val: T
 
 export const Lazy = <T>(fn: () => T): Lazy<T> =>
   ({ fn, val: null, forced: false });
+export const lazyOf = <T>(val: T): Lazy<T> => ({ fn: () => val, val, forced: true });
 export const forceLazy = <T>(lazy: Lazy<T>): T => {
   if (lazy.forced) return lazy.val;
   const v = lazy.fn();

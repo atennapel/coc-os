@@ -55,6 +55,8 @@ export const length = <T>(l: List<T>): number => {
   return n;
 };
 
+export const isEmpty = <T>(l: List<T>): l is Nil => l.tag === 'Nil';
+
 export const reverse = <T>(l: List<T>): List<T> =>
   listFrom(toArray(l, x => x).reverse());
 
@@ -104,6 +106,11 @@ export const indexOf = <T>(l: List<T>, x: T): number => {
   return -1;
 };
 
+export const takeWhile = <T>(l: List<T>, fn: (val: T) => boolean): List<T> =>
+  l.tag === 'Cons' && fn(l.head) ? Cons(l.head, takeWhile(l.tail, fn)) : Nil;
+export const dropWhile = <T>(l: List<T>, fn: (val: T) => boolean): List<T> =>
+  l.tag === 'Cons' && fn(l.head) ? dropWhile(l.tail, fn) : l;
+
 export const indecesOf = <T>(l: List<T>, val: T): number[] => {
   const a: number[] = [];
   let i = 0;
@@ -114,6 +121,9 @@ export const indecesOf = <T>(l: List<T>, val: T): number[] => {
   }
   return a;
 };
+
+export const take = <T>(l: List<T>, n: number): List<T> =>
+  n <= 0 || l.tag === 'Nil' ? Nil : Cons(l.head, take(l.tail, n - 1));
 
 export const extend = <K, T>(name: K, val: T, rest: List<[K, T]>): List<[K, T]> =>
   Cons([name, val] as [K, T], rest);
@@ -126,8 +136,8 @@ export const lookup = <K, T>(l: List<[K, T]>, name: K, eq: (a: K, b: K) => boole
   return null;
 };
 
-export const foldr = <T, R>(f: (h: T, a: R) => R, i: R, l: List<T>): R =>
-  l.tag === 'Nil' ? i : f(l.head, foldr(f, i, l.tail));
+export const foldr = <T, R>(f: (h: T, a: R, j: number) => R, i: R, l: List<T>, j: number = 0): R =>
+  l.tag === 'Nil' ? i : f(l.head, foldr(f, i, l.tail, j + 1), j);
 export const foldl = <T, R>(f: (a: R, h: T) => R, i: R, l: List<T>): R =>
   l.tag === 'Nil' ? i : foldl(f, f(i, l.head), l.tail);
 export const foldrprim = <T, R>(f: (h: T, a: R, l: List<T>, j: number) => R, i: R, l: List<T>, ind: number = 0): R =>
@@ -161,3 +171,9 @@ export const contains = <T>(l: List<T>, v: T): boolean =>
 
 export const max = (l: List<number>): number =>
   foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTEGER, l);
+
+export const last = <T>(l: List<T>): T | null => {
+  let c = l;
+  while (c.tag === 'Cons') if (c.tail.tag === 'Nil') return c.head;
+  return null;
+};

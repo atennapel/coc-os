@@ -8,7 +8,7 @@ function onresize() {
 }
 window.addEventListener('resize', onresize);
 onresize();
-addResult("REPL");
+addResult('repl');
 initREPL();
 input.focus();
 input.onkeydown = function(keyEvent: any) {
