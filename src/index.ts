@@ -1,15 +1,25 @@
-import { setConfig } from './config';
-import { Abs, App, Let, Pi, show, Type, Var } from './core';
-import { typecheck } from './typecheck';
+import { elaborate } from './elaboration';
+import { Abs, App, Let, Pi, show, showCore, Type, Var } from './surface';
+import * as C from './core';
 import { normalize } from './values';
+import { typecheck } from './typecheck';
 
-setConfig({ debug: true });
-
-const term = Let('tid', Type, Pi('t', Type, Pi('x', Var(0), Var(1))), Let('id', Var(0), Abs('t', Type, Abs('x', Var(0), Var(0))), App(App(Var(0), Var(1)), Var(0))));
+const term = Let('tid', null, Pi('t', Type, Pi('_', Var('t'), Var('t'))), Let('id', Var('tid'), Abs('t', null, Abs('x', null, Var('x'))), App(App(Var('id'), Var('tid')), Var('id'))))
 console.log(show(term));
 
-const type = typecheck(term);
-console.log(show(type));
+console.log('ELABORATE');
+const [eterm, etype] = elaborate(term);
+console.log(C.show(eterm));
+console.log(showCore(eterm));
+console.log(C.show(etype));
+console.log(showCore(etype));
 
-const norm = normalize(term);
-console.log(show(norm));
+console.log('TYPECHECK');
+const ttype = typecheck(eterm);
+console.log(C.show(ttype));
+console.log(showCore(ttype));
+
+console.log('NORMALIZE');
+const norm = normalize(eterm);
+console.log(C.show(norm));
+console.log(showCore(norm));
