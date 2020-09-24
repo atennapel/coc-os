@@ -4,7 +4,7 @@ import { Pi, show, Term } from './core';
 import { Ix } from './names';
 import { Cons, index, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { EnvV, evaluate, quote, showV, Val, vinst, VType, VVar } from './values';
+import { EnvV, evaluate, quote, showValZ, Val, vinst, VType, VVar } from './values';
 
 type EnvT = List<Val>;
 
@@ -18,11 +18,13 @@ const localEmpty: Local = Local(0, Nil, Nil);
 const localExtend = (local: Local, ty: Val, val: Val = VVar(local.index)): Local =>
   Local(local.index + 1, Cons(ty, local.ts), Cons(val, local.vs));
 
+const showVal = (local: Local, val: Val): string => showValZ(val, local.vs, local.index);
+
 const check = (local: Local, tm: Term, ty: Val): void => {
-  log(() => `check ${show(tm)} : ${showV(ty, local.index)}`);
+  log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   const ty2 = synth(local, tm);
   tryT(() => conv(local. index, ty2, ty),
-    e => terr(`check failed (${show(tm)}): ${showV(ty2, local.index)} ~ ${showV(ty, local.index)}: ${e}`));
+    e => terr(`check failed (${show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
 };
 
 const synth = (local: Local, tm: Term): Val => {
@@ -56,17 +58,17 @@ const synth = (local: Local, tm: Term): Val => {
     const val = evaluate(tm.val, local.vs);
     return synth(localExtend(local, ty, val), tm.body);
   }
-  return tm;
+  return terr(`synth failed: ${show(tm)}`);
 };
 
 const synthapp = (local: Local, ty: Val, tm: Term): Val => {
-  log(() => `synthapp ${showV(ty, local.index)} @ ${show(tm)}`);
+  log(() => `synthapp ${showVal(local, ty)} @ ${show(tm)}`);
   if (ty.tag === 'VPi') {
     check(local, tm, ty.type);
     const v = evaluate(tm, local.vs);
     return vinst(ty, v);
   }
-  return terr(`not a pi type in synthapp: ${showV(ty, local.index)}`);
+  return terr(`not a pi type in synthapp: ${showVal(local, ty)}`);
 };
 
 export const typecheck = (t: Term): Term => {

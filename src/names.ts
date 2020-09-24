@@ -11,4 +11,4 @@ export const nextName = (x: Name): Name => {
 };
 
 export const chooseName = (x: Name, ns: List<Name>): Name =>
-  contains(ns, x) ? chooseName(nextName(x), ns) : x;
+  x === '_' ? x : contains(ns, x) ? chooseName(nextName(x), ns) : x;

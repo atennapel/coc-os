@@ -43,7 +43,7 @@ export const tryT = <T>(v: () => T, e: (err: TypeError) => T, throwErr: boolean 
   try {
     return v();
   } catch (err) {
-    if (!(err instanceof TypeError)) return err;
+    if (!(err instanceof TypeError)) throw err;
     const r = e(err);
     if (throwErr) throw err;
     return r;

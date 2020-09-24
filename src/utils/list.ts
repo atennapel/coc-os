@@ -148,6 +148,9 @@ export const foldlprim = <T, R>(f: (h: T, a: R, l: List<T>, j: number) => R, i: 
 export const zipWith = <A, B, R>(f: (a: A, b: B) => R, la: List<A>, lb: List<B>): List<R> =>
   la.tag === 'Nil' || lb.tag === 'Nil' ? Nil :
     Cons(f(la.head, lb.head), zipWith(f, la.tail, lb.tail));
+export const zipWithIndex = <A, B, R>(f: (a: A, b: B, i: number) => R, la: List<A>, lb: List<B>, i: number = 0): List<R> =>
+  la.tag === 'Nil' || lb.tag === 'Nil' ? Nil :
+    Cons(f(la.head, lb.head, i), zipWithIndex(f, la.tail, lb.tail, i + 1));
 export const zipWith_ = <A, B>(f: (a: A, b: B) => void, la: List<A>, lb: List<B>): void => {
   if (la.tag === 'Cons' && lb.tag === 'Cons') {
     f(la.head, lb.head);

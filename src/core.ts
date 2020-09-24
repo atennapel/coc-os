@@ -1,6 +1,6 @@
 import { Ix, Name } from './names';
 
-export type Term = Var | App | Abs | Let | Type | Pi;
+export type Term = Var | App | Abs | Let | Type | Pi | Meta;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
@@ -14,9 +14,12 @@ export type Type = { tag: 'Type' };
 export const Type: Type = { tag: 'Type' };
 export type Pi = { tag: 'Pi', name: Name, type: Term, body: Term };
 export const Pi = (name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', name, type, body });
+export type Meta = { tag: 'Meta', index: Ix };
+export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
+  if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'App') return `(${show(t.left)} ${show(t.right)})`;
   if (t.tag === 'Abs') return `(\\(${t.name} : ${show(t.type)}). ${show(t.body)})`;
   if (t.tag === 'Let') return `(let ${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
