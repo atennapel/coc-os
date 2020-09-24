@@ -1,6 +1,6 @@
 import { log } from './config';
 import { conv } from './conversion';
-import { Pi, show, Term } from './core';
+import { Pi, show, Term, Mode, ImplUnif } from './core';
 import { Ix } from './names';
 import { Cons, index, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
@@ -37,13 +37,13 @@ const synth = (local: Local, tm: Term): Val => {
   }
   if (tm.tag === 'App') {
     const ty = synth(local, tm.left);
-    return synthapp(local, ty, tm.right);
+    return synthapp(local, ty, tm.mode, tm.right);
   }
   if (tm.tag === 'Abs') {
     check(local, tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
     const rty = synth(localExtend(local, ty), tm.body);
-    return evaluate(Pi(tm.name, tm.type, quote(rty, local.index + 1)), local.vs);
+    return evaluate(Pi(tm.mode, tm.name, tm.type, quote(rty, local.index + 1)), local.vs);
   }
   if (tm.tag === 'Pi') {
     check(local, tm.type, VType);
@@ -61,14 +61,14 @@ const synth = (local: Local, tm: Term): Val => {
   return terr(`synth failed: ${show(tm)}`);
 };
 
-const synthapp = (local: Local, ty: Val, tm: Term): Val => {
-  log(() => `synthapp ${showVal(local, ty)} @ ${show(tm)}`);
-  if (ty.tag === 'VPi') {
+const synthapp = (local: Local, ty: Val, mode: Mode, tm: Term): Val => {
+  log(() => `synthapp ${showVal(local, ty)} @${mode === ImplUnif ? 'impl' : ''} ${show(tm)}`);
+  if (ty.tag === 'VPi' && ty.mode === mode) {
     check(local, tm, ty.type);
     const v = evaluate(tm, local.vs);
     return vinst(ty, v);
   }
-  return terr(`not a pi type in synthapp: ${showVal(local, ty)}`);
+  return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === ImplUnif ? 'impl' : ''} ${show(tm)}`);
 };
 
 export const typecheck = (t: Term): Term => {

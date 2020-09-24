@@ -10,7 +10,7 @@ import { getMeta, isMetaSolved, postpone, problemsBlockedBy, solveMeta, Unsolved
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
-  if (a.tag === 'EApp' && b.tag === 'EApp') return unify(k, a.right, b.right);
+  if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode) return unify(k, a.right, b.right);
   return terr(`unify failed (${k}): ${showVal(x, k)} ~ ${showVal(y, k)}`);
 };
 export const unify = (k: Ix, a_: Val, b_: Val): void => {
@@ -19,23 +19,23 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
   log(() => `unify(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType') return;
-  if (a.tag === 'VPi' && b.tag === 'VPi') {
+  if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs') {
+  if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode) {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }
 
   if (a.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(k + 1, vinst(a, v), vapp(b, v));
+    return unify(k + 1, vinst(a, v), vapp(b, a.mode, v));
   }
   if (b.tag === 'VAbs') {
     const v = VVar(k);
-    return unify(k + 1, vapp(a, v), vinst(b, v));
+    return unify(k + 1, vapp(a, b.mode, v), vinst(b, v));
   }
 
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
@@ -83,7 +83,7 @@ const constructSolution = (k: Ix, ty_: Val, body: Term): Term => {
   const ty = force(ty_);
   if (ty.tag === 'VPi') {
     const v = VVar(k);
-    return Abs(ty.name, quote(ty.type, k), constructSolution(k + 1, vinst(ty, v), body));
+    return Abs(ty.mode, ty.name, quote(ty.type, k), constructSolution(k + 1, vinst(ty, v), body));
   } else return body;
 };
 
@@ -117,17 +117,17 @@ const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
   if (t.tag === 'App') {
     const l = checkSolution(k, m, is, t.left);
     const r = checkSolution(k, m, is, t.right);
-    return App(l, r);
+    return App(l, t.mode, r);
   }
   if (t.tag === 'Abs') {
     const ty = checkSolution(k, m, is, t.type);
     const body = checkSolution(k + 1, m, Cons(k, is), t.body);
-    return Abs(t.name, ty, body);
+    return Abs(t.mode, t.name, ty, body);
   }
   if (t.tag === 'Pi') {
     const ty = checkSolution(k, m, is, t.type);
     const body = checkSolution(k + 1, m, Cons(k, is), t.body);
-    return Pi(t.name, ty, body);
+    return Pi(t.mode, t.name, ty, body);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${show(t)}`);
 };

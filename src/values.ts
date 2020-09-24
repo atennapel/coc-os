@@ -1,5 +1,5 @@
 import { getMeta } from './context';
-import { Abs, App, Let, Meta, Pi, show, Term, Type, Var } from './core';
+import { Abs, App, Let, Meta, Pi, show, Term, Type, Var, Mode } from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
@@ -13,8 +13,8 @@ export const HMeta = (index: Ix): HMeta => ({ tag: 'HMeta', index });
 
 export type Elim = EApp;
 
-export type EApp = { tag: 'EApp', right: Val };
-export const EApp = (right: Val): EApp => ({ tag: 'EApp', right });
+export type EApp = { tag: 'EApp', mode: Mode, right: Val };
+export const EApp = (mode: Mode, right: Val): EApp => ({ tag: 'EApp', mode, right });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
@@ -25,12 +25,12 @@ export type Val = VNe | VAbs | VType | VPi;
 
 export type VNe = { tag: 'VNe', head: Head, spine: Spine };
 export const VNe = (head: Head, spine: Spine): VNe => ({ tag: 'VNe', head, spine });
-export type VAbs = { tag: 'VAbs', name: Name, type: Val, clos: Clos };
-export const VAbs = (name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', name, type, clos });
+export type VAbs = { tag: 'VAbs', mode: Mode, name: Name, type: Val, clos: Clos };
+export const VAbs = (mode: Mode, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', mode, name, type, clos });
 export type VType = { tag: 'VType' };
 export const VType: VType = { tag: 'VType' };
-export type VPi = { tag: 'VPi', name: Name, type: Val, clos: Clos };
-export const VPi = (name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', name, type, clos });
+export type VPi = { tag: 'VPi', mode: Mode, name: Name, type: Val, clos: Clos };
+export const VPi = (mode: Mode, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', mode, name, type, clos });
 
 export const VVar = (index: Ix): VNe => VNe(HVar(index), Nil);
 export const VMeta = (index: Ix, spine: Spine = Nil): VNe => VNe(HMeta(index), spine);
@@ -42,23 +42,23 @@ export const force = (v: Val): Val => {
   if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
     const val = getMeta(v.head.index);
     if (val.tag === 'Unsolved') return v;
-    return force(foldr((elim, y) => vapp(y, elim.right), val.val, v.spine));
+    return force(foldr((elim, y) => vapp(y, elim.mode, elim.right), val.val, v.spine));
   }
   return v;
 };
 
-export const vapp = (left: Val, right: Val): Val => {
+export const vapp = (left: Val, mode: Mode, right: Val): Val => {
   if (left.tag === 'VAbs') return vinst(left, right);
-  if (left.tag === 'VNe') return VNe(left.head, Cons(EApp(right), left.spine));
+  if (left.tag === 'VNe') return VNe(left.head, Cons(EApp(mode, right), left.spine));
   return impossible(`vapp: ${left.tag}`);
 };
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Abs')
-    return VAbs(t.name, evaluate(t.type, vs), Clos(vs, t.body));
+    return VAbs(t.mode, t.name, evaluate(t.type, vs), Clos(vs, t.body));
   if (t.tag === 'Pi')
-    return VPi(t.name, evaluate(t.type, vs), Clos(vs, t.body));
+    return VPi(t.mode, t.name, evaluate(t.type, vs), Clos(vs, t.body));
   if (t.tag === 'Meta') {
     const s = getMeta(t.index);
     return s.tag === 'Solved' ? s.val : VMeta(t.index);
@@ -66,7 +66,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Var') 
     return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'App')
-    return vapp(evaluate(t.left, vs), evaluate(t.right, vs));
+    return vapp(evaluate(t.left, vs), t.mode, evaluate(t.right, vs));
   if (t.tag === 'Let')
     return evaluate(t.body, Cons(evaluate(t.val, vs), vs));
   return t;
@@ -78,7 +78,7 @@ const quoteHead = (h: Head, k: Ix): Term => {
   return h;
 };
 const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
-  if (e.tag === 'EApp') return App(t, quote(e.right, k));
+  if (e.tag === 'EApp') return App(t, e.mode, quote(e.right, k));
   return e.tag;
 };
 export const quote = (v_: Val, k: Ix): Term => {
@@ -91,9 +91,9 @@ export const quote = (v_: Val, k: Ix): Term => {
       v.spine,
     );
   if (v.tag === 'VAbs')
-    return Abs(v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+    return Abs(v.mode, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
   if (v.tag === 'VPi')
-    return Pi(v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+    return Pi(v.mode, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
   return v;
 };
 
@@ -109,8 +109,8 @@ const zonkSpine = (tm: Term, vs: EnvV, k: Ix): S => {
   if (tm.tag === 'App') {
     const spine = zonkSpine(tm.left, vs, k);
     return spine[0] ?
-      [true, App(spine[1], zonk(tm.right, vs, k))] :
-      [false, vapp(spine[1], evaluate(tm.right, vs))];
+      [true, App(spine[1], tm.mode, zonk(tm.right, vs, k))] :
+      [false, vapp(spine[1], tm.mode, evaluate(tm.right, vs))];
   }
   return [true, zonk(tm, vs, k)];
 };
@@ -120,16 +120,16 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0): Term => {
     return s.tag === 'Solved' ? quote(s.val, k) : tm;
   }
   if (tm.tag === 'Pi')
-    return Pi(tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+    return Pi(tm.mode, tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
   if (tm.tag === 'Let')
     return Let(tm.name, zonk(tm.type, vs, k), zonk(tm.val, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
   if (tm.tag === 'Abs')
-    return Abs(tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+    return Abs(tm.mode, tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
   if (tm.tag === 'App') {
     const spine = zonkSpine(tm.left, vs, k);
     return spine[0] ?
-      App(spine[1], zonk(tm.right, vs, k)) :
-      quote(vapp(spine[1], evaluate(tm.right, vs)), k);
+      App(spine[1], tm.mode, zonk(tm.right, vs, k)) :
+      quote(vapp(spine[1], tm.mode, evaluate(tm.right, vs)), k);
   }
   return tm;
 };

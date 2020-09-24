@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Let, Meta, Pi, Term, Type, Var } from './core';
+import { Abs, App, Let, Meta, Pi, Term, Type, Var, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, foldr, index, indexOf, List, map, Nil, reverse, zipWithIndex } from './utils/list';
@@ -11,37 +11,39 @@ import { show } from './surface';
 import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
 import { unify } from './unification';
 
-type EntryT = { type: Val, bound: boolean };
-const EntryT = (type: Val, bound: boolean): EntryT => ({ type, bound });
+type EntryT = { type: Val, bound: boolean, mode: Mode, inserted: boolean };
+const EntryT = (type: Val, bound: boolean, mode: Mode, inserted: boolean): EntryT =>
+  ({ type, bound, mode, inserted });
 
 type EnvT = List<EntryT>;
 
 interface Local {
   index: Ix;
   ns: List<Name>;
+  nsSurface: List<Name>;
   ts: EnvT;
   vs: EnvV;
 }
-const Local = (index: Ix, ns: List<Name>, ts: EnvT, vs: EnvV): Local => ({ index, ns, ts, vs });
-const localEmpty: Local = Local(0, Nil, Nil, Nil);
-const localExtend = (local: Local, name: Name, ty: Val, bound: boolean = true, val: Val = VVar(local.index)): Local =>
-  Local(local.index + 1, Cons(name, local.ns), Cons(EntryT(ty, bound), local.ts), Cons(val, local.vs));
+const Local = (index: Ix, ns: List<Name>, nsSurface: List<Name>, ts: EnvT, vs: EnvV): Local => ({ index, ns, nsSurface, ts, vs });
+const localEmpty: Local = Local(0, Nil, Nil, Nil, Nil);
+const localExtend = (local: Local, name: Name, ty: Val, mode: Mode, bound: boolean = true, inserted: boolean = false, val: Val = VVar(local.index)): Local =>
+  Local(local.index + 1, Cons(name, local.ns), inserted ? local.nsSurface: Cons(name, local.nsSurface), Cons(EntryT(ty, bound, mode, inserted), local.ts), Cons(val, local.vs));
 
 const showVal = (local: Local, val: Val): string => S.showValZ(val, local.vs, local.index, local.ns);
 
 const selectName = (a: Name, b: Name): Name => a === '_' ? b : a;
 
 const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix): Term =>
-  l.tag === 'Cons' ? Pi(l.head[1], quote(l.head[2].type, k), constructMetaType(l.tail, b, k + 1)) : quote(b, k);
+  l.tag === 'Cons' ? Pi(l.head[2].mode, l.head[1], quote(l.head[2].type, k), constructMetaType(l.tail, b, k + 1)) : quote(b, k);
 const newMeta = (local: Local, ty: Val): Term => {
   const zipped = zipWithIndex((x, y, i) => [i, x, y] as [Ix, Name, EntryT], local.ns, local.ts);
   const boundOnly = filter(zipped, ([_, __, ty]) => ty.bound);
-  const spine: List<Term> = map(boundOnly, x => Var(x[0]));
+  const spine: List<[Mode, Term]> = map(boundOnly, x => [x[2].mode, Var(x[0])] as [Mode, Term]);
   const mty = constructMetaType(reverse(boundOnly), ty, 0);
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);
   log(() => `new meta type: ${V.showVal(vmty, 0)}`);
-  return foldr((x, y) => App(y, x), Meta(freshMeta(vmty)) as Term, spine);
+  return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty)) as Term, spine);
 };
 
 const check = (local: Local, tm: S.Term, ty: Val): Term => {
@@ -51,11 +53,11 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     return x;
   }
   const fty = force(ty);
-  if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi') {
+  if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
     const v = VVar(local.index);
     const x = selectName(tm.name, fty.name);
-    const body = check(localExtend(local, x, fty.type, true, v), tm.body, vinst(fty, v));
-    return Abs(x, quote(fty.type, local.index), body);
+    const body = check(localExtend(local, x, fty.type, tm.mode, true, false, v), tm.body, vinst(fty, v));
+    return Abs(tm.mode, x, quote(fty.type, local.index), body);
   }
   if (tm.tag === 'Let') {
     let type: Term;
@@ -70,7 +72,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
       type = quote(ty, local.index);
     }
     const v = evaluate(val, local.vs);
-    const body = check(localExtend(local, tm.name, ty, false, v), tm.body, ty);
+    const body = check(localExtend(local, tm.name, ty, C.Expl, false, false, v), tm.body, ty);
     return Let(tm.name, type, val, body);
   }
   const [term, ty2] = synth(local, tm);
@@ -80,11 +82,11 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
   }, e => terr(`check failed (${show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
 };
 
-const freshPi = (local: Local, x: Name): Val => {
+const freshPi = (local: Local, mode: Mode, x: Name): Val => {
   const a = newMeta(local, VType);
   const va = evaluate(a, local.vs);
-  const b = newMeta(localExtend(local, '_', va), VType);
-  return evaluate(Pi(x, a, b), local.vs);
+  const b = newMeta(localExtend(local, '_', va, mode), VType);
+  return evaluate(Pi(mode, x, a, b), local.vs);
 };
 
 const synth = (local: Local, tm: S.Term): [Term, Val] => {
@@ -99,18 +101,18 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   }
   if (tm.tag === 'App') {
     const [left, ty] = synth(local, tm.left);
-    const [right, rty] = synthapp(local, ty, tm.right);
-    return [App(left, right), rty];
+    const [right, rty] = synthapp(local, ty, tm.mode, tm.right);
+    return [App(left, tm.mode, right), rty];
   }
   if (tm.tag === 'Abs' && tm.type) {
     if (tm.type) {
       const type = check(local, tm.type, VType);
       const ty = evaluate(type, local.vs);
-      const [body, rty] = synth(localExtend(local, tm.name, ty), tm.body);
-      const pi = evaluate(Pi(tm.name, type, quote(rty, local.index + 1)), local.vs);
-      return [Abs(tm.name, type, body), pi];
+      const [body, rty] = synth(localExtend(local, tm.name, ty, tm.mode), tm.body);
+      const pi = evaluate(Pi(tm.mode, tm.name, type, quote(rty, local.index + 1)), local.vs);
+      return [Abs(tm.mode, tm.name, type, body), pi];
     } else {
-      const pi = freshPi(local, tm.name);
+      const pi = freshPi(local, tm.mode, tm.name);
       const term = check(local, tm, pi);
       return [term, pi];
     }
@@ -118,8 +120,8 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   if (tm.tag === 'Pi') {
     const type = check(local, tm.type, VType);
     const ty = evaluate(type, local.vs);
-    const body = check(localExtend(local, tm.name, ty), tm.body, VType);
-    return [Pi(tm.name, type, body), VType];
+    const body = check(localExtend(local, tm.name, ty, tm.mode), tm.body, VType);
+    return [Pi(tm.mode, tm.name, type, body), VType];
   }
   if (tm.tag === 'Let') {
     let type: Term;
@@ -134,7 +136,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
       type = quote(ty, local.index);
     }
     const v = evaluate(val, local.vs);
-    const [body, rty] = synth(localExtend(local, tm.name, ty, false, v), tm.body);
+    const [body, rty] = synth(localExtend(local, tm.name, ty, C.Expl, false, false, v), tm.body);
     return [Let(tm.name, type, val, body), rty];
   }
   if (tm.tag === 'Hole') {
@@ -145,10 +147,10 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   return terr(`unable to synth ${show(tm)}`);
 };
 
-const synthapp = (local: Local, ty: Val, tm: S.Term): [Term, Val] => {
-  log(() => `synthapp ${showVal(local, ty)} @ ${show(tm)}`);
+const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term): [Term, Val] => {
+  log(() => `synthapp ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
   const fty = force(ty);
-  if (fty.tag === 'VPi') {
+  if (fty.tag === 'VPi' && fty.mode === mode) {
     const term = check(local, tm, fty.type);
     const v = evaluate(term, local.vs);
     return [term, vinst(fty, v)];
@@ -157,11 +159,11 @@ const synthapp = (local: Local, ty: Val, tm: S.Term): [Term, Val] => {
     const mty = getMeta(ty.head.index).type;
     const a = freshMeta(mty);
     const b = freshMeta(mty);
-    const pi = evaluate(Pi('_', quote(VNe(HMeta(a), ty.spine), local.index), quote(VNe(HMeta(b), ty.spine), local.index + 1)), local.vs);
+    const pi = evaluate(Pi(mode, '_', quote(VNe(HMeta(a), ty.spine), local.index), quote(VNe(HMeta(b), ty.spine), local.index + 1)), local.vs);
     unify(local.index, ty, pi);
-    return synthapp(local, pi, tm);
+    return synthapp(local, pi, mode, tm);
   }
-  return terr(`not a pi type in synthapp: ${showVal(local, ty)}`);
+  return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
 };
 
 const tryToSolveBlockedProblems = (): void => {

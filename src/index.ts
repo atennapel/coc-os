@@ -1,13 +1,16 @@
 import { elaborate } from './elaboration';
 import { Abs, App, Hole, Let, Pi, show, showCore, Type, Var } from './surface';
 import * as C from './core';
+import { Expl, ImplUnif } from './core';
 import { normalize } from './values';
 import { typecheck } from './typecheck';
 import { setConfig } from './config';
 
-setConfig({ debug: true });
+setConfig({ debug: false });
 
-const term = Abs('A', Type, Abs('x', Var('A'), Let('tid', null, Pi('t', Type, Pi('_', Var('t'), Var('t'))), Let('id', Var('tid'), Abs('t', null, Abs('x', null, Var('x'))), App(App(Var('id'), Hole), Var('x'))))));
+const Impl = ImplUnif;
+
+const term = Abs(Expl, 'A', Type, Abs(Expl, 'x', Var('A'), Let('tid', null, Pi(Impl, 't', Type, Pi(Expl, '_', Var('t'), Var('t'))), Let('id', Var('tid'), Abs(Impl, 't', null, Abs(Expl, 'x', null, Var('x'))), App(App(Var('id'), Impl, Hole), Expl, Var('x'))))));
 console.log(show(term));
 
 console.log('ELABORATE');

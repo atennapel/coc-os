@@ -11,3 +11,9 @@ Typecheck file:
 yarn install
 yarn start filename
 ```
+
+```
+TODO:
+- implement meta insertion
+- implement sigma types
+```
