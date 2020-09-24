@@ -38,3 +38,12 @@ export const hasDuplicates = <T>(x: T[]): boolean => {
   }
   return false;
 };
+
+export const tryT = <T>(v: () => T, e: (err: TypeError) => T): T => {
+  try {
+    return v();
+  } catch (err) {
+    if (!(err instanceof TypeError)) return err;
+    return e(err);
+  }
+};
