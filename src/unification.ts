@@ -6,7 +6,7 @@ import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil,
 import { hasDuplicates, impossible, terr, tryT } from './utils/utils';
 import { Elim, force, Spine, Val, vapp, vinst, VVar, VMeta, quote, evaluate, showVal } from './values';
 import * as V from './values';
-import { getMeta, isMetaSolved, solveMeta, Unsolved } from './context';
+import { getMeta, isMetaSolved, postpone, problemsBlockedBy, solveMeta, Unsolved } from './context';
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
@@ -56,7 +56,12 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
   log(() => `solve ${V.showVal(VMeta(m, spine), k)} := ${showVal(val, k)} (${k})`);
   tryT(() => {
     if (isMetaSolved(m)) return impossible(`meta ?${m} is already solved`);
-    const spinex = checkSpine(k, spine);
+    const spinex = checkSpineTop(k, spine);
+    if (spinex instanceof TypeError) {
+      // postpone if spine contains non-vars
+      postpone(k, VMeta(m, spine), val, [m]);
+      return;
+    }
     if (hasDuplicates(toArray(spinex, x => x))) return terr(`meta spine contains duplicates`);
     const rhs = quote(val, k);
     const body = checkSolution(k, m, spinex, rhs);
@@ -69,6 +74,9 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
     const vsolution = evaluate(solution, Nil);
     return solveMeta(m, vsolution);
   }, err => terr(`failed to solve meta ${V.showVal(VMeta(m, spine), k)} := ${showVal(val, k)}: ${err.message}`));
+  
+  // try to solve blocked problems for the meta
+  problemsBlockedBy(m).forEach(p => unify(p.k, p.a, p.b));
 };
 
 const constructSolution = (k: Ix, ty_: Val, body: Term): Term => {
@@ -78,6 +86,9 @@ const constructSolution = (k: Ix, ty_: Val, body: Term): Term => {
     return Abs(ty.name, quote(ty.type, k), constructSolution(k + 1, vinst(ty, v), body));
   } else return body;
 };
+
+const checkSpineTop = (k: Ix, spine: Spine): List<Ix> | TypeError =>
+  tryT<List<Ix> | TypeError>(() => checkSpine(k, spine), err => err);
 
 const checkSpine = (k: Ix, spine: Spine): List<Ix> =>
   map(spine, elim => {

@@ -8,7 +8,7 @@ import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, VType, VVar, zonk
 import * as V from './values';
 import * as S from './surface';
 import { show } from './surface';
-import { allMetasSolved, freshMeta, getMeta, resetContext } from './context';
+import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
 import { unify } from './unification';
 
 type EntryT = { type: Val, bound: boolean };
@@ -164,12 +164,32 @@ const synthapp = (local: Local, ty: Val, tm: S.Term): [Term, Val] => {
   return terr(`not a pi type in synthapp: ${showVal(local, ty)}`);
 };
 
+const tryToSolveBlockedProblems = (): void => {
+  if (amountOfProblems() > 0) {
+    let changed = true;
+    while (changed) {
+      const blocked = allProblems();
+      changed = false;
+      for (let i = 0, l = blocked.length; i < l; i++) {
+        const c = blocked[i];
+        const l = amountOfProblems();
+        unify(c.k, c.a, c.b);
+        if (amountOfProblems() > l) changed = true;
+      }
+    }
+  }
+};
+
 export const elaborate = (t: S.Term): [Term, Term] => {
   resetContext();
   const [tm, ty] = synth(localEmpty, t);
+
+  tryToSolveBlockedProblems();
+
   const ztm = zonk(tm);
   const zty = zonk(quote(ty, 0));
-  if (!allMetasSolved())
+
+  if (!contextSolved())
     return terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
   return [ztm, zty];
 };

@@ -9,9 +9,13 @@ export const Unsolved = (type: Val): Unsolved => ({ tag: 'Unsolved', type });
 export type Solved = { tag: 'Solved', val: Val, type: Val };
 export const Solved = (val: Val, type: Val): Solved => ({ tag: 'Solved', val, type });
 
-// MUTABLE
-export type Context = { metas: Solution[] };
-export const Context = (metas: Solution[] = []) => ({ metas });
+// postponing
+type Blocked = { k: Ix, a: Val, b: Val, blockedBy: Ix[] };
+const Blocked = (k: Ix, a: Val, b: Val, blockedBy: Ix[]) => ({ k, a, b, blockedBy });
+
+// context is mutable
+type Context = { metas: Solution[], blocked: Blocked[] };
+const Context = (metas: Solution[] = [], blocked: Blocked[] = []) => ({ metas, blocked });
 
 let context: Context = Context();
 
@@ -39,4 +43,30 @@ export const solveMeta = (id: Ix, val: Val): void => {
   context.metas[id] = Solved(val, s.type);
 };
 
-export const allMetasSolved = (): boolean => context.metas.every(s => s.tag === 'Solved');
+export const postpone = (k: Ix, a: Val, b: Val, blockedBy: Ix[]): void => {
+  context.blocked.push(Blocked(k, a, b, blockedBy));
+};
+
+export const problemsBlockedBy = (m: Ix): Blocked[] => {
+  const bs = context.blocked;
+  const newbs = [];
+  const r = [];
+  for (let i = 0, l = bs.length; i < l; i++) {
+    const c = bs[i];
+    if (c.blockedBy.includes(m)) r.push(c);
+    else newbs.push(c);
+  }
+  context.blocked = newbs;
+  return r;
+};
+
+export const allProblems = (): Blocked[] => {
+  const blocked = context.blocked;
+  context.blocked = [];
+  return blocked;
+};
+
+export const amountOfProblems = (): number => context.blocked.length;
+
+export const contextSolved = (): boolean =>
+  context.metas.every(s => s.tag === 'Solved') && context.blocked.length === 0;
