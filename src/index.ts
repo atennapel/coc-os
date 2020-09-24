@@ -1,5 +1,5 @@
 import { elaborate } from './elaboration';
-import { Abs, App, Hole, Let, Pi, show, showCore, Type, Var } from './surface';
+import { Abs, App, Let, Pi, show, showCore, Type, Var } from './surface';
 import * as C from './core';
 import { Expl, ImplUnif } from './core';
 import { normalize } from './values';
@@ -10,7 +10,7 @@ setConfig({ debug: false });
 
 const Impl = ImplUnif;
 
-const term = Abs(Expl, 'A', Type, Abs(Expl, 'x', Var('A'), Let('tid', null, Pi(Impl, 't', Type, Pi(Expl, '_', Var('t'), Var('t'))), Let('id', Var('tid'), Abs(Impl, 't', null, Abs(Expl, 'x', null, Var('x'))), App(App(Var('id'), Impl, Hole), Expl, Var('x'))))));
+const term = Abs(Expl, 'A', Type, Abs(Expl, 'x', Var('A'), Let('tid', null, Pi(Impl, 't', Type, Pi(Expl, '_', Var('t'), Var('t'))), Let('id', Var('tid'), Abs(Expl, 'x', null, Var('x')), App(Var('id'), Expl, Var('x'))))));
 console.log(show(term));
 
 console.log('ELABORATE');

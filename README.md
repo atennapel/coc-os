@@ -14,6 +14,10 @@ yarn start filename
 
 ```
 TODO:
-- implement meta insertion
+- defined syntax for implicit
+- implement parser
 - implement sigma types
+- add erasure
+- implement pruning
+- implement instance search
 ```

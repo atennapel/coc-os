@@ -2,7 +2,7 @@ import { log } from './config';
 import { Abs, App, Let, Meta, Pi, Term, Type, Var, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
-import { Cons, filter, foldr, index, indexOf, List, map, Nil, reverse, zipWithIndex } from './utils/list';
+import { Cons, filter, foldl, foldr, index, indexOf, List, map, Nil, reverse, zipWithIndex } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, VType, VVar, zonk } from './values';
 import * as V from './values';
@@ -46,6 +46,17 @@ const newMeta = (local: Local, ty: Val): Term => {
   return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty)) as Term, spine);
 };
 
+const inst = (local: Local, ty_: Val): [Val, List<Term>] => {
+  const ty = force(ty_);
+  if (ty.tag === 'VPi' && ty.mode === C.ImplUnif) {
+    const m = newMeta(local, ty.type);
+    const vm = evaluate(m, local.vs);
+    const [res, args] = inst(local, vinst(ty, vm));
+    return [res, Cons(m, args)];
+  }
+  return [ty, Nil];
+};
+
 const check = (local: Local, tm: S.Term, ty: Val): Term => {
   log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   if (tm.tag === 'Hole') {
@@ -58,6 +69,11 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     const x = selectName(tm.name, fty.name);
     const body = check(localExtend(local, x, fty.type, tm.mode, true, false, v), tm.body, vinst(fty, v));
     return Abs(tm.mode, x, quote(fty.type, local.index), body);
+  }
+  if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === C.Expl && fty.mode === C.ImplUnif) {
+    const v = VVar(local.index);
+    const term = check(localExtend(local, fty.name, fty.type, fty.mode, true, true, v), tm, vinst(fty, v));
+    return Abs(fty.mode, fty.name, quote(fty.type, local.index), term);
   }
   if (tm.tag === 'Let') {
     let type: Term;
@@ -76,9 +92,11 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     return Let(tm.name, type, val, body);
   }
   const [term, ty2] = synth(local, tm);
+  const [ty2inst, ms] = inst(local, ty2);
   return tryT(() => {
-    unify(local. index, ty2, ty)
-    return term;
+    log(() => `unify ${showVal(local, ty2inst)} ~ ${showVal(local, ty)}`);
+    unify(local.index, ty2inst, ty);
+    return foldl((a, m) => App(a, C.ImplUnif, m), term, ms);
   }, e => terr(`check failed (${show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
 };
 
@@ -101,8 +119,8 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   }
   if (tm.tag === 'App') {
     const [left, ty] = synth(local, tm.left);
-    const [right, rty] = synthapp(local, ty, tm.mode, tm.right);
-    return [App(left, tm.mode, right), rty];
+    const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right);
+    return [App(foldl((f, a) => App(f, C.ImplUnif, a), left, ms), tm.mode, right), rty];
   }
   if (tm.tag === 'Abs' && tm.type) {
     if (tm.type) {
@@ -147,13 +165,19 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   return terr(`unable to synth ${show(tm)}`);
 };
 
-const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term): [Term, Val] => {
+const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term): [Term, Val, List<Term>] => {
   log(() => `synthapp ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
   const fty = force(ty);
   if (fty.tag === 'VPi' && fty.mode === mode) {
     const term = check(local, tm, fty.type);
     const v = evaluate(term, local.vs);
-    return [term, vinst(fty, v)];
+    return [term, vinst(fty, v), Nil];
+  }
+  if (fty.tag === 'VPi' && fty.mode === C.ImplUnif && mode === C.Expl) {
+    const m = newMeta(local, fty.type);
+    const vm = evaluate(m, local.vs);
+    const [rest, rt, l] = synthapp(local, vinst(fty, vm), mode, tm);
+    return [rest, rt, Cons(m, l)];
   }
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
     const mty = getMeta(ty.head.index).type;
