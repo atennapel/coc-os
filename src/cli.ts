@@ -9,8 +9,10 @@ import { normalize } from './values';
 
 if (process.argv[2]) {
   const option = process.argv[3] || '';
+  let verify = false;
   if (option.includes('d')) setConfig({ debug: true });
   if (option.includes('e')) setConfig({ showEnvs: true });
+  if (option.includes('v')) verify = true;
   try {
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
     const term = parse(sc);
@@ -26,10 +28,12 @@ if (process.argv[2]) {
     log(() => C.show(etype));
     log(() => showCore(etype));
 
-    log(() => 'TYPECHECK');
-    const ttype = typecheck(eterm);
-    log(() => C.show(ttype));
-    log(() => showCore(ttype));
+    if (verify) {
+      log(() => 'TYPECHECK');
+      const ttype = typecheck(eterm);
+      log(() => C.show(ttype));
+      log(() => showCore(ttype));
+    }
 
     log(() => 'NORMALIZE');
     const norm = normalize(eterm);

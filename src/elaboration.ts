@@ -2,10 +2,9 @@ import { log } from './config';
 import { Abs, App, Let, Meta, Pi, Term, Type, Var, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
-import { Cons, filter, foldl, foldr, indexOf, List, map, Nil, reverse, zipWithIndex } from './utils/list';
+import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, zipWithIndex } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, VType, VVar, zonk } from './values';
-import * as V from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
@@ -55,11 +54,13 @@ const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix): Te
 const newMeta = (local: Local, ty: Val): Term => {
   const zipped = zipWithIndex((x, y, i) => [i, x, y] as [Ix, Name, EntryT], local.ns, local.ts);
   const boundOnly = filter(zipped, ([_, __, ty]) => ty.bound);
+  log(() => `new meta spine: ${listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
   const spine: List<[Mode, Term]> = map(boundOnly, x => [x[2].mode, Var(x[0])] as [Mode, Term]);
-  const mty = constructMetaType(reverse(boundOnly), ty, 0);
+  log(() => `new meta spine: ${listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
+  log(() => `${local.index}`);
+  const mty = constructMetaType(reverse(boundOnly), ty, local.index - length(spine));
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);
-  log(() => `new meta type: ${V.showVal(vmty, 0)}`);
   return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty)) as Term, spine);
 };
 
@@ -87,7 +88,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     const body = check(localExtend(local, x, fty.type, tm.mode, true, false, v), tm.body, vinst(fty, v));
     return Abs(tm.mode, x, quote(fty.type, local.index), body);
   }
-  if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === C.Expl && fty.mode === C.ImplUnif) {
+  if (fty.tag === 'VPi' && fty.mode === C.ImplUnif) {
     const v = VVar(local.index);
     const term = check(localExtend(local, fty.name, fty.type, fty.mode, true, true, v), tm, vinst(fty, v));
     return Abs(fty.mode, fty.name, quote(fty.type, local.index), term);

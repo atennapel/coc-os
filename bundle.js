@@ -183,7 +183,6 @@ const C = require("./core");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
-const V = require("./values");
 const S = require("./surface");
 const surface_1 = require("./surface");
 const context_1 = require("./context");
@@ -215,11 +214,13 @@ const constructMetaType = (l, b, k) => l.tag === 'Cons' ? core_1.Pi(l.head[2].mo
 const newMeta = (local, ty) => {
     const zipped = list_1.zipWithIndex((x, y, i) => [i, x, y], local.ns, local.ts);
     const boundOnly = list_1.filter(zipped, ([_, __, ty]) => ty.bound);
+    config_1.log(() => `new meta spine: ${list_1.listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
     const spine = list_1.map(boundOnly, x => [x[2].mode, core_1.Var(x[0])]);
-    const mty = constructMetaType(list_1.reverse(boundOnly), ty, 0);
+    config_1.log(() => `new meta spine: ${list_1.listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
+    config_1.log(() => `${local.index}`);
+    const mty = constructMetaType(list_1.reverse(boundOnly), ty, local.index - list_1.length(spine));
     config_1.log(() => `new meta type: ${C.show(mty)}`);
     const vmty = values_1.evaluate(mty, list_1.Nil);
-    config_1.log(() => `new meta type: ${V.showVal(vmty, 0)}`);
     return list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty)), spine);
 };
 const inst = (local, ty_) => {
@@ -245,7 +246,7 @@ const check = (local, tm, ty) => {
         const body = check(localExtend(local, x, fty.type, tm.mode, true, false, v), tm.body, values_1.vinst(fty, v));
         return core_1.Abs(tm.mode, x, values_1.quote(fty.type, local.index), body);
     }
-    if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === C.Expl && fty.mode === C.ImplUnif) {
+    if (fty.tag === 'VPi' && fty.mode === C.ImplUnif) {
         const v = values_1.VVar(local.index);
         const term = check(localExtend(local, fty.name, fty.type, fty.mode, true, true, v), tm, values_1.vinst(fty, v));
         return core_1.Abs(fty.mode, fty.name, values_1.quote(fty.type, local.index), term);
