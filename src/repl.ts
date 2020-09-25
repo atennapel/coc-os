@@ -18,6 +18,7 @@ export const runREPL = (s: string, cb: (msg: string, err?: boolean) => void) => 
     }
     const term = parse(s);
     log(() => show(term));
+
     log(() => 'ELABORATE');
     const [eterm, etype] = elaborate(term);
     log(() => C.show(eterm));
