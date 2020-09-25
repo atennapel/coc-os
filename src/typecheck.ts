@@ -45,7 +45,21 @@ const synth = (local: Local, tm: Term): Val => {
     const rty = synth(localExtend(local, ty), tm.body);
     return evaluate(Pi(tm.mode, tm.name, tm.type, quote(rty, local.index + 1)), local.vs);
   }
+  if (tm.tag === 'Pair') {
+    check(local, tm.type, VType);
+    const ty = evaluate(tm.type, local.vs);
+    if (ty.tag !== 'VSigma') return terr(`not a sigma type in pair: ${show(tm)}`);
+    check(local, tm.fst, ty.type);
+    check(local, tm.snd, vinst(ty, evaluate(tm.fst, local.vs)));
+    return ty;
+  }
   if (tm.tag === 'Pi') {
+    check(local, tm.type, VType);
+    const ty = evaluate(tm.type, local.vs);
+    check(localExtend(local, ty), tm.body, VType);
+    return VType;
+  }
+  if (tm.tag === 'Sigma') {
     check(local, tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
     check(localExtend(local, ty), tm.body, VType);

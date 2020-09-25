@@ -1,6 +1,6 @@
 import { log } from './config';
 import { eqHead } from './conversion';
-import { Abs, App, Pi, show, Term, Var } from './core';
+import { Abs, App, Pair, Pi, show, Sigma, Term, Var } from './core';
 import { Ix } from './names';
 import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil, toArray, zipWithR_ } from './utils/list';
 import { hasDuplicates, impossible, terr, tryT } from './utils/utils';
@@ -24,9 +24,18 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }
+  if (a.tag === 'VSigma' && b.tag === 'VSigma') {
+    unify(k, a.type, b.type);
+    const v = VVar(k);
+    return unify(k + 1, vinst(a, v), vinst(b, v));
+  }
   if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode) {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
+  }
+  if (a.tag === 'VPair' && b.tag === 'VPair') {
+    unify(k, a.fst, b.fst);
+    return unify(k, a.snd, b.snd);
   }
 
   if (a.tag === 'VAbs') {
@@ -37,6 +46,16 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return unify(k + 1, vapp(a, b.mode, v), vinst(b, v));
   }
+  /*
+  if (a.tag === 'VPair') {
+    unify(k, a.fst, vproj('fst', b));
+    return unify(k, a.snd, vproj('snd', b));
+  }
+  if (b.tag === 'VPair') {
+    unify(k, vproj('fst', a), b.fst);
+    return unify(k, vproj('snd', a), b.snd);
+  }
+  */
 
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
     return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.spine, b.spine);
@@ -119,6 +138,12 @@ const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
     const r = checkSolution(k, m, is, t.right);
     return App(l, t.mode, r);
   }
+  if (t.tag === 'Pair') {
+    const fst = checkSolution(k, m, is, t.fst);
+    const snd = checkSolution(k, m, is, t.snd);
+    const type = checkSolution(k, m, is, t.type);
+    return Pair(fst, snd, type);
+  }
   if (t.tag === 'Abs') {
     const ty = checkSolution(k, m, is, t.type);
     const body = checkSolution(k + 1, m, Cons(k, is), t.body);
@@ -128,6 +153,11 @@ const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
     const ty = checkSolution(k, m, is, t.type);
     const body = checkSolution(k + 1, m, Cons(k, is), t.body);
     return Pi(t.mode, t.name, ty, body);
+  }
+  if (t.tag === 'Sigma') {
+    const ty = checkSolution(k, m, is, t.type);
+    const body = checkSolution(k + 1, m, Cons(k, is), t.body);
+    return Sigma(t.name, ty, body);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${show(t)}`);
 };

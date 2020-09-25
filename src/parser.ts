@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Type, Abs, Pi, Let, Hole } from './surface';
+import { Term, Var, App, Type, Abs, Pi, Let, Hole, Sigma, Pair } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif } from './core';
 
@@ -23,8 +23,8 @@ const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
-const SYM1: string[] = ['\\', ':', '*', '='];
-const SYM2: string[] = ['->'];
+const SYM1: string[] = ['\\', ':', '*', '=', ','];
+const SYM2: string[] = ['->', '**'];
 
 const START = 0;
 const NAME = 1;
@@ -290,6 +290,44 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(');
     return args.reduceRight((x, [name, impl, ty]) => Pi(impl ? ImplUnif : Expl, name, ty, x), body);
+  }
+  const jp = ts.findIndex(x => isName(x, ','));
+  if (jp >= 0) {
+    const s = splitTokens(ts, x => isName(x, ','));
+    if (s.length < 2) return serr(`parsing failed with ,`);
+    const args: [Term, boolean][] = s.map(x => {
+      if (x.length === 1) {
+        const h = x[0];
+        if (h.tag === 'List' && h.bracket === '{')
+          return expr(h)
+      }
+      return [exprs(x, '('), false];
+    });
+    if (args.length === 0) return serr(`empty pair`);
+    if (args.length === 1) return serr(`singleton pair`);
+    const last1 = args[args.length - 1];
+    const last2 = args[args.length - 2];
+    const lastitem = Pair(last2[0], last1[0]);
+    return args.slice(0, -2).reduceRight((x, [y, p]) => Pair(y, x), lastitem);
+  }
+  const js = ts.findIndex(x => isName(x, '**'));
+  if (js >= 0) {
+    const s = splitTokens(ts, x => isName(x, '**'));
+    if (s.length < 2) return serr(`parsing failed with **`);
+    const args: [Name, boolean, Term][] = s.slice(0, -1)
+      .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')] as [Name, boolean, Term]])
+      .reduce((x, y) => x.concat(y), []);
+    const rest = s[s.length - 1];
+    let body: [Term, boolean];
+    if (rest.length === 1) {
+      const h = rest[0];
+      if (h.tag === 'List' && h.bracket === '{')
+        body = expr(h)
+      else body = [exprs(s[s.length - 1], '('), false];
+    } else body = [exprs(s[s.length - 1], '('), false];
+    const last = args[args.length - 1];
+    const lastitem = Sigma(last[0], last[2], body[0]);
+    return args.slice(0, -1).reduceRight((x, [name, impl, ty]) => Sigma(name, ty, x), lastitem);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];

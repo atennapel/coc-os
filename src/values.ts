@@ -1,5 +1,5 @@
 import { getMeta } from './context';
-import { Abs, App, Let, Meta, Pi, show, Term, Type, Var, Mode } from './core';
+import { Abs, App, Let, Meta, Pi, show, Term, Type, Var, Mode, Sigma, Pair } from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
@@ -21,22 +21,26 @@ export type EnvV = List<Val>;
 export type Clos = { env: EnvV, body: Term };
 export const Clos = (env: EnvV, body: Term): Clos => ({ env, body });
 
-export type Val = VNe | VAbs | VType | VPi;
+export type Val = VNe | VAbs | VPair | VType | VPi | VSigma;
 
 export type VNe = { tag: 'VNe', head: Head, spine: Spine };
 export const VNe = (head: Head, spine: Spine): VNe => ({ tag: 'VNe', head, spine });
 export type VAbs = { tag: 'VAbs', mode: Mode, name: Name, type: Val, clos: Clos };
 export const VAbs = (mode: Mode, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', mode, name, type, clos });
+export type VPair = { tag: 'VPair', fst: Val, snd: Val, type: Val };
+export const VPair = (fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', fst, snd, type });
 export type VType = { tag: 'VType' };
 export const VType: VType = { tag: 'VType' };
 export type VPi = { tag: 'VPi', mode: Mode, name: Name, type: Val, clos: Clos };
 export const VPi = (mode: Mode, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', mode, name, type, clos });
+export type VSigma = { tag: 'VSigma', name: Name, type: Val, clos: Clos };
+export const VSigma = (name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', name, type, clos });
 
 export const VVar = (index: Ix): VNe => VNe(HVar(index), Nil);
 export const VMeta = (index: Ix, spine: Spine = Nil): VNe => VNe(HMeta(index), spine);
 
 const cinst = (clos: Clos, arg: Val): Val => evaluate(clos.body, Cons(arg, clos.env));
-export const vinst = (val: VAbs | VPi, arg: Val): Val => cinst(val.clos, arg);
+export const vinst = (val: VAbs | VPi | VSigma, arg: Val): Val => cinst(val.clos, arg);
 
 export const force = (v: Val): Val => {
   if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
@@ -57,8 +61,12 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType;
   if (t.tag === 'Abs')
     return VAbs(t.mode, t.name, evaluate(t.type, vs), Clos(vs, t.body));
+  if (t.tag === 'Pair')
+    return VPair(evaluate(t.fst, vs), evaluate(t.snd, vs), evaluate(t.type, vs));
   if (t.tag === 'Pi')
     return VPi(t.mode, t.name, evaluate(t.type, vs), Clos(vs, t.body));
+  if (t.tag === 'Sigma')
+    return VSigma(t.name, evaluate(t.type, vs), Clos(vs, t.body));
   if (t.tag === 'Meta') {
     const s = getMeta(t.index);
     return s.tag === 'Solved' ? s.val : VMeta(t.index);
@@ -90,10 +98,14 @@ export const quote = (v_: Val, k: Ix): Term => {
       quoteHead(v.head, k),
       v.spine,
     );
+  if (v.tag === 'VPair')
+    return Pair(quote(v.fst, k), quote(v.snd, k), quote(v.type, k));
   if (v.tag === 'VAbs')
     return Abs(v.mode, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
   if (v.tag === 'VPi')
     return Pi(v.mode, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+  if (v.tag === 'VSigma')
+    return Sigma(v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
   return v;
 };
 
@@ -121,10 +133,14 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0): Term => {
   }
   if (tm.tag === 'Pi')
     return Pi(tm.mode, tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+  if (tm.tag === 'Sigma')
+    return Sigma(tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
   if (tm.tag === 'Let')
     return Let(tm.name, zonk(tm.type, vs, k), zonk(tm.val, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
   if (tm.tag === 'Abs')
     return Abs(tm.mode, tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+  if (tm.tag === 'Pair')
+    return Pair(zonk(tm.fst, vs, k), zonk(tm.snd, vs, k), zonk(tm.type, vs, k));
   if (tm.tag === 'App') {
     const spine = zonkSpine(tm.left, vs, k);
     return spine[0] ?

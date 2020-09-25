@@ -24,9 +24,18 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vinst(b, v));
   }
+  if (a.tag === 'VSigma' && b.tag === 'VSigma') {
+    conv(k, a.type, b.type);
+    const v = VVar(k);
+    return conv(k + 1, vinst(a, v), vinst(b, v));
+  }
   if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode) {
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vinst(b, v));
+  }
+  if (a.tag === 'VPair' && b.tag === 'VPair') {
+    conv(k, a.fst, b.fst);
+    return conv(k, a.snd, b.snd);
   }
   if (a.tag === 'VAbs') {
     const v = VVar(k);
@@ -36,6 +45,16 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     const v = VVar(k);
     return conv(k + 1, vapp(a, b.mode, v), vinst(b, v));
   }
+  /*
+  if (a.tag === 'VPair') {
+    conv(k, a.fst, vproj('fst', b));
+    return conv(k, a.snd, vproj('snd', b));
+  }
+  if (b.tag === 'VPair') {
+    conv(k, vproj('fst', a), b.fst);
+    return conv(k, vproj('snd', a), b.snd);
+  }
+  */
 
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
     return zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);

@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Let, Meta, Pi, Term, Type, Var, Mode } from './core';
+import { Abs, App, Let, Meta, Pi, Term, Type, Var, Sigma, Pair, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, zipWithIndex } from './utils/list';
@@ -93,6 +93,11 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     const term = check(localExtend(local, fty.name, fty.type, fty.mode, true, true, v), tm, vinst(fty, v));
     return Abs(fty.mode, fty.name, quote(fty.type, local.index), term);
   }
+  if (tm.tag === 'Pair' && fty.tag === 'VSigma') {
+    const fst = check(local, tm.fst, fty.type);
+    const snd = check(local, tm.snd, vinst(fty, evaluate(fst, local.vs)));
+    return Pair(fst, snd, quote(ty, local.index));
+  }
   if (tm.tag === 'Let') {
     let type: Term;
     let ty: Val;
@@ -151,11 +156,23 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
       return [term, pi];
     }
   }
+  if (tm.tag === 'Pair') {
+    const [fst, fstty] = synth(local, tm.fst);
+    const [snd, sndty] = synth(local, tm.snd);
+    const ty = Sigma('_', quote(fstty, local.index), quote(sndty, local.index + 1));
+    return [Pair(fst, snd, ty), evaluate(ty, local.vs)];
+  }
   if (tm.tag === 'Pi') {
     const type = check(local, tm.type, VType);
     const ty = evaluate(type, local.vs);
     const body = check(localExtend(local, tm.name, ty, tm.mode), tm.body, VType);
     return [Pi(tm.mode, tm.name, type, body), VType];
+  }
+  if (tm.tag === 'Sigma') {
+    const type = check(local, tm.type, VType);
+    const ty = evaluate(type, local.vs);
+    const body = check(localExtend(local, tm.name, ty, C.Expl), tm.body, VType);
+    return [Sigma(tm.name, type, body), VType];
   }
   if (tm.tag === 'Let') {
     let type: Term;
