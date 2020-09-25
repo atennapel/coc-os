@@ -2,7 +2,7 @@ import { log } from './config';
 import { Abs, App, Let, Meta, Pi, Term, Type, Var, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
-import { Cons, filter, foldl, foldr, index, indexOf, List, map, Nil, reverse, zipWithIndex } from './utils/list';
+import { Cons, filter, foldl, foldr, indexOf, List, map, Nil, reverse, zipWithIndex } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, VType, VVar, zonk } from './values';
 import * as V from './values';
@@ -16,6 +16,23 @@ const EntryT = (type: Val, bound: boolean, mode: Mode, inserted: boolean): Entry
   ({ type, bound, mode, inserted });
 
 type EnvT = List<EntryT>;
+
+const indexT = (ts: EnvT, ix: Ix): [EntryT, Ix] | null => {
+  let l = ts;
+  let i = 0;
+  while (l.tag === 'Cons') {
+    if (l.head.inserted) {
+      l = l.tail;
+      i++;
+      continue;
+    }
+    if (ix === 0) return [l.head, i];
+    i++;
+    ix--;
+    l = l.tail;
+  }
+  return null;
+};
 
 interface Local {
   index: Ix;
@@ -111,11 +128,9 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   log(() => `synth ${show(tm)}`);
   if (tm.tag === 'Type') return [Type, VType];
   if (tm.tag === 'Var') {
-    const i = indexOf(local.ns, tm.name);
-    if (i < 0) return terr(`undefined variable ${tm.name}`);
-    const ty = index(local.ts, i);
-    if (!ty) return terr(`undefined variable ${tm.name}: no type found`);
-    return [Var(i), ty.type];
+    const i = indexOf(local.nsSurface, tm.name);
+    const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
+    return [Var(j), entry.type];
   }
   if (tm.tag === 'App') {
     const [left, ty] = synth(local, tm.left);
