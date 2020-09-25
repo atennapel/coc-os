@@ -14,7 +14,6 @@ yarn start filename
 
 ```
 TODO:
-- define syntax for implicit
 - implement parser
 - implement sigma types
 - add erasure

@@ -26,12 +26,23 @@ export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export const showMode = (m: Mode): string => m === 'ImplUnif' ? 'impl' : '';
 
 export const show = (t: Term): string => {
+  if (t.tag === 'Type') return '*';
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'App') return `(${show(t.left)} ${t.mode === ImplUnif ? 'impl ' : ''}${show(t.right)})`;
-  if (t.tag === 'Abs') return `(\\(${t.mode === ImplUnif ? 'impl ' : ''}${t.name} : ${show(t.type)}). ${show(t.body)})`;
+  if (t.tag === 'App') return `(${show(t.left)} ${t.mode === ImplUnif ? '{' : ''}${show(t.right)}${t.mode === ImplUnif ? '}' : ''})`;
+  if (t.tag === 'Abs') return `(\\${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'}. ${show(t.body)})`;
   if (t.tag === 'Let') return `(let ${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
-  if (t.tag === 'Type') return '*';
-  if (t.tag === 'Pi') return `(/(${t.mode === ImplUnif ? 'impl ' : ''}${t.name} : ${show(t.type)}). ${show(t.body)})`;
+  if (t.tag === 'Pi') return `(/${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'}. ${show(t.body)})`;
+  return t;
+};
+
+export const eq = (t: Term, o: Term): boolean => {
+  if (t.tag === 'Type') return o.tag === 'Type';
+  if (t.tag === 'Var') return o.tag === 'Var' && t.index === o.index;
+  if (t.tag === 'Meta') return o.tag === 'Meta' && t.index === o.index;
+  if (t.tag === 'App') return o.tag === 'App' && eq(t.left, o.left) && eq(t.right, o.right);
+  if (t.tag === 'Abs') return o.tag === 'Abs' && eq(t.type, o.type) && eq(t.body, o.body);
+  if (t.tag === 'Let') return o.tag === 'Let' && eq(t.type, o.type) && eq(t.val, o.val) && eq(t.body, o.body);
+  if (t.tag === 'Pi') return o.tag === 'Pi' && eq(t.type, o.type) && eq(t.body, o.body);;
   return t;
 };

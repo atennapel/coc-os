@@ -58,19 +58,20 @@ export const show = (t: Term): string => {
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
-    return `${showP(!isSimple(f), f)} ${as.map(([m, t], i) => `${m === C.ImplUnif ? 'impl ' : ''}${showP(!isSimple(t) && !(t.tag === 'Abs' && i >= as.length), t)}`).join(' ')}`;
+    return `${showP(!isSimple(f), f)} ${as.map(([m, t], i) =>
+      m === C.ImplUnif ? `{${show(t)}}` : showP(!isSimple(t) && !(t.tag === 'Abs' && i >= as.length), t)).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
     return `\\${as.map(([x, m, t]) => !t ?
-      (m === C.ImplUnif ? `(impl ${x})` : x) :
-      `(${m === C.ImplUnif ? 'impl ' : ''}${x} : ${show(t)})`).join(' ')}. ${show(b)}`;
+      (m === C.ImplUnif ? `{${x}}` : x) :
+      `${m === C.ImplUnif ? '{' : '('}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' ')}. ${show(b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `${as.map(([x, m, t]) => x === '_' && m === C.Expl ?
-      showP(!isSimple(t) && t.tag !== 'App', t) :
-      `(${m === C.ImplUnif ? 'impl ' : ''}${x} : ${show(t)})`).join(' -> ')} -> ${show(b)}`;
+    return `${as.map(([x, m, t]) => x === '_' ?
+      (m === C.ImplUnif ? `{${show(t)}}` : showP(!isSimple(t) && t.tag !== 'App', t)) :
+      `${m === C.ImplUnif ? '{' : '('}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(b)}`;
   }
   if (t.tag === 'Let')
     return `let ${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
