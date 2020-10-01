@@ -3,7 +3,7 @@ import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, Prim
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
 import { forceLazy, Lazy, lazyOf, mapLazy } from './utils/lazy';
-import { Cons, foldr, index, List, Nil } from './utils/list';
+import { Cons, foldr, index, List, Nil, toArray } from './utils/list';
 import { impossible } from './utils/utils';
 
 export type Head = HVar | HPrim | HMeta;
@@ -49,6 +49,13 @@ export const VMeta = (index: Ix, spine: Spine = Nil): VNe => VNe(HMeta(index), s
 
 export const isVPrim = (name: PrimName, v: Val): boolean =>
   v.tag === 'VNe' && v.head.tag === 'HPrim' && v.head.name === name;
+export const vprimArgs = (v: Val): Val[] => {
+  if (v.tag !== 'VNe') return impossible(`vprimArgs, not VNe: ${v.tag}`);
+  return toArray(v.spine, e => {
+    if (e.tag !== 'EApp') return impossible(`vprimArgs, not EApp: ${e.tag}`);
+    return e.right;
+  }).reverse();
+};
 
 export const VType = VPrim('Type');
 export const VB = VPrim('B');
@@ -59,6 +66,9 @@ export const VReflHEq = VPrim('ReflHEq');
 export const vheq = (a: Val, b: Val, x: Val, y: Val) => vappE(vappE(vappE(vappE(VHEq, a), b), x), y);
 export const vreflheq = (a: Val, x: Val) => vappE(vappE(VReflHEq, a), x);
 export const VDesc = VPrim('Desc');
+export const VRet = VPrim('Ret');
+export const VRec = VPrim('Rec');
+export const VArg = VPrim('Arg');
 
 export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
 export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);
@@ -104,6 +114,21 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
   }
   if (name === 'elimHEq') {
     if (isVPrim('ReflHEq', v)) return args[3];
+  }
+  if (name === 'elimDesc') {
+    const [P, ret, rec, arg] = args;
+    // elimDesc P ret rec arg Ret ~> ret
+    if (isVPrim('Ret', v)) return ret;
+    // elimDesc P ret rec arg (Rec r) ~> rec r (elimDesc P ret rec arg r)
+    if (isVPrim('Rec', v)) {
+      const [r] = vprimArgs(v);
+      return vappE(vappE(args[2], r), velimprim('elimDesc', r, [P, ret, rec, arg]));
+    }
+    // elimDesc P ret rec arg (Arg T f) ~> arg T f (\(x : T). elimDesc P ret rec arg (f x))
+    if (isVPrim('Arg', v)) {
+      const [T, f] = vprimArgs(v);
+      return vappE(vappE(vappE(args[3], T), f), VAbsE('x', T, x => velimprim('elimDesc', vappE(f, x), [P, ret, rec, arg])));
+    }
   }
   if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
   if (v.tag === 'VGlobal')
@@ -152,6 +177,14 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
         VAbsE('b', A, b =>
         VAbsE('p', vheq(A, A, a, b), p =>
         velimprim('elimHEq', p, [A, a, P, h, b])))))));
+    }
+    if (t.name === 'elimDesc') {
+      return VAbsE('P', VPiE('_', VDesc, _ => VType), P =>
+        VAbsE('ret', vappE(P, VRet), ret =>
+        VAbsE('rec', VPiE('r', VDesc, r => VPiE('_', vappE(P, r), _ => vappE(P, vappE(VRec, r)))), rec =>
+        VAbsE('arg', VPiE('T', VType, T => VPiE('f', VPiE('_', T, _ => VDesc), f => VPiE('_', VPiE('x', T, x => vappE(P, vappE(f, x))), _ => vappE(P, vappE(vappE(VArg, T), f))))), arg =>
+        VAbsE('d', VDesc, d =>
+        velimprim('elimDesc', d, [P, ret, rec, arg]))))));
     }
     return VPrim(t.name);
   }

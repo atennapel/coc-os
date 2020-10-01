@@ -18,9 +18,9 @@ Currently done:
 - an heterogenous equality type with definitional uniqueness of identity proofs (UIP)
 - booleans with an induction primitive
 - type-in-type
+- descriptions ala "Gentle Art of Levitation"
 
 Not yet done:
-- descriptions ala "Gentle Art of Levitation"
 - a fixpoint type for descriptions
 - indexed descriptions
 - explicit erasure annotations
@@ -35,11 +35,14 @@ Future work:
 
 ```
 TODO:
-- add descriptions
+- add fixpoint type for descriptions
 - optimize importing
 - add erasure
 - implement pruning
 - implement instance search
 - specialize meta when checking pair
 - support some impredicative instantiation
+
+IDEAS:
+- should elimDesc nest inside of elimB?
 ```

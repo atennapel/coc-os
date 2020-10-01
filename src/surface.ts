@@ -111,7 +111,7 @@ export const show = (t: Term): string => {
     return `let ${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
   if (t.tag === 'Sigma') {
     const [as, b] = flattenSigma(t);
-    return `${as.map(([x, t]) => x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `${x} : ${showP(t.tag === 'Let', t)}`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`
+    return `${as.map(([x, t]) => x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `(${x} : ${showP(t.tag === 'Let', t)})`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`
   }
   if (t.tag === 'Pair') {
     const ps = flattenPair(t);
