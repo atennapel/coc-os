@@ -23,9 +23,8 @@ The core language will be:
 
 ```
 TODO:
-- fix interaction of metas and globals
-- add descriptions
 - add definitions
+- add descriptions
 - add erasure
 - implement pruning
 - implement instance search

@@ -316,7 +316,7 @@ const inst = (local, ty_) => {
         const [res, args] = inst(local, values_1.vinst(ty, vm));
         return [res, list_1.Cons(m, args)];
     }
-    return [ty, list_1.Nil];
+    return [ty_, list_1.Nil];
 };
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);

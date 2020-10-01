@@ -74,7 +74,7 @@ const inst = (local: Local, ty_: Val): [Val, List<Term>] => {
     const [res, args] = inst(local, vinst(ty, vm));
     return [res, Cons(m, args)];
   }
-  return [ty, Nil];
+  return [ty_, Nil];
 };
 
 const check = (local: Local, tm: S.Term, ty: Val): Term => {
