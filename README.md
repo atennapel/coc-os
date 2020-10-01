@@ -12,14 +12,25 @@ yarn install
 yarn start filename
 ```
 
-The core language will be:
-- type-in-type, with the wish to implement a predicative hierarchy in the future
+Currently done:
 - dependent functions (pi types)
 - dependent pairs (sigma types)
 - an heterogenous equality type with definitional uniqueness of identity proofs (UIP)
 - booleans with an induction primitive
-- descriptions ala "Gentle Art of Levitation", with the wish to allow inductive-recursive and inductive-inductive types as well
+- type-in-type
+
+Not yet done:
+- descriptions ala "Gentle Art of Levitation"
 - a fixpoint type for descriptions
+- explicit erasure annotations
+- CEK machine for erased terms
+- hash-based content-addressed references
+- IO monad for system calls
+
+Future work:
+- inductive-recursive types
+- inductive-inductive types
+- predicative hierarchy
 
 ```
 TODO:
