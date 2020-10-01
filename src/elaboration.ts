@@ -1,10 +1,10 @@
 import { log } from './config';
-import { Abs, App, Let, Meta, Pi, Term, Type, Var, Sigma, Pair, Mode } from './core';
+import { Abs, App, Let, Meta, Pi, Term, Type, Var, Sigma, Pair, Proj, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, zipWithIndex } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, VType, VVar, zonk } from './values';
+import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, vproj, VType, VVar, zonk } from './values';
 import * as S from './surface';
 import { show } from './surface';
 import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
@@ -161,6 +161,42 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     const [snd, sndty] = synth(local, tm.snd);
     const ty = Sigma('_', quote(fstty, local.index), quote(sndty, local.index + 1));
     return [Pair(fst, snd, ty), evaluate(ty, local.vs)];
+  }
+  if (tm.tag === 'Proj') {
+    const [term, ty] = synth(local, tm.term);
+    const fty = force(ty);
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, ty)}`);
+    const proj = tm.proj;
+    if (proj.tag === 'PCore') {
+      const tag = proj.proj;
+      const e = Proj(tag, term);
+      return tag === 'fst' ? [e, fty.type] : [e, vinst(fty, vproj('fst', evaluate(term, local.vs)))];
+    } else if (proj.tag === 'PIndex') {
+      let c = term;
+      let t: Val = fty;
+      let v: Val = evaluate(term, local.vs);
+      for (let i = 0; i < proj.index; i++) {
+        if (t.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, t)}`);
+        c = Proj('snd', c);
+        t = vinst(t, vproj('fst', v));
+        v = vproj('snd', v);
+      }
+      if (t.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, t)}`);
+      return [Proj('fst', c), t.type];
+    } else if (proj.tag === 'PName') {
+      let c = term;
+      let t: Val = fty;
+      let v: Val = evaluate(term, local.vs);
+      while (true) {
+        if (t.tag !== 'VSigma') return terr(`not a sigma type or name not found in ${show(tm)}: ${showVal(local, t)}`);
+        if (t.name === proj.name) break;
+        c = Proj('snd', c);
+        t = vinst(t, vproj('fst', v));
+        v = vproj('snd', v);
+      }
+      if (t.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, t)}`);
+      return [Proj('fst', c), t.type];
+    }
   }
   if (tm.tag === 'Pi') {
     const type = check(local, tm.type, VType);

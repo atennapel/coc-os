@@ -1,16 +1,17 @@
 import { log } from './config';
 import { eqHead } from './conversion';
-import { Abs, App, Pair, Pi, show, Sigma, Term, Var } from './core';
+import { Abs, App, Pair, Pi, Proj, show, Sigma, Term, Var } from './core';
 import { Ix } from './names';
 import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil, toArray, zipWithR_ } from './utils/list';
 import { hasDuplicates, impossible, terr, tryT } from './utils/utils';
-import { Elim, force, Spine, Val, vapp, vinst, VVar, VMeta, quote, evaluate, showVal } from './values';
+import { Elim, force, Spine, Val, vapp, vproj, vinst, VVar, VMeta, quote, evaluate, showVal } from './values';
 import * as V from './values';
 import { getMeta, isMetaSolved, postpone, problemsBlockedBy, solveMeta, Unsolved } from './context';
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
   if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode) return unify(k, a.right, b.right);
+  if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj) return;
   return terr(`unify failed (${k}): ${showVal(x, k)} ~ ${showVal(y, k)}`);
 };
 export const unify = (k: Ix, a_: Val, b_: Val): void => {
@@ -46,7 +47,6 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return unify(k + 1, vapp(a, b.mode, v), vinst(b, v));
   }
-  /*
   if (a.tag === 'VPair') {
     unify(k, a.fst, vproj('fst', b));
     return unify(k, a.snd, vproj('snd', b));
@@ -55,7 +55,6 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     unify(k, vproj('fst', a), b.fst);
     return unify(k, vproj('snd', a), b.snd);
   }
-  */
 
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
     return zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.spine, b.spine);
@@ -143,6 +142,10 @@ const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
     const snd = checkSolution(k, m, is, t.snd);
     const type = checkSolution(k, m, is, t.type);
     return Pair(fst, snd, type);
+  }
+  if (t.tag === 'Proj') {
+    const x = checkSolution(k, m, is, t.term);
+    return Proj(t.proj, x);
   }
   if (t.tag === 'Abs') {
     const ty = checkSolution(k, m, is, t.type);

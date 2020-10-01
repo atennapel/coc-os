@@ -14,7 +14,8 @@ yarn start filename
 
 ```
 TODO:
-- implement sigma projection
+- add primitives
+- add globals
 - add erasure
 - implement pruning
 - implement instance search

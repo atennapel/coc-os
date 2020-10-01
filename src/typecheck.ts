@@ -4,7 +4,7 @@ import { Pi, show, Term, Mode, ImplUnif } from './core';
 import { Ix } from './names';
 import { Cons, index, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { EnvV, evaluate, quote, showValZ, Val, vinst, VType, VVar } from './values';
+import { EnvV, evaluate, quote, showValZ, Val, vinst, vproj, VType, VVar } from './values';
 
 type EnvT = List<Val>;
 
@@ -52,6 +52,11 @@ const synth = (local: Local, tm: Term): Val => {
     check(local, tm.fst, ty.type);
     check(local, tm.snd, vinst(ty, evaluate(tm.fst, local.vs)));
     return ty;
+  }
+  if (tm.tag === 'Proj') {
+    const fty = synth(local, tm.term);
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in ${tm.proj}: ${show(tm)}: ${showVal(local, fty)}`);
+    return tm.proj === 'fst' ? fty.type : vinst(fty, vproj('fst', evaluate(tm.term, local.vs)));
   }
   if (tm.tag === 'Pi') {
     check(local, tm.type, VType);

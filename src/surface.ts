@@ -5,7 +5,15 @@ import { EnvV, quote, Val, zonk } from './values';
 import { Cons, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
 
-export type Term = Var | App | Abs | Pair | Let | Type | Pi | Sigma | Meta | Hole;
+export type ProjType = PName | PIndex | PCore;
+export type PName = { tag: 'PName', name: Name };
+export const PName = (name: Name): PName => ({ tag: 'PName', name });
+export type PIndex = { tag: 'PIndex', index: Ix };
+export const PIndex = (index: Ix): PIndex => ({ tag: 'PIndex', index });
+export type PCore = { tag: 'PCore', proj: 'fst' | 'snd' };
+export const PCore = (proj: 'fst' | 'snd'): PCore => ({ tag: 'PCore', proj });
+
+export type Term = Var | App | Abs | Pair | Proj | Let | Type | Pi | Sigma | Meta | Hole;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
@@ -15,6 +23,8 @@ export type Abs = { tag: 'Abs', mode: Mode, name: Name, type: Term | null, body:
 export const Abs = (mode: Mode, name: Name, type: Term | null, body: Term): Abs => ({ tag: 'Abs', mode, name, type, body });
 export type Pair = { tag: 'Pair', fst: Term, snd: Term };
 export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
+export type Proj = { tag: 'Proj', proj: ProjType, term: Term };
+export const Proj = (proj: ProjType, term: Term): Proj => ({ tag: 'Proj', proj, term });
 export type Let = { tag: 'Let', name: Name, type: Term | null, val: Term, body: Term };
 export const Let = (name: Name, type: Term | null, val: Term, body: Term): Let => ({ tag: 'Let', name, type, val, body });
 export type Type = { tag: 'Type' };
@@ -71,7 +81,8 @@ export const flattenPair = (t: Term): Term[] => {
 };
 
 const showP = (b: boolean, t: Term): string => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Term): boolean => t.tag === 'Var' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'Hole';
+const isSimple = (t: Term): boolean =>
+  t.tag === 'Var' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'Hole' || (t.tag === 'Proj' && isSimple(t.term));
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'Type') return '*';
@@ -104,6 +115,11 @@ export const show = (t: Term): string => {
     const ps = flattenPair(t);
     return `(${ps.map(t => show(t)).join(', ')})`;
   }
+  if (t.tag === 'Proj') {
+    const proj = t.proj.tag === 'PName' ? t.proj.name : t.proj.tag === 'PIndex' ? t.proj.index : t.proj.proj;
+    if (isSimple(t.term)) return `${show(t.term)}.${proj}`;
+    return `.${proj} ${showP(true, t.term)}`;
+  }
   return t;
 };
 
@@ -113,6 +129,7 @@ export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Var') return Var(index(ns, t.index) || impossible(`toSurface: index out of scope: ${t.index}`));
   if (t.tag === 'App') return App(toSurface(t.left, ns), t.mode, toSurface(t.right, ns));
   if (t.tag === 'Pair') return Pair(toSurface(t.fst, ns), toSurface(t.snd, ns));
+  if (t.tag === 'Proj') return Proj(PCore(t.proj), toSurface(t.term, ns));
   if (t.tag === 'Abs') {
     const x = chooseName(t.name, ns);
     return Abs(t.mode, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));

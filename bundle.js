@@ -93,6 +93,8 @@ const convElim = (k, a, b, x, y) => {
         return;
     if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode)
         return exports.conv(k, a.right, b.right);
+    if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj)
+        return;
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(x, k)} ~ ${values_1.showVal(y, k)}`);
 };
 exports.conv = (k, a, b) => {
@@ -127,16 +129,14 @@ exports.conv = (k, a, b) => {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vapp(a, b.mode, v), values_1.vinst(b, v));
     }
-    /*
     if (a.tag === 'VPair') {
-      conv(k, a.fst, vproj('fst', b));
-      return conv(k, a.snd, vproj('snd', b));
+        exports.conv(k, a.fst, values_1.vproj('fst', b));
+        return exports.conv(k, a.snd, values_1.vproj('snd', b));
     }
     if (b.tag === 'VPair') {
-      conv(k, vproj('fst', a), b.fst);
-      return conv(k, vproj('snd', a), b.snd);
+        exports.conv(k, values_1.vproj('fst', a), b.fst);
+        return exports.conv(k, values_1.vproj('snd', a), b.snd);
     }
-    */
     if (a.tag === 'VNe' && b.tag === 'VNe' && exports.eqHead(a.head, b.head))
         return list_1.zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
@@ -145,13 +145,14 @@ exports.conv = (k, a, b) => {
 },{"./config":1,"./utils/list":12,"./utils/utils":13,"./values":14}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.eq = exports.show = exports.showMode = exports.Meta = exports.Sigma = exports.Pi = exports.Type = exports.Let = exports.Pair = exports.Abs = exports.App = exports.Var = exports.ImplUnif = exports.Expl = void 0;
+exports.eq = exports.show = exports.showMode = exports.Meta = exports.Sigma = exports.Pi = exports.Type = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Var = exports.ImplUnif = exports.Expl = void 0;
 exports.Expl = 'Expl';
 exports.ImplUnif = 'ImplUnif';
 exports.Var = (index) => ({ tag: 'Var', index });
 exports.App = (left, mode, right) => ({ tag: 'App', left, mode, right });
 exports.Abs = (mode, name, type, body) => ({ tag: 'Abs', name, mode, type, body });
 exports.Pair = (fst, snd, type) => ({ tag: 'Pair', fst, snd, type });
+exports.Proj = (proj, term) => ({ tag: 'Proj', proj, term });
 exports.Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
 exports.Type = { tag: 'Type' };
 exports.Pi = (mode, name, type, body) => ({ tag: 'Pi', mode, name, type, body });
@@ -171,6 +172,8 @@ exports.show = (t) => {
         return `(${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'} -> ${exports.show(t.body)})`;
     if (t.tag === 'Pair')
         return `(${exports.show(t.fst)}, ${exports.show(t.snd)} : ${exports.show(t.type)})`;
+    if (t.tag === 'Proj')
+        return `(${t.proj} ${exports.show(t.term)})`;
     if (t.tag === 'Let')
         return `(let ${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
     if (t.tag === 'Pi')
@@ -192,6 +195,8 @@ exports.eq = (t, o) => {
         return o.tag === 'Abs' && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Pair')
         return o.tag === 'Pair' && exports.eq(t.fst, o.snd) && exports.eq(t.fst, o.snd);
+    if (t.tag === 'Proj')
+        return o.tag === 'Proj' && t.proj === o.proj && exports.eq(t.term, o.term);
     if (t.tag === 'Let')
         return o.tag === 'Let' && exports.eq(t.type, o.type) && exports.eq(t.val, o.val) && exports.eq(t.body, o.body);
     if (t.tag === 'Pi')
@@ -348,6 +353,50 @@ const synth = (local, tm) => {
         const [snd, sndty] = synth(local, tm.snd);
         const ty = core_1.Sigma('_', values_1.quote(fstty, local.index), values_1.quote(sndty, local.index + 1));
         return [core_1.Pair(fst, snd, ty), values_1.evaluate(ty, local.vs)];
+    }
+    if (tm.tag === 'Proj') {
+        const [term, ty] = synth(local, tm.term);
+        const fty = values_1.force(ty);
+        if (fty.tag !== 'VSigma')
+            return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, ty)}`);
+        const proj = tm.proj;
+        if (proj.tag === 'PCore') {
+            const tag = proj.proj;
+            const e = core_1.Proj(tag, term);
+            return tag === 'fst' ? [e, fty.type] : [e, values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(term, local.vs)))];
+        }
+        else if (proj.tag === 'PIndex') {
+            let c = term;
+            let t = fty;
+            let v = values_1.evaluate(term, local.vs);
+            for (let i = 0; i < proj.index; i++) {
+                if (t.tag !== 'VSigma')
+                    return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, t)}`);
+                c = core_1.Proj('snd', c);
+                t = values_1.vinst(t, values_1.vproj('fst', v));
+                v = values_1.vproj('snd', v);
+            }
+            if (t.tag !== 'VSigma')
+                return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, t)}`);
+            return [core_1.Proj('fst', c), t.type];
+        }
+        else if (proj.tag === 'PName') {
+            let c = term;
+            let t = fty;
+            let v = values_1.evaluate(term, local.vs);
+            while (true) {
+                if (t.tag !== 'VSigma')
+                    return utils_1.terr(`not a sigma type or name not found in ${surface_1.show(tm)}: ${showVal(local, t)}`);
+                if (t.name === proj.name)
+                    break;
+                c = core_1.Proj('snd', c);
+                t = values_1.vinst(t, values_1.vproj('fst', v));
+                v = values_1.vproj('snd', v);
+            }
+            if (t.tag !== 'VSigma')
+                return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, t)}`);
+            return [core_1.Proj('fst', c), t.type];
+        }
     }
     if (tm.tag === 'Pi') {
         const type = check(local, tm.type, values_1.VType);
@@ -621,6 +670,25 @@ const piParams = (t) => {
     }
     return utils_1.serr(`invalid pi param`);
 };
+const parseProj = (t, xx) => {
+    const spl = xx.split('.');
+    let c = t;
+    for (let i = 0; i < spl.length; i++) {
+        const x = spl[i];
+        const n = +x;
+        let proj;
+        if (!isNaN(n) && n >= 0 && Math.floor(n) === n)
+            proj = surface_1.PIndex(n);
+        else if (x === 'fst')
+            proj = surface_1.PCore('fst');
+        else if (x === 'snd')
+            proj = surface_1.PCore('snd');
+        else
+            proj = surface_1.PName(x);
+        c = surface_1.Proj(proj, c);
+    }
+    return c;
+};
 const codepoints = (s) => {
     const chars = [];
     for (let i = 0; i < s.length; i++) {
@@ -661,8 +729,15 @@ const expr = (t) => {
             return [surface_1.Type, false];
         if (x === '_')
             return [surface_1.Hole, false];
-        if (/[a-z]/i.test(x[0]))
+        if (/[a-z]/i.test(x[0])) {
+            if (x.includes('.')) {
+                const spl = x.split('.');
+                const v = spl[0];
+                const rest = spl.slice(1).join('.');
+                return [parseProj(surface_1.Var(v), rest), false];
+            }
             return [surface_1.Var(x), false];
+        }
         return utils_1.serr(`invalid name: ${x}`);
     }
     if (t.tag === 'Num') {
@@ -780,6 +855,20 @@ const exprs = (ts, br) => {
             return utils_1.serr(`. not found after \\ or there was no whitespace after .`);
         const body = exprs(ts.slice(i + 1), '(');
         return args.reduceRight((x, [name, impl, ty]) => surface_1.Abs(impl ? core_1.ImplUnif : core_1.Expl, name, ty, x), body);
+    }
+    if (ts[0].tag === 'Name' && ts[0].name[0] === '.') {
+        const x = ts[0].name.slice(1);
+        if (ts.length < 2)
+            return utils_1.serr(`something went wrong when parsing .${x}`);
+        if (ts.length === 2) {
+            const [term, tb] = expr(ts[1]);
+            if (tb)
+                return utils_1.serr(`something went wrong when parsing .${x}`);
+            return parseProj(term, x);
+        }
+        const indPart = ts.slice(0, 2);
+        const rest = ts.slice(2);
+        return exprs([TList(indPart, '(')].concat(rest), '(');
     }
     const j = ts.findIndex(x => isName(x, '->'));
     if (j >= 0) {
@@ -905,16 +994,20 @@ exports.runREPL = (s, cb) => {
 },{"./config":1,"./core":4,"./elaboration":5,"./parser":7,"./surface":9,"./typecheck":10,"./values":14}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Type = exports.Let = exports.Pair = exports.Abs = exports.App = exports.Var = void 0;
+exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Type = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
 const names_1 = require("./names");
 const C = require("./core");
 const values_1 = require("./values");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
+exports.PName = (name) => ({ tag: 'PName', name });
+exports.PIndex = (index) => ({ tag: 'PIndex', index });
+exports.PCore = (proj) => ({ tag: 'PCore', proj });
 exports.Var = (name) => ({ tag: 'Var', name });
 exports.App = (left, mode, right) => ({ tag: 'App', left, mode, right });
 exports.Abs = (mode, name, type, body) => ({ tag: 'Abs', mode, name, type, body });
 exports.Pair = (fst, snd) => ({ tag: 'Pair', fst, snd });
+exports.Proj = (proj, term) => ({ tag: 'Proj', proj, term });
 exports.Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
 exports.Type = { tag: 'Type' };
 exports.Pi = (mode, name, type, body) => ({ tag: 'Pi', mode, name, type, body });
@@ -963,7 +1056,7 @@ exports.flattenPair = (t) => {
     return r;
 };
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Var' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'Hole';
+const isSimple = (t) => t.tag === 'Var' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'Hole' || (t.tag === 'Proj' && isSimple(t.term));
 exports.show = (t) => {
     if (t.tag === 'Var')
         return t.name;
@@ -999,6 +1092,12 @@ exports.show = (t) => {
         const ps = exports.flattenPair(t);
         return `(${ps.map(t => exports.show(t)).join(', ')})`;
     }
+    if (t.tag === 'Proj') {
+        const proj = t.proj.tag === 'PName' ? t.proj.name : t.proj.tag === 'PIndex' ? t.proj.index : t.proj.proj;
+        if (isSimple(t.term))
+            return `${exports.show(t.term)}.${proj}`;
+        return `.${proj} ${showP(true, t.term)}`;
+    }
     return t;
 };
 exports.toSurface = (t, ns = list_1.Nil) => {
@@ -1012,6 +1111,8 @@ exports.toSurface = (t, ns = list_1.Nil) => {
         return exports.App(exports.toSurface(t.left, ns), t.mode, exports.toSurface(t.right, ns));
     if (t.tag === 'Pair')
         return exports.Pair(exports.toSurface(t.fst, ns), exports.toSurface(t.snd, ns));
+    if (t.tag === 'Proj')
+        return exports.Proj(exports.PCore(t.proj), exports.toSurface(t.term, ns));
     if (t.tag === 'Abs') {
         const x = names_1.chooseName(t.name, ns);
         return exports.Abs(t.mode, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
@@ -1083,6 +1184,12 @@ const synth = (local, tm) => {
         check(local, tm.snd, values_1.vinst(ty, values_1.evaluate(tm.fst, local.vs)));
         return ty;
     }
+    if (tm.tag === 'Proj') {
+        const fty = synth(local, tm.term);
+        if (fty.tag !== 'VSigma')
+            return utils_1.terr(`not a sigma type in ${tm.proj}: ${core_1.show(tm)}: ${showVal(local, fty)}`);
+        return tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(tm.term, local.vs)));
+    }
     if (tm.tag === 'Pi') {
         check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
@@ -1135,6 +1242,8 @@ const unifyElim = (k, a, b, x, y) => {
         return;
     if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode)
         return exports.unify(k, a.right, b.right);
+    if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj)
+        return;
     return utils_1.terr(`unify failed (${k}): ${values_1.showVal(x, k)} ~ ${values_1.showVal(y, k)}`);
 };
 exports.unify = (k, a_, b_) => {
@@ -1171,16 +1280,14 @@ exports.unify = (k, a_, b_) => {
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vapp(a, b.mode, v), values_1.vinst(b, v));
     }
-    /*
     if (a.tag === 'VPair') {
-      unify(k, a.fst, vproj('fst', b));
-      return unify(k, a.snd, vproj('snd', b));
+        exports.unify(k, a.fst, values_1.vproj('fst', b));
+        return exports.unify(k, a.snd, values_1.vproj('snd', b));
     }
     if (b.tag === 'VPair') {
-      unify(k, vproj('fst', a), b.fst);
-      return unify(k, vproj('snd', a), b.snd);
+        exports.unify(k, values_1.vproj('fst', a), b.fst);
+        return exports.unify(k, values_1.vproj('snd', a), b.snd);
     }
-    */
     if (a.tag === 'VNe' && b.tag === 'VNe' && conversion_1.eqHead(a.head, b.head))
         return list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.spine, b.spine);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
@@ -1263,6 +1370,10 @@ const checkSolution = (k, m, is, t) => {
         const snd = checkSolution(k, m, is, t.snd);
         const type = checkSolution(k, m, is, t.type);
         return core_1.Pair(fst, snd, type);
+    }
+    if (t.tag === 'Proj') {
+        const x = checkSolution(k, m, is, t.term);
+        return core_1.Proj(t.proj, x);
     }
     if (t.tag === 'Abs') {
         const ty = checkSolution(k, m, is, t.type);
@@ -1483,7 +1594,7 @@ exports.tryT = (v, e, throwErr = false) => {
 },{"fs":16}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.force = exports.vinst = exports.VMeta = exports.VVar = exports.VSigma = exports.VPi = exports.VType = exports.VPair = exports.VAbs = exports.VNe = exports.Clos = exports.EApp = exports.HMeta = exports.HVar = void 0;
+exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.vproj = exports.vapp = exports.force = exports.vinst = exports.VMeta = exports.VVar = exports.VSigma = exports.VPi = exports.VType = exports.VPair = exports.VAbs = exports.VNe = exports.Clos = exports.EProj = exports.EApp = exports.HMeta = exports.HVar = void 0;
 const context_1 = require("./context");
 const core_1 = require("./core");
 const list_1 = require("./utils/list");
@@ -1491,6 +1602,7 @@ const utils_1 = require("./utils/utils");
 exports.HVar = (index) => ({ tag: 'HVar', index });
 exports.HMeta = (index) => ({ tag: 'HMeta', index });
 exports.EApp = (mode, right) => ({ tag: 'EApp', mode, right });
+exports.EProj = (proj) => ({ tag: 'EProj', proj });
 exports.Clos = (env, body) => ({ env, body });
 exports.VNe = (head, spine) => ({ tag: 'VNe', head, spine });
 exports.VAbs = (mode, name, type, clos) => ({ tag: 'VAbs', mode, name, type, clos });
@@ -1507,7 +1619,8 @@ exports.force = (v) => {
         const val = context_1.getMeta(v.head.index);
         if (val.tag === 'Unsolved')
             return v;
-        return exports.force(list_1.foldr((elim, y) => exports.vapp(y, elim.mode, elim.right), val.val, v.spine));
+        return exports.force(list_1.foldr((elim, y) => elim.tag === 'EProj' ? exports.vproj(elim.proj, y) :
+            exports.vapp(y, elim.mode, elim.right), val.val, v.spine));
     }
     return v;
 };
@@ -1517,6 +1630,13 @@ exports.vapp = (left, mode, right) => {
     if (left.tag === 'VNe')
         return exports.VNe(left.head, list_1.Cons(exports.EApp(mode, right), left.spine));
     return utils_1.impossible(`vapp: ${left.tag}`);
+};
+exports.vproj = (proj, v) => {
+    if (v.tag === 'VPair')
+        return proj === 'fst' ? v.fst : v.snd;
+    if (v.tag === 'VNe')
+        return exports.VNe(v.head, list_1.Cons(exports.EProj(proj), v.spine));
+    return utils_1.impossible(`vproj: ${v.tag}`);
 };
 exports.evaluate = (t, vs) => {
     if (t.tag === 'Type')
@@ -1539,6 +1659,8 @@ exports.evaluate = (t, vs) => {
         return exports.vapp(exports.evaluate(t.left, vs), t.mode, exports.evaluate(t.right, vs));
     if (t.tag === 'Let')
         return exports.evaluate(t.body, list_1.Cons(exports.evaluate(t.val, vs), vs));
+    if (t.tag === 'Proj')
+        return exports.vproj(t.proj, exports.evaluate(t.term, vs));
     return t;
 };
 const quoteHead = (h, k) => {
@@ -1551,7 +1673,9 @@ const quoteHead = (h, k) => {
 const quoteElim = (t, e, k) => {
     if (e.tag === 'EApp')
         return core_1.App(t, e.mode, exports.quote(e.right, k));
-    return e.tag;
+    if (e.tag === 'EProj')
+        return core_1.Proj(e.proj, t);
+    return e;
 };
 exports.quote = (v_, k) => {
     const v = exports.force(v_);
@@ -1600,6 +1724,8 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0) => {
         return core_1.Abs(tm.mode, tm.name, exports.zonk(tm.type, vs, k), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1));
     if (tm.tag === 'Pair')
         return core_1.Pair(exports.zonk(tm.fst, vs, k), exports.zonk(tm.snd, vs, k), exports.zonk(tm.type, vs, k));
+    if (tm.tag === 'Proj')
+        return core_1.Proj(tm.proj, exports.zonk(tm.term, vs, k));
     if (tm.tag === 'App') {
         const spine = zonkSpine(tm.left, vs, k);
         return spine[0] ?

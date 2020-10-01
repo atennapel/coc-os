@@ -1,5 +1,5 @@
 import { getMeta } from './context';
-import { Abs, App, Let, Meta, Pi, show, Term, Type, Var, Mode, Sigma, Pair } from './core';
+import { Abs, App, Let, Meta, Pi, show, Term, Type, Var, Mode, Sigma, Pair, Proj } from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
@@ -11,10 +11,12 @@ export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
 export type HMeta = { tag: 'HMeta', index: Ix };
 export const HMeta = (index: Ix): HMeta => ({ tag: 'HMeta', index });
 
-export type Elim = EApp;
+export type Elim = EApp | EProj;
 
 export type EApp = { tag: 'EApp', mode: Mode, right: Val };
 export const EApp = (mode: Mode, right: Val): EApp => ({ tag: 'EApp', mode, right });
+export type EProj = { tag: 'EProj', proj: 'fst' | 'snd' };
+export const EProj = (proj: 'fst' | 'snd'): EProj => ({ tag: 'EProj', proj });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
@@ -46,7 +48,9 @@ export const force = (v: Val): Val => {
   if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
     const val = getMeta(v.head.index);
     if (val.tag === 'Unsolved') return v;
-    return force(foldr((elim, y) => vapp(y, elim.mode, elim.right), val.val, v.spine));
+    return force(foldr((elim, y) =>
+      elim.tag === 'EProj' ? vproj(elim.proj, y) :
+      vapp(y, elim.mode, elim.right), val.val, v.spine));
   }
   return v;
 };
@@ -55,6 +59,11 @@ export const vapp = (left: Val, mode: Mode, right: Val): Val => {
   if (left.tag === 'VAbs') return vinst(left, right);
   if (left.tag === 'VNe') return VNe(left.head, Cons(EApp(mode, right), left.spine));
   return impossible(`vapp: ${left.tag}`);
+};
+export const vproj = (proj: 'fst' | 'snd', v: Val): Val => {
+  if (v.tag === 'VPair') return proj === 'fst' ? v.fst : v.snd;
+  if (v.tag === 'VNe') return VNe(v.head, Cons(EProj(proj), v.spine));
+  return impossible(`vproj: ${v.tag}`);
 };
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
@@ -77,6 +86,8 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return vapp(evaluate(t.left, vs), t.mode, evaluate(t.right, vs));
   if (t.tag === 'Let')
     return evaluate(t.body, Cons(evaluate(t.val, vs), vs));
+  if (t.tag === 'Proj')
+    return vproj(t.proj, evaluate(t.term, vs));
   return t;
 };
 
@@ -87,7 +98,8 @@ const quoteHead = (h: Head, k: Ix): Term => {
 };
 const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
   if (e.tag === 'EApp') return App(t, e.mode, quote(e.right, k));
-  return e.tag;
+  if (e.tag === 'EProj') return Proj(e.proj, t);
+  return e;
 };
 export const quote = (v_: Val, k: Ix): Term => {
   const v = force(v_);
@@ -141,6 +153,8 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0): Term => {
     return Abs(tm.mode, tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
   if (tm.tag === 'Pair')
     return Pair(zonk(tm.fst, vs, k), zonk(tm.snd, vs, k), zonk(tm.type, vs, k));
+  if (tm.tag === 'Proj')
+    return Proj(tm.proj, zonk(tm.term, vs, k));
   if (tm.tag === 'App') {
     const spine = zonkSpine(tm.left, vs, k);
     return spine[0] ?

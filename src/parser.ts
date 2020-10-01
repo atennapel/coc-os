@@ -1,5 +1,5 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Type, Abs, Pi, Let, Hole, Sigma, Pair } from './surface';
+import { Term, Var, App, Type, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif } from './core';
 
@@ -143,6 +143,22 @@ const piParams = (t: Token): [Name, boolean, Term][] => {
   return serr(`invalid pi param`);
 };
 
+const parseProj = (t: Term, xx: string): Term => {
+  const spl = xx.split('.');
+  let c = t;
+  for (let i = 0; i < spl.length; i++) {
+    const x = spl[i];
+    const n = +x;
+    let proj;
+    if (!isNaN(n) && n >= 0 && Math.floor(n) === n) proj = PIndex(n);
+    else if (x === 'fst') proj = PCore('fst');
+    else if (x === 'snd') proj = PCore('snd');
+    else proj = PName(x);
+    c = Proj(proj, c);
+  }
+  return c;
+};
+
 const codepoints = (s: string): number[] => {
   const chars: number[] = [];
   for (let i = 0; i < s.length; i++) {
@@ -181,7 +197,15 @@ const expr = (t: Token): [Term, boolean] => {
     const x = t.name;
     if (x === '*') return [Type, false];
     if (x === '_') return [Hole, false];
-    if (/[a-z]/i.test(x[0])) return [Var(x), false];
+    if (/[a-z]/i.test(x[0])) {
+      if (x.includes('.')) {
+        const spl = x.split('.');
+        const v = spl[0];
+        const rest = spl.slice(1).join('.');
+        return [parseProj(Var(v), rest), false];
+      }
+      return [Var(x), false];
+    }
     return serr(`invalid name: ${x}`);
   }
   if (t.tag === 'Num') {
@@ -280,6 +304,18 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     if (!found) return serr(`. not found after \\ or there was no whitespace after .`);
     const body = exprs(ts.slice(i + 1), '(');
     return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? ImplUnif : Expl, name, ty, x), body);
+  }
+  if (ts[0].tag === 'Name' && ts[0].name[0] === '.') {
+    const x = ts[0].name.slice(1);
+    if (ts.length < 2) return serr(`something went wrong when parsing .${x}`);
+    if (ts.length === 2) {
+      const [term, tb] = expr(ts[1]);
+      if (tb) return serr(`something went wrong when parsing .${x}`);
+      return parseProj(term, x);
+    }
+    const indPart = ts.slice(0, 2);
+    const rest = ts.slice(2);
+    return exprs([TList(indPart, '(')].concat(rest), '(');
   }
   const j = ts.findIndex(x => isName(x, '->'));
   if (j >= 0) {
