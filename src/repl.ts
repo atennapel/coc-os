@@ -1,6 +1,6 @@
 import { config, log, setConfig } from './config';
-import { elaborate } from './elaboration';
-import { parse } from './parser';
+import { elaborate, elaborateDefs } from './elaboration';
+import { ImportMap, parse, parseDefs } from './parser';
 import { show, showCore, showVal } from './surface';
 import * as C from './core';
 import { typecheck } from './typecheck';
@@ -8,6 +8,7 @@ import { evaluate, normalize } from './values';
 import { deleteGlobal, getGlobal, getGlobals, hasGlobal, setGlobal } from './globals';
 import { Nil } from './utils/list';
 import { Name } from './names';
+import { loadFile } from './utils/utils';
 
 const help = `
 COMMANDS
@@ -20,9 +21,15 @@ COMMANDS
 [:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
+[:view files] view a file
+[:def definitions] define names
+[:import files] import a file
 `.trim();
 
+let importMap: ImportMap = {};
+
 export const initREPL = () => {
+  importMap = {};
 };
 
 export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) => {
@@ -46,6 +53,21 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const names = s.slice(4).trim().split(/\s+/g);
       names.forEach(x => deleteGlobal(x));
       return cb(`deleted ${names.join(' ')}`);
+    }
+    if (s.startsWith(':def') || s.startsWith(':import')) {
+      const rest = s.slice(1);
+      parseDefs(rest, importMap).then(ds => {
+        const xs = elaborateDefs(ds, true);
+        return cb(`defined ${xs.join(' ')}`);
+      }).catch(err => cb(''+err, true));
+      return;
+    }
+    if (s.startsWith(':view')) {
+      const files = s.slice(5).trim().split(/\s+/g);
+      Promise.all(files.map(loadFile)).then(ds => {
+        return cb(ds.join('\n\n'));
+      }).catch(err => cb(''+err, true));
+      return;
     }
     if (s.startsWith(':gtype')) {
       const name = s.slice(6).trim();

@@ -259,7 +259,7 @@ exports.eq = (t, o) => {
 },{}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.elaborate = void 0;
+exports.elaborateDefs = exports.elaborate = void 0;
 const config_1 = require("./config");
 const core_1 = require("./core");
 const C = require("./core");
@@ -537,6 +537,7 @@ const tryToSolveBlockedProblems = () => {
 exports.elaborate = (t) => {
     context_1.resetContext();
     const [tm, ty] = synth(localEmpty, t);
+    config_1.log(() => `try solve unsolved problems`);
     tryToSolveBlockedProblems();
     const ztm = values_1.zonk(tm);
     const zty = values_1.zonk(values_1.quote(ty, 0));
@@ -544,12 +545,42 @@ exports.elaborate = (t) => {
         return utils_1.terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
     return [ztm, zty];
 };
+exports.elaborateDefs = (ds, allowRedefinition = false) => {
+    config_1.log(() => `elaborateDefs ${ds.map(x => x.name).join(' ')}`);
+    const xs = [];
+    if (!allowRedefinition) {
+        for (let i = 0; i < ds.length; i++) {
+            const d = ds[i];
+            if (d.tag === 'DDef' && globals_1.hasGlobal(d.name))
+                return utils_1.terr(`cannot redefine global ${d.name}`);
+        }
+    }
+    for (let i = 0; i < ds.length; i++) {
+        const d = ds[i];
+        config_1.log(() => `elaborateDef ${S.showDef(d)}`);
+        if (d.tag === 'DDef') {
+            try {
+                const [tm, ty] = exports.elaborate(d.value);
+                config_1.log(() => `set ${d.name} : ${S.showCore(ty)} = ${S.showCore(tm)}`);
+                globals_1.setGlobal(d.name, tm, values_1.evaluate(tm, list_1.Nil), values_1.evaluate(ty, list_1.Nil));
+                const i = xs.indexOf(d.name);
+                if (i >= 0)
+                    xs.splice(i, 1);
+                xs.push(d.name);
+            }
+            catch (err) {
+                err.message = `type error in def ${d.name}: ${err.message}`;
+                throw err;
+            }
+        }
+    }
+    return xs;
+};
 
 },{"./config":1,"./context":2,"./core":4,"./globals":6,"./primitives":9,"./surface":11,"./unification":13,"./utils/list":15,"./utils/utils":16,"./values":17}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteGlobal = exports.setGlobal = exports.hasGlobal = exports.getGlobal = exports.getGlobals = exports.resetGlobals = void 0;
-const utils_1 = require("./utils/utils");
 let env = new Map();
 exports.resetGlobals = () => {
     env.clear();
@@ -559,14 +590,14 @@ exports.getGlobal = (name) => env.get(name) || null;
 exports.hasGlobal = (name) => env.has(name);
 exports.setGlobal = (name, term, val, type) => {
     if (env.has(name))
-        return utils_1.impossible(`setGlobal: name already exists: ${name}`);
+        env.delete(name);
     env.set(name, { term, val, type });
 };
 exports.deleteGlobal = (name) => {
     env.delete(name);
 };
 
-},{"./utils/utils":16}],7:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -584,10 +615,11 @@ exports.chooseName = (x, ns) => x === '_' ? x : list_1.contains(ns, x) ? exports
 },{"./utils/list":15}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parse = void 0;
+exports.parseDefs = exports.parseDef = exports.parse = void 0;
 const utils_1 = require("./utils/utils");
 const surface_1 = require("./surface");
 const core_1 = require("./core");
+const config_1 = require("./config");
 const matchingBracket = (c) => {
     if (c === '(')
         return ')';
@@ -692,7 +724,7 @@ const tokenize = (sc) => {
         return utils_1.serr(`escape is true after tokenize`);
     return r;
 };
-const tunit = surface_1.Var('UnitType');
+const tunit = surface_1.Var('U');
 const unit = surface_1.Var('Unit');
 const isName = (t, x) => t.tag === 'Name' && t.name === x;
 const isNames = (t) => t.map(x => {
@@ -1032,8 +1064,91 @@ exports.parse = (s) => {
     const ex = exprs(ts, '(');
     return ex;
 };
+exports.parseDef = async (c, importMap) => {
+    if (c.length === 0)
+        return [];
+    if (c[0].tag === 'Name' && c[0].name === 'import') {
+        const files = c.slice(1).map(t => {
+            if (t.tag !== 'Name')
+                return utils_1.serr(`trying to import a non-path`);
+            if (importMap[t.name]) {
+                config_1.log(() => `skipping import ${t.name}`);
+                return null;
+            }
+            return t.name;
+        }).filter(x => x);
+        config_1.log(() => `import ${files.join(' ')}`);
+        const imps = await Promise.all(files.map(utils_1.loadFile));
+        const defs = await Promise.all(imps.map(s => exports.parseDefs(s, importMap)));
+        const fdefs = defs.reduce((x, y) => x.concat(y), []);
+        fdefs.forEach(t => importMap[t.name] = true);
+        config_1.log(() => `imported ${fdefs.map(x => x.name).join(' ')}`);
+        return fdefs;
+    }
+    else if (c[0].tag === 'Name' && c[0].name === 'def') {
+        const x = c[1];
+        let impl = false;
+        let name = '';
+        if (x.tag === 'Name') {
+            name = x.name;
+        }
+        else if (x.tag === 'List' && x.bracket === '{') {
+            const a = x.list;
+            if (a.length !== 1)
+                return utils_1.serr(`invalid name for def`);
+            const h = a[0];
+            if (h.tag !== 'Name')
+                return utils_1.serr(`invalid name for def`);
+            name = h.name;
+            impl = true;
+        }
+        else
+            return utils_1.serr(`invalid name for def`);
+        if (impl)
+            return utils_1.serr(`definition cannot be implicit`);
+        if (name) {
+            const fst = 2;
+            const sym = c[fst];
+            if (sym.tag !== 'Name')
+                return utils_1.serr(`def: after name should be : or =`);
+            if (sym.name === '=') {
+                return [surface_1.DDef(name, exprs(c.slice(fst + 1), '('))];
+            }
+            else if (sym.name === ':') {
+                const tyts = [];
+                let j = fst + 1;
+                for (; j < c.length; j++) {
+                    const v = c[j];
+                    if (v.tag === 'Name' && v.name === '=')
+                        break;
+                    else
+                        tyts.push(v);
+                }
+                const ety = exprs(tyts, '(');
+                const body = exprs(c.slice(j + 1), '(');
+                return [surface_1.DDef(name, surface_1.Let(name, ety, body, surface_1.Var(name)))];
+            }
+            else
+                return utils_1.serr(`def: : or = expected but got ${sym.name}`);
+        }
+        else
+            return utils_1.serr(`def should start with a name`);
+    }
+    else
+        return utils_1.serr(`def should start with def or import`);
+};
+exports.parseDefs = async (s, importMap) => {
+    const ts = tokenize(s);
+    if (ts.length === 0)
+        return [];
+    if (ts[0].tag !== 'Name' || (ts[0].name !== 'def' && ts[0].name !== 'import'))
+        return utils_1.serr(`def should start with "def" or "import"`);
+    const spl = splitTokens(ts, t => t.tag === 'Name' && (t.name === 'def' || t.name === 'import'), true);
+    const ds = await Promise.all(spl.map(s => exports.parseDef(s, importMap)));
+    return ds.reduce((x, y) => x.concat(y), []);
+};
 
-},{"./core":4,"./surface":11,"./utils/utils":16}],9:[function(require,module,exports){
+},{"./config":1,"./core":4,"./surface":11,"./utils/utils":16}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.primType = void 0;
@@ -1068,6 +1183,7 @@ const typecheck_1 = require("./typecheck");
 const values_1 = require("./values");
 const globals_1 = require("./globals");
 const list_1 = require("./utils/list");
+const utils_1 = require("./utils/utils");
 const help = `
 COMMANDS
 [:help or :h] this help message
@@ -1079,8 +1195,13 @@ COMMANDS
 [:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
+[:view files] view a file
+[:def definitions] define names
+[:import files] import a file
 `.trim();
+let importMap = {};
 exports.initREPL = () => {
+    importMap = {};
 };
 exports.runREPL = (s_, cb) => {
     try {
@@ -1103,6 +1224,21 @@ exports.runREPL = (s_, cb) => {
             const names = s.slice(4).trim().split(/\s+/g);
             names.forEach(x => globals_1.deleteGlobal(x));
             return cb(`deleted ${names.join(' ')}`);
+        }
+        if (s.startsWith(':def') || s.startsWith(':import')) {
+            const rest = s.slice(1);
+            parser_1.parseDefs(rest, importMap).then(ds => {
+                const xs = elaboration_1.elaborateDefs(ds, true);
+                return cb(`defined ${xs.join(' ')}`);
+            }).catch(err => cb('' + err, true));
+            return;
+        }
+        if (s.startsWith(':view')) {
+            const files = s.slice(5).trim().split(/\s+/g);
+            Promise.all(files.map(utils_1.loadFile)).then(ds => {
+                return cb(ds.join('\n\n'));
+            }).catch(err => cb('' + err, true));
+            return;
         }
         if (s.startsWith(':gtype')) {
             const name = s.slice(6).trim();
@@ -1174,10 +1310,10 @@ exports.runREPL = (s_, cb) => {
     }
 };
 
-},{"./config":1,"./core":4,"./elaboration":5,"./globals":6,"./parser":8,"./surface":11,"./typecheck":12,"./utils/list":15,"./values":17}],11:[function(require,module,exports){
+},{"./config":1,"./core":4,"./elaboration":5,"./globals":6,"./parser":8,"./surface":11,"./typecheck":12,"./utils/list":15,"./utils/utils":16,"./values":17}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
+exports.showDefs = exports.showDef = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
 const names_1 = require("./names");
 const C = require("./core");
 const values_1 = require("./values");
@@ -1321,6 +1457,13 @@ exports.showCore = (t, ns = list_1.Nil) => exports.show(exports.toSurface(t, ns)
 exports.showVal = (v, k = 0, ns = list_1.Nil, full = false) => exports.show(exports.toSurface(values_1.quote(v, k, full), ns));
 exports.showCoreZ = (t, vs = list_1.Nil, k = 0, ns = list_1.Nil) => exports.show(exports.toSurface(values_1.zonk(t, vs, k), ns));
 exports.showValZ = (v, vs = list_1.Nil, k = 0, ns = list_1.Nil, full = false) => exports.show(exports.toSurface(values_1.zonk(values_1.quote(v, k, full), vs, k), ns));
+exports.DDef = (name, value) => ({ tag: 'DDef', name, value });
+exports.showDef = (d) => {
+    if (d.tag === 'DDef')
+        return `def ${d.name} = ${exports.show(d.value)}`;
+    return d.tag;
+};
+exports.showDefs = (ds) => ds.map(exports.showDef).join('\n');
 
 },{"./core":4,"./names":7,"./utils/list":15,"./utils/utils":16,"./values":17}],12:[function(require,module,exports){
 "use strict";
@@ -1541,10 +1684,12 @@ const solve = (k, m, spine, val) => {
         const solution = constructSolution(0, type, body);
         config_1.log(() => `solution ?${m} := ${core_1.show(solution)}`);
         const vsolution = values_1.evaluate(solution, list_1.Nil);
-        return context_1.solveMeta(m, vsolution);
+        context_1.solveMeta(m, vsolution);
+        // try to solve blocked problems for the meta
+        config_1.log(() => `try solve problems for ?${m}`);
+        context_1.problemsBlockedBy(m).forEach(p => exports.unify(p.k, p.a, p.b));
+        return;
     }, err => utils_1.terr(`failed to solve meta ${V.showVal(values_1.VMeta(m, spine), k)} := ${values_1.showVal(val, k)}: ${err.message}`));
-    // try to solve blocked problems for the meta
-    context_1.problemsBlockedBy(m).forEach(p => exports.unify(p.k, p.a, p.b));
 };
 const constructSolution = (k, ty_, body) => {
     const ty = values_1.force(ty_);

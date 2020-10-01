@@ -156,3 +156,14 @@ export const showCore = (t: C.Term, ns: List<Name> = Nil): string => show(toSurf
 export const showVal = (v: Val, k: Ix = 0, ns: List<Name> = Nil, full: boolean = false): string => show(toSurface(quote(v, k, full), ns));
 export const showCoreZ = (t: C.Term, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil): string => show(toSurface(zonk(t, vs, k), ns));
 export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil, full: boolean = false): string => show(toSurface(zonk(quote(v, k, full), vs, k), ns));
+
+export type Def = DDef;
+
+export type DDef = { tag: 'DDef', name: Name, value: Term };
+export const DDef = (name: Name, value: Term): DDef => ({ tag: 'DDef', name, value });
+
+export const showDef = (d: Def): string => {
+  if (d.tag === 'DDef') return `def ${d.name} = ${show(d.value)}`;
+  return d.tag;
+};
+export const showDefs = (ds: Def[]): string => ds.map(showDef).join('\n');

@@ -10,7 +10,7 @@ import { show } from './surface';
 import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
 import { unify } from './unification';
 import { primType } from './primitives';
-import { getGlobal } from './globals';
+import { getGlobal, hasGlobal, setGlobal } from './globals';
 
 type EntryT = { type: Val, bound: boolean, mode: Mode, inserted: boolean };
 const EntryT = (type: Val, bound: boolean, mode: Mode, inserted: boolean): EntryT =>
@@ -287,6 +287,7 @@ export const elaborate = (t: S.Term): [Term, Term] => {
   resetContext();
   const [tm, ty] = synth(localEmpty, t);
 
+  log(() => `try solve unsolved problems`);
   tryToSolveBlockedProblems();
 
   const ztm = zonk(tm);
@@ -295,4 +296,35 @@ export const elaborate = (t: S.Term): [Term, Term] => {
   if (!contextSolved())
     return terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
   return [ztm, zty];
+};
+
+export const elaborateDefs = (ds: S.Def[], allowRedefinition: boolean = false): Name[] => {
+  log(() => `elaborateDefs ${ds.map(x => x.name).join(' ')}`);
+  const xs: Name[] = [];
+  if (!allowRedefinition) {
+    for (let i = 0; i < ds.length; i++) {
+      const d = ds[i];
+      if (d.tag === 'DDef' && hasGlobal(d.name))
+        return terr(`cannot redefine global ${d.name}`);
+    }
+  }
+  for (let i = 0; i < ds.length; i++) {
+    const d = ds[i];
+    log(() => `elaborateDef ${S.showDef(d)}`);
+    if (d.tag === 'DDef') {
+      try {
+        const [tm, ty] = elaborate(d.value);
+        log(() => `set ${d.name} : ${S.showCore(ty)} = ${S.showCore(tm)}`);
+        setGlobal(d.name, tm, evaluate(tm, Nil), evaluate(ty, Nil));
+
+        const i = xs.indexOf(d.name);
+        if (i >= 0) xs.splice(i, 1);
+        xs.push(d.name);
+      } catch (err) {
+        err.message = `type error in def ${d.name}: ${err.message}`;
+        throw err;
+      }
+    }
+  }
+  return xs;
 };

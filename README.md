@@ -23,7 +23,6 @@ The core language will be:
 
 ```
 TODO:
-- add definitions
 - add descriptions
 - add erasure
 - implement pruning
