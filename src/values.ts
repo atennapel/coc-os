@@ -69,6 +69,8 @@ export const VDesc = VPrim('Desc');
 export const VRet = VPrim('Ret');
 export const VRec = VPrim('Rec');
 export const VArg = VPrim('Arg');
+export const VFixD = VPrim('FixD');
+export const VConD = VPrim('ConD');
 
 export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
 export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);

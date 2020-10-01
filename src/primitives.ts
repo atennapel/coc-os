@@ -1,6 +1,6 @@
 import { PrimName } from './core';
 import { impossible } from './utils/utils';
-import { V0, V1, Val, vappE, VB, VDesc, vheq, VPiE, vreflheq, VType, VRet, VRec, VArg } from './values';
+import { V0, V1, Val, vappE, VB, VDesc, vheq, VPiE, vreflheq, VType, VRet, VRec, VArg, VFixD } from './values';
 
 const primTypes: { [K in PrimName]: Val } = {
 
@@ -51,6 +51,11 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiE('_', VPiE('T', VType, T => VPiE('f', VPiE('_', T, _ => VDesc), f => VPiE('_', VPiE('x', T, x => vappE(P, vappE(f, x))), _ => vappE(P, vappE(vappE(VArg, T), f))))), _ =>
     VPiE('d', VDesc, d =>
     vappE(P, d)))))),
+
+  // (Desc -> Type -> Type) -> Desc -> Type
+  'FixD': VPiE('_', VPiE('_', VDesc, _ => VPiE('_', VType, _ => VType)), _ => VPiE('_', VDesc, _ => VType)),
+  // (interpret : Desc -> Type -> Type) -> (d: Desc) -> interpret d (Fix d) -> Fix d
+  'ConD': VPiE('interpret', VPiE('_', VDesc, _ => VPiE('_', VType, _ => VType)), interpret => VPiE('d', VDesc, d => VPiE('_', vappE(vappE(interpret, d), vappE(vappE(VFixD, interpret), d)), _ => vappE(vappE(VFixD, interpret), d)))),
 
 };
 

@@ -197,6 +197,7 @@ exports.primNames = [
     'B', '0', '1', 'elimB',
     'HEq', 'ReflHEq', 'elimHEq',
     'Desc', 'Ret', 'Rec', 'Arg', 'elimDesc',
+    'FixD', 'ConD',
 ];
 exports.Type = exports.Prim('Type');
 exports.AppE = (left, right) => exports.App(left, exports.Expl, right);
@@ -1182,6 +1183,10 @@ const primTypes = {
       -> P d
     */
     'elimDesc': values_1.VPiE('P', values_1.VPiE('_', values_1.VDesc, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.VRet), _ => values_1.VPiE('_', values_1.VPiE('r', values_1.VDesc, r => values_1.VPiE('_', values_1.vappE(P, r), _ => values_1.vappE(P, values_1.vappE(values_1.VRec, r)))), _ => values_1.VPiE('_', values_1.VPiE('T', values_1.VType, T => values_1.VPiE('f', values_1.VPiE('_', T, _ => values_1.VDesc), f => values_1.VPiE('_', values_1.VPiE('x', T, x => values_1.vappE(P, values_1.vappE(f, x))), _ => values_1.vappE(P, values_1.vappE(values_1.vappE(values_1.VArg, T), f))))), _ => values_1.VPiE('d', values_1.VDesc, d => values_1.vappE(P, d)))))),
+    // (Desc -> Type -> Type) -> Desc -> Type
+    'FixD': values_1.VPiE('_', values_1.VPiE('_', values_1.VDesc, _ => values_1.VPiE('_', values_1.VType, _ => values_1.VType)), _ => values_1.VPiE('_', values_1.VDesc, _ => values_1.VType)),
+    // (interpret : Desc -> Type -> Type) -> (d: Desc) -> interpret d (Fix d) -> Fix d
+    'ConD': values_1.VPiE('interpret', values_1.VPiE('_', values_1.VDesc, _ => values_1.VPiE('_', values_1.VType, _ => values_1.VType)), interpret => values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('_', values_1.vappE(values_1.vappE(interpret, d), values_1.vappE(values_1.vappE(values_1.VFixD, interpret), d)), _ => values_1.vappE(values_1.vappE(values_1.VFixD, interpret), d)))),
 };
 exports.primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
 
@@ -1997,7 +2002,7 @@ exports.mapObj = (o, fn) => {
 },{"fs":19}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.velimprim = exports.vproj = exports.vappU = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.VArg = exports.VRec = exports.VRet = exports.VDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
+exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.velimprim = exports.vproj = exports.vappU = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.VConD = exports.VFixD = exports.VArg = exports.VRec = exports.VRet = exports.VDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
 const context_1 = require("./context");
 const core_1 = require("./core");
 const globals_1 = require("./globals");
@@ -2041,6 +2046,8 @@ exports.VDesc = exports.VPrim('Desc');
 exports.VRet = exports.VPrim('Ret');
 exports.VRec = exports.VPrim('Rec');
 exports.VArg = exports.VPrim('Arg');
+exports.VFixD = exports.VPrim('FixD');
+exports.VConD = exports.VPrim('ConD');
 exports.VPiE = (name, type, clos) => exports.VPi(core_1.Expl, name, type, clos);
 exports.VPiU = (name, type, clos) => exports.VPi(core_1.ImplUnif, name, type, clos);
 exports.VAbsE = (name, type, clos) => exports.VAbs(core_1.Expl, name, type, clos);
