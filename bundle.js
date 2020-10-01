@@ -97,6 +97,11 @@ const convElim = (k, a, b, x, y) => {
         return exports.conv(k, a.right, b.right);
     if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj)
         return;
+    if (a.tag === 'EPrim' && b.tag === 'EPrim' && a.name === b.name && a.args.length === b.args.length) {
+        for (let i = 0, l = a.args.length; i < l; i++)
+            exports.conv(k, a.args[i], b.args[i]);
+        return;
+    }
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(x, k)} ~ ${values_1.showVal(y, k)}`);
 };
 exports.conv = (k, a, b) => {
@@ -137,6 +142,10 @@ exports.conv = (k, a, b) => {
         exports.conv(k, values_1.vproj('fst', a), b.fst);
         return exports.conv(k, values_1.vproj('snd', a), b.snd);
     }
+    if (values_1.isVPrim('ReflHEq', a))
+        return;
+    if (values_1.isVPrim('ReflHEq', b))
+        return;
     if (a.tag === 'VNe' && b.tag === 'VNe' && exports.eqHead(a.head, b.head))
         return list_1.zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
@@ -162,6 +171,7 @@ exports.isPrimName = (name) => exports.primNames.includes(name);
 exports.primNames = [
     'Type',
     'B', '0', '1', 'elimB',
+    'HEq', 'ReflHEq', 'elimHEq',
 ];
 exports.Type = exports.Prim('Type');
 exports.AppE = (left, right) => exports.App(left, exports.Expl, right);
@@ -980,6 +990,12 @@ const primTypes = {
     '1': values_1.VB,
     // (P : %B -> *) -> P %0 -> P %1 -> (b : %B) -> P b
     'elimB': values_1.VPiE('P', values_1.VPiE('_', values_1.VB, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.V0), _ => values_1.VPiE('_', values_1.vappE(P, values_1.V1), _ => values_1.VPiE('b', values_1.VB, b => values_1.vappE(P, b))))),
+    // (A : *) -> (B : *) -> A -> B -> *
+    'HEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('B', values_1.VType, B => values_1.VPiE('_', A, _ => values_1.VPiE('_', B, _ => values_1.VType)))),
+    // (A : *) -> (a : A) -> HEq A A a a
+    'ReflHEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('a', A, a => values_1.vheq(A, A, a, a))),
+    // (A : *) -> (a : A) -> (P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (b : A) -> (p : HEq A A a b) -> P b p
+    'elimHEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('a', A, a => values_1.VPiE('P', values_1.VPiE('b', A, b => values_1.VPiE('_', values_1.vheq(A, A, a, b), _ => values_1.VType)), P => values_1.VPiE('_', values_1.vappE(values_1.vappE(P, a), values_1.vreflheq(A, a)), _ => values_1.VPiE('b', A, b => values_1.VPiE('p', values_1.vheq(A, A, a, b), p => values_1.vappE(values_1.vappE(P, b), p))))))),
 };
 exports.primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
 
@@ -1281,6 +1297,11 @@ const unifyElim = (k, a, b, x, y) => {
         return exports.unify(k, a.right, b.right);
     if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj)
         return;
+    if (a.tag === 'EPrim' && b.tag === 'EPrim' && a.name === b.name && a.args.length === b.args.length) {
+        for (let i = 0, l = a.args.length; i < l; i++)
+            exports.unify(k, a.args[i], b.args[i]);
+        return;
+    }
     return utils_1.terr(`unify failed (${k}): ${values_1.showVal(x, k)} ~ ${values_1.showVal(y, k)}`);
 };
 exports.unify = (k, a_, b_) => {
@@ -1323,6 +1344,10 @@ exports.unify = (k, a_, b_) => {
         exports.unify(k, values_1.vproj('fst', a), b.fst);
         return exports.unify(k, values_1.vproj('snd', a), b.snd);
     }
+    if (values_1.isVPrim('ReflHEq', a))
+        return;
+    if (values_1.isVPrim('ReflHEq', b))
+        return;
     if (a.tag === 'VNe' && b.tag === 'VNe' && conversion_1.eqHead(a.head, b.head))
         return list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.spine, b.spine);
     if (a.tag === 'VNe' && b.tag === 'VNe' && a.head.tag === 'HMeta' && b.head.tag === 'HMeta')
@@ -1635,7 +1660,7 @@ exports.mapObj = (o, fn) => {
 },{"fs":17}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.velimprim = exports.vproj = exports.vappU = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
+exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.velimprim = exports.vproj = exports.vappU = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
 const context_1 = require("./context");
 const core_1 = require("./core");
 const list_1 = require("./utils/list");
@@ -1659,6 +1684,10 @@ exports.VType = exports.VPrim('Type');
 exports.VB = exports.VPrim('B');
 exports.V0 = exports.VPrim('0');
 exports.V1 = exports.VPrim('1');
+exports.VHEq = exports.VPrim('HEq');
+exports.VReflHEq = exports.VPrim('ReflHEq');
+exports.vheq = (a, b, x, y) => exports.vappE(exports.vappE(exports.vappE(exports.vappE(exports.VHEq, a), b), x), y);
+exports.vreflheq = (a, x) => exports.vappE(exports.vappE(exports.VReflHEq, a), x);
 exports.VPiE = (name, type, clos) => exports.VPi(core_1.Expl, name, type, clos);
 exports.VPiU = (name, type, clos) => exports.VPi(core_1.ImplUnif, name, type, clos);
 exports.VAbsE = (name, type, clos) => exports.VAbs(core_1.Expl, name, type, clos);
@@ -1698,6 +1727,10 @@ exports.velimprim = (name, v, args) => {
         if (exports.isVPrim('1', v))
             return args[2];
     }
+    if (name === 'elimHEq') {
+        if (exports.isVPrim('ReflHEq', v))
+            return args[3];
+    }
     if (v.tag === 'VNe')
         return exports.VNe(v.head, list_1.Cons(exports.EPrim(name, args), v.spine));
     return utils_1.impossible(`velimprim ${name}: ${v.tag}`);
@@ -1726,6 +1759,9 @@ exports.evaluate = (t, vs) => {
     if (t.tag === 'Prim') {
         if (t.name === 'elimB') {
             return exports.VAbsE('P', exports.VPiE('_', exports.VB, _ => exports.VType), P => exports.VAbsE('f', exports.vappE(P, exports.V0), f => exports.VAbsE('t', exports.vappE(P, exports.V1), t => exports.VAbsE('b', exports.VB, b => exports.velimprim('elimB', b, [P, f, t])))));
+        }
+        if (t.name === 'elimHEq') {
+            return exports.VAbsE('A', exports.VType, A => exports.VAbsE('a', A, a => exports.VAbsE('P', exports.VPiE('b', A, b => exports.VPiE('_', exports.vheq(A, A, a, b), _ => exports.VType)), P => exports.VAbsE('h', exports.vappE(exports.vappE(P, a), exports.vreflheq(A, a)), h => exports.VAbsE('b', A, b => exports.VAbsE('p', exports.vheq(A, A, a, b), p => exports.velimprim('elimHEq', p, [A, a, P, h, b])))))));
         }
         return exports.VPrim(t.name);
     }

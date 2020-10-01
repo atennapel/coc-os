@@ -2,7 +2,7 @@ import { log } from './config';
 import { Ix } from './names';
 import { zipWithR_ } from './utils/list';
 import { terr } from './utils/utils';
-import { Elim, Head, Val, vapp, vproj, vinst, VVar, showVal } from './values';
+import { Elim, Head, Val, vapp, vproj, vinst, VVar, showVal, isVPrim } from './values';
 
 export const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -15,6 +15,11 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
   if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode) return conv(k, a.right, b.right);
   if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj) return;
+  if (a.tag === 'EPrim' && b.tag === 'EPrim' && a.name === b.name && a.args.length === b.args.length) {
+    for (let i = 0, l = a.args.length; i < l; i++)
+      conv(k, a.args[i], b.args[i]);
+    return;
+  }
   return terr(`conv failed (${k}): ${showVal(x, k)} ~ ${showVal(y, k)}`);
 };
 export const conv = (k: Ix, a: Val, b: Val): void => {
@@ -38,6 +43,7 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     conv(k, a.fst, b.fst);
     return conv(k, a.snd, b.snd);
   }
+
   if (a.tag === 'VAbs') {
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vapp(b, a.mode, v));
@@ -54,6 +60,9 @@ export const conv = (k: Ix, a: Val, b: Val): void => {
     conv(k, vproj('fst', a), b.fst);
     return conv(k, vproj('snd', a), b.snd);
   }
+
+  if (isVPrim('ReflHEq', a)) return;
+  if (isVPrim('ReflHEq', b)) return;
 
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
     return zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);

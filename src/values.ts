@@ -50,6 +50,10 @@ export const VType = VPrim('Type');
 export const VB = VPrim('B');
 export const V0 = VPrim('0');
 export const V1 = VPrim('1');
+export const VHEq = VPrim('HEq');
+export const VReflHEq = VPrim('ReflHEq');
+export const vheq = (a: Val, b: Val, x: Val, y: Val) => vappE(vappE(vappE(vappE(VHEq, a), b), x), y);
+export const vreflheq = (a: Val, x: Val) => vappE(vappE(VReflHEq, a), x);
 
 export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
 export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);
@@ -88,6 +92,9 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     if (isVPrim('0', v)) return args[1];
     if (isVPrim('1', v)) return args[2];
   }
+  if (name === 'elimHEq') {
+    if (isVPrim('ReflHEq', v)) return args[3];
+  }
   if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
   return impossible(`velimprim ${name}: ${v.tag}`);
 };
@@ -120,6 +127,15 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
         VAbsE('t', vappE(P, V1), t =>
         VAbsE('b', VB, b =>
         velimprim('elimB', b, [P, f, t])))));
+    }
+    if (t.name === 'elimHEq') {
+      return VAbsE('A', VType, A =>
+        VAbsE('a', A, a =>
+        VAbsE('P', VPiE('b', A, b => VPiE('_', vheq(A, A, a, b), _ => VType)), P =>
+        VAbsE('h', vappE(vappE(P, a), vreflheq(A, a)), h =>
+        VAbsE('b', A, b =>
+        VAbsE('p', vheq(A, A, a, b), p =>
+        velimprim('elimHEq', p, [A, a, P, h, b])))))));
     }
     return VPrim(t.name);
   }
