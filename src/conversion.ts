@@ -1,7 +1,8 @@
 import { log } from './config';
 import { Ix } from './names';
-import { zipWithR_ } from './utils/list';
-import { terr } from './utils/utils';
+import { forceLazy } from './utils/lazy';
+import { length, zipWithR_ } from './utils/list';
+import { terr, tryT } from './utils/utils';
 import { Elim, Head, Val, vapp, vproj, vinst, VVar, showVal, isVPrim, force } from './values';
 
 export const eqHead = (a: Head, b: Head): boolean => {
@@ -68,6 +69,13 @@ export const conv = (k: Ix, a_: Val, b_: Val): void => {
 
   if (a.tag === 'VNe' && b.tag === 'VNe' && eqHead(a.head, b.head))
     return zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);
+
+  if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.head === b.head && length(a.args) === length(b.args)) {
+    return tryT(() => zipWithR_((x, y) => convElim(k, x, y, a, b), a.args, b.args),
+      () => conv(k, forceLazy(a.val), forceLazy(b.val)));
+  }
+  if (a.tag === 'VGlobal') return conv(k, forceLazy(a.val), b);
+  if (b.tag === 'VGlobal') return conv(k, a, forceLazy(b.val));
 
   return terr(`conv failed (${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
 };

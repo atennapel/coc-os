@@ -23,6 +23,7 @@ The core language will be:
 
 ```
 TODO:
+- fix interaction of metas and globals
 - add descriptions
 - add definitions
 - add erasure

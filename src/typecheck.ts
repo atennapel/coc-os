@@ -1,6 +1,7 @@
 import { log } from './config';
 import { conv } from './conversion';
 import { Pi, show, Term, Mode, ImplUnif } from './core';
+import { getGlobal } from './globals';
 import { Ix } from './names';
 import { primType } from './primitives';
 import { Cons, index, List, Nil } from './utils/list';
@@ -35,6 +36,11 @@ const synth = (local: Local, tm: Term): Val => {
     const ty = index(local.ts, tm.index);
     if (!ty) return terr(`undefined index ${tm.index}`);
     return ty;
+  }
+  if (tm.tag === 'Global') {
+    const entry = getGlobal(tm.name);
+    if (!entry) return terr(`global ${tm.name} not found`);
+    return entry.type;
   }
   if (tm.tag === 'App') {
     const ty = synth(local, tm.left);

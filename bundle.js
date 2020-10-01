@@ -89,6 +89,7 @@ exports.contextSolved = () => context.metas.every(s => s.tag === 'Solved') && co
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.conv = exports.eqHead = void 0;
 const config_1 = require("./config");
+const lazy_1 = require("./utils/lazy");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
@@ -163,10 +164,17 @@ exports.conv = (k, a_, b_) => {
         return;
     if (a.tag === 'VNe' && b.tag === 'VNe' && exports.eqHead(a.head, b.head))
         return list_1.zipWithR_((x, y) => convElim(k, x, y, a, b), a.spine, b.spine);
+    if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.head === b.head && list_1.length(a.args) === list_1.length(b.args)) {
+        return utils_1.tryT(() => list_1.zipWithR_((x, y) => convElim(k, x, y, a, b), a.args, b.args), () => exports.conv(k, lazy_1.forceLazy(a.val), lazy_1.forceLazy(b.val)));
+    }
+    if (a.tag === 'VGlobal')
+        return exports.conv(k, lazy_1.forceLazy(a.val), b);
+    if (b.tag === 'VGlobal')
+        return exports.conv(k, a, lazy_1.forceLazy(b.val));
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
 };
 
-},{"./config":1,"./utils/list":15,"./utils/utils":16,"./values":17}],4:[function(require,module,exports){
+},{"./config":1,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16,"./values":17}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.eq = exports.show = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
@@ -263,6 +271,7 @@ const surface_1 = require("./surface");
 const context_1 = require("./context");
 const unification_1 = require("./unification");
 const primitives_1 = require("./primitives");
+const globals_1 = require("./globals");
 const EntryT = (type, bound, mode, inserted) => ({ type, bound, mode, inserted });
 const indexT = (ts, ix) => {
     let l = ts;
@@ -369,8 +378,16 @@ const synth = (local, tm) => {
         return [core_1.Prim(tm.name), primitives_1.primType(tm.name)];
     if (tm.tag === 'Var') {
         const i = list_1.indexOf(local.nsSurface, tm.name);
-        const [entry, j] = indexT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
-        return [core_1.Var(j), entry.type];
+        if (i < 0) {
+            const entry = globals_1.getGlobal(tm.name);
+            if (!entry)
+                return utils_1.terr(`global ${tm.name} not found`);
+            return [core_1.Global(tm.name), entry.type];
+        }
+        else {
+            const [entry, j] = indexT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
+            return [core_1.Var(j), entry.type];
+        }
     }
     if (tm.tag === 'App') {
         const [left, ty] = synth(local, tm.left);
@@ -528,24 +545,28 @@ exports.elaborate = (t) => {
     return [ztm, zty];
 };
 
-},{"./config":1,"./context":2,"./core":4,"./primitives":9,"./surface":11,"./unification":13,"./utils/list":15,"./utils/utils":16,"./values":17}],6:[function(require,module,exports){
+},{"./config":1,"./context":2,"./core":4,"./globals":6,"./primitives":9,"./surface":11,"./unification":13,"./utils/list":15,"./utils/utils":16,"./values":17}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteGlobal = exports.setGlobal = exports.getGlobal = exports.getGlobals = exports.resetGlobals = void 0;
+exports.deleteGlobal = exports.setGlobal = exports.hasGlobal = exports.getGlobal = exports.getGlobals = exports.resetGlobals = void 0;
+const utils_1 = require("./utils/utils");
 let env = new Map();
 exports.resetGlobals = () => {
     env.clear();
 };
 exports.getGlobals = () => env;
 exports.getGlobal = (name) => env.get(name) || null;
+exports.hasGlobal = (name) => env.has(name);
 exports.setGlobal = (name, term, val, type) => {
+    if (env.has(name))
+        return utils_1.impossible(`setGlobal: name already exists: ${name}`);
     env.set(name, { term, val, type });
 };
 exports.deleteGlobal = (name) => {
     env.delete(name);
 };
 
-},{}],7:[function(require,module,exports){
+},{"./utils/utils":16}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -582,7 +603,7 @@ const TName = (name) => ({ tag: 'Name', name });
 const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list, bracket) => ({ tag: 'List', list, bracket });
 const TStr = (str) => ({ tag: 'Str', str });
-const SYM1 = ['\\', ':', '*', '=', ','];
+const SYM1 = ['\\', ':', '=', ','];
 const SYM2 = ['->', '**'];
 const START = 0;
 const NAME = 1;
@@ -785,8 +806,6 @@ const expr = (t) => {
     }
     if (t.tag === 'Name') {
         const x = t.name;
-        if (x === '*')
-            return [surface_1.Type, false];
         if (x === '_')
             return [surface_1.Hole, false];
         if (x[0] === '%') {
@@ -1120,7 +1139,14 @@ exports.runREPL = (s_, cb) => {
                 return cb(`undefined global: ${name}`, true);
             return cb(surface_1.showVal(res.val, 0, list_1.Nil, true));
         }
-        const term = parser_1.parse(s);
+        let code = s;
+        let g = null;
+        if (s.startsWith(':def')) {
+            const spl = s.slice(4).trim().split('=');
+            g = spl[0].trim();
+            code = spl.slice(1).join('=');
+        }
+        const term = parser_1.parse(code);
         config_1.log(() => surface_1.show(term));
         config_1.log(() => 'ELABORATE');
         const [eterm, etype] = elaboration_1.elaborate(term);
@@ -1136,7 +1162,12 @@ exports.runREPL = (s_, cb) => {
         const norm = values_1.normalize(eterm, true);
         config_1.log(() => C.show(norm));
         config_1.log(() => surface_1.showCore(norm));
-        return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\nnorm: ${surface_1.showCore(norm)}`);
+        if (g) {
+            if (globals_1.hasGlobal(g))
+                globals_1.deleteGlobal(g);
+            globals_1.setGlobal(g, eterm, values_1.evaluate(eterm, list_1.Nil), values_1.evaluate(etype, list_1.Nil));
+        }
+        return cb(`${g ? `defined ${g}\n` : ''}term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\nnorm: ${surface_1.showCore(norm)}`);
     }
     catch (err) {
         return cb(`${err}`, true);
@@ -1298,6 +1329,7 @@ exports.typecheck = void 0;
 const config_1 = require("./config");
 const conversion_1 = require("./conversion");
 const core_1 = require("./core");
+const globals_1 = require("./globals");
 const primitives_1 = require("./primitives");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
@@ -1320,6 +1352,12 @@ const synth = (local, tm) => {
         if (!ty)
             return utils_1.terr(`undefined index ${tm.index}`);
         return ty;
+    }
+    if (tm.tag === 'Global') {
+        const entry = globals_1.getGlobal(tm.name);
+        if (!entry)
+            return utils_1.terr(`global ${tm.name} not found`);
+        return entry.type;
     }
     if (tm.tag === 'App') {
         const ty = synth(local, tm.left);
@@ -1384,7 +1422,7 @@ exports.typecheck = (t) => {
     return values_1.quote(ty, 0);
 };
 
-},{"./config":1,"./conversion":3,"./core":4,"./primitives":9,"./utils/list":15,"./utils/utils":16,"./values":17}],13:[function(require,module,exports){
+},{"./config":1,"./conversion":3,"./core":4,"./globals":6,"./primitives":9,"./utils/list":15,"./utils/utils":16,"./values":17}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.unify = void 0;

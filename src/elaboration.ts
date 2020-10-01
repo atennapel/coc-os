@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Let, Meta, Pi, Term, Var, Prim, Sigma, Pair, Proj, Mode } from './core';
+import { Abs, App, Let, Meta, Pi, Term, Var, Prim, Sigma, Pair, Proj, Global, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, zipWithIndex } from './utils/list';
@@ -10,6 +10,7 @@ import { show } from './surface';
 import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
 import { unify } from './unification';
 import { primType } from './primitives';
+import { getGlobal } from './globals';
 
 type EntryT = { type: Val, bound: boolean, mode: Mode, inserted: boolean };
 const EntryT = (type: Val, bound: boolean, mode: Mode, inserted: boolean): EntryT =>
@@ -136,8 +137,14 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   if (tm.tag === 'Prim') return [Prim(tm.name), primType(tm.name)];
   if (tm.tag === 'Var') {
     const i = indexOf(local.nsSurface, tm.name);
-    const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
-    return [Var(j), entry.type];
+    if (i < 0) {
+      const entry = getGlobal(tm.name);
+      if (!entry) return terr(`global ${tm.name} not found`);
+      return [Global(tm.name), entry.type];
+    } else {
+      const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
+      return [Var(j), entry.type];
+    }
   }
   if (tm.tag === 'App') {
     const [left, ty] = synth(local, tm.left);
