@@ -50,3 +50,19 @@ def elimFix
     -> (x : Fix d)
     -> P x
   = elimFixD {interpretDesc}
+
+def All
+  : (D : Desc) -> (X : Type) -> (P : X -> Type) -> interpretDesc D X -> Type
+  = \D X P. indDesc {\D. interpretDesc D X -> Type}
+    (\_. U)
+    (\r h p. P p.fst ** h p.snd)
+    (\T f rec p. rec p.fst p.snd)
+    D
+
+def all
+  : (D : Desc) -> (X : Type) -> (P : X -> Type) -> ((x : X) -> P x) -> (xs : interpretDesc D X) -> All D X P xs
+  = \D X P p. indDesc {\D. (xs : interpretDesc D X) -> All D X P xs}
+    (\_. ())
+    (\r h pp. (p pp.fst, h pp.snd))
+    (\T f rec pp. rec pp.fst pp.snd)
+    D
