@@ -1,6 +1,8 @@
 import { getMeta } from './context';
-import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif } from './core';
+import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global } from './core';
+import { getGlobal } from './globals';
 import { Ix, Name } from './names';
+import { forceLazy, Lazy, lazyOf, mapLazy } from './utils/lazy';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
 
@@ -26,10 +28,12 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VNe | VAbs | VPair | VPi | VSigma;
+export type Val = VNe | VGlobal | VAbs | VPair | VPi | VSigma;
 
 export type VNe = { tag: 'VNe', head: Head, spine: Spine };
 export const VNe = (head: Head, spine: Spine): VNe => ({ tag: 'VNe', head, spine });
+export type VGlobal = { tag: 'VGlobal', head: Name, args: List<Elim>, val: Lazy<Val> };
+export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): VGlobal => ({ tag: 'VGlobal', head, args, val });
 export type VAbs = { tag: 'VAbs', mode: Mode, name: Name, type: Val, clos: Clos };
 export const VAbs = (mode: Mode, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', mode, name, type, clos });
 export type VPair = { tag: 'VPair', fst: Val, snd: Val, type: Val };
@@ -62,14 +66,15 @@ export const VAbsU = (name: Name, type: Val, clos: Clos): VAbs => VAbs(ImplUnif,
 
 export const vinst = (val: VAbs | VPi | VSigma, arg: Val): Val => val.clos(arg);
 
-export const force = (v: Val): Val => {
+export const force = (v: Val, forceGlobal: boolean = true): Val => {
+  if (v.tag === 'VGlobal' && forceGlobal) return force(forceLazy(v.val), forceGlobal);
   if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
     const val = getMeta(v.head.index);
     if (val.tag === 'Unsolved') return v;
     return force(foldr((elim, y) =>
       elim.tag === 'EProj' ? vproj(elim.proj, y) :
       elim.tag === 'EPrim' ? velimprim(elim.name, y, elim.args) :
-      vapp(y, elim.mode, elim.right), val.val, v.spine));
+      vapp(y, elim.mode, elim.right), val.val, v.spine), forceGlobal);
   }
   return v;
 };
@@ -77,13 +82,17 @@ export const force = (v: Val): Val => {
 export const vapp = (left: Val, mode: Mode, right: Val): Val => {
   if (left.tag === 'VAbs') return vinst(left, right);
   if (left.tag === 'VNe') return VNe(left.head, Cons(EApp(mode, right), left.spine));
+  if (left.tag === 'VGlobal')
+    return VGlobal(left.head, Cons(EApp(mode, right), left.args), mapLazy(left.val, v => vapp(v, mode, right)));
   return impossible(`vapp: ${left.tag}`);
 };
 export const vappE = (left: Val, right: Val): Val => vapp(left, Expl, right);
 export const vappU = (left: Val, right: Val): Val => vapp(left, ImplUnif, right);
-export const vproj= (proj: 'fst' | 'snd', v: Val): Val => {
+export const vproj = (proj: 'fst' | 'snd', v: Val): Val => {
   if (v.tag === 'VPair') return proj === 'fst' ? v.fst : v.snd;
   if (v.tag === 'VNe') return VNe(v.head, Cons(EProj(proj), v.spine));
+  if (v.tag === 'VGlobal')
+    return VGlobal(v.head, Cons(EProj(proj), v.args), mapLazy(v.val, v => vproj(proj, v)));
   return impossible(`vproj: ${v.tag}`);
 };
 
@@ -96,6 +105,8 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     if (isVPrim('ReflHEq', v)) return args[3];
   }
   if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
+  if (v.tag === 'VGlobal')
+    return VGlobal(v.head, Cons(EPrim(name, args), v.args), mapLazy(v.val, v => velimprim(name, v, args)));
   return impossible(`velimprim ${name}: ${v.tag}`);
 };
 
@@ -114,6 +125,10 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   }
   if (t.tag === 'Var') 
     return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
+  if (t.tag === 'Global') {
+    const entry = getGlobal(t.name) || impossible(`evaluate: global ${t.name} has no value`);
+    return VGlobal(t.name, Nil, lazyOf(entry.val));
+  }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.mode, evaluate(t.right, vs));
   if (t.tag === 'Let')
@@ -148,73 +163,81 @@ const quoteHead = (h: Head, k: Ix): Term => {
   if (h.tag === 'HMeta') return Meta(h.index);
   return h;
 };
-const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
-  if (e.tag === 'EApp') return App(t, e.mode, quote(e.right, k));
+const quoteElim = (t: Term, e: Elim, k: Ix, full: boolean): Term => {
+  if (e.tag === 'EApp') return App(t, e.mode, quote(e.right, k, full));
   if (e.tag === 'EProj') return Proj(e.proj, t);
-  if (e.tag === 'EPrim') return AppE(e.args.reduce((x, y) => AppE(x, quote(y, k)), Prim(e.name) as Term), t);
+  if (e.tag === 'EPrim') return AppE(e.args.reduce((x, y) => AppE(x, quote(y, k, full)), Prim(e.name) as Term), t);
   return e;
 };
-export const quote = (v_: Val, k: Ix): Term => {
-  const v = force(v_);
+export const quote = (v_: Val, k: Ix, full: boolean = false): Term => {
+  const v = force(v_, false);
   if (v.tag === 'VNe')
     return foldr(
-      (x, y) => quoteElim(y, x, k),
+      (x, y) => quoteElim(y, x, k, full),
       quoteHead(v.head, k),
       v.spine,
     );
+  if (v.tag === 'VGlobal') {
+    if (full) return quote(forceLazy(v.val), k, full);
+    return foldr(
+      (x, y) => quoteElim(y, x, k, full),
+      Global(v.head) as Term,
+      v.args,
+    );
+  }
   if (v.tag === 'VPair')
-    return Pair(quote(v.fst, k), quote(v.snd, k), quote(v.type, k));
+    return Pair(quote(v.fst, k, full), quote(v.snd, k, full), quote(v.type, k, full));
   if (v.tag === 'VAbs')
-    return Abs(v.mode, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+    return Abs(v.mode, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VPi')
-    return Pi(v.mode, v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+    return Pi(v.mode, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VSigma')
-    return Sigma(v.name, quote(v.type, k), quote(vinst(v, VVar(k)), k + 1));
+    return Sigma(v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   return v;
 };
 
-export const normalize = (t: Term): Term => quote(evaluate(t, Nil), 0);
+export const normalize = (t: Term, full: boolean = false): Term => quote(evaluate(t, Nil), 0, full);
 
 type S = [false, Val] | [true, Term];
-const zonkSpine = (tm: Term, vs: EnvV, k: Ix): S => {
+const zonkSpine = (tm: Term, vs: EnvV, k: Ix, full: boolean): S => {
   if (tm.tag === 'Meta') {
     const s = getMeta(tm.index);
-    if (s.tag === 'Unsolved') return [true, zonk(tm, vs, k)];
+    if (s.tag === 'Unsolved') return [true, zonk(tm, vs, k, full)];
     return [false, s.val];
   }
   if (tm.tag === 'App') {
-    const spine = zonkSpine(tm.left, vs, k);
+    const spine = zonkSpine(tm.left, vs, k, full);
     return spine[0] ?
-      [true, App(spine[1], tm.mode, zonk(tm.right, vs, k))] :
+      [true, App(spine[1], tm.mode, zonk(tm.right, vs, k, full))] :
       [false, vapp(spine[1], tm.mode, evaluate(tm.right, vs))];
   }
-  return [true, zonk(tm, vs, k)];
+  return [true, zonk(tm, vs, k, full)];
 };
-export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0): Term => {
+export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false): Term => {
   if (tm.tag === 'Meta') {
     const s = getMeta(tm.index);
-    return s.tag === 'Solved' ? quote(s.val, k) : tm;
+    return s.tag === 'Solved' ? quote(s.val, k, full) : tm;
   }
   if (tm.tag === 'Pi')
-    return Pi(tm.mode, tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+    return Pi(tm.mode, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Sigma')
-    return Sigma(tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+    return Sigma(tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Let')
-    return Let(tm.name, zonk(tm.type, vs, k), zonk(tm.val, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+    return Let(tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Abs')
-    return Abs(tm.mode, tm.name, zonk(tm.type, vs, k), zonk(tm.body, Cons(VVar(k), vs), k + 1));
+    return Abs(tm.mode, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Pair')
-    return Pair(zonk(tm.fst, vs, k), zonk(tm.snd, vs, k), zonk(tm.type, vs, k));
+    return Pair(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full), zonk(tm.type, vs, k, full));
   if (tm.tag === 'Proj')
-    return Proj(tm.proj, zonk(tm.term, vs, k));
+    return Proj(tm.proj, zonk(tm.term, vs, k, full));
   if (tm.tag === 'App') {
-    const spine = zonkSpine(tm.left, vs, k);
+    const spine = zonkSpine(tm.left, vs, k, full);
     return spine[0] ?
-      App(spine[1], tm.mode, zonk(tm.right, vs, k)) :
-      quote(vapp(spine[1], tm.mode, evaluate(tm.right, vs)), k);
+      App(spine[1], tm.mode, zonk(tm.right, vs, k, full)) :
+      quote(vapp(spine[1], tm.mode, evaluate(tm.right, vs)), k, full);
   }
   return tm;
 };
 
-export const showVal = (v: Val, k: Ix) => show(quote(v, k));
-export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix) => show(zonk(quote(v, k), vs, k));
+export const showVal = (v: Val, k: Ix = 0, full: boolean = false) => show(quote(v, k, full));
+export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, full: boolean = false) => show(zonk(quote(v, k, full), vs, k, full));

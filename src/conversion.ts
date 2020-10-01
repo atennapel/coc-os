@@ -2,7 +2,7 @@ import { log } from './config';
 import { Ix } from './names';
 import { zipWithR_ } from './utils/list';
 import { terr } from './utils/utils';
-import { Elim, Head, Val, vapp, vproj, vinst, VVar, showVal, isVPrim } from './values';
+import { Elim, Head, Val, vapp, vproj, vinst, VVar, showVal, isVPrim, force } from './values';
 
 export const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
@@ -22,7 +22,9 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   }
   return terr(`conv failed (${k}): ${showVal(x, k)} ~ ${showVal(y, k)}`);
 };
-export const conv = (k: Ix, a: Val, b: Val): void => {
+export const conv = (k: Ix, a_: Val, b_: Val): void => {
+  const a = force(a_, false);
+  const b = force(b_, false);
   log(() => `conv(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {

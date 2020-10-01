@@ -6,12 +6,14 @@ export const Expl: Expl = 'Expl';
 export type ImplUnif = 'ImplUnif';
 export const ImplUnif: ImplUnif = 'ImplUnif';
 
-export type Term = Var | Prim | App | Abs | Pair | Proj | Let | Pi | Sigma | Meta;
+export type Term = Var | Prim | Global | App | Abs | Pair | Proj | Let | Pi | Sigma | Meta;
 
 export type Var = { tag: 'Var', index: Ix };
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
 export type Prim = { tag: 'Prim', name: PrimName };
 export const Prim = (name: PrimName): Prim => ({ tag: 'Prim', name });
+export type Global = { tag: 'Global', name: Name };
+export const Global = (name: Name): Global => ({ tag: 'Global', name });
 export type App = { tag: 'App', left: Term, mode: Mode, right: Term };
 export const App = (left: Term, mode: Mode, right: Term): App => ({ tag: 'App', left, mode, right });
 export type Abs = { tag: 'Abs', mode: Mode, name: Name, type: Term, body: Term };
@@ -33,9 +35,7 @@ export type PrimName = (typeof primNames)[number];
 export const isPrimName = (name: string): name is PrimName => (primNames as any).includes(name);
 export const primNames = [
   'Type',
-
   'B', '0', '1', 'elimB',
-
   'HEq', 'ReflHEq', 'elimHEq',
 ] as const;
 export type PrimNameElim = 'elimB' | 'elimHEq';
@@ -54,6 +54,7 @@ export const showMode = (m: Mode): string => m === 'ImplUnif' ? 'impl' : '';
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Prim') return `%${t.name}`;
+  if (t.tag === 'Global') return `${t.name}`;
   if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'App') return `(${show(t.left)} ${t.mode === ImplUnif ? '{' : ''}${show(t.right)}${t.mode === ImplUnif ? '}' : ''})`;
   if (t.tag === 'Abs') return `(${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'} -> ${show(t.body)})`;
@@ -68,6 +69,7 @@ export const show = (t: Term): string => {
 export const eq = (t: Term, o: Term): boolean => {
   if (t.tag === 'Var') return o.tag === 'Var' && t.index === o.index;
   if (t.tag === 'Prim') return o.tag === 'Prim' && t.name === o.name;
+  if (t.tag === 'Global') return o.tag === 'Global' && t.name === o.name;
   if (t.tag === 'Meta') return o.tag === 'Meta' && t.index === o.index;
   if (t.tag === 'App') return o.tag === 'App' && eq(t.left, o.left) && eq(t.right, o.right);
   if (t.tag === 'Abs') return o.tag === 'Abs' && eq(t.type, o.type) && eq(t.body, o.body);

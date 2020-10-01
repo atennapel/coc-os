@@ -23,9 +23,8 @@ The core language will be:
 
 ```
 TODO:
-- add primitives
-- add globals
 - add descriptions
+- add definitions
 - add erasure
 - implement pruning
 - implement instance search

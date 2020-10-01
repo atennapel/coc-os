@@ -18,9 +18,22 @@ type Context = { metas: Solution[], blocked: Blocked[] };
 const Context = (metas: Solution[] = [], blocked: Blocked[] = []) => ({ metas, blocked });
 
 let context: Context = Context();
+let contextStack: Context[] = [];
 
 export const resetContext = () => {
   context = Context();
+};
+
+export const markMetas = () => {
+  contextStack.push(context);
+};
+export const discardMetas = () => {
+  contextStack.pop();
+};
+export const undoMetas = (): void => {
+  const ctx = contextStack.pop();
+  if (!ctx) return impossible(`tried to undoMetas with empty stack`);
+  context = ctx;
 };
 
 export const freshMeta = (type: Val): Ix => {

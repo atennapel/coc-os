@@ -128,6 +128,7 @@ export const show = (t: Term): string => {
 export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Meta') return Meta(t.index);
   if (t.tag === 'Var') return Var(index(ns, t.index) || impossible(`toSurface: index out of scope: ${t.index}`));
+  if (t.tag === 'Global') return Var(t.name);
   if (t.tag === 'Prim') return Prim(t.name);
   if (t.tag === 'App') return App(toSurface(t.left, ns), t.mode, toSurface(t.right, ns));
   if (t.tag === 'Pair') return Pair(toSurface(t.fst, ns), toSurface(t.snd, ns));
@@ -152,6 +153,6 @@ export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
 };
 
 export const showCore = (t: C.Term, ns: List<Name> = Nil): string => show(toSurface(t, ns));
-export const showVal = (v: Val, k: Ix = 0, ns: List<Name> = Nil): string => show(toSurface(quote(v, k), ns));
+export const showVal = (v: Val, k: Ix = 0, ns: List<Name> = Nil, full: boolean = false): string => show(toSurface(quote(v, k, full), ns));
 export const showCoreZ = (t: C.Term, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil): string => show(toSurface(zonk(t, vs, k), ns));
-export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil): string => show(toSurface(zonk(quote(v, k), vs, k), ns));
+export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil, full: boolean = false): string => show(toSurface(zonk(quote(v, k, full), vs, k), ns));

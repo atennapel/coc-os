@@ -5,7 +5,7 @@ import { Ix } from './names';
 import { primType } from './primitives';
 import { Cons, index, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
-import { EnvV, evaluate, quote, showValZ, Val, vinst, vproj, VType, VVar } from './values';
+import { EnvV, evaluate, force, quote, showValZ, Val, vinst, vproj, VType, VVar } from './values';
 
 type EnvT = List<Val>;
 
@@ -49,14 +49,16 @@ const synth = (local: Local, tm: Term): Val => {
   if (tm.tag === 'Pair') {
     check(local, tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
-    if (ty.tag !== 'VSigma') return terr(`not a sigma type in pair: ${show(tm)}`);
-    check(local, tm.fst, ty.type);
-    check(local, tm.snd, vinst(ty, evaluate(tm.fst, local.vs)));
+    const fty = force(ty);
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in pair: ${show(tm)}`);
+    check(local, tm.fst, fty.type);
+    check(local, tm.snd, vinst(fty, evaluate(tm.fst, local.vs)));
     return ty;
   }
   if (tm.tag === 'Proj') {
-    const fty = synth(local, tm.term);
-    if (fty.tag !== 'VSigma') return terr(`not a sigma type in ${tm.proj}: ${show(tm)}: ${showVal(local, fty)}`);
+    const ty = synth(local, tm.term);
+    const fty = force(ty);
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in ${tm.proj}: ${show(tm)}: ${showVal(local, ty)}`);
     return tm.proj === 'fst' ? fty.type : vinst(fty, vproj('fst', evaluate(tm.term, local.vs)));
   }
   if (tm.tag === 'Pi') {
@@ -83,10 +85,11 @@ const synth = (local: Local, tm: Term): Val => {
 
 const synthapp = (local: Local, ty: Val, mode: Mode, tm: Term): Val => {
   log(() => `synthapp ${showVal(local, ty)} @${mode === ImplUnif ? 'impl' : ''} ${show(tm)}`);
-  if (ty.tag === 'VPi' && ty.mode === mode) {
-    check(local, tm, ty.type);
+  const fty = force(ty);
+  if (fty.tag === 'VPi' && fty.mode === mode) {
+    check(local, tm, fty.type);
     const v = evaluate(tm, local.vs);
-    return vinst(ty, v);
+    return vinst(fty, v);
   }
   return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === ImplUnif ? 'impl' : ''} ${show(tm)}`);
 };

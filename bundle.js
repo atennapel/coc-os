@@ -18,15 +18,28 @@ exports.log = (msg) => {
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.contextSolved = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
+exports.contextSolved = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.undoMetas = exports.discardMetas = exports.markMetas = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
 const utils_1 = require("./utils/utils");
 exports.Unsolved = (type) => ({ tag: 'Unsolved', type });
 exports.Solved = (val, type) => ({ tag: 'Solved', val, type });
 const Blocked = (k, a, b, blockedBy) => ({ k, a, b, blockedBy });
 const Context = (metas = [], blocked = []) => ({ metas, blocked });
 let context = Context();
+let contextStack = [];
 exports.resetContext = () => {
     context = Context();
+};
+exports.markMetas = () => {
+    contextStack.push(context);
+};
+exports.discardMetas = () => {
+    contextStack.pop();
+};
+exports.undoMetas = () => {
+    const ctx = contextStack.pop();
+    if (!ctx)
+        return utils_1.impossible(`tried to undoMetas with empty stack`);
+    context = ctx;
 };
 exports.freshMeta = (type) => {
     const id = context.metas.length;
@@ -71,7 +84,7 @@ exports.allProblems = () => {
 exports.amountOfProblems = () => context.blocked.length;
 exports.contextSolved = () => context.metas.every(s => s.tag === 'Solved') && context.blocked.length === 0;
 
-},{"./utils/utils":14}],3:[function(require,module,exports){
+},{"./utils/utils":16}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.conv = exports.eqHead = void 0;
@@ -104,7 +117,9 @@ const convElim = (k, a, b, x, y) => {
     }
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(x, k)} ~ ${values_1.showVal(y, k)}`);
 };
-exports.conv = (k, a, b) => {
+exports.conv = (k, a_, b_) => {
+    const a = values_1.force(a_, false);
+    const b = values_1.force(b_, false);
     config_1.log(() => `conv(${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
     if (a === b)
         return;
@@ -151,14 +166,15 @@ exports.conv = (k, a, b) => {
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
 };
 
-},{"./config":1,"./utils/list":13,"./utils/utils":14,"./values":15}],4:[function(require,module,exports){
+},{"./config":1,"./utils/list":15,"./utils/utils":16,"./values":17}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.eq = exports.show = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
+exports.eq = exports.show = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
 exports.Expl = 'Expl';
 exports.ImplUnif = 'ImplUnif';
 exports.Var = (index) => ({ tag: 'Var', index });
 exports.Prim = (name) => ({ tag: 'Prim', name });
+exports.Global = (name) => ({ tag: 'Global', name });
 exports.App = (left, mode, right) => ({ tag: 'App', left, mode, right });
 exports.Abs = (mode, name, type, body) => ({ tag: 'Abs', name, mode, type, body });
 exports.Pair = (fst, snd, type) => ({ tag: 'Pair', fst, snd, type });
@@ -186,6 +202,8 @@ exports.show = (t) => {
         return `${t.index}`;
     if (t.tag === 'Prim')
         return `%${t.name}`;
+    if (t.tag === 'Global')
+        return `${t.name}`;
     if (t.tag === 'Meta')
         return `?${t.index}`;
     if (t.tag === 'App')
@@ -209,6 +227,8 @@ exports.eq = (t, o) => {
         return o.tag === 'Var' && t.index === o.index;
     if (t.tag === 'Prim')
         return o.tag === 'Prim' && t.name === o.name;
+    if (t.tag === 'Global')
+        return o.tag === 'Global' && t.name === o.name;
     if (t.tag === 'Meta')
         return o.tag === 'Meta' && t.index === o.index;
     if (t.tag === 'App')
@@ -508,7 +528,24 @@ exports.elaborate = (t) => {
     return [ztm, zty];
 };
 
-},{"./config":1,"./context":2,"./core":4,"./primitives":8,"./surface":10,"./unification":12,"./utils/list":13,"./utils/utils":14,"./values":15}],6:[function(require,module,exports){
+},{"./config":1,"./context":2,"./core":4,"./primitives":9,"./surface":11,"./unification":13,"./utils/list":15,"./utils/utils":16,"./values":17}],6:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.deleteGlobal = exports.setGlobal = exports.getGlobal = exports.getGlobals = exports.resetGlobals = void 0;
+let env = new Map();
+exports.resetGlobals = () => {
+    env.clear();
+};
+exports.getGlobals = () => env;
+exports.getGlobal = (name) => env.get(name) || null;
+exports.setGlobal = (name, term, val, type) => {
+    env.set(name, { term, val, type });
+};
+exports.deleteGlobal = (name) => {
+    env.delete(name);
+};
+
+},{}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -523,7 +560,7 @@ exports.nextName = (x) => {
 };
 exports.chooseName = (x, ns) => x === '_' ? x : list_1.contains(ns, x) ? exports.chooseName(exports.nextName(x), ns) : x;
 
-},{"./utils/list":13}],7:[function(require,module,exports){
+},{"./utils/list":15}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parse = void 0;
@@ -977,7 +1014,7 @@ exports.parse = (s) => {
     return ex;
 };
 
-},{"./core":4,"./surface":10,"./utils/utils":14}],8:[function(require,module,exports){
+},{"./core":4,"./surface":11,"./utils/utils":16}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.primType = void 0;
@@ -999,7 +1036,7 @@ const primTypes = {
 };
 exports.primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
 
-},{"./utils/utils":14,"./values":15}],9:[function(require,module,exports){
+},{"./utils/utils":16,"./values":17}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runREPL = exports.initREPL = void 0;
@@ -1010,14 +1047,78 @@ const surface_1 = require("./surface");
 const C = require("./core");
 const typecheck_1 = require("./typecheck");
 const values_1 = require("./values");
+const globals_1 = require("./globals");
+const list_1 = require("./utils/list");
+const help = `
+COMMANDS
+[:help or :h] this help message
+[:debug or :d] toggle debug log messages
+[:defs] show all defs
+[:del name] delete a name
+[:gtype name] view the type of a name
+[:gtyno name] view the fully normalized type of a name
+[:gelab name] view the elaborated term of a name
+[:gterm name] view the term of a name
+[:gnorm name] view the fully normalized term of a name
+`.trim();
 exports.initREPL = () => {
 };
-exports.runREPL = (s, cb) => {
+exports.runREPL = (s_, cb) => {
     try {
+        const s = s_.trim();
+        if (s === ':help' || s === ':h')
+            return cb(help);
         if (s === ':d' || s === ':debug') {
             const d = !config_1.config.debug;
             config_1.setConfig({ debug: d });
             return cb(`debug: ${d}`);
+        }
+        if (s === ':defs') {
+            const gs = globals_1.getGlobals();
+            const r = [];
+            for (const [k, e] of gs)
+                r.push(`def ${k} : ${surface_1.showVal(e.type)} = ${surface_1.showCore(e.term)}`);
+            return cb(r.length === 0 ? 'no definitions' : r.join('\n'));
+        }
+        if (s.startsWith(':del')) {
+            const names = s.slice(4).trim().split(/\s+/g);
+            names.forEach(x => globals_1.deleteGlobal(x));
+            return cb(`deleted ${names.join(' ')}`);
+        }
+        if (s.startsWith(':gtype')) {
+            const name = s.slice(6).trim();
+            const res = globals_1.getGlobal(name);
+            if (!res)
+                return cb(`undefined global: ${name}`, true);
+            return cb(surface_1.showVal(res.type));
+        }
+        if (s.startsWith(':gtyno')) {
+            const name = s.slice(6).trim();
+            const res = globals_1.getGlobal(name);
+            if (!res)
+                return cb(`undefined global: ${name}`, true);
+            return cb(surface_1.showVal(res.type, 0, list_1.Nil, true));
+        }
+        if (s.startsWith(':gelab')) {
+            const name = s.slice(6).trim();
+            const res = globals_1.getGlobal(name);
+            if (!res)
+                return cb(`undefined global: ${name}`, true);
+            return cb(surface_1.showCore(res.term));
+        }
+        if (s.startsWith(':gterm')) {
+            const name = s.slice(7).trim();
+            const res = globals_1.getGlobal(name);
+            if (!res)
+                return cb(`undefined global: ${name}`, true);
+            return cb(surface_1.showVal(res.val));
+        }
+        if (s.startsWith(':gnorm')) {
+            const name = s.slice(7).trim();
+            const res = globals_1.getGlobal(name);
+            if (!res)
+                return cb(`undefined global: ${name}`, true);
+            return cb(surface_1.showVal(res.val, 0, list_1.Nil, true));
         }
         const term = parser_1.parse(s);
         config_1.log(() => surface_1.show(term));
@@ -1032,7 +1133,7 @@ exports.runREPL = (s, cb) => {
         config_1.log(() => C.show(ttype));
         config_1.log(() => surface_1.showCore(ttype));
         config_1.log(() => 'NORMALIZE');
-        const norm = values_1.normalize(eterm);
+        const norm = values_1.normalize(eterm, true);
         config_1.log(() => C.show(norm));
         config_1.log(() => surface_1.showCore(norm));
         return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\nnorm: ${surface_1.showCore(norm)}`);
@@ -1042,7 +1143,7 @@ exports.runREPL = (s, cb) => {
     }
 };
 
-},{"./config":1,"./core":4,"./elaboration":5,"./parser":7,"./surface":10,"./typecheck":11,"./values":15}],10:[function(require,module,exports){
+},{"./config":1,"./core":4,"./elaboration":5,"./globals":6,"./parser":8,"./surface":11,"./typecheck":12,"./utils/list":15,"./values":17}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
@@ -1157,6 +1258,8 @@ exports.toSurface = (t, ns = list_1.Nil) => {
         return exports.Meta(t.index);
     if (t.tag === 'Var')
         return exports.Var(list_1.index(ns, t.index) || utils_1.impossible(`toSurface: index out of scope: ${t.index}`));
+    if (t.tag === 'Global')
+        return exports.Var(t.name);
     if (t.tag === 'Prim')
         return exports.Prim(t.name);
     if (t.tag === 'App')
@@ -1184,11 +1287,11 @@ exports.toSurface = (t, ns = list_1.Nil) => {
     return t;
 };
 exports.showCore = (t, ns = list_1.Nil) => exports.show(exports.toSurface(t, ns));
-exports.showVal = (v, k = 0, ns = list_1.Nil) => exports.show(exports.toSurface(values_1.quote(v, k), ns));
+exports.showVal = (v, k = 0, ns = list_1.Nil, full = false) => exports.show(exports.toSurface(values_1.quote(v, k, full), ns));
 exports.showCoreZ = (t, vs = list_1.Nil, k = 0, ns = list_1.Nil) => exports.show(exports.toSurface(values_1.zonk(t, vs, k), ns));
-exports.showValZ = (v, vs = list_1.Nil, k = 0, ns = list_1.Nil) => exports.show(exports.toSurface(values_1.zonk(values_1.quote(v, k), vs, k), ns));
+exports.showValZ = (v, vs = list_1.Nil, k = 0, ns = list_1.Nil, full = false) => exports.show(exports.toSurface(values_1.zonk(values_1.quote(v, k, full), vs, k), ns));
 
-},{"./core":4,"./names":6,"./utils/list":13,"./utils/utils":14,"./values":15}],11:[function(require,module,exports){
+},{"./core":4,"./names":7,"./utils/list":15,"./utils/utils":16,"./values":17}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.typecheck = void 0;
@@ -1231,16 +1334,18 @@ const synth = (local, tm) => {
     if (tm.tag === 'Pair') {
         check(local, tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        if (ty.tag !== 'VSigma')
+        const fty = values_1.force(ty);
+        if (fty.tag !== 'VSigma')
             return utils_1.terr(`not a sigma type in pair: ${core_1.show(tm)}`);
-        check(local, tm.fst, ty.type);
-        check(local, tm.snd, values_1.vinst(ty, values_1.evaluate(tm.fst, local.vs)));
+        check(local, tm.fst, fty.type);
+        check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(tm.fst, local.vs)));
         return ty;
     }
     if (tm.tag === 'Proj') {
-        const fty = synth(local, tm.term);
+        const ty = synth(local, tm.term);
+        const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
-            return utils_1.terr(`not a sigma type in ${tm.proj}: ${core_1.show(tm)}: ${showVal(local, fty)}`);
+            return utils_1.terr(`not a sigma type in ${tm.proj}: ${core_1.show(tm)}: ${showVal(local, ty)}`);
         return tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(tm.term, local.vs)));
     }
     if (tm.tag === 'Pi') {
@@ -1266,10 +1371,11 @@ const synth = (local, tm) => {
 };
 const synthapp = (local, ty, mode, tm) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${core_1.show(tm)}`);
-    if (ty.tag === 'VPi' && ty.mode === mode) {
-        check(local, tm, ty.type);
+    const fty = values_1.force(ty);
+    if (fty.tag === 'VPi' && fty.mode === mode) {
+        check(local, tm, fty.type);
         const v = values_1.evaluate(tm, local.vs);
-        return values_1.vinst(ty, v);
+        return values_1.vinst(fty, v);
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${core_1.show(tm)}`);
 };
@@ -1278,7 +1384,7 @@ exports.typecheck = (t) => {
     return values_1.quote(ty, 0);
 };
 
-},{"./config":1,"./conversion":3,"./core":4,"./primitives":8,"./utils/list":13,"./utils/utils":14,"./values":15}],12:[function(require,module,exports){
+},{"./config":1,"./conversion":3,"./core":4,"./primitives":9,"./utils/list":15,"./utils/utils":16,"./values":17}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.unify = void 0;
@@ -1290,6 +1396,7 @@ const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
 const V = require("./values");
 const context_1 = require("./context");
+const lazy_1 = require("./utils/lazy");
 const unifyElim = (k, a, b, x, y) => {
     if (a === b)
         return;
@@ -1305,8 +1412,8 @@ const unifyElim = (k, a, b, x, y) => {
     return utils_1.terr(`unify failed (${k}): ${values_1.showVal(x, k)} ~ ${values_1.showVal(y, k)}`);
 };
 exports.unify = (k, a_, b_) => {
-    const a = values_1.force(a_);
-    const b = values_1.force(b_);
+    const a = values_1.force(a_, false);
+    const b = values_1.force(b_, false);
     config_1.log(() => `unify(${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
     if (a === b)
         return;
@@ -1358,6 +1465,20 @@ exports.unify = (k, a_, b_) => {
         return solve(k, a.head.index, a.spine, b);
     if (b.tag === 'VNe' && b.head.tag === 'HMeta')
         return solve(k, b.head.index, b.spine, a);
+    if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.head === b.head && list_1.length(a.args) === list_1.length(b.args)) {
+        context_1.markMetas();
+        return utils_1.tryT(() => {
+            list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+            context_1.discardMetas();
+        }, () => {
+            context_1.undoMetas();
+            exports.unify(k, lazy_1.forceLazy(a.val), lazy_1.forceLazy(b.val));
+        });
+    }
+    if (a.tag === 'VGlobal')
+        return exports.unify(k, lazy_1.forceLazy(a.val), b);
+    if (b.tag === 'VGlobal')
+        return exports.unify(k, a, lazy_1.forceLazy(b.val));
     return utils_1.terr(`unify failed (${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
 };
 const solve = (k, m, spine, val) => {
@@ -1409,6 +1530,8 @@ const checkSpine = (k, spine) => list_1.map(spine, elim => {
 const checkSolution = (k, m, is, t) => {
     if (t.tag === 'Prim')
         return t;
+    if (t.tag === 'Global')
+        return t;
     if (t.tag === 'Var') {
         const i = k - t.index - 1;
         if (list_1.contains(is, i))
@@ -1453,7 +1576,23 @@ const checkSolution = (k, m, is, t) => {
     return utils_1.impossible(`checkSolution ?${m}: non-normal term: ${core_1.show(t)}`);
 };
 
-},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./utils/list":13,"./utils/utils":14,"./values":15}],13:[function(require,module,exports){
+},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16,"./values":17}],14:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mapLazy = exports.forceLazy = exports.lazyOf = exports.Lazy = void 0;
+exports.Lazy = (fn) => ({ fn, val: null, forced: false });
+exports.lazyOf = (val) => ({ fn: () => val, val, forced: true });
+exports.forceLazy = (lazy) => {
+    if (lazy.forced)
+        return lazy.val;
+    const v = lazy.fn();
+    lazy.val = v;
+    lazy.forced = true;
+    return v;
+};
+exports.mapLazy = (lazy, fn) => exports.Lazy(() => fn(exports.forceLazy(lazy)));
+
+},{}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
@@ -1594,7 +1733,7 @@ exports.last = (l) => {
     return null;
 };
 
-},{}],14:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapObj = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
@@ -1657,12 +1796,14 @@ exports.mapObj = (o, fn) => {
     return n;
 };
 
-},{"fs":17}],15:[function(require,module,exports){
+},{"fs":19}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.velimprim = exports.vproj = exports.vappU = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
+exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.velimprim = exports.vproj = exports.vappU = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
 const context_1 = require("./context");
 const core_1 = require("./core");
+const globals_1 = require("./globals");
+const lazy_1 = require("./utils/lazy");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
 exports.HVar = (index) => ({ tag: 'HVar', index });
@@ -1672,6 +1813,7 @@ exports.EApp = (mode, right) => ({ tag: 'EApp', mode, right });
 exports.EProj = (proj) => ({ tag: 'EProj', proj });
 exports.EPrim = (name, args) => ({ tag: 'EPrim', name, args });
 exports.VNe = (head, spine) => ({ tag: 'VNe', head, spine });
+exports.VGlobal = (head, args, val) => ({ tag: 'VGlobal', head, args, val });
 exports.VAbs = (mode, name, type, clos) => ({ tag: 'VAbs', mode, name, type, clos });
 exports.VPair = (fst, snd, type) => ({ tag: 'VPair', fst, snd, type });
 exports.VPi = (mode, name, type, clos) => ({ tag: 'VPi', mode, name, type, clos });
@@ -1693,14 +1835,16 @@ exports.VPiU = (name, type, clos) => exports.VPi(core_1.ImplUnif, name, type, cl
 exports.VAbsE = (name, type, clos) => exports.VAbs(core_1.Expl, name, type, clos);
 exports.VAbsU = (name, type, clos) => exports.VAbs(core_1.ImplUnif, name, type, clos);
 exports.vinst = (val, arg) => val.clos(arg);
-exports.force = (v) => {
+exports.force = (v, forceGlobal = true) => {
+    if (v.tag === 'VGlobal' && forceGlobal)
+        return exports.force(lazy_1.forceLazy(v.val), forceGlobal);
     if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
         const val = context_1.getMeta(v.head.index);
         if (val.tag === 'Unsolved')
             return v;
         return exports.force(list_1.foldr((elim, y) => elim.tag === 'EProj' ? exports.vproj(elim.proj, y) :
             elim.tag === 'EPrim' ? exports.velimprim(elim.name, y, elim.args) :
-                exports.vapp(y, elim.mode, elim.right), val.val, v.spine));
+                exports.vapp(y, elim.mode, elim.right), val.val, v.spine), forceGlobal);
     }
     return v;
 };
@@ -1709,6 +1853,8 @@ exports.vapp = (left, mode, right) => {
         return exports.vinst(left, right);
     if (left.tag === 'VNe')
         return exports.VNe(left.head, list_1.Cons(exports.EApp(mode, right), left.spine));
+    if (left.tag === 'VGlobal')
+        return exports.VGlobal(left.head, list_1.Cons(exports.EApp(mode, right), left.args), lazy_1.mapLazy(left.val, v => exports.vapp(v, mode, right)));
     return utils_1.impossible(`vapp: ${left.tag}`);
 };
 exports.vappE = (left, right) => exports.vapp(left, core_1.Expl, right);
@@ -1718,6 +1864,8 @@ exports.vproj = (proj, v) => {
         return proj === 'fst' ? v.fst : v.snd;
     if (v.tag === 'VNe')
         return exports.VNe(v.head, list_1.Cons(exports.EProj(proj), v.spine));
+    if (v.tag === 'VGlobal')
+        return exports.VGlobal(v.head, list_1.Cons(exports.EProj(proj), v.args), lazy_1.mapLazy(v.val, v => exports.vproj(proj, v)));
     return utils_1.impossible(`vproj: ${v.tag}`);
 };
 exports.velimprim = (name, v, args) => {
@@ -1733,6 +1881,8 @@ exports.velimprim = (name, v, args) => {
     }
     if (v.tag === 'VNe')
         return exports.VNe(v.head, list_1.Cons(exports.EPrim(name, args), v.spine));
+    if (v.tag === 'VGlobal')
+        return exports.VGlobal(v.head, list_1.Cons(exports.EPrim(name, args), v.args), lazy_1.mapLazy(v.val, v => exports.velimprim(name, v, args)));
     return utils_1.impossible(`velimprim ${name}: ${v.tag}`);
 };
 exports.evaluate = (t, vs) => {
@@ -1750,6 +1900,10 @@ exports.evaluate = (t, vs) => {
     }
     if (t.tag === 'Var')
         return list_1.index(vs, t.index) || utils_1.impossible(`evaluate: var ${t.index} has no value`);
+    if (t.tag === 'Global') {
+        const entry = globals_1.getGlobal(t.name) || utils_1.impossible(`evaluate: global ${t.name} has no value`);
+        return exports.VGlobal(t.name, list_1.Nil, lazy_1.lazyOf(entry.val));
+    }
     if (t.tag === 'App')
         return exports.vapp(exports.evaluate(t.left, vs), t.mode, exports.evaluate(t.right, vs));
     if (t.tag === 'Let')
@@ -1776,74 +1930,79 @@ const quoteHead = (h, k) => {
         return core_1.Meta(h.index);
     return h;
 };
-const quoteElim = (t, e, k) => {
+const quoteElim = (t, e, k, full) => {
     if (e.tag === 'EApp')
-        return core_1.App(t, e.mode, exports.quote(e.right, k));
+        return core_1.App(t, e.mode, exports.quote(e.right, k, full));
     if (e.tag === 'EProj')
         return core_1.Proj(e.proj, t);
     if (e.tag === 'EPrim')
-        return core_1.AppE(e.args.reduce((x, y) => core_1.AppE(x, exports.quote(y, k)), core_1.Prim(e.name)), t);
+        return core_1.AppE(e.args.reduce((x, y) => core_1.AppE(x, exports.quote(y, k, full)), core_1.Prim(e.name)), t);
     return e;
 };
-exports.quote = (v_, k) => {
-    const v = exports.force(v_);
+exports.quote = (v_, k, full = false) => {
+    const v = exports.force(v_, false);
     if (v.tag === 'VNe')
-        return list_1.foldr((x, y) => quoteElim(y, x, k), quoteHead(v.head, k), v.spine);
+        return list_1.foldr((x, y) => quoteElim(y, x, k, full), quoteHead(v.head, k), v.spine);
+    if (v.tag === 'VGlobal') {
+        if (full)
+            return exports.quote(lazy_1.forceLazy(v.val), k, full);
+        return list_1.foldr((x, y) => quoteElim(y, x, k, full), core_1.Global(v.head), v.args);
+    }
     if (v.tag === 'VPair')
-        return core_1.Pair(exports.quote(v.fst, k), exports.quote(v.snd, k), exports.quote(v.type, k));
+        return core_1.Pair(exports.quote(v.fst, k, full), exports.quote(v.snd, k, full), exports.quote(v.type, k, full));
     if (v.tag === 'VAbs')
-        return core_1.Abs(v.mode, v.name, exports.quote(v.type, k), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1));
+        return core_1.Abs(v.mode, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VPi')
-        return core_1.Pi(v.mode, v.name, exports.quote(v.type, k), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1));
+        return core_1.Pi(v.mode, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VSigma')
-        return core_1.Sigma(v.name, exports.quote(v.type, k), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1));
+        return core_1.Sigma(v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     return v;
 };
-exports.normalize = (t) => exports.quote(exports.evaluate(t, list_1.Nil), 0);
-const zonkSpine = (tm, vs, k) => {
+exports.normalize = (t, full = false) => exports.quote(exports.evaluate(t, list_1.Nil), 0, full);
+const zonkSpine = (tm, vs, k, full) => {
     if (tm.tag === 'Meta') {
         const s = context_1.getMeta(tm.index);
         if (s.tag === 'Unsolved')
-            return [true, exports.zonk(tm, vs, k)];
+            return [true, exports.zonk(tm, vs, k, full)];
         return [false, s.val];
     }
     if (tm.tag === 'App') {
-        const spine = zonkSpine(tm.left, vs, k);
+        const spine = zonkSpine(tm.left, vs, k, full);
         return spine[0] ?
-            [true, core_1.App(spine[1], tm.mode, exports.zonk(tm.right, vs, k))] :
+            [true, core_1.App(spine[1], tm.mode, exports.zonk(tm.right, vs, k, full))] :
             [false, exports.vapp(spine[1], tm.mode, exports.evaluate(tm.right, vs))];
     }
-    return [true, exports.zonk(tm, vs, k)];
+    return [true, exports.zonk(tm, vs, k, full)];
 };
-exports.zonk = (tm, vs = list_1.Nil, k = 0) => {
+exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
     if (tm.tag === 'Meta') {
         const s = context_1.getMeta(tm.index);
-        return s.tag === 'Solved' ? exports.quote(s.val, k) : tm;
+        return s.tag === 'Solved' ? exports.quote(s.val, k, full) : tm;
     }
     if (tm.tag === 'Pi')
-        return core_1.Pi(tm.mode, tm.name, exports.zonk(tm.type, vs, k), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1));
+        return core_1.Pi(tm.mode, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Sigma')
-        return core_1.Sigma(tm.name, exports.zonk(tm.type, vs, k), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1));
+        return core_1.Sigma(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Let')
-        return core_1.Let(tm.name, exports.zonk(tm.type, vs, k), exports.zonk(tm.val, vs, k), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1));
+        return core_1.Let(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Abs')
-        return core_1.Abs(tm.mode, tm.name, exports.zonk(tm.type, vs, k), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1));
+        return core_1.Abs(tm.mode, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Pair')
-        return core_1.Pair(exports.zonk(tm.fst, vs, k), exports.zonk(tm.snd, vs, k), exports.zonk(tm.type, vs, k));
+        return core_1.Pair(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full), exports.zonk(tm.type, vs, k, full));
     if (tm.tag === 'Proj')
-        return core_1.Proj(tm.proj, exports.zonk(tm.term, vs, k));
+        return core_1.Proj(tm.proj, exports.zonk(tm.term, vs, k, full));
     if (tm.tag === 'App') {
-        const spine = zonkSpine(tm.left, vs, k);
+        const spine = zonkSpine(tm.left, vs, k, full);
         return spine[0] ?
-            core_1.App(spine[1], tm.mode, exports.zonk(tm.right, vs, k)) :
-            exports.quote(exports.vapp(spine[1], tm.mode, exports.evaluate(tm.right, vs)), k);
+            core_1.App(spine[1], tm.mode, exports.zonk(tm.right, vs, k, full)) :
+            exports.quote(exports.vapp(spine[1], tm.mode, exports.evaluate(tm.right, vs)), k, full);
     }
     return tm;
 };
-exports.showVal = (v, k) => core_1.show(exports.quote(v, k));
-exports.showValZ = (v, vs = list_1.Nil, k) => core_1.show(exports.zonk(exports.quote(v, k), vs, k));
+exports.showVal = (v, k = 0, full = false) => core_1.show(exports.quote(v, k, full));
+exports.showValZ = (v, vs = list_1.Nil, k = 0, full = false) => core_1.show(exports.zonk(exports.quote(v, k, full), vs, k, full));
 
-},{"./context":2,"./core":4,"./utils/list":13,"./utils/utils":14}],16:[function(require,module,exports){
+},{"./context":2,"./core":4,"./globals":6,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -1899,6 +2058,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":9}],17:[function(require,module,exports){
+},{"./repl":10}],19:[function(require,module,exports){
 
-},{}]},{},[16]);
+},{}]},{},[18]);

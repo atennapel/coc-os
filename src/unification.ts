@@ -6,7 +6,8 @@ import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil,
 import { hasDuplicates, impossible, terr, tryT } from './utils/utils';
 import { Elim, force, Spine, Val, vapp, vproj, vinst, VVar, VMeta, quote, evaluate, showVal, isVPrim } from './values';
 import * as V from './values';
-import { getMeta, isMetaSolved, postpone, problemsBlockedBy, solveMeta, Unsolved } from './context';
+import { discardMetas, getMeta, isMetaSolved, markMetas, postpone, problemsBlockedBy, solveMeta, undoMetas, Unsolved } from './context';
+import { forceLazy } from './utils/lazy';
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
@@ -20,8 +21,8 @@ const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   return terr(`unify failed (${k}): ${showVal(x, k)} ~ ${showVal(y, k)}`);
 };
 export const unify = (k: Ix, a_: Val, b_: Val): void => {
-  const a = force(a_);
-  const b = force(b_);
+  const a = force(a_, false);
+  const b = force(b_, false);
   log(() => `unify(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
@@ -73,6 +74,19 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     return solve(k, a.head.index, a.spine, b);
   if (b.tag === 'VNe' && b.head.tag === 'HMeta')
     return solve(k, b.head.index, b.spine, a);
+
+  if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.head === b.head && length(a.args) === length(b.args)) {
+    markMetas();
+    return tryT(() => {
+      zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
+      discardMetas();
+    }, () => {
+      undoMetas();
+      unify(k, forceLazy(a.val), forceLazy(b.val));
+    });
+  }
+  if (a.tag === 'VGlobal') return unify(k, forceLazy(a.val), b);
+  if (b.tag === 'VGlobal') return unify(k, a, forceLazy(b.val));
 
   return terr(`unify failed (${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
 };
@@ -128,6 +142,7 @@ const checkSpine = (k: Ix, spine: Spine): List<Ix> =>
 
 const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
   if (t.tag === 'Prim') return t;
+  if (t.tag === 'Global') return t;
   if (t.tag === 'Var') {
     const i = k - t.index - 1;
     if (contains(is, i))

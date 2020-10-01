@@ -26,6 +26,6 @@ console.log(C.show(ttype));
 console.log(showCore(ttype));
 
 console.log('NORMALIZE');
-const norm = normalize(eterm);
+const norm = normalize(eterm, true);
 console.log(C.show(norm));
 console.log(showCore(norm));
