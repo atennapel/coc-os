@@ -1,7 +1,7 @@
 import { serr } from './utils/utils';
-import { Term, Var, App, Type, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Type } from './surface';
 import { Name } from './names';
-import { Expl, ImplUnif } from './core';
+import { Expl, ImplUnif, isPrimName } from './core';
 
 type BracketO = '(' | '{'
 type Bracket = BracketO | ')' | '}';
@@ -197,6 +197,11 @@ const expr = (t: Token): [Term, boolean] => {
     const x = t.name;
     if (x === '*') return [Type, false];
     if (x === '_') return [Hole, false];
+    if (x[0] === '%') {
+      const rest = x.slice(1);
+      if (isPrimName(rest)) return [Prim(rest), false];
+      return serr(`invalid primitive: ${x}`);
+    }
     if (/[a-z]/i.test(x[0])) {
       if (x.includes('.')) {
         const spl = x.split('.');

@@ -2,6 +2,7 @@ import { log } from './config';
 import { conv } from './conversion';
 import { Pi, show, Term, Mode, ImplUnif } from './core';
 import { Ix } from './names';
+import { primType } from './primitives';
 import { Cons, index, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, quote, showValZ, Val, vinst, vproj, VType, VVar } from './values';
@@ -29,7 +30,7 @@ const check = (local: Local, tm: Term, ty: Val): void => {
 
 const synth = (local: Local, tm: Term): Val => {
   log(() => `synth ${show(tm)}`);
-  if (tm.tag === 'Type') return VType;
+  if (tm.tag === 'Prim') return primType(tm.name);
   if (tm.tag === 'Var') {
     const ty = index(local.ts, tm.index);
     if (!ty) return terr(`undefined index ${tm.index}`);

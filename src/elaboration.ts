@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Let, Meta, Pi, Term, Type, Var, Sigma, Pair, Proj, Mode } from './core';
+import { Abs, App, Let, Meta, Pi, Term, Var, Prim, Sigma, Pair, Proj, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
 import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, zipWithIndex } from './utils/list';
@@ -9,6 +9,7 @@ import * as S from './surface';
 import { show } from './surface';
 import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
 import { unify } from './unification';
+import { primType } from './primitives';
 
 type EntryT = { type: Val, bound: boolean, mode: Mode, inserted: boolean };
 const EntryT = (type: Val, bound: boolean, mode: Mode, inserted: boolean): EntryT =>
@@ -132,7 +133,7 @@ const freshPi = (local: Local, mode: Mode, x: Name): Val => {
 
 const synth = (local: Local, tm: S.Term): [Term, Val] => {
   log(() => `synth ${show(tm)}`);
-  if (tm.tag === 'Type') return [Type, VType];
+  if (tm.tag === 'Prim') return [Prim(tm.name), primType(tm.name)];
   if (tm.tag === 'Var') {
     const i = indexOf(local.nsSurface, tm.name);
     const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
@@ -143,7 +144,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right);
     return [App(foldl((f, a) => App(f, C.ImplUnif, a), left, ms), tm.mode, right), rty];
   }
-  if (tm.tag === 'Abs' && tm.type) {
+  if (tm.tag === 'Abs') {
     if (tm.type) {
       const type = check(local, tm.type, VType);
       const ty = evaluate(type, local.vs);

@@ -1,29 +1,32 @@
 import { getMeta } from './context';
-import { Abs, App, Let, Meta, Pi, show, Term, Type, Var, Mode, Sigma, Pair, Proj } from './core';
+import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif } from './core';
 import { Ix, Name } from './names';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
 
-export type Head = HVar | HMeta;
+export type Head = HVar | HPrim | HMeta;
 
 export type HVar = { tag: 'HVar', index: Ix };
 export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
+export type HPrim = { tag: 'HPrim', name: PrimName };
+export const HPrim = (name: PrimName): HPrim => ({ tag: 'HPrim', name });
 export type HMeta = { tag: 'HMeta', index: Ix };
 export const HMeta = (index: Ix): HMeta => ({ tag: 'HMeta', index });
 
-export type Elim = EApp | EProj;
+export type Elim = EApp | EProj | EPrim;
 
 export type EApp = { tag: 'EApp', mode: Mode, right: Val };
 export const EApp = (mode: Mode, right: Val): EApp => ({ tag: 'EApp', mode, right });
 export type EProj = { tag: 'EProj', proj: 'fst' | 'snd' };
 export const EProj = (proj: 'fst' | 'snd'): EProj => ({ tag: 'EProj', proj });
+export type EPrim = { tag: 'EPrim', name: PrimNameElim, args: Val[] };
+export const EPrim = (name: PrimNameElim, args: Val[]): EPrim => ({ tag: 'EPrim', name, args });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
-export type Clos = { env: EnvV, body: Term };
-export const Clos = (env: EnvV, body: Term): Clos => ({ env, body });
+export type Clos = (val: Val) => Val;
 
-export type Val = VNe | VAbs | VPair | VType | VPi | VSigma;
+export type Val = VNe | VAbs | VPair | VPi | VSigma;
 
 export type VNe = { tag: 'VNe', head: Head, spine: Spine };
 export const VNe = (head: Head, spine: Spine): VNe => ({ tag: 'VNe', head, spine });
@@ -31,18 +34,29 @@ export type VAbs = { tag: 'VAbs', mode: Mode, name: Name, type: Val, clos: Clos 
 export const VAbs = (mode: Mode, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', mode, name, type, clos });
 export type VPair = { tag: 'VPair', fst: Val, snd: Val, type: Val };
 export const VPair = (fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', fst, snd, type });
-export type VType = { tag: 'VType' };
-export const VType: VType = { tag: 'VType' };
 export type VPi = { tag: 'VPi', mode: Mode, name: Name, type: Val, clos: Clos };
 export const VPi = (mode: Mode, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', mode, name, type, clos });
 export type VSigma = { tag: 'VSigma', name: Name, type: Val, clos: Clos };
 export const VSigma = (name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', name, type, clos });
 
-export const VVar = (index: Ix): VNe => VNe(HVar(index), Nil);
+export const VVar = (index: Ix, spine: Spine = Nil): VNe => VNe(HVar(index), spine);
+export const VPrim = (name: PrimName, spine: Spine = Nil): VNe => VNe(HPrim(name), spine);
 export const VMeta = (index: Ix, spine: Spine = Nil): VNe => VNe(HMeta(index), spine);
 
-const cinst = (clos: Clos, arg: Val): Val => evaluate(clos.body, Cons(arg, clos.env));
-export const vinst = (val: VAbs | VPi | VSigma, arg: Val): Val => cinst(val.clos, arg);
+export const isVPrim = (name: PrimName, v: Val): boolean =>
+  v.tag === 'VNe' && v.head.tag === 'HPrim' && v.head.name === name;
+
+export const VType = VPrim('Type');
+export const VB = VPrim('B');
+export const V0 = VPrim('0');
+export const V1 = VPrim('1');
+
+export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
+export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);
+export const VAbsE = (name: Name, type: Val, clos: Clos): VAbs => VAbs(Expl, name, type, clos);
+export const VAbsU = (name: Name, type: Val, clos: Clos): VAbs => VAbs(ImplUnif, name, type, clos);
+
+export const vinst = (val: VAbs | VPi | VSigma, arg: Val): Val => val.clos(arg);
 
 export const force = (v: Val): Val => {
   if (v.tag === 'VNe' && v.head.tag === 'HMeta') {
@@ -50,6 +64,7 @@ export const force = (v: Val): Val => {
     if (val.tag === 'Unsolved') return v;
     return force(foldr((elim, y) =>
       elim.tag === 'EProj' ? vproj(elim.proj, y) :
+      elim.tag === 'EPrim' ? velimprim(elim.name, y, elim.args) :
       vapp(y, elim.mode, elim.right), val.val, v.spine));
   }
   return v;
@@ -60,22 +75,32 @@ export const vapp = (left: Val, mode: Mode, right: Val): Val => {
   if (left.tag === 'VNe') return VNe(left.head, Cons(EApp(mode, right), left.spine));
   return impossible(`vapp: ${left.tag}`);
 };
-export const vproj = (proj: 'fst' | 'snd', v: Val): Val => {
+export const vappE = (left: Val, right: Val): Val => vapp(left, Expl, right);
+export const vappU = (left: Val, right: Val): Val => vapp(left, ImplUnif, right);
+export const vproj= (proj: 'fst' | 'snd', v: Val): Val => {
   if (v.tag === 'VPair') return proj === 'fst' ? v.fst : v.snd;
   if (v.tag === 'VNe') return VNe(v.head, Cons(EProj(proj), v.spine));
   return impossible(`vproj: ${v.tag}`);
 };
 
+export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
+  if (name === 'elimB') {
+    if (isVPrim('0', v)) return args[1];
+    if (isVPrim('1', v)) return args[2];
+  }
+  if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
+  return impossible(`velimprim ${name}: ${v.tag}`);
+};
+
 export const evaluate = (t: Term, vs: EnvV): Val => {
-  if (t.tag === 'Type') return VType;
   if (t.tag === 'Abs')
-    return VAbs(t.mode, t.name, evaluate(t.type, vs), Clos(vs, t.body));
+    return VAbs(t.mode, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Pair')
     return VPair(evaluate(t.fst, vs), evaluate(t.snd, vs), evaluate(t.type, vs));
   if (t.tag === 'Pi')
-    return VPi(t.mode, t.name, evaluate(t.type, vs), Clos(vs, t.body));
+    return VPi(t.mode, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Sigma')
-    return VSigma(t.name, evaluate(t.type, vs), Clos(vs, t.body));
+    return VSigma(t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Meta') {
     const s = getMeta(t.index);
     return s.tag === 'Solved' ? s.val : VMeta(t.index);
@@ -88,22 +113,33 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return evaluate(t.body, Cons(evaluate(t.val, vs), vs));
   if (t.tag === 'Proj')
     return vproj(t.proj, evaluate(t.term, vs));
+  if (t.tag === 'Prim') {
+    if (t.name === 'elimB') {
+      return VAbsE('P', VPiE('_', VB, _ => VType), P =>
+        VAbsE('f', vappE(P, V0), f =>
+        VAbsE('t', vappE(P, V1), t =>
+        VAbsE('b', VB, b =>
+        velimprim('elimB', b, [P, f, t])))));
+    }
+    return VPrim(t.name);
+  }
   return t;
 };
 
 const quoteHead = (h: Head, k: Ix): Term => {
   if (h.tag === 'HVar') return Var(k - (h.index + 1));
+  if (h.tag === 'HPrim') return Prim(h.name);
   if (h.tag === 'HMeta') return Meta(h.index);
   return h;
 };
 const quoteElim = (t: Term, e: Elim, k: Ix): Term => {
   if (e.tag === 'EApp') return App(t, e.mode, quote(e.right, k));
   if (e.tag === 'EProj') return Proj(e.proj, t);
+  if (e.tag === 'EPrim') return AppE(e.args.reduce((x, y) => AppE(x, quote(y, k)), Prim(e.name) as Term), t);
   return e;
 };
 export const quote = (v_: Val, k: Ix): Term => {
   const v = force(v_);
-  if (v.tag === 'VType') return Type;
   if (v.tag === 'VNe')
     return foldr(
       (x, y) => quoteElim(y, x, k),

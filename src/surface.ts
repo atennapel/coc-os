@@ -1,6 +1,6 @@
 import { chooseName, Ix, Name } from './names';
 import * as C from './core';
-import { Mode } from './core';
+import { Mode, PrimName } from './core';
 import { EnvV, quote, Val, zonk } from './values';
 import { Cons, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
@@ -13,10 +13,12 @@ export const PIndex = (index: Ix): PIndex => ({ tag: 'PIndex', index });
 export type PCore = { tag: 'PCore', proj: 'fst' | 'snd' };
 export const PCore = (proj: 'fst' | 'snd'): PCore => ({ tag: 'PCore', proj });
 
-export type Term = Var | App | Abs | Pair | Proj | Let | Type | Pi | Sigma | Meta | Hole;
+export type Term = Var | Prim | App | Abs | Pair | Proj | Let | Pi | Sigma | Meta | Hole;
 
 export type Var = { tag: 'Var', name: Name };
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
+export type Prim = { tag: 'Prim', name: PrimName };
+export const Prim = (name: PrimName): Prim => ({ tag: 'Prim', name });
 export type App = { tag: 'App', left: Term, mode: Mode, right: Term };
 export const App = (left: Term, mode: Mode, right: Term): App => ({ tag: 'App', left, mode, right });
 export type Abs = { tag: 'Abs', mode: Mode, name: Name, type: Term | null, body: Term };
@@ -27,8 +29,6 @@ export type Proj = { tag: 'Proj', proj: ProjType, term: Term };
 export const Proj = (proj: ProjType, term: Term): Proj => ({ tag: 'Proj', proj, term });
 export type Let = { tag: 'Let', name: Name, type: Term | null, val: Term, body: Term };
 export const Let = (name: Name, type: Term | null, val: Term, body: Term): Let => ({ tag: 'Let', name, type, val, body });
-export type Type = { tag: 'Type' };
-export const Type: Type = { tag: 'Type' };
 export type Pi = { tag: 'Pi', mode: Mode, name: Name, type: Term, body: Term };
 export const Pi = (mode: Mode, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', mode, name, type, body });
 export type Sigma = { tag: 'Sigma', name: Name, type: Term, body: Term };
@@ -37,6 +37,8 @@ export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export type Hole = { tag: 'Hole' };
 export const Hole: Hole = { tag: 'Hole' };
+
+export const Type = Prim('Type');
 
 export const flattenApp = (t: Term): [Term, [Mode, Term][]] => {
   const r: [Mode, Term][] = [];
@@ -82,10 +84,10 @@ export const flattenPair = (t: Term): Term[] => {
 
 const showP = (b: boolean, t: Term): string => b ? `(${show(t)})` : show(t);
 const isSimple = (t: Term): boolean =>
-  t.tag === 'Var' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'Hole' || (t.tag === 'Proj' && isSimple(t.term));
+  t.tag === 'Var' || t.tag === 'Prim' || t.tag === 'Meta' || t.tag === 'Hole' || (t.tag === 'Proj' && isSimple(t.term));
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
-  if (t.tag === 'Type') return '*';
+  if (t.tag === 'Prim') return `%${t.name}`;
   if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') {
@@ -124,9 +126,9 @@ export const show = (t: Term): string => {
 };
 
 export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
-  if (t.tag === 'Type') return Type;
   if (t.tag === 'Meta') return Meta(t.index);
   if (t.tag === 'Var') return Var(index(ns, t.index) || impossible(`toSurface: index out of scope: ${t.index}`));
+  if (t.tag === 'Prim') return Prim(t.name);
   if (t.tag === 'App') return App(toSurface(t.left, ns), t.mode, toSurface(t.right, ns));
   if (t.tag === 'Pair') return Pair(toSurface(t.fst, ns), toSurface(t.snd, ns));
   if (t.tag === 'Proj') return Proj(PCore(t.proj), toSurface(t.term, ns));

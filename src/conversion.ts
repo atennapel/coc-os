@@ -7,6 +7,7 @@ import { Elim, Head, Val, vapp, vproj, vinst, VVar, showVal } from './values';
 export const eqHead = (a: Head, b: Head): boolean => {
   if (a === b) return true;
   if (a.tag === 'HVar') return b.tag === 'HVar' && a.index === b.index;
+  if (a.tag === 'HPrim') return b.tag === 'HPrim' && a.name === b.name;
   if (a.tag === 'HMeta') return b.tag === 'HMeta' && a.index === b.index;
   return a;
 };
@@ -19,7 +20,6 @@ const convElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
 export const conv = (k: Ix, a: Val, b: Val): void => {
   log(() => `conv(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
-  if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
     conv(k, a.type, b.type);
     const v = VVar(k);

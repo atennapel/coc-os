@@ -19,7 +19,6 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
   const b = force(b_);
   log(() => `unify(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
-  if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
     unify(k, a.type, b.type);
     const v = VVar(k);
@@ -120,7 +119,7 @@ const checkSpine = (k: Ix, spine: Spine): List<Ix> =>
   });
 
 const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
-  if (t.tag === 'Type') return t;
+  if (t.tag === 'Prim') return t;
   if (t.tag === 'Var') {
     const i = k - t.index - 1;
     if (contains(is, i))
