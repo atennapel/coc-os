@@ -58,6 +58,7 @@ export const VHEq = VPrim('HEq');
 export const VReflHEq = VPrim('ReflHEq');
 export const vheq = (a: Val, b: Val, x: Val, y: Val) => vappE(vappE(vappE(vappE(VHEq, a), b), x), y);
 export const vreflheq = (a: Val, x: Val) => vappE(vappE(VReflHEq, a), x);
+export const VDesc = VPrim('Desc');
 
 export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
 export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);

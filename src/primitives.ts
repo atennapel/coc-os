@@ -1,6 +1,6 @@
 import { PrimName } from './core';
 import { impossible } from './utils/utils';
-import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType } from './values';
+import { V0, V1, Val, vappE, VB, VDesc, vheq, VPiE, vreflheq, VType } from './values';
 
 const primTypes: { [K in PrimName]: Val } = {
 
@@ -30,6 +30,12 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiE('b', A, b =>
     VPiE('p', vheq(A, A, a, b), p =>
     vappE(vappE(P, b), p))))))),
+
+  'Desc': VType,
+  'Ret': VDesc,
+  'Rec': VPiE('_', VDesc, _ => VDesc),
+  // (T : Type) -> (T -> Desc) -> Desc
+  'Arg': VPiE('T', VType, T => VPiE('_', VPiE('_', T, _ => VDesc), _ => VDesc)),
 
 };
 

@@ -22,6 +22,7 @@ Currently done:
 Not yet done:
 - descriptions ala "Gentle Art of Levitation"
 - a fixpoint type for descriptions
+- indexed descriptions
 - explicit erasure annotations
 - CEK machine for erased terms
 - hash-based content-addressed references
@@ -35,6 +36,7 @@ Future work:
 ```
 TODO:
 - add descriptions
+- optimize importing
 - add erasure
 - implement pruning
 - implement instance search
