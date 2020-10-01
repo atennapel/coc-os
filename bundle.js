@@ -197,7 +197,7 @@ exports.primNames = [
     'B', '0', '1', 'elimB',
     'HEq', 'ReflHEq', 'elimHEq',
     'Desc', 'Ret', 'Rec', 'Arg', 'elimDesc',
-    'FixD', 'ConD',
+    'FixD', 'ConD', 'elimFixD',
 ];
 exports.Type = exports.Prim('Type');
 exports.AppE = (left, right) => exports.App(left, exports.Expl, right);
@@ -1185,8 +1185,17 @@ const primTypes = {
     'elimDesc': values_1.VPiE('P', values_1.VPiE('_', values_1.VDesc, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.VRet), _ => values_1.VPiE('_', values_1.VPiE('r', values_1.VDesc, r => values_1.VPiE('_', values_1.vappE(P, r), _ => values_1.vappE(P, values_1.vappE(values_1.VRec, r)))), _ => values_1.VPiE('_', values_1.VPiE('T', values_1.VType, T => values_1.VPiE('f', values_1.VPiE('_', T, _ => values_1.VDesc), f => values_1.VPiE('_', values_1.VPiE('x', T, x => values_1.vappE(P, values_1.vappE(f, x))), _ => values_1.vappE(P, values_1.vappE(values_1.vappE(values_1.VArg, T), f))))), _ => values_1.VPiE('d', values_1.VDesc, d => values_1.vappE(P, d)))))),
     // (Desc -> Type -> Type) -> Desc -> Type
     'FixD': values_1.VPiE('_', values_1.VPiE('_', values_1.VDesc, _ => values_1.VPiE('_', values_1.VType, _ => values_1.VType)), _ => values_1.VPiE('_', values_1.VDesc, _ => values_1.VType)),
-    // (interpret : Desc -> Type -> Type) -> (d: Desc) -> interpret d (Fix d) -> Fix d
+    // (interpret : Desc -> Type -> Type) -> (d: Desc) -> interpret d (FixD interpret d) -> FixD interpret d
     'ConD': values_1.VPiE('interpret', values_1.VPiE('_', values_1.VDesc, _ => values_1.VPiE('_', values_1.VType, _ => values_1.VType)), interpret => values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('_', values_1.vappE(values_1.vappE(interpret, d), values_1.vappE(values_1.vappE(values_1.VFixD, interpret), d)), _ => values_1.vappE(values_1.vappE(values_1.VFixD, interpret), d)))),
+    /*
+      (interpret : Desc -> Type -> Type)
+      -> (d : Desc)
+      -> (P : FixD interpret d -> Type)
+      -> ((y : interpret d (FixD interpret d)) -> P (ConD interpret d y))
+      -> (x : FixD interpret d)
+      -> P x
+    */
+    'elimFixD': values_1.VPiE('interpret', values_1.VPiE('_', values_1.VDesc, _ => values_1.VPiE('_', values_1.VType, _ => values_1.VType)), interpret => values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('P', values_1.VPiE('_', values_1.vappE(values_1.vappE(values_1.VFixD, interpret), d), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiE('y', values_1.vappE(values_1.vappE(interpret, d), values_1.vappE(values_1.vappE(values_1.VFixD, interpret), d)), y => values_1.vappE(P, values_1.vappE(values_1.vappE(values_1.vappE(values_1.VConD, interpret), d), y))), _ => values_1.VPiE('x', values_1.vappE(values_1.vappE(values_1.VFixD, interpret), d), x => values_1.vappE(P, x)))))),
 };
 exports.primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
 
@@ -2113,6 +2122,12 @@ exports.velimprim = (name, v, args) => {
             return exports.vappE(exports.vappE(exports.vappE(args[3], T), f), exports.VAbsE('x', T, x => exports.velimprim('elimDesc', exports.vappE(f, x), [P, ret, rec, arg])));
         }
     }
+    if (name === 'elimFixD') {
+        if (exports.isVPrim('ConD', v)) {
+            const [c] = exports.vprimArgs(v);
+            return exports.vappE(args[3], c);
+        }
+    }
     if (v.tag === 'VNe')
         return exports.VNe(v.head, list_1.Cons(exports.EPrim(name, args), v.spine));
     if (v.tag === 'VGlobal')
@@ -2153,6 +2168,9 @@ exports.evaluate = (t, vs) => {
         }
         if (t.name === 'elimDesc') {
             return exports.VAbsE('P', exports.VPiE('_', exports.VDesc, _ => exports.VType), P => exports.VAbsE('ret', exports.vappE(P, exports.VRet), ret => exports.VAbsE('rec', exports.VPiE('r', exports.VDesc, r => exports.VPiE('_', exports.vappE(P, r), _ => exports.vappE(P, exports.vappE(exports.VRec, r)))), rec => exports.VAbsE('arg', exports.VPiE('T', exports.VType, T => exports.VPiE('f', exports.VPiE('_', T, _ => exports.VDesc), f => exports.VPiE('_', exports.VPiE('x', T, x => exports.vappE(P, exports.vappE(f, x))), _ => exports.vappE(P, exports.vappE(exports.vappE(exports.VArg, T), f))))), arg => exports.VAbsE('d', exports.VDesc, d => exports.velimprim('elimDesc', d, [P, ret, rec, arg]))))));
+        }
+        if (t.name === 'elimFixD') {
+            return exports.VAbsE('interpret', exports.VPiE('_', exports.VDesc, _ => exports.VPiE('_', exports.VType, _ => exports.VType)), interpret => exports.VAbsE('d', exports.VDesc, d => exports.VAbsE('P', exports.VPiE('_', exports.vappE(exports.vappE(exports.VFixD, interpret), d), _ => exports.VType), P => exports.VAbsE('h', exports.VPiE('y', exports.vappE(exports.vappE(interpret, d), exports.vappE(exports.vappE(exports.VFixD, interpret), d)), y => exports.vappE(P, exports.vappE(exports.vappE(exports.vappE(exports.VConD, interpret), d), y))), h => exports.VAbsE('x', exports.vappE(exports.vappE(exports.VFixD, interpret), d), x => exports.velimprim('elimFixD', x, [interpret, d, P, h]))))));
         }
         return exports.VPrim(t.name);
     }

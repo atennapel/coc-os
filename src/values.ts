@@ -132,6 +132,12 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
       return vappE(vappE(vappE(args[3], T), f), VAbsE('x', T, x => velimprim('elimDesc', vappE(f, x), [P, ret, rec, arg])));
     }
   }
+  if (name === 'elimFixD') {
+    if (isVPrim('ConD', v)) {
+      const [c] = vprimArgs(v);
+      return vappE(args[3], c);
+    }
+  }
   if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
   if (v.tag === 'VGlobal')
     return VGlobal(v.head, Cons(EPrim(name, args), v.args), mapLazy(v.val, v => velimprim(name, v, args)));
@@ -187,6 +193,14 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
         VAbsE('arg', VPiE('T', VType, T => VPiE('f', VPiE('_', T, _ => VDesc), f => VPiE('_', VPiE('x', T, x => vappE(P, vappE(f, x))), _ => vappE(P, vappE(vappE(VArg, T), f))))), arg =>
         VAbsE('d', VDesc, d =>
         velimprim('elimDesc', d, [P, ret, rec, arg]))))));
+    }
+    if (t.name === 'elimFixD') {
+      return VAbsE('interpret', VPiE('_', VDesc, _ => VPiE('_', VType, _ => VType)), interpret =>
+        VAbsE('d', VDesc, d =>
+        VAbsE('P', VPiE('_', vappE(vappE(VFixD, interpret), d), _ => VType), P =>
+        VAbsE('h', VPiE('y', vappE(vappE(interpret, d), vappE(vappE(VFixD, interpret), d)), y => vappE(P, vappE(vappE(vappE(VConD, interpret), d), y))), h =>
+        VAbsE('x', vappE(vappE(VFixD, interpret), d), x =>
+        velimprim('elimFixD', x, [interpret, d, P, h]))))));
     }
     return VPrim(t.name);
   }

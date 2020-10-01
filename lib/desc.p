@@ -31,5 +31,22 @@ def interpretDesc
 def FixD : (Desc -> Type -> Type) -> Desc -> Type = %FixD
 def ConD : (interpret : Desc -> Type -> Type) -> (d : Desc) -> interpret d (FixD interpret d) -> FixD interpret d = %ConD
 
+def elimFixD
+  : {interpret : Desc -> Type -> Type}
+    -> {d : Desc}
+    -> {P : FixD interpret d -> Type}
+    -> ((y : interpret d (FixD interpret d)) -> P (ConD interpret d y))
+    -> (x : FixD interpret d)
+    -> P x
+  = \{interpret} {d} {P} h x. %elimFixD interpret d P h x
+
 def Fix : Desc -> Type = FixD interpretDesc
 def Con : (d : Desc) -> interpretDesc d (Fix d) -> Fix d = ConD interpretDesc
+
+def elimFix
+  : {d : Desc}
+    -> {P : Fix d -> Type}
+    -> ((y : interpretDesc d (Fix d)) -> P (Con d y))
+    -> (x : Fix d)
+    -> P x
+  = elimFixD {interpretDesc}

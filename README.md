@@ -21,7 +21,7 @@ Currently done:
 - descriptions ala "Gentle Art of Levitation"
 
 Not yet done:
-- a fixpoint type for descriptions
+- generic induction
 - indexed descriptions
 - explicit erasure annotations
 - CEK machine for erased terms
@@ -35,7 +35,9 @@ Future work:
 
 ```
 TODO:
-- add fixpoint type for descriptions
+- write fix induction
+- write generic induction
+- add indexed descriptions
 - optimize importing
 - add erasure
 - implement pruning
