@@ -1,5 +1,6 @@
 import lib/type.p
 import lib/unit.p
+import lib/bool.p
 
 def Desc : Type = %Desc
 def Ret : Desc = %Ret
@@ -75,3 +76,5 @@ def elimFix
     -> (x : Fix D)
     -> P x
   = \{d} {P}. elimFixD descInterpretPackage d P
+
+def SumD : Desc -> Desc -> Desc = \a b. Arg \c. if c a b

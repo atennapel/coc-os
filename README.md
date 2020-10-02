@@ -21,7 +21,6 @@ Currently done:
 - descriptions ala "Gentle Art of Levitation"
 
 Not yet done:
-- generic induction
 - indexed descriptions
 - explicit erasure annotations
 - CEK machine for erased terms
@@ -35,8 +34,8 @@ Future work:
 
 ```
 TODO:
-- write fix induction
-- write generic induction
+- add named holes
+- write induction for nats and lists
 - add indexed descriptions
 - optimize importing
 - add erasure
