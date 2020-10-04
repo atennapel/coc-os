@@ -5,6 +5,7 @@ exports.log = exports.setConfig = exports.config = void 0;
 exports.config = {
     debug: false,
     showEnvs: false,
+    unfold: [],
 };
 exports.setConfig = (c) => {
     for (let k in c)
@@ -1227,10 +1228,12 @@ COMMANDS
 [:view files] view a file
 [:def definitions] define names
 [:import files] import a file
+[:addunfold x y z] always unfold globals
 `.trim();
 let importMap = {};
 exports.initREPL = () => {
     importMap = {};
+    config_1.config.unfold.push('typeof');
 };
 exports.runREPL = (s_, cb) => {
     try {
@@ -1241,6 +1244,12 @@ exports.runREPL = (s_, cb) => {
             const d = !config_1.config.debug;
             config_1.setConfig({ debug: d });
             return cb(`debug: ${d}`);
+        }
+        if (s === ':addunfold') {
+            const xs = s.slice(10).trim().split(/\s+/g);
+            const u = config_1.config.unfold;
+            xs.forEach(x => u.push(x));
+            return cb(`unfold: ${u.join(' ')}`);
         }
         if (s === ':defs') {
             const gs = globals_1.getGlobals();
@@ -1319,6 +1328,8 @@ exports.runREPL = (s_, cb) => {
         config_1.log(() => surface_1.showCore(eterm));
         config_1.log(() => C.show(etype));
         config_1.log(() => surface_1.showCore(etype));
+        const unfolded = values_1.normalize(eterm, false);
+        config_1.log(() => surface_1.showCore(unfolded));
         config_1.log(() => 'TYPECHECK');
         const ttype = typecheck_1.typecheck(eterm);
         config_1.log(() => C.show(ttype));
@@ -1332,7 +1343,7 @@ exports.runREPL = (s_, cb) => {
                 globals_1.deleteGlobal(g);
             globals_1.setGlobal(g, eterm, values_1.evaluate(eterm, list_1.Nil), values_1.evaluate(etype, list_1.Nil));
         }
-        return cb(`${g ? `defined ${g}\n` : ''}term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\nnorm: ${surface_1.showCore(norm)}`);
+        return cb(`${g ? `defined ${g}\n` : ''}term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\netru: ${surface_1.showCore(unfolded)}\nnorm: ${surface_1.showCore(norm)}`);
     }
     catch (err) {
         return cb(`${err}`, true);
@@ -2012,6 +2023,7 @@ exports.mapObj = (o, fn) => {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.velimprim = exports.descInterpretPackage = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.VConD = exports.VFixD = exports.VArg = exports.VRec = exports.VRet = exports.VDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
+const config_1 = require("./config");
 const context_1 = require("./context");
 const core_1 = require("./core");
 const globals_1 = require("./globals");
@@ -2212,7 +2224,7 @@ exports.quote = (v_, k, full = false) => {
     if (v.tag === 'VNe')
         return list_1.foldr((x, y) => quoteElim(y, x, k, full), quoteHead(v.head, k), v.spine);
     if (v.tag === 'VGlobal') {
-        if (full)
+        if (full || config_1.config.unfold.includes(v.head))
             return exports.quote(lazy_1.forceLazy(v.val), k, full);
         return list_1.foldr((x, y) => quoteElim(y, x, k, full), core_1.Global(v.head), v.args);
     }
@@ -2270,7 +2282,7 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
 exports.showVal = (v, k = 0, full = false) => core_1.show(exports.quote(v, k, full));
 exports.showValZ = (v, vs = list_1.Nil, k = 0, full = false) => core_1.show(exports.zonk(exports.quote(v, k, full), vs, k, full));
 
-},{"./context":2,"./core":4,"./globals":6,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16}],18:[function(require,module,exports){
+},{"./config":1,"./context":2,"./core":4,"./globals":6,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");

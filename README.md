@@ -34,6 +34,7 @@ Future work:
 
 ```
 TODO:
+- allow meta as head of glued value
 - add named holes
 - write induction for nats and lists
 - add indexed descriptions

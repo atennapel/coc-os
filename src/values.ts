@@ -1,3 +1,4 @@
+import { config } from './config';
 import { getMeta } from './context';
 import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global } from './core';
 import { getGlobal } from './globals';
@@ -245,7 +246,7 @@ export const quote = (v_: Val, k: Ix, full: boolean = false): Term => {
       v.spine,
     );
   if (v.tag === 'VGlobal') {
-    if (full) return quote(forceLazy(v.val), k, full);
+    if (full || config.unfold.includes(v.head)) return quote(forceLazy(v.val), k, full);
     return foldr(
       (x, y) => quoteElim(y, x, k, full),
       Global(v.head) as Term,
