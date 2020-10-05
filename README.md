@@ -28,12 +28,14 @@ Not yet done:
 - IO monad for system calls
 
 Future work:
+- more levitation
 - inductive-recursive types
 - inductive-inductive types
 - predicative hierarchy
 
 ```
 TODO:
+- implement descriptions as descriptions
 - allow meta as head of glued value
 - add named holes
 - write induction for nats and lists

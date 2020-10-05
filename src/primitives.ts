@@ -1,6 +1,6 @@
 import { PrimName } from './core';
 import { impossible } from './utils/utils';
-import { V0, V1, Val, vappE, VB, VDesc, vheq, VPiE, vreflheq, VType, VRet, VRec, VArg, VFixD, VConD, vproj, descInterpretPackage } from './values';
+import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, VData, VDesc, vinterp, vdata, vcon, vAll } from './values';
 
 const primTypes: { [K in PrimName]: Val } = {
 
@@ -9,7 +9,7 @@ const primTypes: { [K in PrimName]: Val } = {
   'B': VType,
   '0': VB,
   '1': VB,
-  // (P : %B -> Type) -> P %0 -> P %1 -> (b : %B) -> P b
+  // (P : %B -> *) -> P %0 -> P %1 -> (b : %B) -> P b
   'elimB':
     VPiE('P', VPiE('_', VB, _ => VType), P =>
     VPiE('_', vappE(P, V0), _ =>
@@ -17,11 +17,11 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiE('b', VB, b =>
     vappE(P, b))))),
 
-  // (A : Type) -> (B : Type) -> A -> B -> Type
+  // (A : *) -> (B : *) -> A -> B -> *
   'HEq': VPiE('A', VType, A => VPiE('B', VType, B => VPiE('_', A, _ => VPiE('_', B, _ => VType)))),
-  // (A : Type) -> (a : A) -> HEq A A a a
+  // (A : *) -> (a : A) -> HEq A A a a
   'ReflHEq': VPiE('A', VType, A => VPiE('a', A, a => vheq(A, A, a, a))),
-  // (A : Type) -> (a : A) -> (P : (b : A) -> HEq A A a b -> Type) -> P a (ReflHEq A a) -> (b : A) -> (p : HEq A A a b) -> P b p
+  // (A : *) -> (a : A) -> (P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (b : A) -> (p : HEq A A a b) -> P b p
   'elimHEq':
     VPiE('A', VType, A =>
     VPiE('a', A, a =>
@@ -32,45 +32,36 @@ const primTypes: { [K in PrimName]: Val } = {
     vappE(vappE(P, b), p))))))),
 
   'Desc': VType,
-  'Ret': VDesc,
-  'Rec': VPiE('_', VDesc, _ => VDesc),
-  // (T : Type) -> (T -> Desc) -> Desc
-  'Arg': VPiE('T', VType, T => VPiE('_', VPiE('_', T, _ => VDesc), _ => VDesc)),
-  /*
-    (P : Desc -> Type)
-    -> P Ret
-    -> ((r : Desc) -> P r -> P (Rec r))
-    -> ((T : Type) -> (f : T -> Desc) -> ((x : T) -> P (f x)) -> P (Arg T f))
-    -> (d : Desc)
-    -> P d
-  */
-  'elimDesc':
-    VPiE('P', VPiE('_', VDesc, _ => VType), P =>
-    VPiE('_', vappE(P, VRet), _ =>
-    VPiE('_', VPiE('r', VDesc, r => VPiE('_', vappE(P, r), _ => vappE(P, vappE(VRec, r)))), _ =>
-    VPiE('_', VPiE('T', VType, T => VPiE('f', VPiE('_', T, _ => VDesc), f => VPiE('_', VPiE('x', T, x => vappE(P, vappE(f, x))), _ => vappE(P, vappE(vappE(VArg, T), f))))), _ =>
-    VPiE('d', VDesc, d =>
-    vappE(P, d)))))),
+  'End': VDesc,
+  'Arg': VPiE('A', VType, A => VPiE('_', VPiE('_', A, _ => VDesc), _ => VDesc)),
+  'Rec': VPiE('_', VType, _ => VPiE('_', VDesc, _ => VDesc)),
+  'interp': VPiE('_', VDesc, _ => VPiE('_', VType, _ => VType)),
+  // (d : Desc) -> (X : *) -> (P : X -> *) -> (xs : interp d X) -> *
+  'All': VPiE('d', VDesc, d => VPiE('X', VType, X => VPiE('_', VPiE('_', X, _ => VType), _ => VPiE('_', vinterp(d, X), _ => VType)))),
+  // (d : Desc) -> (X : *) -> (P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> All d X P xs
+  'all': VPiE('d', VDesc, d => VPiE('X', VType, X => VPiE('P', VPiE('_', X, _ => VType), P => VPiE('_', VPiE('x', X, x => vappE(P, x)), _ => VPiE('xs', vinterp(d, X), xs => vAll(d, X, P, xs)))))),
 
-  // descInterpretPackage -> Desc -> Type
-  'FixD': VPiE('_', descInterpretPackage, _ => VPiE('_', VDesc, _ => VType)),
-  // (p : descInterpretPackage) -> (d: Desc) -> p.fst d (FixD p d) -> FixD p d
-  'ConD': VPiE('p', descInterpretPackage, p => VPiE('d', VDesc, d => VPiE('_', vappE(vappE(vproj('fst', p), d), vappE(vappE(VFixD, p), d)), _ => vappE(vappE(VFixD, p), d)))),
+  // Desc -> *
+  'Data': VPiE('_', VDesc, _ => VType),
+  // (d : Desc) -> interp d (Data d) -> Data d
+  'Con': VPiE('d', VDesc, d => VPiE('_', vinterp(d, vdata(d)), _ => vdata(d))),
   /*
-    (p : descInterpretPackage)
-    -> (D : Desc)
-    -> (P : FixD p D -> Type)
-    -> ((d : p.fst D (FixD p D)) -> p.snd.fst D (FixD p D) P d -> P (ConD p D d))
-    -> (x : FixD p d)
+    (d : Desc)
+    -> (P : Data d -> *)
+    -> (
+      (y : interp d (Data d))
+      -> All d (Data d) P y
+      -> P (Con d y)
+    )
+    -> (x : Data d)
     -> P x
   */
-  'elimFixD':
-    VPiE('p', descInterpretPackage, p =>
-    VPiE('D', VDesc, D =>
-    VPiE('P', VPiE('_', vappE(vappE(VFixD, p), D), _ => VType), P =>
-    VPiE('_', VPiE('d', vappE(vappE(vproj('fst', p), D), vappE(vappE(VFixD, p), D)), d => VPiE('_', vappE(vappE(vappE(vappE(vproj('fst', vproj('snd', p)), D), vappE(vappE(VFixD, p), D)), P), d), _ => vappE(P, vappE(vappE(vappE(VConD, p), D), d)))), _ =>
-    VPiE('x', vappE(vappE(VFixD, p), D), x =>
-    vappE(P, x)))))),
+  'ind':
+    VPiE('d', VDesc, d =>
+    VPiE('P', VPiE('_', vappE(VData, d), _ => VType), P =>
+    VPiE('_', VPiE('y', vinterp(d, vdata(d)), y => VPiE('_', vAll(d, vdata(d), P, y), _ => vappE(P, vcon(d, y)))), _ =>
+    VPiE('x', vappE(VData, d), x =>
+    vappE(P, x))))),
 
 };
 

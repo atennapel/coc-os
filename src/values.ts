@@ -67,11 +67,14 @@ export const VReflHEq = VPrim('ReflHEq');
 export const vheq = (a: Val, b: Val, x: Val, y: Val) => vappE(vappE(vappE(vappE(VHEq, a), b), x), y);
 export const vreflheq = (a: Val, x: Val) => vappE(vappE(VReflHEq, a), x);
 export const VDesc = VPrim('Desc');
-export const VRet = VPrim('Ret');
-export const VRec = VPrim('Rec');
-export const VArg = VPrim('Arg');
-export const VFixD = VPrim('FixD');
-export const VConD = VPrim('ConD');
+export const VData = VPrim('Data');
+export const vdata = (v: Val) => vappE(VData, v);
+export const VCon = VPrim('Con');
+export const vcon = (d: Val, x: Val) => vappEs([VCon, d, x]);
+export const VInterp = VPrim('interp');
+export const vinterp = (d: Val, x: Val) => velimprim('interp', d, [x]);
+export const VAll = VPrim('All');
+export const vAll = (d: Val, X: Val, P: Val, xs: Val) => velimprim('All', d, [X, P, xs]);
 
 export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
 export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);
@@ -111,19 +114,6 @@ export const vproj = (proj: 'fst' | 'snd', v: Val): Val => {
   return impossible(`vproj: ${v.tag}`);
 };
 
-/*
-descInterpretPackage :
-(interpret : Desc -> Type -> Type)
-**
-(All : (D : Desc) -> (X : Type) -> (P : X -> Type) -> interpret D X -> Type)
-**
-(D : Desc) -> (X : Type) -> (P : X -> Type) -> ((x : X) -> P x) -> (xs : interpret D X) -> All D X P xs
-*/
-export const descInterpretPackage =
-  VSigma('interpret', VPiE('_', VDesc, _ => VPiE('_', VType, _ => VType)), interpret =>
-  VSigma('All', VPiE('D', VDesc, D => VPiE('X', VType, X => VPiE('P', VPiE('_', X, _ => VType), _ => VPiE('_', vappEs([interpret, D, X]), _ => VType)))), All =>
-  VPiE('D', VDesc, D => VPiE('X', VType, X => VPiE('P', VPiE('_', X, _ => VType), P => VPiE('_', VPiE('x', X, x => vappE(P, x)), _ => VPiE('xs', vappEs([interpret, D, X]), xs => vappEs([All, D, X, P, xs]))))))));
-
 export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
   if (name === 'elimB') {
     if (isVPrim('0', v)) return args[1];
@@ -132,28 +122,66 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
   if (name === 'elimHEq') {
     if (isVPrim('ReflHEq', v)) return args[3];
   }
-  if (name === 'elimDesc') {
-    const [P, ret, rec, arg] = args;
-    // elimDesc P ret rec arg Ret ~> ret
-    if (isVPrim('Ret', v)) return ret;
-    // elimDesc P ret rec arg (Rec r) ~> rec r (elimDesc P ret rec arg r)
-    if (isVPrim('Rec', v)) {
-      const [r] = vprimArgs(v);
-      return vappE(vappE(args[2], r), velimprim('elimDesc', r, [P, ret, rec, arg]));
-    }
-    // elimDesc P ret rec arg (Arg T f) ~> arg T f (\(x : T). elimDesc P ret rec arg (f x))
+  if (name === 'interp') {
+    /*
+    interp : Desc -> * -> *
+    interp End X = U
+    interp (Arg A f) X = (x : A) ** interp (f x) X
+    interp (Rec A d) X = (A -> X) ** interp d X
+    */
+    const [X] = args;
+    if (isVPrim('End', v)) return VU;
     if (isVPrim('Arg', v)) {
-      const [T, f] = vprimArgs(v);
-      return vappE(vappE(vappE(args[3], T), f), VAbsE('x', T, x => velimprim('elimDesc', vappE(f, x), [P, ret, rec, arg])));
+      const [A, f] = vprimArgs(v);
+      return VSigma('x', A, x => vinterp(vappE(f, x), X));
+    }
+    if (isVPrim('Rec', v)) {
+      const [A, d] = vprimArgs(v);
+      return VSigma('_', VPiE('_', A, _ => X), _ => vinterp(d, X));
     }
   }
-  if (name === 'elimFixD') {
-    if (isVPrim('ConD', v)) {
-      const [p, D, P, h] = args;
-      const [d] = vprimArgs(v);
-      // elimFixD p D P h (ConD p d) ~> h d (p.all D (FixD p D) P (elimFixD p D P h) d)
-      const fix = vappEs([VFixD, p, D]);
-      return vappEs([h, d, vappEs([vproj('snd', vproj('snd', p)), D, fix, P, VAbsE('x', fix, x => velimprim('elimFixD', x, args)), d])]);
+  if (name === 'All') {
+    /*
+    All : (d : Desc) -> (X : *) -> (P : X -> *) -> (xs : interp d X) -> *
+    All End X P () = U
+    All (Arg A f) X P (x, y) = All (f x) X P y
+    All (Rec A d) X P (f, y) = ((x : A) -> P (f x)) ** All d X P y
+    */
+    const [X, P, xs] = args;
+    if (isVPrim('End', v)) return VU;
+    if (isVPrim('Arg', v)) {
+      const f = vprimArgs(v)[1];
+      return velimprim('All', vappE(f, vproj('fst', xs)), [X, P, vproj('snd', xs)]);
+    }
+    if (isVPrim('Rec', v)) {
+      const [A, d] = vprimArgs(v);
+      return VSigma('_', VPiE('x', A, x => vappE(P, vappE(vproj('fst', xs), x))), _ => velimprim('All', d, [X, P, vproj('snd', xs)]));
+    }
+  }
+  if (name === 'all') {
+    /*
+    all : (d : Desc) -> (X : *) -> (P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> All d X P xs
+    all End X P p () = ()
+    all (Arg A f) X P p (x, y) = all (f x) X P p y
+    all (Rec A d) X P p (f, y) = (\(h : A). p (f h), all d X P p y)
+    */
+    const [X, P, p, xs] = args;
+    if (isVPrim('End', v)) return VUnit;
+    if (isVPrim('Arg', v)) {
+      const f = vprimArgs(v)[1];
+      return velimprim('all', vappE(f, vproj('fst', xs)), [X, P, p, vproj('snd', xs)]);
+    }
+    if (isVPrim('Rec', v)) {
+      const [A, d] = vprimArgs(v);
+      return VPair(VAbsE('h', A, h => vappE(p, vappE(vproj('fst', xs), h))), velimprim('all', d, [X, P, p, vproj('snd', xs)]), velimprim('All', v, [X, P, xs]));
+    }
+  }
+  if (name === 'ind') {
+    if (isVPrim('Con', v)) {
+      const [d, P, i] = args;
+      const [c] = vprimArgs(v);
+      // ind d P i (Con c) ~> i c (all d (Data d) P (\(x : Data d). ind d P i x) c)
+      return vappEs([i, c, velimprim('all', d, [vappE(VData, d), P, VAbsE('x', vappE(VData, d), x => velimprim('ind', x, [d, P, i])), c])]);
     }
   }
   if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
@@ -161,6 +189,10 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     return VGlobal(v.head, Cons(EPrim(name, args), v.args), mapLazy(v.val, v => velimprim(name, v, args)));
   return impossible(`velimprim ${name}: ${v.tag}`);
 };
+
+export const VVoid = VPiE('t', VType, t => t);
+export const VU = vheq(VType, VType, VVoid, VVoid);
+export const VUnit = vreflheq(VType, VVoid);
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Abs')
@@ -204,21 +236,24 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
         VAbsE('p', vheq(A, A, a, b), p =>
         velimprim('elimHEq', p, [A, a, P, h, b])))))));
     }
-    if (t.name === 'elimDesc') {
-      return VAbsE('P', VPiE('_', VDesc, _ => VType), P =>
-        VAbsE('ret', vappE(P, VRet), ret =>
-        VAbsE('rec', VPiE('r', VDesc, r => VPiE('_', vappE(P, r), _ => vappE(P, vappE(VRec, r)))), rec =>
-        VAbsE('arg', VPiE('T', VType, T => VPiE('f', VPiE('_', T, _ => VDesc), f => VPiE('_', VPiE('x', T, x => vappE(P, vappE(f, x))), _ => vappE(P, vappE(vappE(VArg, T), f))))), arg =>
-        VAbsE('d', VDesc, d =>
-        velimprim('elimDesc', d, [P, ret, rec, arg]))))));
+    if (t.name === 'interp')
+      return VAbsE('d', VDesc, d => VAbsE('X', VType, X => velimprim('interp', d, [X])));
+    if (t.name === 'All')
+      return VAbsE('d', VDesc, d => VAbsE('X', VType, X => VAbsE('P', VPiE('_', X, _ => VType), P => VAbsE('xs', vinterp(d, X), xs => velimprim('All', d, [X, P, xs])))));
+    if (t.name === 'all') {
+      return VAbsE('d', VDesc, d =>
+        VAbsE('X', VType, X =>
+        VAbsE('P', VPiE('_', X, _ => VType), P =>
+        VAbsE('p', VPiE('x', X, x => vappE(P, x)), p =>
+        VAbsE('xs', vinterp(d, X), xs =>
+        velimprim('all', d, [X, P, p, xs]))))));
     }
-    if (t.name === 'elimFixD') {
-      return VAbsE('p', descInterpretPackage, p =>
-        VAbsE('D', VDesc, D =>
-        VAbsE('P', VPiE('_', vappE(vappE(VFixD, p), D), _ => VType), P =>
-        VAbsE('h', VPiE('d', vappE(vappE(vproj('fst', p), D), vappE(vappE(VFixD, p), D)), d => VPiE('_', vappE(vappE(vappE(vappE(vproj('fst', vproj('snd', p)), D), vappE(vappE(VFixD, p), D)), P), d), _ => vappE(P, vappE(vappE(vappE(VConD, p), D), d)))), h =>
-        VAbsE('x', vappE(vappE(VFixD, p), D), x =>
-        velimprim('elimFixD', x, [p, D, P, h]))))));
+    if (t.name === 'ind') {
+      return VAbsE('d', VDesc, d =>
+        VAbsE('P', VPiE('_', vappE(VData, d), _ => VType), P =>
+        VAbsE('i', VPiE('y', vinterp(d, vdata(d)), y => VPiE('_', vAll(d, vdata(d), P, y), _ => vappE(P, vcon(d, y)))), i =>
+        VAbsE('x', vappE(VData, d), x =>
+        velimprim('ind', x, [d, P, i])))));
     }
     return VPrim(t.name);
   }
@@ -234,7 +269,11 @@ const quoteHead = (h: Head, k: Ix): Term => {
 const quoteElim = (t: Term, e: Elim, k: Ix, full: boolean): Term => {
   if (e.tag === 'EApp') return App(t, e.mode, quote(e.right, k, full));
   if (e.tag === 'EProj') return Proj(e.proj, t);
-  if (e.tag === 'EPrim') return AppE(e.args.reduce((x, y) => AppE(x, quote(y, k, full)), Prim(e.name) as Term), t);
+  if (e.tag === 'EPrim') {
+    if (e.name === 'interp' || e.name === 'All' || e.name === 'all')
+      return e.args.reduce((x, y) => AppE(x, quote(y, k, full)), AppE(Prim(e.name), t));
+    return AppE(e.args.reduce((x, y) => AppE(x, quote(y, k, full)), Prim(e.name) as Term), t);
+  }
   return e;
 };
 export const quote = (v_: Val, k: Ix, full: boolean = false): Term => {
