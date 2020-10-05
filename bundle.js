@@ -212,7 +212,7 @@ exports.show = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
     if (t.tag === 'Prim')
-        return `%${t.name}`;
+        return t.name === 'Type' ? '*' : `%${t.name}`;
     if (t.tag === 'Global')
         return `${t.name}`;
     if (t.tag === 'Meta')
@@ -638,7 +638,7 @@ const TName = (name) => ({ tag: 'Name', name });
 const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list, bracket) => ({ tag: 'List', list, bracket });
 const TStr = (str) => ({ tag: 'Str', str });
-const SYM1 = ['\\', ':', '=', ','];
+const SYM1 = ['\\', ':', '=', ',', '*'];
 const SYM2 = ['->', '**'];
 const START = 0;
 const NAME = 1;
@@ -841,6 +841,8 @@ const expr = (t) => {
     }
     if (t.tag === 'Name') {
         const x = t.name;
+        if (x === '*')
+            return [surface_1.Type, false];
         if (x === '_')
             return [surface_1.Hole, false];
         if (x[0] === '%') {
@@ -1421,7 +1423,7 @@ exports.show = (t) => {
     if (t.tag === 'Var')
         return t.name;
     if (t.tag === 'Prim')
-        return `%${t.name}`;
+        return t.name === 'Type' ? '*' : `%${t.name}`;
     if (t.tag === 'Meta')
         return `?${t.index}`;
     if (t.tag === 'Hole')

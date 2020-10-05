@@ -55,7 +55,7 @@ export const showMode = (m: Mode): string => m === 'ImplUnif' ? 'impl' : '';
 
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
-  if (t.tag === 'Prim') return `%${t.name}`;
+  if (t.tag === 'Prim') return t.name === 'Type' ? '*' : `%${t.name}`;
   if (t.tag === 'Global') return `${t.name}`;
   if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'App') return `(${show(t.left)} ${t.mode === ImplUnif ? '{' : ''}${show(t.right)}${t.mode === ImplUnif ? '}' : ''})`;

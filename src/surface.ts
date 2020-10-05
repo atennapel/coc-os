@@ -87,7 +87,7 @@ const isSimple = (t: Term): boolean =>
   t.tag === 'Var' || t.tag === 'Prim' || t.tag === 'Meta' || t.tag === 'Hole' || (t.tag === 'Proj' && isSimple(t.term));
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
-  if (t.tag === 'Prim') return `%${t.name}`;
+  if (t.tag === 'Prim') return t.name === 'Type' ? '*' : `%${t.name}`;
   if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'Hole') return '_';
   if (t.tag === 'App') {

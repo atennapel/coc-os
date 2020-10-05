@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif, isPrimName } from './core';
 import { log } from './config';
@@ -24,7 +24,7 @@ const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
-const SYM1: string[] = ['\\', ':', '=', ','];
+const SYM1: string[] = ['\\', ':', '=', ',', '*'];
 const SYM2: string[] = ['->', '**'];
 
 const START = 0;
@@ -196,6 +196,7 @@ const expr = (t: Token): [Term, boolean] => {
   }
   if (t.tag === 'Name') {
     const x = t.name;
+    if (x === '*') return [Type, false];
     if (x === '_') return [Hole, false];
     if (x[0] === '%') {
       const rest = x.slice(1);

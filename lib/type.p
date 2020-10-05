@@ -1,3 +1,1 @@
-def Type = %Type
-
-def typeof : {T : Type} -> (x : T) -> Type = \{T} _. T
+def typeof : {T : *} -> (x : T) -> * = \{T} _. T

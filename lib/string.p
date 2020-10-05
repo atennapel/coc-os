@@ -1,5 +1,4 @@
 -- will not typecheck yet
-import lib/type.p
 import lib/unit.p
 import lib/nat.p
 import lib/bool.p
@@ -11,12 +10,12 @@ def String = List Codepoint
 def Showable = String
 
 def Show = \t. t -> Showable
-def show : {t : Type} -> Show t -> t -> Showable = \x. x
+def show : {t : *} -> Show t -> t -> Showable = \x. x
 
 def instanceShowString : Show String = \s. s
 def instanceShowNatUnary : Show Nat = \n. cataNat n (Nil {Nat}) (Cons 49)
-def instanceShowUnit : Show UnitType = \_. "()"
+def instanceShowUnit : Show Unit* = \_. "()"
 def instanceShowBool : Show Bool = \b. if b "True" "False"
 def instanceShowList
-  : {t : Type} -> Show t -> Show (List t)
+  : {t : *} -> Show t -> Show (List t)
   = \{t} instanceShow l. cataList l "()" (\h r. appendList (instanceShow h) (appendList " :: " r))
