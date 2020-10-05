@@ -84,7 +84,7 @@ export const flattenPair = (t: Term): Term[] => {
 
 const showP = (b: boolean, t: Term): string => b ? `(${show(t)})` : show(t);
 const isSimple = (t: Term): boolean =>
-  t.tag === 'Var' || t.tag === 'Prim' || t.tag === 'Meta' || t.tag === 'Hole' || (t.tag === 'Proj' && isSimple(t.term));
+  t.tag === 'Var' || t.tag === 'Prim' || t.tag === 'Meta' || t.tag === 'Hole' || t.tag === 'Pair' || (t.tag === 'Proj' && isSimple(t.term));
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'Prim') return t.name === 'Type' ? '*' : `%${t.name}`;

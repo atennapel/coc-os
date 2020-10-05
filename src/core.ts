@@ -37,10 +37,10 @@ export const primNames = [
   'Type',
   'B', '0', '1', 'elimB',
   'HEq', 'ReflHEq', 'elimHEq',
-  'Desc', 'End', 'Arg', 'Rec', 'interp', 'All', 'all',
+  'Desc', 'End', 'Arg', 'Rec', 'elimDesc', 'interp', 'All', 'all',
   'Data', 'Con', 'ind',
 ] as const;
-export type PrimNameElim = 'elimB' | 'elimHEq' | 'interp' | 'All' | 'all' | 'ind';
+export type PrimNameElim = 'elimB' | 'elimHEq' | 'elimDesc' | 'interp' | 'All' | 'all' | 'ind';
 
 export const Type = Prim('Type');
 

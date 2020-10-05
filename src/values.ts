@@ -67,6 +67,9 @@ export const VReflHEq = VPrim('ReflHEq');
 export const vheq = (a: Val, b: Val, x: Val, y: Val) => vappE(vappE(vappE(vappE(VHEq, a), b), x), y);
 export const vreflheq = (a: Val, x: Val) => vappE(vappE(VReflHEq, a), x);
 export const VDesc = VPrim('Desc');
+export const VEnd = VPrim('End');
+export const VArg = VPrim('Arg');
+export const VRec = VPrim('Rec');
 export const VData = VPrim('Data');
 export const vdata = (v: Val) => vappE(VData, v);
 export const VCon = VPrim('Con');
@@ -121,6 +124,18 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
   }
   if (name === 'elimHEq') {
     if (isVPrim('ReflHEq', v)) return args[3];
+  }
+  if (name === 'elimDesc') {
+    const [P, e, a, r] = args;
+    if (isVPrim('End', v)) return e;
+    if (isVPrim('Arg', v)) {
+      const [A, f] = vprimArgs(v);
+      return vappEs([a, A, f, VAbsE('a', A, a => velimprim('elimDesc', vappE(f, a), [P, e, a, r]))]);
+    }
+    if (isVPrim('Rec', v)) {
+      const [A, d] = vprimArgs(v);
+      return vappEs([r, A, d, velimprim('elimDesc', d, [P, e, a, r])]);
+    }
   }
   if (name === 'interp') {
     /*
@@ -235,6 +250,14 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
         VAbsE('b', A, b =>
         VAbsE('p', vheq(A, A, a, b), p =>
         velimprim('elimHEq', p, [A, a, P, h, b])))))));
+    }
+    if (t.name === 'elimDesc') {
+      return VAbsE('P', VPiE('_', VDesc, _ => VType), P =>
+        VAbsE('e', vappE(P, VEnd), e =>
+        VAbsE('a', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => VDesc), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ => vappE(P, vappEs([VArg, A, f]))))), a =>
+        VAbsE('r', VPiE('A', VType, A => VPiE('d', VDesc, d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VRec, A, d]))))), r =>
+        VAbsE('d', VDesc, d =>
+        velimprim('elimDesc', d, [P, e, a, r]))))));
     }
     if (t.name === 'interp')
       return VAbsE('d', VDesc, d => VAbsE('X', VType, X => velimprim('interp', d, [X])));

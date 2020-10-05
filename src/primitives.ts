@@ -1,6 +1,6 @@
 import { PrimName } from './core';
 import { impossible } from './utils/utils';
-import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, VData, VDesc, vinterp, vdata, vcon, vAll } from './values';
+import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, VData, VDesc, vinterp, vdata, vcon, vAll, VEnd, VArg, VRec, vappEs } from './values';
 
 const primTypes: { [K in PrimName]: Val } = {
 
@@ -35,6 +35,21 @@ const primTypes: { [K in PrimName]: Val } = {
   'End': VDesc,
   'Arg': VPiE('A', VType, A => VPiE('_', VPiE('_', A, _ => VDesc), _ => VDesc)),
   'Rec': VPiE('_', VType, _ => VPiE('_', VDesc, _ => VDesc)),
+  /*
+    (P : Desc -> *)
+    -> P End
+    -> ((A : *) -> (f : A -> Desc) -> ((a : A) -> P (f a)) -> P (Arg {A} f))
+    -> ((A : *) -> (d : Desc) -> P d -> P (HRec A d))
+    -> (d : Desc)
+    -> P d
+  */
+  'elimDesc':
+    VPiE('P', VPiE('_', VDesc, _ => VType), P =>
+    VPiE('_', vappE(P, VEnd), _ =>
+    VPiE('_', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => VDesc), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ => vappE(P, vappEs([VArg, A, f]))))), _ =>
+    VPiE('_', VPiE('A', VType, A => VPiE('d', VDesc, d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VRec, A, d]))))), _ =>
+    VPiE('d', VDesc, d =>
+    vappE(P, d)))))),
   'interp': VPiE('_', VDesc, _ => VPiE('_', VType, _ => VType)),
   // (d : Desc) -> (X : *) -> (P : X -> *) -> (xs : interp d X) -> *
   'All': VPiE('d', VDesc, d => VPiE('X', VType, X => VPiE('_', VPiE('_', X, _ => VType), _ => VPiE('_', vinterp(d, X), _ => VType)))),

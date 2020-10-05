@@ -31,7 +31,7 @@ let importMap: ImportMap = {};
 
 export const initREPL = () => {
   importMap = {};
-  config.unfold.push('typeof');
+  config.unfold.push('typeof', 'interp', 'All', 'all');
 };
 
 export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) => {
@@ -44,7 +44,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       setConfig({ debug: d });
       return cb(`debug: ${d}`);
     }
-    if (s === ':addunfold') {
+    if (s.startsWith(':addunfold')) {
       const xs = s.slice(10).trim().split(/\s+/g);
       const u = config.unfold;
       xs.forEach(x => u.push(x));
