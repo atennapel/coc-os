@@ -186,6 +186,13 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
       const [, A, f, d] = vprimArgs(v);
       return VSigma('_', VPiE('a', A, a => vappE(X, vappE(f, a))), _ => velimprim('interpI', d, args));
     }
+    // interpretI I (elimB Pb f t b) X i ~> elimB * (interpretI I f X i) (interpretI I t X i) b
+    if (v.tag === 'VNe' && v.spine.tag === 'Cons' && v.spine.head.tag === 'EPrim' && v.spine.head.name === 'elimB') {
+      const head = v.spine.head;
+      const f = head.args[1];
+      const t = head.args[2];
+      return velimprim('elimB', VNe(v.head, v.spine.tail), [VAbsE('_', VB, _ => VType), velimprim('interpI', f, args), velimprim('interpI', t, args)]);
+    }
   }
   if (name === 'AllI') {
     /*

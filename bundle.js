@@ -220,7 +220,7 @@ exports.show = (t) => {
     if (t.tag === 'App')
         return `(${exports.show(t.left)} ${t.mode === exports.ImplUnif ? '{' : ''}${exports.show(t.right)}${t.mode === exports.ImplUnif ? '}' : ''})`;
     if (t.tag === 'Abs')
-        return `(${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'} -> ${exports.show(t.body)})`;
+        return `(\\${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'}. ${exports.show(t.body)})`;
     if (t.tag === 'Pair')
         return `(${exports.show(t.fst)}, ${exports.show(t.snd)} : ${exports.show(t.type)})`;
     if (t.tag === 'Proj')
@@ -228,7 +228,7 @@ exports.show = (t) => {
     if (t.tag === 'Let')
         return `(let ${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
     if (t.tag === 'Pi')
-        return `(/${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'}. ${exports.show(t.body)})`;
+        return `(${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'} -> ${exports.show(t.body)})`;
     if (t.tag === 'Sigma')
         return `((${t.name} : ${exports.show(t.type)}) ** ${exports.show(t.body)})`;
     return t;
@@ -2203,6 +2203,13 @@ exports.velimprim = (name, v, args) => {
         if (exports.isVPrim('IHRec', v)) {
             const [, A, f, d] = exports.vprimArgs(v);
             return exports.VSigma('_', exports.VPiE('a', A, a => exports.vappE(X, exports.vappE(f, a))), _ => exports.velimprim('interpI', d, args));
+        }
+        // interpretI I (elimB Pb f t b) X i ~> elimB * (interpretI I f X i) (interpretI I t X i) b
+        if (v.tag === 'VNe' && v.spine.tag === 'Cons' && v.spine.head.tag === 'EPrim' && v.spine.head.name === 'elimB') {
+            const head = v.spine.head;
+            const f = head.args[1];
+            const t = head.args[2];
+            return exports.velimprim('elimB', exports.VNe(v.head, v.spine.tail), [exports.VAbsE('_', exports.VB, _ => exports.VType), exports.velimprim('interpI', f, args), exports.velimprim('interpI', t, args)]);
         }
     }
     if (name === 'AllI') {

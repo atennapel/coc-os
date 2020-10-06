@@ -34,18 +34,15 @@ Future work:
 
 ```
 TODO:
+- add named holes
 - implement induction nats and lists
 - implement generic constructors and elimination
 - allow meta as head of glued value
 - glued lets
-- add named holes
 - optimize importing
 - add erasure
 - implement pruning
 - implement instance search
 - specialize meta when checking pair
 - support some impredicative instantiation
-
-IDEAS:
-- should elimDesc nest inside of elimB?
 ```

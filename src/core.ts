@@ -59,11 +59,11 @@ export const show = (t: Term): string => {
   if (t.tag === 'Global') return `${t.name}`;
   if (t.tag === 'Meta') return `?${t.index}`;
   if (t.tag === 'App') return `(${show(t.left)} ${t.mode === ImplUnif ? '{' : ''}${show(t.right)}${t.mode === ImplUnif ? '}' : ''})`;
-  if (t.tag === 'Abs') return `(${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'} -> ${show(t.body)})`;
+  if (t.tag === 'Abs') return `(\\${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'}. ${show(t.body)})`;
   if (t.tag === 'Pair') return `(${show(t.fst)}, ${show(t.snd)} : ${show(t.type)})`;
   if (t.tag === 'Proj') return `(${t.proj} ${show(t.term)})`;
   if (t.tag === 'Let') return `(let ${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
-  if (t.tag === 'Pi') return `(/${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'}. ${show(t.body)})`;
+  if (t.tag === 'Pi') return `(${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'} -> ${show(t.body)})`;
   if (t.tag === 'Sigma') return `((${t.name} : ${show(t.type)}) ** ${show(t.body)})`;
   return t;
 };
