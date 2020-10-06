@@ -18,10 +18,9 @@ Currently done:
 - an heterogenous equality type with definitional uniqueness of identity proofs (UIP)
 - booleans with an induction primitive
 - type-in-type
-- descriptions ala "Gentle Art of Levitation"
+- indexed descriptions ala "Gentle Art of Levitation"
 
 Not yet done:
-- indexed descriptions
 - explicit erasure annotations
 - CEK machine for erased terms
 - hash-based content-addressed references
@@ -31,15 +30,15 @@ Future work:
 - levitation of Desc
 - inductive-recursive types
 - inductive-inductive types
-- predicative hierarchy
+- predicative universe hierarchy
 
 ```
 TODO:
 - implement induction nats and lists
 - implement generic constructors and elimination
 - allow meta as head of glued value
+- glued lets
 - add named holes
-- add indexed descriptions
 - optimize importing
 - add erasure
 - implement pruning

@@ -66,18 +66,21 @@ export const VHEq = VPrim('HEq');
 export const VReflHEq = VPrim('ReflHEq');
 export const vheq = (a: Val, b: Val, x: Val, y: Val) => vappE(vappE(vappE(vappE(VHEq, a), b), x), y);
 export const vreflheq = (a: Val, x: Val) => vappE(vappE(VReflHEq, a), x);
-export const VDesc = VPrim('Desc');
-export const VEnd = VPrim('End');
-export const VArg = VPrim('Arg');
-export const VRec = VPrim('Rec');
-export const VData = VPrim('Data');
-export const vdata = (v: Val) => vappE(VData, v);
-export const VCon = VPrim('Con');
-export const vcon = (d: Val, x: Val) => vappEs([VCon, d, x]);
-export const VInterp = VPrim('interp');
-export const vinterp = (d: Val, x: Val) => velimprim('interp', d, [x]);
-export const VAll = VPrim('All');
-export const vAll = (d: Val, X: Val, P: Val, xs: Val) => velimprim('All', d, [X, P, xs]);
+export const VIDesc = VPrim('IDesc');
+export const videsc = (i : Val) => vappE(VIDesc, i);
+export const VIEnd = VPrim('IEnd');
+export const VIArg = VPrim('IArg');
+export const VIFArg = VPrim('IFArg');
+export const VIRec = VPrim('IRec');
+export const VIHRec = VPrim('IHRec');
+export const VIData = VPrim('IData');
+export const vidata = (I: Val, d: Val, i: Val) => vappEs([VIData, I, d, i]);
+export const VICon = VPrim('ICon');
+export const vicon = (I: Val, d: Val, i: Val, x: Val) => vappEs([VICon, I, d, i, x]);
+export const VInterpI = VPrim('interpI');
+export const vinterpI = (I: Val, d: Val, r: Val, i: Val) => velimprim('interpI', d, [I, r, i]);
+export const VAllI = VPrim('AllI');
+export const vAllI = (I: Val, d: Val, X: Val, P: Val, i: Val, xs: Val) => velimprim('AllI', d, [I, X, P, i, xs]);
 
 export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
 export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);
@@ -125,78 +128,127 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
   if (name === 'elimHEq') {
     if (isVPrim('ReflHEq', v)) return args[3];
   }
-  if (name === 'elimDesc') {
-    const [P, e, a, r] = args;
-    if (isVPrim('End', v)) return e;
-    if (isVPrim('Arg', v)) {
-      const [A, f] = vprimArgs(v);
-      return vappEs([a, A, f, VAbsE('a', A, a => velimprim('elimDesc', vappE(f, a), [P, e, a, r]))]);
+  if (name === 'elimIDesc') {
+    const [,, end, arg, farg, rec, hrec] = args;
+    if (isVPrim('IEnd', v)) {
+      // elimIDesc I P end arg farg rec hrec (IEnd I i) = end i
+      const [, i] = vprimArgs(v);
+      return vappE(end, i);
     }
-    if (isVPrim('Rec', v)) {
-      const [A, d] = vprimArgs(v);
-      return vappEs([r, A, d, velimprim('elimDesc', d, [P, e, a, r])]);
+    if (isVPrim('IArg', v)) {
+      // elimIDesc I P end arg farg rec hrec (IArg I A f) = arg A f (\(a : A). elimIDesc ... (f a))
+      const [, A, f] = vprimArgs(v);
+      return vappEs([arg, A, f, VAbsE('a', A, a => velimprim('elimIDesc', vappE(f, a), args))]);
+    }
+    if (isVPrim('IFArg', v)) {
+      // elimIDesc I P end arg farg rec hrec (IFArg I A d) = farg A d (elimIDesc ... d)
+      const [, A, d] = vprimArgs(v);
+      return vappEs([farg, A, d, velimprim('elimIDesc', d, args)]);
+    }
+    if (isVPrim('IRec', v)) {
+      // elimIDesc I P end arg farg rec hrec (IRec I i d) = rec i d (elimIDesc ... d)
+      const [, i, d] = vprimArgs(v);
+      return vappEs([rec, i, d, velimprim('elimIDesc', d, args)]);
+    }
+    if (isVPrim('IHRec', v)) {
+      // elimIDesc I P end arg farg rec hrec (IHRec I A f d) = rec A f d (elimIDesc ... d)
+      const [, A, f, d] = vprimArgs(v);
+      return vappEs([hrec, A, f, d, velimprim('elimIDesc', d, args)]);
     }
   }
-  if (name === 'interp') {
+  if (name === 'interpI') {
     /*
-    interp : Desc -> * -> *
-    interp End X = U
-    interp (Arg A f) X = (x : A) ** interp (f x) X
-    interp (Rec A d) X = (A -> X) ** interp d X
+    interp : (I : *) -> IDesc I -> (I -> *) -> I -> *
+    interp I (IEnd I i) X j = i = j
+    interp I (IArg I A f) X j = (x : A) ** interp I (f x) X j
+    interp I (IFArg I A d) X j = A ** interp I d X j
+    interp I (IRec I i d) X j = X i ** interp I d X j
+    interp I (IHRec I A f d) X j = ((a : A) -> X (f a)) ** interp I d X j
     */
-    const [X] = args;
-    if (isVPrim('End', v)) return VU;
-    if (isVPrim('Arg', v)) {
-      const [A, f] = vprimArgs(v);
-      return VSigma('x', A, x => vinterp(vappE(f, x), X));
+    const [I, X, j] = args;
+    if (isVPrim('IEnd', v)) {
+      const [, i] = vprimArgs(v);
+      return vheq(I, I, i, j);
     }
-    if (isVPrim('Rec', v)) {
-      const [A, d] = vprimArgs(v);
-      return VSigma('_', VPiE('_', A, _ => X), _ => vinterp(d, X));
+    if (isVPrim('IArg', v)) {
+      const [, A, f] = vprimArgs(v);
+      return VSigma('x', A, x => velimprim('interpI', vappE(f, x), args));
+    }
+    if (isVPrim('IFArg', v)) {
+      const [, A, d] = vprimArgs(v);
+      return VSigma('_', A, _ => velimprim('interpI', d, args));
+    }
+    if (isVPrim('IRec', v)) {
+      const [, i, d] = vprimArgs(v);
+      return VSigma('_', vappE(X, i), _ => velimprim('interpI', d, args));
+    }
+    if (isVPrim('IHRec', v)) {
+      const [, A, f, d] = vprimArgs(v);
+      return VSigma('_', VPiE('a', A, a => vappE(X, vappE(f, a))), _ => velimprim('interpI', d, args));
     }
   }
-  if (name === 'All') {
+  if (name === 'AllI') {
     /*
-    All : (d : Desc) -> (X : *) -> (P : X -> *) -> (xs : interp d X) -> *
-    All End X P () = U
-    All (Arg A f) X P (x, y) = All (f x) X P y
-    All (Rec A d) X P (f, y) = ((x : A) -> P (f x)) ** All d X P y
+    AllI : (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *
+    AllI I (IEnd I i) X P j () = U
+    AllI I (IArg I A f) X P j (x, y) = AllI I (f x) X P j y
+    AllI I (IFArg I A d) X P j (_, y) = AllI I d X P j y
+    AllI I (IRec I i d) X P j (x, y) = P i x ** AllI I d X P j y
+    AllI I (IHRec I A fi d) X P j (f, y) = ((a : A) -> P (fi a) (f a)) ** AllI I d X P j y
     */
-    const [X, P, xs] = args;
-    if (isVPrim('End', v)) return VU;
-    if (isVPrim('Arg', v)) {
-      const f = vprimArgs(v)[1];
-      return velimprim('All', vappE(f, vproj('fst', xs)), [X, P, vproj('snd', xs)]);
+    const [I, X, P, i, xs] = args;
+    if (isVPrim('IEnd', v)) return VU;
+    if (isVPrim('IArg', v)) {
+      const [, , f] = vprimArgs(v);
+      return velimprim('AllI', vappE(f, vproj('fst', xs)), [I, X, P, i, vproj('snd', xs)]);
     }
-    if (isVPrim('Rec', v)) {
-      const [A, d] = vprimArgs(v);
-      return VSigma('_', VPiE('x', A, x => vappE(P, vappE(vproj('fst', xs), x))), _ => velimprim('All', d, [X, P, vproj('snd', xs)]));
+    if (isVPrim('IFArg', v)) {
+      const [, , d] = vprimArgs(v);
+      return velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]);
+    }
+    if (isVPrim('IRec', v)) {
+      const [, i, d] = vprimArgs(v);
+      return VSigma('_', vappEs([P, i, vproj('fst', xs)]), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
+    }
+    if (isVPrim('IHRec', v)) {
+      const [, A, fi, d] = vprimArgs(v);
+      return VSigma('_', VPiE('a', A, a => vappEs([P, vappE(fi, a), vappE(vproj('fst', xs), a)])), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
     }
   }
-  if (name === 'all') {
+  if (name === 'allI') {
     /*
-    all : (d : Desc) -> (X : *) -> (P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> All d X P xs
-    all End X P p () = ()
-    all (Arg A f) X P p (x, y) = all (f x) X P p y
-    all (Rec A d) X P p (f, y) = (\(h : A). p (f h), all d X P p y)
+    allI : (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> ((i : I) -> (x : X i) -> P i x) -> (i : I) -> (xs : interpI I d X i) -> All I d X P i xs
+    allI I (IEnd I i) X P p j () = ()
+    allI I (IArg I A f) X P p j (x, y) = all (f x) X P p y
+    allI I (IFArg I A d) X P p j (_, y) = all d X P p y
+    allI I (IRec A i d) X P p j (x, y) = (p i x, all d X P p y)
+    allI I (IHRec A fi d) X P p j (f, y) = (\(h : A). p (fi h) (f h), all d X P p y)
     */
-    const [X, P, p, xs] = args;
-    if (isVPrim('End', v)) return VUnit;
-    if (isVPrim('Arg', v)) {
-      const f = vprimArgs(v)[1];
-      return velimprim('all', vappE(f, vproj('fst', xs)), [X, P, p, vproj('snd', xs)]);
+    const [I, X, P, p, i, xs] = args;
+    if (isVPrim('IEnd', v)) return VUnit;
+    if (isVPrim('IArg', v)) {
+      const [, , f] = vprimArgs(v);
+      return velimprim('allI', vappE(f, vproj('fst', xs)), [I, X, P, p, i, vproj('snd', xs)]);
     }
-    if (isVPrim('Rec', v)) {
-      const [A, d] = vprimArgs(v);
-      return VPair(VAbsE('h', A, h => vappE(p, vappE(vproj('fst', xs), h))), velimprim('all', d, [X, P, p, vproj('snd', xs)]), velimprim('All', v, [X, P, xs]));
+    if (isVPrim('IFArg', v)) {
+      const [, , d] = vprimArgs(v);
+      return velimprim('allI', d, [I, X, P, p, i, vproj('snd', xs)]);
+    }
+    if (isVPrim('IRec', v)) {
+      const [, i, d] = vprimArgs(v);
+      return VPair(vappEs([p, i, vproj('fst', xs)]), velimprim('allI', d, [I, X, P, p, i, vproj('snd', xs)]), velimprim('AllI', v, [I, X, P, i, xs]));
+    }
+    if (isVPrim('IHRec', v)) {
+      const [, A, fi, d] = vprimArgs(v);
+      return VPair(VAbsE('h', A, h => vappEs([p, vappE(fi, h), vappE(vproj('fst', xs), h)])), velimprim('allI', d, [I, X, P, p, i, vproj('snd', xs)]), velimprim('AllI', v, [I, X, P, i, xs]));
     }
   }
-  if (name === 'ind') {
-    if (isVPrim('Con', v)) {
-      const [d, P, i] = args;
-      const [c] = vprimArgs(v);
-      // ind d P i (Con c) ~> i c (all d (Data d) P (\(x : Data d). ind d P i x) c)
-      return vappEs([i, c, velimprim('all', d, [vappE(VData, d), P, VAbsE('x', vappE(VData, d), x => velimprim('ind', x, [d, P, i])), c])]);
+  if (name === 'indI') {
+    if (isVPrim('ICon', v)) {
+      const [I, d, P, h, i] = args;
+      const [, , , c] = vprimArgs(v);
+      // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind d P i x) c)
+      return vappEs([h, i, c, velimprim('allI', d, [I, vappEs([VIData, I, d]), P, VAbsE('i', I, i => VAbsE('x', vidata(I, d, i), x => velimprim('indI', x, [I, d, P, h, i]))), c])]);
     }
   }
   if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
@@ -251,32 +303,49 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
         VAbsE('p', vheq(A, A, a, b), p =>
         velimprim('elimHEq', p, [A, a, P, h, b])))))));
     }
-    if (t.name === 'elimDesc') {
-      return VAbsE('P', VPiE('_', VDesc, _ => VType), P =>
-        VAbsE('e', vappE(P, VEnd), e =>
-        VAbsE('a', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => VDesc), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ => vappE(P, vappEs([VArg, A, f]))))), a =>
-        VAbsE('r', VPiE('A', VType, A => VPiE('d', VDesc, d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VRec, A, d]))))), r =>
-        VAbsE('d', VDesc, d =>
-        velimprim('elimDesc', d, [P, e, a, r]))))));
+    if (t.name === 'elimIDesc') {
+      return VAbsE('I', VType, I =>
+        VAbsE('P', VPiE('_', videsc(I), _ => VType), P =>
+        VAbsE('end', VPiE('i', I, i => vappE(P, vappE(VIEnd, i))), end =>
+        VAbsE('arg', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), arg =>
+        VAbsE('farg', VPiE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), farg =>
+        VAbsE('rec', VPiE('i', I, i => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIRec, i, d]))))), rec =>
+        VAbsE('hrec', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => I), f => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIHRec, A, f, d])))))), hrec =>
+        VAbsE('d', videsc(I), d =>
+        velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
     }
-    if (t.name === 'interp')
-      return VAbsE('d', VDesc, d => VAbsE('X', VType, X => velimprim('interp', d, [X])));
-    if (t.name === 'All')
-      return VAbsE('d', VDesc, d => VAbsE('X', VType, X => VAbsE('P', VPiE('_', X, _ => VType), P => VAbsE('xs', vinterp(d, X), xs => velimprim('All', d, [X, P, xs])))));
-    if (t.name === 'all') {
-      return VAbsE('d', VDesc, d =>
-        VAbsE('X', VType, X =>
-        VAbsE('P', VPiE('_', X, _ => VType), P =>
-        VAbsE('p', VPiE('x', X, x => vappE(P, x)), p =>
-        VAbsE('xs', vinterp(d, X), xs =>
-        velimprim('all', d, [X, P, p, xs]))))));
+    if (t.name === 'interpI')
+      return VAbsE('I', VType, I =>
+        VAbsE('d', videsc(I), d =>
+        VAbsE('r', VPiE('_', I, _ => VType), r =>
+        VAbsE('i', I, i =>
+        velimprim('interpI', d, [I, r, i])))));
+    if (t.name === 'AllI')
+      return VAbsE('I', VType, I =>
+        VAbsE('d', videsc(I), d =>
+        VAbsE('X', VPiE('_', I, _ => VType), X =>
+        VAbsE('P', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), P =>
+        VAbsE('i', I, i =>
+        VAbsE('xs', vinterpI(I, d, X, i), xs =>
+        velimprim('AllI', d, [I, X, P, i, xs])))))));
+    if (t.name === 'allI') {
+      return VAbsE('I', VType, I =>
+        VAbsE('d', videsc(I), d =>
+        VAbsE('X', VPiE('_', I, _ => VType), X =>
+        VAbsE('P', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), P =>
+        VAbsE('p', VPiE('i', I, i => VPiE('x', vappE(X, i), x => vappEs([P, i, x]))), p =>
+        VAbsE('i', I, i =>
+        VAbsE('xs', vinterpI(I, d, X, i), xs =>
+        velimprim('allI', d, [I, X, P, p, i, xs]))))))));
     }
-    if (t.name === 'ind') {
-      return VAbsE('d', VDesc, d =>
-        VAbsE('P', VPiE('_', vappE(VData, d), _ => VType), P =>
-        VAbsE('i', VPiE('y', vinterp(d, vdata(d)), y => VPiE('_', vAll(d, vdata(d), P, y), _ => vappE(P, vcon(d, y)))), i =>
-        VAbsE('x', vappE(VData, d), x =>
-        velimprim('ind', x, [d, P, i])))));
+    if (t.name === 'indI') {
+      return VAbsE('I', VType, I =>
+        VAbsE('d', videsc(I), d =>
+        VAbsE('P', VPiE('i', I, i => VPiE('_', vidata(I, d, i), _ => VType)), P =>
+        VAbsE('h', VPiE('i', I, i => VPiE('y', vinterpI(I, d, vappEs([VIData, I, d]), i), y => VPiE('_', vAllI(I, d, vappEs([VIData, I,]), P, i, y), _ => vappEs([P, i, vicon(I, d, i, y)])))), h =>
+        VAbsE('i', I, i =>
+        VAbsE('x', vidata(I, d, i), x =>
+        velimprim('indI', x, [I, d, P, h, i])))))));
     }
     return VPrim(t.name);
   }
@@ -293,8 +362,10 @@ const quoteElim = (t: Term, e: Elim, k: Ix, full: boolean): Term => {
   if (e.tag === 'EApp') return App(t, e.mode, quote(e.right, k, full));
   if (e.tag === 'EProj') return Proj(e.proj, t);
   if (e.tag === 'EPrim') {
-    if (e.name === 'interp' || e.name === 'All' || e.name === 'all')
-      return e.args.reduce((x, y) => AppE(x, quote(y, k, full)), AppE(Prim(e.name), t));
+    if (e.name === 'interpI' || e.name === 'AllI' || e.name === 'allI') {
+      const first = quote(e.args[0], k, full);
+      return e.args.slice(1).reduce((x, y) => AppE(x, quote(y, k, full)), AppE(AppE(Prim(e.name), first), t));
+    }
     return AppE(e.args.reduce((x, y) => AppE(x, quote(y, k, full)), Prim(e.name) as Term), t);
   }
   return e;

@@ -197,8 +197,8 @@ exports.primNames = [
     'Type',
     'B', '0', '1', 'elimB',
     'HEq', 'ReflHEq', 'elimHEq',
-    'Desc', 'End', 'Arg', 'Rec', 'elimDesc', 'interp', 'All', 'all',
-    'Data', 'Con', 'ind',
+    'IDesc', 'IEnd', 'IArg', 'IFArg', 'IRec', 'IHRec', 'elimIDesc', 'interpI', 'AllI', 'allI',
+    'IData', 'ICon', 'indI',
 ];
 exports.Type = exports.Prim('Type');
 exports.AppE = (left, right) => exports.App(left, exports.Expl, right);
@@ -394,7 +394,7 @@ const synth = (local, tm) => {
     }
     if (tm.tag === 'App') {
         const [left, ty] = synth(local, tm.left);
-        const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right);
+        const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right, tm);
         return [core_1.App(list_1.foldl((f, a) => core_1.App(f, C.ImplUnif, a), left, ms), tm.mode, right), rty];
     }
     if (tm.tag === 'Abs') {
@@ -497,7 +497,7 @@ const synth = (local, tm) => {
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
-const synthapp = (local, ty, mode, tm) => {
+const synthapp = (local, ty, mode, tm, full) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
     const fty = values_1.force(ty);
     if (fty.tag === 'VPi' && fty.mode === mode) {
@@ -508,7 +508,7 @@ const synthapp = (local, ty, mode, tm) => {
     if (fty.tag === 'VPi' && fty.mode === C.ImplUnif && mode === C.Expl) {
         const m = newMeta(local, fty.type);
         const vm = values_1.evaluate(m, local.vs);
-        const [rest, rt, l] = synthapp(local, values_1.vinst(fty, vm), mode, tm);
+        const [rest, rt, l] = synthapp(local, values_1.vinst(fty, vm), mode, tm, full);
         return [rest, rt, list_1.Cons(m, l)];
     }
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
@@ -517,9 +517,9 @@ const synthapp = (local, ty, mode, tm) => {
         const b = context_1.freshMeta(mty);
         const pi = values_1.evaluate(core_1.Pi(mode, '_', values_1.quote(values_1.VNe(values_1.HMeta(a), ty.spine), local.index), values_1.quote(values_1.VNe(values_1.HMeta(b), ty.spine), local.index + 1)), local.vs);
         unification_1.unify(local.index, ty, pi);
-        return synthapp(local, pi, mode, tm);
+        return synthapp(local, pi, mode, tm, full);
     }
-    return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
+    return utils_1.terr(`not a correct pi type in synthapp in ${surface_1.show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
 };
 const tryToSolveBlockedProblems = () => {
     if (context_1.amountOfProblems() > 0) {
@@ -1023,7 +1023,7 @@ const exprs = (ts, br) => {
         const last1 = args[args.length - 1];
         const last2 = args[args.length - 2];
         const lastitem = surface_1.Pair(last2[0], last1[0]);
-        return args.slice(0, -2).reduceRight((x, [y, p]) => surface_1.Pair(y, x), lastitem);
+        return args.slice(0, -2).reduceRight((x, [y, _p]) => surface_1.Pair(y, x), lastitem);
     }
     const js = ts.findIndex(x => isName(x, '**'));
     if (js >= 0) {
@@ -1046,7 +1046,7 @@ const exprs = (ts, br) => {
             body = [exprs(s[s.length - 1], '('), false];
         const last = args[args.length - 1];
         const lastitem = surface_1.Sigma(last[0], last[2], body[0]);
-        return args.slice(0, -1).reduceRight((x, [name, impl, ty]) => surface_1.Sigma(name, ty, x), lastitem);
+        return args.slice(0, -1).reduceRight((x, [name, _impl, ty]) => surface_1.Sigma(name, ty, x), lastitem);
     }
     const l = ts.findIndex(x => isName(x, '\\'));
     let all = [];
@@ -1172,40 +1172,49 @@ const primTypes = {
     'ReflHEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('a', A, a => values_1.vheq(A, A, a, a))),
     // (A : *) -> (a : A) -> (P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (b : A) -> (p : HEq A A a b) -> P b p
     'elimHEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('a', A, a => values_1.VPiE('P', values_1.VPiE('b', A, b => values_1.VPiE('_', values_1.vheq(A, A, a, b), _ => values_1.VType)), P => values_1.VPiE('_', values_1.vappE(values_1.vappE(P, a), values_1.vreflheq(A, a)), _ => values_1.VPiE('b', A, b => values_1.VPiE('p', values_1.vheq(A, A, a, b), p => values_1.vappE(values_1.vappE(P, b), p))))))),
-    'Desc': values_1.VType,
-    'End': values_1.VDesc,
-    'Arg': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.VDesc), _ => values_1.VDesc)),
-    'Rec': values_1.VPiE('_', values_1.VType, _ => values_1.VPiE('_', values_1.VDesc, _ => values_1.VDesc)),
+    'IDesc': values_1.VPiE('_', values_1.VType, _ => values_1.VType),
+    'IEnd': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.videsc(I))),
+    'IArg': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
+    'IFArg': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.VType, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IRec': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IHRec': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => I), _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I))))),
     /*
-      (P : Desc -> *)
-      -> P End
-      -> ((A : *) -> (f : A -> Desc) -> ((a : A) -> P (f a)) -> P (Arg {A} f))
-      -> ((A : *) -> (d : Desc) -> P d -> P (HRec A d))
-      -> (d : Desc)
+      (I : *)
+      -> (P : IDesc I -> *)
+      -> ((i : I) -> P (IEnd i))
+      -> ((A : *) -> (f : A -> IDesc I) -> ((a : A) -> P (f a)) -> P (IArg A f))
+      -> ((A : *) -> (d : IDesc I) -> P d -> P (IFOArg A d))
+      -> ((i : I) -> (d : IDesc I) -> P d -> P (IRec i d))
+      -> ((A : *) -> (f : A -> I) -> (d : IDesc I) -> P d -> P (IHRec A f d))
+      -> (d : IDesc I)
       -> P d
     */
-    'elimDesc': values_1.VPiE('P', values_1.VPiE('_', values_1.VDesc, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.VEnd), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.VDesc), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VRec, A, d]))))), _ => values_1.VPiE('d', values_1.VDesc, d => values_1.vappE(P, d)))))),
-    'interp': values_1.VPiE('_', values_1.VDesc, _ => values_1.VPiE('_', values_1.VType, _ => values_1.VType)),
-    // (d : Desc) -> (X : *) -> (P : X -> *) -> (xs : interp d X) -> *
-    'All': values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('X', values_1.VType, X => values_1.VPiE('_', values_1.VPiE('_', X, _ => values_1.VType), _ => values_1.VPiE('_', values_1.vinterp(d, X), _ => values_1.VType)))),
-    // (d : Desc) -> (X : *) -> (P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> All d X P xs
-    'all': values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('X', values_1.VType, X => values_1.VPiE('P', values_1.VPiE('_', X, _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiE('x', X, x => values_1.vappE(P, x)), _ => values_1.VPiE('xs', values_1.vinterp(d, X), xs => values_1.vAll(d, X, P, xs)))))),
-    // Desc -> *
-    'Data': values_1.VPiE('_', values_1.VDesc, _ => values_1.VType),
-    // (d : Desc) -> interp d (Data d) -> Data d
-    'Con': values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('_', values_1.vinterp(d, values_1.vdata(d)), _ => values_1.vdata(d))),
+    'elimIDesc': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('P', values_1.VPiE('_', values_1.videsc(I), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.vappE(P, values_1.vappE(values_1.VIEnd, i))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIFArg, A, d]))))), _ => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIRec, i, d]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => I), f => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIHRec, A, f, d])))))), _ => values_1.VPiE('d', values_1.videsc(I), d => values_1.vappE(P, d))))))))),
+    // (I : *) -> IDesc I -> (I -> *) -> I -> *
+    'interpI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', values_1.VPiE('_', I, _ => values_1.VType), _ => values_1.VPiE('_', I, _ => values_1.VType)))),
+    // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *
+    'AllI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), _ => values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vinterpI(I, d, X, i), _ => values_1.VType)))))),
+    // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> ((i : I) -> (x : X i) -> P i x) -> (i : I) -> (xs : interpI I d X i) -> All I d X P i xs
+    'allI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('x', values_1.vappE(X, i), x => values_1.vappEs([P, i, x]))), _ => values_1.VPiE('i', I, i => values_1.VPiE('xs', values_1.vinterpI(I, d, X, i), xs => values_1.vAllI(I, d, X, P, i, xs)))))))),
+    // (I : *) -> IDesc I -> I -> *
+    'IData': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', I, _ => values_1.VType))),
+    // (I : *) -> (d : IDesc I) -> (i : I) -> interpI I d (IData I d) i -> IData I d i
+    'ICon': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vinterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), _ => values_1.vidata(I, d, i))))),
     /*
-      (d : Desc)
-      -> (P : Data d -> *)
+      (I : *)
+      -> (d : IDesc I)
+      -> (P : (i : I) -> IData I d i -> *)
       -> (
-        (y : interp d (Data d))
-        -> All d (Data d) P y
-        -> P (Con d y)
+        (i : I)
+        -> (y : interpI I d (IData I d) i)
+        -> AllI I d (IData I d) P i y
+        -> P i (ICon I d i y)
       )
-      -> (x : Data d)
-      -> P x
+      -> (i : I)
+      -> (x : IData I d i)
+      -> P i x
     */
-    'ind': values_1.VPiE('d', values_1.VDesc, d => values_1.VPiE('P', values_1.VPiE('_', values_1.vappE(values_1.VData, d), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiE('y', values_1.vinterp(d, values_1.vdata(d)), y => values_1.VPiE('_', values_1.vAll(d, values_1.vdata(d), P, y), _ => values_1.vappE(P, values_1.vcon(d, y)))), _ => values_1.VPiE('x', values_1.vappE(values_1.VData, d), x => values_1.vappE(P, x))))),
+    'indI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vidata(I, d, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('y', values_1.vinterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), y => values_1.VPiE('_', values_1.vAllI(I, d, values_1.vappEs([values_1.VIData, I, d]), P, i, y), _ => values_1.vappEs([P, i, values_1.vicon(I, d, i, y)])))), _ => values_1.VPiE('i', I, i => values_1.VPiE('x', values_1.vidata(I, d, i), x => values_1.vappEs([P, i, x]))))))),
 };
 exports.primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
 
@@ -1242,7 +1251,7 @@ COMMANDS
 let importMap = {};
 exports.initREPL = () => {
     importMap = {};
-    config_1.config.unfold.push('typeof', 'interp', 'All', 'all');
+    config_1.config.unfold.push('typeof', 'indIDesc', 'indDesc', 'interpI', 'interp', 'AllIDesc', 'allIDesc', 'AllDesc', 'allDesc');
 };
 exports.runREPL = (s_, cb) => {
     try {
@@ -2031,7 +2040,7 @@ exports.mapObj = (o, fn) => {
 },{"fs":19}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.vAll = exports.VAll = exports.vinterp = exports.VInterp = exports.vcon = exports.VCon = exports.vdata = exports.VData = exports.VRec = exports.VArg = exports.VEnd = exports.VDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
+exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.vAllI = exports.VAllI = exports.vinterpI = exports.VInterpI = exports.vicon = exports.VICon = exports.vidata = exports.VIData = exports.VIHRec = exports.VIRec = exports.VIFArg = exports.VIArg = exports.VIEnd = exports.videsc = exports.VIDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
 const config_1 = require("./config");
 const context_1 = require("./context");
 const core_1 = require("./core");
@@ -2072,18 +2081,21 @@ exports.VHEq = exports.VPrim('HEq');
 exports.VReflHEq = exports.VPrim('ReflHEq');
 exports.vheq = (a, b, x, y) => exports.vappE(exports.vappE(exports.vappE(exports.vappE(exports.VHEq, a), b), x), y);
 exports.vreflheq = (a, x) => exports.vappE(exports.vappE(exports.VReflHEq, a), x);
-exports.VDesc = exports.VPrim('Desc');
-exports.VEnd = exports.VPrim('End');
-exports.VArg = exports.VPrim('Arg');
-exports.VRec = exports.VPrim('Rec');
-exports.VData = exports.VPrim('Data');
-exports.vdata = (v) => exports.vappE(exports.VData, v);
-exports.VCon = exports.VPrim('Con');
-exports.vcon = (d, x) => exports.vappEs([exports.VCon, d, x]);
-exports.VInterp = exports.VPrim('interp');
-exports.vinterp = (d, x) => exports.velimprim('interp', d, [x]);
-exports.VAll = exports.VPrim('All');
-exports.vAll = (d, X, P, xs) => exports.velimprim('All', d, [X, P, xs]);
+exports.VIDesc = exports.VPrim('IDesc');
+exports.videsc = (i) => exports.vappE(exports.VIDesc, i);
+exports.VIEnd = exports.VPrim('IEnd');
+exports.VIArg = exports.VPrim('IArg');
+exports.VIFArg = exports.VPrim('IFArg');
+exports.VIRec = exports.VPrim('IRec');
+exports.VIHRec = exports.VPrim('IHRec');
+exports.VIData = exports.VPrim('IData');
+exports.vidata = (I, d, i) => exports.vappEs([exports.VIData, I, d, i]);
+exports.VICon = exports.VPrim('ICon');
+exports.vicon = (I, d, i, x) => exports.vappEs([exports.VICon, I, d, i, x]);
+exports.VInterpI = exports.VPrim('interpI');
+exports.vinterpI = (I, d, r, i) => exports.velimprim('interpI', d, [I, r, i]);
+exports.VAllI = exports.VPrim('AllI');
+exports.vAllI = (I, d, X, P, i, xs) => exports.velimprim('AllI', d, [I, X, P, i, xs]);
 exports.VPiE = (name, type, clos) => exports.VPi(core_1.Expl, name, type, clos);
 exports.VPiU = (name, type, clos) => exports.VPi(core_1.ImplUnif, name, type, clos);
 exports.VAbsE = (name, type, clos) => exports.VAbs(core_1.Expl, name, type, clos);
@@ -2134,82 +2146,129 @@ exports.velimprim = (name, v, args) => {
         if (exports.isVPrim('ReflHEq', v))
             return args[3];
     }
-    if (name === 'elimDesc') {
-        const [P, e, a, r] = args;
-        if (exports.isVPrim('End', v))
-            return e;
-        if (exports.isVPrim('Arg', v)) {
-            const [A, f] = exports.vprimArgs(v);
-            return exports.vappEs([a, A, f, exports.VAbsE('a', A, a => exports.velimprim('elimDesc', exports.vappE(f, a), [P, e, a, r]))]);
+    if (name === 'elimIDesc') {
+        const [, , end, arg, farg, rec, hrec] = args;
+        if (exports.isVPrim('IEnd', v)) {
+            // elimIDesc I P end arg farg rec hrec (IEnd I i) = end i
+            const [, i] = exports.vprimArgs(v);
+            return exports.vappE(end, i);
         }
-        if (exports.isVPrim('Rec', v)) {
-            const [A, d] = exports.vprimArgs(v);
-            return exports.vappEs([r, A, d, exports.velimprim('elimDesc', d, [P, e, a, r])]);
+        if (exports.isVPrim('IArg', v)) {
+            // elimIDesc I P end arg farg rec hrec (IArg I A f) = arg A f (\(a : A). elimIDesc ... (f a))
+            const [, A, f] = exports.vprimArgs(v);
+            return exports.vappEs([arg, A, f, exports.VAbsE('a', A, a => exports.velimprim('elimIDesc', exports.vappE(f, a), args))]);
+        }
+        if (exports.isVPrim('IFArg', v)) {
+            // elimIDesc I P end arg farg rec hrec (IFArg I A d) = farg A d (elimIDesc ... d)
+            const [, A, d] = exports.vprimArgs(v);
+            return exports.vappEs([farg, A, d, exports.velimprim('elimIDesc', d, args)]);
+        }
+        if (exports.isVPrim('IRec', v)) {
+            // elimIDesc I P end arg farg rec hrec (IRec I i d) = rec i d (elimIDesc ... d)
+            const [, i, d] = exports.vprimArgs(v);
+            return exports.vappEs([rec, i, d, exports.velimprim('elimIDesc', d, args)]);
+        }
+        if (exports.isVPrim('IHRec', v)) {
+            // elimIDesc I P end arg farg rec hrec (IHRec I A f d) = rec A f d (elimIDesc ... d)
+            const [, A, f, d] = exports.vprimArgs(v);
+            return exports.vappEs([hrec, A, f, d, exports.velimprim('elimIDesc', d, args)]);
         }
     }
-    if (name === 'interp') {
+    if (name === 'interpI') {
         /*
-        interp : Desc -> * -> *
-        interp End X = U
-        interp (Arg A f) X = (x : A) ** interp (f x) X
-        interp (Rec A d) X = (A -> X) ** interp d X
+        interp : (I : *) -> IDesc I -> (I -> *) -> I -> *
+        interp I (IEnd I i) X j = i = j
+        interp I (IArg I A f) X j = (x : A) ** interp I (f x) X j
+        interp I (IFArg I A d) X j = A ** interp I d X j
+        interp I (IRec I i d) X j = X i ** interp I d X j
+        interp I (IHRec I A f d) X j = ((a : A) -> X (f a)) ** interp I d X j
         */
-        const [X] = args;
-        if (exports.isVPrim('End', v))
+        const [I, X, j] = args;
+        if (exports.isVPrim('IEnd', v)) {
+            const [, i] = exports.vprimArgs(v);
+            return exports.vheq(I, I, i, j);
+        }
+        if (exports.isVPrim('IArg', v)) {
+            const [, A, f] = exports.vprimArgs(v);
+            return exports.VSigma('x', A, x => exports.velimprim('interpI', exports.vappE(f, x), args));
+        }
+        if (exports.isVPrim('IFArg', v)) {
+            const [, A, d] = exports.vprimArgs(v);
+            return exports.VSigma('_', A, _ => exports.velimprim('interpI', d, args));
+        }
+        if (exports.isVPrim('IRec', v)) {
+            const [, i, d] = exports.vprimArgs(v);
+            return exports.VSigma('_', exports.vappE(X, i), _ => exports.velimprim('interpI', d, args));
+        }
+        if (exports.isVPrim('IHRec', v)) {
+            const [, A, f, d] = exports.vprimArgs(v);
+            return exports.VSigma('_', exports.VPiE('a', A, a => exports.vappE(X, exports.vappE(f, a))), _ => exports.velimprim('interpI', d, args));
+        }
+    }
+    if (name === 'AllI') {
+        /*
+        AllI : (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *
+        AllI I (IEnd I i) X P j () = U
+        AllI I (IArg I A f) X P j (x, y) = AllI I (f x) X P j y
+        AllI I (IFArg I A d) X P j (_, y) = AllI I d X P j y
+        AllI I (IRec I i d) X P j (x, y) = P i x ** AllI I d X P j y
+        AllI I (IHRec I A fi d) X P j (f, y) = ((a : A) -> P (fi a) (f a)) ** AllI I d X P j y
+        */
+        const [I, X, P, i, xs] = args;
+        if (exports.isVPrim('IEnd', v))
             return exports.VU;
-        if (exports.isVPrim('Arg', v)) {
-            const [A, f] = exports.vprimArgs(v);
-            return exports.VSigma('x', A, x => exports.vinterp(exports.vappE(f, x), X));
+        if (exports.isVPrim('IArg', v)) {
+            const [, , f] = exports.vprimArgs(v);
+            return exports.velimprim('AllI', exports.vappE(f, exports.vproj('fst', xs)), [I, X, P, i, exports.vproj('snd', xs)]);
         }
-        if (exports.isVPrim('Rec', v)) {
-            const [A, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', exports.VPiE('_', A, _ => X), _ => exports.vinterp(d, X));
+        if (exports.isVPrim('IFArg', v)) {
+            const [, , d] = exports.vprimArgs(v);
+            return exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]);
         }
-    }
-    if (name === 'All') {
-        /*
-        All : (d : Desc) -> (X : *) -> (P : X -> *) -> (xs : interp d X) -> *
-        All End X P () = U
-        All (Arg A f) X P (x, y) = All (f x) X P y
-        All (Rec A d) X P (f, y) = ((x : A) -> P (f x)) ** All d X P y
-        */
-        const [X, P, xs] = args;
-        if (exports.isVPrim('End', v))
-            return exports.VU;
-        if (exports.isVPrim('Arg', v)) {
-            const f = exports.vprimArgs(v)[1];
-            return exports.velimprim('All', exports.vappE(f, exports.vproj('fst', xs)), [X, P, exports.vproj('snd', xs)]);
+        if (exports.isVPrim('IRec', v)) {
+            const [, i, d] = exports.vprimArgs(v);
+            return exports.VSigma('_', exports.vappEs([P, i, exports.vproj('fst', xs)]), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
         }
-        if (exports.isVPrim('Rec', v)) {
-            const [A, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', exports.VPiE('x', A, x => exports.vappE(P, exports.vappE(exports.vproj('fst', xs), x))), _ => exports.velimprim('All', d, [X, P, exports.vproj('snd', xs)]));
+        if (exports.isVPrim('IHRec', v)) {
+            const [, A, fi, d] = exports.vprimArgs(v);
+            return exports.VSigma('_', exports.VPiE('a', A, a => exports.vappEs([P, exports.vappE(fi, a), exports.vappE(exports.vproj('fst', xs), a)])), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
         }
     }
-    if (name === 'all') {
+    if (name === 'allI') {
         /*
-        all : (d : Desc) -> (X : *) -> (P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> All d X P xs
-        all End X P p () = ()
-        all (Arg A f) X P p (x, y) = all (f x) X P p y
-        all (Rec A d) X P p (f, y) = (\(h : A). p (f h), all d X P p y)
+        allI : (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> ((i : I) -> (x : X i) -> P i x) -> (i : I) -> (xs : interpI I d X i) -> All I d X P i xs
+        allI I (IEnd I i) X P p j () = ()
+        allI I (IArg I A f) X P p j (x, y) = all (f x) X P p y
+        allI I (IFArg I A d) X P p j (_, y) = all d X P p y
+        allI I (IRec A i d) X P p j (x, y) = (p i x, all d X P p y)
+        allI I (IHRec A fi d) X P p j (f, y) = (\(h : A). p (fi h) (f h), all d X P p y)
         */
-        const [X, P, p, xs] = args;
-        if (exports.isVPrim('End', v))
+        const [I, X, P, p, i, xs] = args;
+        if (exports.isVPrim('IEnd', v))
             return exports.VUnit;
-        if (exports.isVPrim('Arg', v)) {
-            const f = exports.vprimArgs(v)[1];
-            return exports.velimprim('all', exports.vappE(f, exports.vproj('fst', xs)), [X, P, p, exports.vproj('snd', xs)]);
+        if (exports.isVPrim('IArg', v)) {
+            const [, , f] = exports.vprimArgs(v);
+            return exports.velimprim('allI', exports.vappE(f, exports.vproj('fst', xs)), [I, X, P, p, i, exports.vproj('snd', xs)]);
         }
-        if (exports.isVPrim('Rec', v)) {
-            const [A, d] = exports.vprimArgs(v);
-            return exports.VPair(exports.VAbsE('h', A, h => exports.vappE(p, exports.vappE(exports.vproj('fst', xs), h))), exports.velimprim('all', d, [X, P, p, exports.vproj('snd', xs)]), exports.velimprim('All', v, [X, P, xs]));
+        if (exports.isVPrim('IFArg', v)) {
+            const [, , d] = exports.vprimArgs(v);
+            return exports.velimprim('allI', d, [I, X, P, p, i, exports.vproj('snd', xs)]);
+        }
+        if (exports.isVPrim('IRec', v)) {
+            const [, i, d] = exports.vprimArgs(v);
+            return exports.VPair(exports.vappEs([p, i, exports.vproj('fst', xs)]), exports.velimprim('allI', d, [I, X, P, p, i, exports.vproj('snd', xs)]), exports.velimprim('AllI', v, [I, X, P, i, xs]));
+        }
+        if (exports.isVPrim('IHRec', v)) {
+            const [, A, fi, d] = exports.vprimArgs(v);
+            return exports.VPair(exports.VAbsE('h', A, h => exports.vappEs([p, exports.vappE(fi, h), exports.vappE(exports.vproj('fst', xs), h)])), exports.velimprim('allI', d, [I, X, P, p, i, exports.vproj('snd', xs)]), exports.velimprim('AllI', v, [I, X, P, i, xs]));
         }
     }
-    if (name === 'ind') {
-        if (exports.isVPrim('Con', v)) {
-            const [d, P, i] = args;
-            const [c] = exports.vprimArgs(v);
-            // ind d P i (Con c) ~> i c (all d (Data d) P (\(x : Data d). ind d P i x) c)
-            return exports.vappEs([i, c, exports.velimprim('all', d, [exports.vappE(exports.VData, d), P, exports.VAbsE('x', exports.vappE(exports.VData, d), x => exports.velimprim('ind', x, [d, P, i])), c])]);
+    if (name === 'indI') {
+        if (exports.isVPrim('ICon', v)) {
+            const [I, d, P, h, i] = args;
+            const [, , , c] = exports.vprimArgs(v);
+            // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind d P i x) c)
+            return exports.vappEs([h, i, c, exports.velimprim('allI', d, [I, exports.vappEs([exports.VIData, I, d]), P, exports.VAbsE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i]))), c])]);
         }
     }
     if (v.tag === 'VNe')
@@ -2253,18 +2312,18 @@ exports.evaluate = (t, vs) => {
         if (t.name === 'elimHEq') {
             return exports.VAbsE('A', exports.VType, A => exports.VAbsE('a', A, a => exports.VAbsE('P', exports.VPiE('b', A, b => exports.VPiE('_', exports.vheq(A, A, a, b), _ => exports.VType)), P => exports.VAbsE('h', exports.vappE(exports.vappE(P, a), exports.vreflheq(A, a)), h => exports.VAbsE('b', A, b => exports.VAbsE('p', exports.vheq(A, A, a, b), p => exports.velimprim('elimHEq', p, [A, a, P, h, b])))))));
         }
-        if (t.name === 'elimDesc') {
-            return exports.VAbsE('P', exports.VPiE('_', exports.VDesc, _ => exports.VType), P => exports.VAbsE('e', exports.vappE(P, exports.VEnd), e => exports.VAbsE('a', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => exports.VDesc), f => exports.VPiE('_', exports.VPiE('a', A, a => exports.vappE(P, exports.vappE(f, a))), _ => exports.vappE(P, exports.vappEs([exports.VArg, A, f]))))), a => exports.VAbsE('r', exports.VPiE('A', exports.VType, A => exports.VPiE('d', exports.VDesc, d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VRec, A, d]))))), r => exports.VAbsE('d', exports.VDesc, d => exports.velimprim('elimDesc', d, [P, e, a, r]))))));
+        if (t.name === 'elimIDesc') {
+            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('P', exports.VPiE('_', exports.videsc(I), _ => exports.VType), P => exports.VAbsE('end', exports.VPiE('i', I, i => exports.vappE(P, exports.vappE(exports.VIEnd, i))), end => exports.VAbsE('arg', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => exports.videsc(I)), f => exports.VPiE('_', exports.VPiE('a', A, a => exports.vappE(P, exports.vappE(f, a))), _ => exports.vappE(P, exports.vappEs([exports.VIArg, A, f]))))), arg => exports.VAbsE('farg', exports.VPiE('A', exports.VType, A => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIFArg, A, d]))))), farg => exports.VAbsE('rec', exports.VPiE('i', I, i => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIRec, i, d]))))), rec => exports.VAbsE('hrec', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => I), f => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIHRec, A, f, d])))))), hrec => exports.VAbsE('d', exports.videsc(I), d => exports.velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
         }
-        if (t.name === 'interp')
-            return exports.VAbsE('d', exports.VDesc, d => exports.VAbsE('X', exports.VType, X => exports.velimprim('interp', d, [X])));
-        if (t.name === 'All')
-            return exports.VAbsE('d', exports.VDesc, d => exports.VAbsE('X', exports.VType, X => exports.VAbsE('P', exports.VPiE('_', X, _ => exports.VType), P => exports.VAbsE('xs', exports.vinterp(d, X), xs => exports.velimprim('All', d, [X, P, xs])))));
-        if (t.name === 'all') {
-            return exports.VAbsE('d', exports.VDesc, d => exports.VAbsE('X', exports.VType, X => exports.VAbsE('P', exports.VPiE('_', X, _ => exports.VType), P => exports.VAbsE('p', exports.VPiE('x', X, x => exports.vappE(P, x)), p => exports.VAbsE('xs', exports.vinterp(d, X), xs => exports.velimprim('all', d, [X, P, p, xs]))))));
+        if (t.name === 'interpI')
+            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('r', exports.VPiE('_', I, _ => exports.VType), r => exports.VAbsE('i', I, i => exports.velimprim('interpI', d, [I, r, i])))));
+        if (t.name === 'AllI')
+            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('X', exports.VPiE('_', I, _ => exports.VType), X => exports.VAbsE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vappE(X, i), _ => exports.VType)), P => exports.VAbsE('i', I, i => exports.VAbsE('xs', exports.vinterpI(I, d, X, i), xs => exports.velimprim('AllI', d, [I, X, P, i, xs])))))));
+        if (t.name === 'allI') {
+            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('X', exports.VPiE('_', I, _ => exports.VType), X => exports.VAbsE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vappE(X, i), _ => exports.VType)), P => exports.VAbsE('p', exports.VPiE('i', I, i => exports.VPiE('x', exports.vappE(X, i), x => exports.vappEs([P, i, x]))), p => exports.VAbsE('i', I, i => exports.VAbsE('xs', exports.vinterpI(I, d, X, i), xs => exports.velimprim('allI', d, [I, X, P, p, i, xs]))))))));
         }
-        if (t.name === 'ind') {
-            return exports.VAbsE('d', exports.VDesc, d => exports.VAbsE('P', exports.VPiE('_', exports.vappE(exports.VData, d), _ => exports.VType), P => exports.VAbsE('i', exports.VPiE('y', exports.vinterp(d, exports.vdata(d)), y => exports.VPiE('_', exports.vAll(d, exports.vdata(d), P, y), _ => exports.vappE(P, exports.vcon(d, y)))), i => exports.VAbsE('x', exports.vappE(exports.VData, d), x => exports.velimprim('ind', x, [d, P, i])))));
+        if (t.name === 'indI') {
+            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vidata(I, d, i), _ => exports.VType)), P => exports.VAbsE('h', exports.VPiE('i', I, i => exports.VPiE('y', exports.vinterpI(I, d, exports.vappEs([exports.VIData, I, d]), i), y => exports.VPiE('_', exports.vAllI(I, d, exports.vappEs([exports.VIData, I,]), P, i, y), _ => exports.vappEs([P, i, exports.vicon(I, d, i, y)])))), h => exports.VAbsE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i])))))));
         }
         return exports.VPrim(t.name);
     }
@@ -2285,8 +2344,10 @@ const quoteElim = (t, e, k, full) => {
     if (e.tag === 'EProj')
         return core_1.Proj(e.proj, t);
     if (e.tag === 'EPrim') {
-        if (e.name === 'interp' || e.name === 'All' || e.name === 'all')
-            return e.args.reduce((x, y) => core_1.AppE(x, exports.quote(y, k, full)), core_1.AppE(core_1.Prim(e.name), t));
+        if (e.name === 'interpI' || e.name === 'AllI' || e.name === 'allI') {
+            const first = exports.quote(e.args[0], k, full);
+            return e.args.slice(1).reduce((x, y) => core_1.AppE(x, exports.quote(y, k, full)), core_1.AppE(core_1.AppE(core_1.Prim(e.name), first), t));
+        }
         return core_1.AppE(e.args.reduce((x, y) => core_1.AppE(x, exports.quote(y, k, full)), core_1.Prim(e.name)), t);
     }
     return e;

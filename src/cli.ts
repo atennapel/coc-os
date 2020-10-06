@@ -35,7 +35,7 @@ if (process.argv[2]) {
   process.stdin.setEncoding('utf8');
   function _input() {
     _readline.question('> ', function(_i: string) {
-      runREPL(_i, (s: string, e?: boolean) => {
+      runREPL(_i, (s: string, _e?: boolean) => {
         console.log(s);
         setImmediate(_input, 0);
       });

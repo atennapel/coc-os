@@ -350,7 +350,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     const last1 = args[args.length - 1];
     const last2 = args[args.length - 2];
     const lastitem = Pair(last2[0], last1[0]);
-    return args.slice(0, -2).reduceRight((x, [y, p]) => Pair(y, x), lastitem);
+    return args.slice(0, -2).reduceRight((x, [y, _p]) => Pair(y, x), lastitem);
   }
   const js = ts.findIndex(x => isName(x, '**'));
   if (js >= 0) {
@@ -369,7 +369,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     } else body = [exprs(s[s.length - 1], '('), false];
     const last = args[args.length - 1];
     const lastitem = Sigma(last[0], last[2], body[0]);
-    return args.slice(0, -1).reduceRight((x, [name, impl, ty]) => Sigma(name, ty, x), lastitem);
+    return args.slice(0, -1).reduceRight((x, [name, _impl, ty]) => Sigma(name, ty, x), lastitem);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];

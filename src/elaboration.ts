@@ -148,7 +148,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   }
   if (tm.tag === 'App') {
     const [left, ty] = synth(local, tm.left);
-    const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right);
+    const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right, tm);
     return [App(foldl((f, a) => App(f, C.ImplUnif, a), left, ms), tm.mode, right), rty];
   }
   if (tm.tag === 'Abs') {
@@ -242,7 +242,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   return terr(`unable to synth ${show(tm)}`);
 };
 
-const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term): [Term, Val, List<Term>] => {
+const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): [Term, Val, List<Term>] => {
   log(() => `synthapp ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
   const fty = force(ty);
   if (fty.tag === 'VPi' && fty.mode === mode) {
@@ -253,7 +253,7 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term): [Term, Val, Li
   if (fty.tag === 'VPi' && fty.mode === C.ImplUnif && mode === C.Expl) {
     const m = newMeta(local, fty.type);
     const vm = evaluate(m, local.vs);
-    const [rest, rt, l] = synthapp(local, vinst(fty, vm), mode, tm);
+    const [rest, rt, l] = synthapp(local, vinst(fty, vm), mode, tm, full);
     return [rest, rt, Cons(m, l)];
   }
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
@@ -262,9 +262,9 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term): [Term, Val, Li
     const b = freshMeta(mty);
     const pi = evaluate(Pi(mode, '_', quote(VNe(HMeta(a), ty.spine), local.index), quote(VNe(HMeta(b), ty.spine), local.index + 1)), local.vs);
     unify(local.index, ty, pi);
-    return synthapp(local, pi, mode, tm);
+    return synthapp(local, pi, mode, tm, full);
   }
-  return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
+  return terr(`not a correct pi type in synthapp in ${show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
 };
 
 const tryToSolveBlockedProblems = (): void => {
