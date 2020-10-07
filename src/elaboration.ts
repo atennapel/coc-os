@@ -2,12 +2,12 @@ import { log } from './config';
 import { Abs, App, Let, Meta, Pi, Term, Var, Prim, Sigma, Pair, Proj, Global, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
-import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, zipWithIndex } from './utils/list';
+import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, toArray, zipWith, zipWithIndex } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, vproj, VType, VVar, zonk } from './values';
 import * as S from './surface';
 import { show } from './surface';
-import { allProblems, amountOfProblems, contextSolved, freshMeta, getMeta, resetContext } from './context';
+import { allProblems, amountOfProblems, contextSolved, freshMeta, getHoleEntries, getMeta, registerHole, resetContext } from './context';
 import { unify } from './unification';
 import { primType } from './primitives';
 import { getGlobal, hasGlobal, setGlobal } from './globals';
@@ -47,6 +47,8 @@ const localEmpty: Local = Local(0, Nil, Nil, Nil, Nil);
 const localExtend = (local: Local, name: Name, ty: Val, mode: Mode, bound: boolean = true, inserted: boolean = false, val: Val = VVar(local.index)): Local =>
   Local(local.index + 1, Cons(name, local.ns), inserted ? local.nsSurface: Cons(name, local.nsSurface), Cons(EntryT(ty, bound, mode, inserted), local.ts), Cons(val, local.vs));
 
+export type HoleInfo = [Val, Val, Local];
+
 const showVal = (local: Local, val: Val): string => S.showValZ(val, local.vs, local.index, local.ns);
 
 const selectName = (a: Name, b: Name): Name => a === '_' ? b : a;
@@ -81,6 +83,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
   log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   if (tm.tag === 'Hole') {
     const x = newMeta(local, ty);
+    if (tm.name) registerHole(tm.name, [evaluate(x, local.vs), ty, local]);
     return x;
   }
   const fty = force(ty);
@@ -237,6 +240,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   if (tm.tag === 'Hole') {
     const t = newMeta(local, VType);
     const vt = evaluate(newMeta(local, evaluate(t, local.vs)), local.vs);
+    if (tm.name) registerHole(tm.name, [evaluate(t, local.vs), vt, local]);
     return [t, vt];
   }
   return terr(`unable to synth ${show(tm)}`);
@@ -293,6 +297,8 @@ export const elaborate = (t: S.Term): [Term, Term] => {
   const ztm = zonk(tm);
   const zty = zonk(quote(ty, 0));
 
+  showHoles(ztm, zty);  
+
   if (!contextSolved())
     return terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
   return [ztm, zty];
@@ -327,4 +333,20 @@ export const elaborateDefs = (ds: S.Def[], allowRedefinition: boolean = false): 
     }
   }
   return xs;
+};
+
+const showValSZ = (local: Local, v: Val) =>
+  S.showCore(zonk(quote(v, local.index, false), local.vs, local.index, false), local.ns);
+
+const showHoles = (tm: Term, ty: Term) => {
+  const holeprops = getHoleEntries();
+  if (holeprops.length === 0) return;
+  const strtype = S.showCore(ty);
+  const strterm = S.showCore(tm);
+  const str = holeprops.map(([x, [t, v, local]]) => {
+    const all = zipWith(([x, v], { bound: def, type: ty, inserted, mode }) => [x, v, def, ty, inserted, mode] as [Name, Val, boolean, Val, boolean, Mode], zipWith((x, v) => [x, v] as [Name, Val], local.ns, local.vs), local.ts);
+    const allstr = toArray(all, ([x, v, b, t, _, p]) => `${p !== C.Expl ? `{${x}}` : x} : ${showValSZ(local, t)}${b ? '' : ` = ${showValSZ(local, v)}`}`).join('\n');
+    return `\n_${x} : ${showValSZ(local, v)} = ${showValSZ(local, t)}\nlocal:\n${allstr}\n`;
+  }).join('\n');
+  return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
 };

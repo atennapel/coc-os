@@ -197,7 +197,10 @@ const expr = (t: Token): [Term, boolean] => {
   if (t.tag === 'Name') {
     const x = t.name;
     if (x === '*') return [Type, false];
-    if (x === '_') return [Hole, false];
+    if (x.startsWith('_')) {
+      const rest = x.slice(1);
+      return [Hole(rest.length > 0 ? rest : null), false];
+    }
     if (x[0] === '%') {
       const rest = x.slice(1);
       if (isPrimName(rest)) return [Prim(rest), false];

@@ -6,7 +6,7 @@ import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil,
 import { hasDuplicates, impossible, terr, tryT } from './utils/utils';
 import { Elim, force, Spine, Val, vapp, vproj, vinst, VVar, VMeta, quote, evaluate, showVal, isVPrim } from './values';
 import * as V from './values';
-import { discardMetas, getMeta, isMetaSolved, markMetas, postpone, problemsBlockedBy, solveMeta, undoMetas, Unsolved } from './context';
+import { discardContext, getMeta, isMetaSolved, markContext, postpone, problemsBlockedBy, solveMeta, undoContext, Unsolved } from './context';
 import { forceLazy } from './utils/lazy';
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
@@ -76,12 +76,12 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     return solve(k, b.head.index, b.spine, a);
 
   if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.head === b.head && length(a.args) === length(b.args)) {
-    markMetas();
+    markContext();
     return tryT(() => {
       zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
-      discardMetas();
+      discardContext();
     }, () => {
-      undoMetas();
+      undoContext();
       unify(k, forceLazy(a.val), forceLazy(b.val));
     });
   }

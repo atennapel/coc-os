@@ -20,6 +20,7 @@ Currently done:
 - type-in-type
 - indexed descriptions ala "Gentle Art of Levitation"
 - generic constructors from "Generic Constructors and Eliminators from Descriptions"
+- named holes (_name)
 
 Not yet done:
 - generic eliminators from "Generic Constructors and Eliminators from Descriptions"
@@ -36,7 +37,6 @@ Future work:
 
 ```
 TODO:
-- add named holes
 - implement induction nats and lists
 - implement generic elimination
 - allow meta as head of glued value

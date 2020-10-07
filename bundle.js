@@ -19,29 +19,32 @@ exports.log = (msg) => {
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.contextSolved = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.undoMetas = exports.discardMetas = exports.markMetas = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
+exports.getHoleEntries = exports.getHoles = exports.registerHole = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.contextSolved = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.undoContext = exports.discardContext = exports.markContext = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
 const utils_1 = require("./utils/utils");
 exports.Unsolved = (type) => ({ tag: 'Unsolved', type });
 exports.Solved = (val, type) => ({ tag: 'Solved', val, type });
 const Blocked = (k, a, b, blockedBy) => ({ k, a, b, blockedBy });
-const Context = (metas = [], blocked = []) => ({ metas, blocked });
+const Context = (metas = [], blocked = [], holes = {}) => ({ metas, blocked, holes });
 let context = Context();
 let contextStack = [];
+const cloneContext = (ctx) => Context(ctx.metas.slice(), ctx.blocked.slice(), Object.assign({}, ctx.holes));
 exports.resetContext = () => {
     context = Context();
 };
-exports.markMetas = () => {
+exports.markContext = () => {
     contextStack.push(context);
+    context = cloneContext(context);
 };
-exports.discardMetas = () => {
+exports.discardContext = () => {
     contextStack.pop();
 };
-exports.undoMetas = () => {
+exports.undoContext = () => {
     const ctx = contextStack.pop();
     if (!ctx)
         return utils_1.impossible(`tried to undoMetas with empty stack`);
     context = ctx;
 };
+// metas
 exports.freshMeta = (type) => {
     const id = context.metas.length;
     context.metas[id] = exports.Unsolved(type);
@@ -60,6 +63,8 @@ exports.solveMeta = (id, val) => {
         return utils_1.impossible(`meta already solved: ?${id}`);
     context.metas[id] = exports.Solved(val, s.type);
 };
+exports.contextSolved = () => context.metas.every(s => s.tag === 'Solved') && context.blocked.length === 0;
+// postponements
 exports.postpone = (k, a, b, blockedBy) => {
     context.blocked.push(Blocked(k, a, b, blockedBy));
 };
@@ -83,7 +88,14 @@ exports.allProblems = () => {
     return blocked;
 };
 exports.amountOfProblems = () => context.blocked.length;
-exports.contextSolved = () => context.metas.every(s => s.tag === 'Solved') && context.blocked.length === 0;
+// holes
+exports.registerHole = (name, info) => {
+    if (context.holes[name])
+        return utils_1.terr(`named hole used more than once: _${name}`);
+    context.holes[name] = info;
+};
+exports.getHoles = () => context.holes;
+exports.getHoleEntries = () => Object.entries(exports.getHoles());
 
 },{"./utils/utils":16}],3:[function(require,module,exports){
 "use strict";
@@ -325,6 +337,8 @@ const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
     if (tm.tag === 'Hole') {
         const x = newMeta(local, ty);
+        if (tm.name)
+            context_1.registerHole(tm.name, [values_1.evaluate(x, local.vs), ty, local]);
         return x;
     }
     const fty = values_1.force(ty);
@@ -493,6 +507,8 @@ const synth = (local, tm) => {
     if (tm.tag === 'Hole') {
         const t = newMeta(local, values_1.VType);
         const vt = values_1.evaluate(newMeta(local, values_1.evaluate(t, local.vs)), local.vs);
+        if (tm.name)
+            context_1.registerHole(tm.name, [values_1.evaluate(t, local.vs), vt, local]);
         return [t, vt];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
@@ -544,6 +560,7 @@ exports.elaborate = (t) => {
     tryToSolveBlockedProblems();
     const ztm = values_1.zonk(tm);
     const zty = values_1.zonk(values_1.quote(ty, 0));
+    showHoles(ztm, zty);
     if (!context_1.contextSolved())
         return utils_1.terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
     return [ztm, zty];
@@ -578,6 +595,20 @@ exports.elaborateDefs = (ds, allowRedefinition = false) => {
         }
     }
     return xs;
+};
+const showValSZ = (local, v) => S.showCore(values_1.zonk(values_1.quote(v, local.index, false), local.vs, local.index, false), local.ns);
+const showHoles = (tm, ty) => {
+    const holeprops = context_1.getHoleEntries();
+    if (holeprops.length === 0)
+        return;
+    const strtype = S.showCore(ty);
+    const strterm = S.showCore(tm);
+    const str = holeprops.map(([x, [t, v, local]]) => {
+        const all = list_1.zipWith(([x, v], { bound: def, type: ty, inserted, mode }) => [x, v, def, ty, inserted, mode], list_1.zipWith((x, v) => [x, v], local.ns, local.vs), local.ts);
+        const allstr = list_1.toArray(all, ([x, v, b, t, _, p]) => `${p !== C.Expl ? `{${x}}` : x} : ${showValSZ(local, t)}${b ? '' : ` = ${showValSZ(local, v)}`}`).join('\n');
+        return `\n_${x} : ${showValSZ(local, v)} = ${showValSZ(local, t)}\nlocal:\n${allstr}\n`;
+    }).join('\n');
+    return utils_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
 };
 
 },{"./config":1,"./context":2,"./core":4,"./globals":6,"./primitives":9,"./surface":11,"./unification":13,"./utils/list":15,"./utils/utils":16,"./values":17}],6:[function(require,module,exports){
@@ -843,8 +874,10 @@ const expr = (t) => {
         const x = t.name;
         if (x === '*')
             return [surface_1.Type, false];
-        if (x === '_')
-            return [surface_1.Hole, false];
+        if (x.startsWith('_')) {
+            const rest = x.slice(1);
+            return [surface_1.Hole(rest.length > 0 ? rest : null), false];
+        }
         if (x[0] === '%') {
             const rest = x.slice(1);
             if (core_1.isPrimName(rest))
@@ -1390,7 +1423,7 @@ exports.Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body })
 exports.Pi = (mode, name, type, body) => ({ tag: 'Pi', mode, name, type, body });
 exports.Sigma = (name, type, body) => ({ tag: 'Sigma', name, type, body });
 exports.Meta = (index) => ({ tag: 'Meta', index });
-exports.Hole = { tag: 'Hole' };
+exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Type = exports.Prim('Type');
 exports.flattenApp = (t) => {
     const r = [];
@@ -1443,7 +1476,7 @@ exports.show = (t) => {
     if (t.tag === 'Meta')
         return `?${t.index}`;
     if (t.tag === 'Hole')
-        return '_';
+        return `_${t.name || ''}`;
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
         return `${showP(!isSimple(f), f)} ${as.map(([m, t], i) => m === C.ImplUnif ? `{${exports.show(t)}}` : showP(!isSimple(t) && !(t.tag === 'Abs' && i >= as.length), t)).join(' ')}`;
@@ -1705,12 +1738,12 @@ exports.unify = (k, a_, b_) => {
     if (b.tag === 'VNe' && b.head.tag === 'HMeta')
         return solve(k, b.head.index, b.spine, a);
     if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.head === b.head && list_1.length(a.args) === list_1.length(b.args)) {
-        context_1.markMetas();
+        context_1.markContext();
         return utils_1.tryT(() => {
             list_1.zipWithR_((x, y) => unifyElim(k, x, y, a, b), a.args, b.args);
-            context_1.discardMetas();
+            context_1.discardContext();
         }, () => {
-            context_1.undoMetas();
+            context_1.undoContext();
             exports.unify(k, lazy_1.forceLazy(a.val), lazy_1.forceLazy(b.val));
         });
     }

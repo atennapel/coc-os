@@ -35,8 +35,8 @@ export type Sigma = { tag: 'Sigma', name: Name, type: Term, body: Term };
 export const Sigma = (name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', name, type, body });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
-export type Hole = { tag: 'Hole' };
-export const Hole: Hole = { tag: 'Hole' };
+export type Hole = { tag: 'Hole', name: Name | null };
+export const Hole = (name: Name | null): Hole => ({ tag: 'Hole', name });
 
 export const Type = Prim('Type');
 
@@ -89,7 +89,7 @@ export const show = (t: Term): string => {
   if (t.tag === 'Var') return t.name;
   if (t.tag === 'Prim') return t.name === 'Type' ? '*' : `%${t.name}`;
   if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'Hole') return '_';
+  if (t.tag === 'Hole') return `_${t.name || ''}`;
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
     return `${showP(!isSimple(f), f)} ${as.map(([m, t], i) =>

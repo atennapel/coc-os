@@ -1,6 +1,7 @@
-import { Ix } from './names';
-import { impossible } from './utils/utils';
+import { Ix, Name } from './names';
+import { impossible, terr } from './utils/utils';
 import { Val } from './values';
+import { HoleInfo } from './elaboration';
 
 export type Solution = Unsolved | Solved;
 
@@ -13,29 +14,37 @@ export const Solved = (val: Val, type: Val): Solved => ({ tag: 'Solved', val, ty
 type Blocked = { k: Ix, a: Val, b: Val, blockedBy: Ix[] };
 const Blocked = (k: Ix, a: Val, b: Val, blockedBy: Ix[]) => ({ k, a, b, blockedBy });
 
+// holes
+type Holes = { [key: string]: HoleInfo };
+
 // context is mutable
-type Context = { metas: Solution[], blocked: Blocked[] };
-const Context = (metas: Solution[] = [], blocked: Blocked[] = []) => ({ metas, blocked });
+type Context = { metas: Solution[], blocked: Blocked[], holes: Holes };
+const Context = (metas: Solution[] = [], blocked: Blocked[] = [], holes: Holes = {}) => ({ metas, blocked, holes });
 
 let context: Context = Context();
 let contextStack: Context[] = [];
+
+const cloneContext = (ctx: Context): Context =>
+  Context(ctx.metas.slice(), ctx.blocked.slice(), Object.assign({}, ctx.holes));
 
 export const resetContext = () => {
   context = Context();
 };
 
-export const markMetas = () => {
+export const markContext = () => {
   contextStack.push(context);
+  context = cloneContext(context);
 };
-export const discardMetas = () => {
+export const discardContext = () => {
   contextStack.pop();
 };
-export const undoMetas = (): void => {
+export const undoContext = (): void => {
   const ctx = contextStack.pop();
   if (!ctx) return impossible(`tried to undoMetas with empty stack`);
   context = ctx;
 };
 
+// metas
 export const freshMeta = (type: Val): Ix => {
   const id = context.metas.length;
   context.metas[id] = Unsolved(type);
@@ -56,6 +65,10 @@ export const solveMeta = (id: Ix, val: Val): void => {
   context.metas[id] = Solved(val, s.type);
 };
 
+export const contextSolved = (): boolean =>
+  context.metas.every(s => s.tag === 'Solved') && context.blocked.length === 0;
+
+// postponements
 export const postpone = (k: Ix, a: Val, b: Val, blockedBy: Ix[]): void => {
   context.blocked.push(Blocked(k, a, b, blockedBy));
 };
@@ -81,5 +94,12 @@ export const allProblems = (): Blocked[] => {
 
 export const amountOfProblems = (): number => context.blocked.length;
 
-export const contextSolved = (): boolean =>
-  context.metas.every(s => s.tag === 'Solved') && context.blocked.length === 0;
+// holes
+export const registerHole = (name: Name, info: HoleInfo): void => {
+  if (context.holes[name]) return terr(`named hole used more than once: _${name}`);
+  context.holes[name] = info;
+};
+
+export const getHoles = (): Holes => context.holes;
+
+export const getHoleEntries = (): [Name, HoleInfo][] => Object.entries(getHoles());
