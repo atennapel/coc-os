@@ -1,4 +1,5 @@
 import lib/desc.p
+import lib/generic.p
 import lib/unit.p
 import lib/eq.p
 import lib/bool.p
@@ -6,8 +7,8 @@ import lib/sigma.p
 
 def NatD : Desc = SumD End (Rec End)
 def Nat : * = Data NatD
-def Z : Nat = Con {NatD} (True, Refl)
-def S : Nat -> Nat = \n. Con {NatD} (False, n, Refl)
+def Z : Nat = inj NatD True
+def S : Nat -> Nat = inj NatD False
 
 def indNat
   : {P : Nat -> *}

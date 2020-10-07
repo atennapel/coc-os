@@ -19,8 +19,10 @@ Currently done:
 - booleans with an induction primitive
 - type-in-type
 - indexed descriptions ala "Gentle Art of Levitation"
+- generic constructors from "Generic Constructors and Eliminators from Descriptions"
 
 Not yet done:
+- generic eliminators from "Generic Constructors and Eliminators from Descriptions"
 - explicit erasure annotations
 - CEK machine for erased terms
 - hash-based content-addressed references
@@ -36,7 +38,7 @@ Future work:
 TODO:
 - add named holes
 - implement induction nats and lists
-- implement generic constructors and elimination
+- implement generic elimination
 - allow meta as head of glued value
 - glued lets
 - optimize importing
@@ -45,4 +47,8 @@ TODO:
 - implement instance search
 - specialize meta when checking pair
 - support some impredicative instantiation
+
+QUESTIONS:
+- how to levitate in my core theory?
+- is a first-order Arg description useful? (IFArg)
 ```
