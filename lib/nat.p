@@ -16,9 +16,7 @@ def indNat
     -> ((m : Nat) -> P m -> P (S m))
     -> (n : Nat)
     -> P n
-  = \{P} z s n. ind {NatD} {P}
-      (\y. indBool {\b. (d : if b (Eq () ()) (Nat ** (Eq () ()))) -> AllDesc NatD Nat P (b, d) -> P (Con {NatD} (b, d))} (\_ _. z) (\m p. s m.fst p.fst) y.fst y.snd)
-      n
+  = \{P} z s n. elimBool (\b. if b End (Rec End)) {P} z s n
 
 def paraNat : {t : *} -> Nat -> t -> (Nat -> t -> t) -> t = \{t} n z s. indNat {\_. t} z s n
 def cataNat : {t : *} -> Nat -> t -> (t -> t) -> t = \{t} n z s. paraNat {t} n z (\_. s)

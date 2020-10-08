@@ -53,18 +53,28 @@ const showVal = (local: Local, val: Val): string => S.showValZ(val, local.vs, lo
 
 const selectName = (a: Name, b: Name): Name => a === '_' ? b : a;
 
-const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix): Term =>
-  l.tag === 'Cons' ? Pi(l.head[2].mode, l.head[1], quote(l.head[2].type, k), constructMetaType(l.tail, b, k + 1)) : quote(b, k);
+const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix = 0, skipped: Ix = 0): Term => {
+  if (l.tag === 'Cons') {
+    const [, x, e] = l.head;
+    if (!e.bound) return constructMetaType(l.tail, b, k + 1, skipped + 1);
+    const q = quote(e.type, k);
+    const sq = C.shift(-skipped, k - skipped, q);
+    return Pi(e.mode, x, sq, constructMetaType(l.tail, b, k + 1, skipped));
+  }
+  return C.shift(-skipped, k - skipped, quote(b, k));
+};
 const newMeta = (local: Local, ty: Val): Term => {
+  log(() => `new meta return type: ${showVal(local, ty)}`);
   const zipped = zipWithIndex((x, y, i) => [i, x, y] as [Ix, Name, EntryT], local.ns, local.ts);
   const boundOnly = filter(zipped, ([_, __, ty]) => ty.bound);
-  log(() => `new meta spine: ${listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
+  log(() => `new meta spine (${local.index}, ${length(boundOnly)}): ${listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
   const spine: List<[Mode, Term]> = map(boundOnly, x => [x[2].mode, Var(x[0])] as [Mode, Term]);
   log(() => `new meta spine: ${listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
   log(() => `${local.index}`);
-  const mty = constructMetaType(reverse(boundOnly), ty, local.index - length(spine));
+  const mty = constructMetaType(reverse(zipped), ty);
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);
+  log(() => `new meta type val: ${S.showVal(vmty)}`);
   return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty)) as Term, spine);
 };
 
@@ -104,20 +114,20 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     return Pair(fst, snd, quote(ty, local.index));
   }
   if (tm.tag === 'Let') {
-    let type: Term;
-    let ty: Val;
+    let vtype: Term;
+    let vty: Val;
     let val: Term;
     if (tm.type) {
-      type = check(local, tm.type, VType);
-      ty = evaluate(type, local.vs);
+      vtype = check(local, tm.type, VType);
+      vty = evaluate(vtype, local.vs);
       val = check(local, tm.val, ty);
     } else {
-      [val, ty] = synth(local, tm.val);
-      type = quote(ty, local.index);
+      [val, vty] = synth(local, tm.val);
+      vtype = quote(ty, local.index);
     }
     const v = evaluate(val, local.vs);
-    const body = check(localExtend(local, tm.name, ty, C.Expl, false, false, v), tm.body, ty);
-    return Let(tm.name, type, val, body);
+    const body = check(localExtend(local, tm.name, vty, C.Expl, false, false, v), tm.body, ty);
+    return Let(tm.name, vtype, val, body);
   }
   const [term, ty2] = synth(local, tm);
   const [ty2inst, ms] = inst(local, ty2);
@@ -271,10 +281,12 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): 
   return terr(`not a correct pi type in synthapp in ${show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
 };
 
+const MAX_SOLVING_COUNT = 1000;
 const tryToSolveBlockedProblems = (): void => {
   if (amountOfProblems() > 0) {
     let changed = true;
-    while (changed) {
+    let count = 0;
+    while (changed && count++ < MAX_SOLVING_COUNT) {
       const blocked = allProblems();
       changed = false;
       for (let i = 0, l = blocked.length; i < l; i++) {

@@ -214,8 +214,8 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
       return velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]);
     }
     if (isVPrim('IRec', v)) {
-      const [, i, d] = vprimArgs(v);
-      return VSigma('_', vappEs([P, i, vproj('fst', xs)]), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
+      const [, j, d] = vprimArgs(v);
+      return VSigma('_', vappEs([P, j, vproj('fst', xs)]), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
     }
     if (isVPrim('IHRec', v)) {
       const [, A, fi, d] = vprimArgs(v);

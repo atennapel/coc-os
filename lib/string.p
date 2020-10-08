@@ -1,4 +1,3 @@
--- will not typecheck yet
 import lib/unit.p
 import lib/nat.p
 import lib/bool.p
@@ -14,7 +13,7 @@ def show : {t : *} -> Show t -> t -> Showable = \x. x
 
 def instanceShowString : Show String = \s. s
 def instanceShowNatUnary : Show Nat = \n. cataNat n (Nil {Nat}) (Cons 49)
-def instanceShowUnit : Show Unit* = \_. "()"
+def instanceShowUnit : Show U = \_. "()"
 def instanceShowBool : Show Bool = \b. if b "True" "False"
 def instanceShowList
   : {t : *} -> Show t -> Show (List t)

@@ -190,7 +190,7 @@ exports.conv = (k, a_, b_) => {
 },{"./config":1,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16,"./values":17}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.eq = exports.show = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
+exports.shift = exports.eq = exports.show = exports.flattenPi = exports.flattenApp = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
 exports.Expl = 'Expl';
 exports.ImplUnif = 'ImplUnif';
 exports.Var = (index) => ({ tag: 'Var', index });
@@ -220,6 +220,22 @@ exports.AbsU = (name, type, body) => exports.Abs(exports.ImplUnif, name, type, b
 exports.PiE = (name, type, body) => exports.Pi(exports.Expl, name, type, body);
 exports.PiU = (name, type, body) => exports.Pi(exports.ImplUnif, name, type, body);
 exports.showMode = (m) => m === 'ImplUnif' ? 'impl' : '';
+exports.flattenApp = (t) => {
+    const r = [];
+    while (t.tag === 'App') {
+        r.push([t.mode, t.right]);
+        t = t.left;
+    }
+    return [t, r.reverse()];
+};
+exports.flattenPi = (t) => {
+    const r = [];
+    while (t.tag === 'Pi') {
+        r.push([t.name, t.mode, t.type]);
+        t = t.body;
+    }
+    return [r, t];
+};
 exports.show = (t) => {
     if (t.tag === 'Var')
         return `${t.index}`;
@@ -229,8 +245,10 @@ exports.show = (t) => {
         return `${t.name}`;
     if (t.tag === 'Meta')
         return `?${t.index}`;
-    if (t.tag === 'App')
-        return `(${exports.show(t.left)} ${t.mode === exports.ImplUnif ? '{' : ''}${exports.show(t.right)}${t.mode === exports.ImplUnif ? '}' : ''})`;
+    if (t.tag === 'App') {
+        const [f, as] = exports.flattenApp(t);
+        return `(${exports.show(f)} ${as.map(([m, a]) => `${m === exports.ImplUnif ? '{' : ''}${exports.show(a)}${m === exports.ImplUnif ? '}' : ''}`).join(' ')})`;
+    }
     if (t.tag === 'Abs')
         return `(\\${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'}. ${exports.show(t.body)})`;
     if (t.tag === 'Pair')
@@ -239,8 +257,10 @@ exports.show = (t) => {
         return `(${t.proj} ${exports.show(t.term)})`;
     if (t.tag === 'Let')
         return `(let ${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
-    if (t.tag === 'Pi')
-        return `(${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'} -> ${exports.show(t.body)})`;
+    if (t.tag === 'Pi') {
+        const [as, r] = exports.flattenPi(t);
+        return `(${as.map(([x, m, ty]) => `${m === exports.ImplUnif ? '{' : '('}${x} : ${exports.show(ty)}${m === exports.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(r)})`;
+    }
     if (t.tag === 'Sigma')
         return `((${t.name} : ${exports.show(t.type)}) ** ${exports.show(t.body)})`;
     return t;
@@ -268,6 +288,31 @@ exports.eq = (t, o) => {
         return o.tag === 'Pi' && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Sigma')
         return o.tag === 'Sigma' && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
+    return t;
+};
+exports.shift = (d, c, t) => {
+    if (t.tag === 'Var')
+        return t.index < c ? t : exports.Var(t.index + d);
+    if (t.tag === 'Prim')
+        return t;
+    if (t.tag === 'Global')
+        return t;
+    if (t.tag === 'Meta')
+        return t;
+    if (t.tag === 'App')
+        return exports.App(exports.shift(d, c, t.left), t.mode, exports.shift(d, c, t.right));
+    if (t.tag === 'Abs')
+        return exports.Abs(t.mode, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Pair')
+        return exports.Pair(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd), exports.shift(d, c, t.type));
+    if (t.tag === 'Proj')
+        return exports.Proj(t.proj, exports.shift(d, c, t.term));
+    if (t.tag === 'Let')
+        return exports.Let(t.name, exports.shift(d, c, t.type), exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Pi')
+        return exports.Pi(t.mode, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Sigma')
+        return exports.Sigma(t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     return t;
 };
 
@@ -310,17 +355,29 @@ const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, list_1.Nil);
 const localExtend = (local, name, ty, mode, bound = true, inserted = false, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), inserted ? local.nsSurface : list_1.Cons(name, local.nsSurface), list_1.Cons(EntryT(ty, bound, mode, inserted), local.ts), list_1.Cons(val, local.vs));
 const showVal = (local, val) => S.showValZ(val, local.vs, local.index, local.ns);
 const selectName = (a, b) => a === '_' ? b : a;
-const constructMetaType = (l, b, k) => l.tag === 'Cons' ? core_1.Pi(l.head[2].mode, l.head[1], values_1.quote(l.head[2].type, k), constructMetaType(l.tail, b, k + 1)) : values_1.quote(b, k);
+const constructMetaType = (l, b, k = 0, skipped = 0) => {
+    if (l.tag === 'Cons') {
+        const [, x, e] = l.head;
+        if (!e.bound)
+            return constructMetaType(l.tail, b, k + 1, skipped + 1);
+        const q = values_1.quote(e.type, k);
+        const sq = C.shift(-skipped, k - skipped, q);
+        return core_1.Pi(e.mode, x, sq, constructMetaType(l.tail, b, k + 1, skipped));
+    }
+    return C.shift(-skipped, k - skipped, values_1.quote(b, k));
+};
 const newMeta = (local, ty) => {
+    config_1.log(() => `new meta return type: ${showVal(local, ty)}`);
     const zipped = list_1.zipWithIndex((x, y, i) => [i, x, y], local.ns, local.ts);
     const boundOnly = list_1.filter(zipped, ([_, __, ty]) => ty.bound);
-    config_1.log(() => `new meta spine: ${list_1.listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
+    config_1.log(() => `new meta spine (${local.index}, ${list_1.length(boundOnly)}): ${list_1.listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
     const spine = list_1.map(boundOnly, x => [x[2].mode, core_1.Var(x[0])]);
     config_1.log(() => `new meta spine: ${list_1.listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
     config_1.log(() => `${local.index}`);
-    const mty = constructMetaType(list_1.reverse(boundOnly), ty, local.index - list_1.length(spine));
+    const mty = constructMetaType(list_1.reverse(zipped), ty);
     config_1.log(() => `new meta type: ${C.show(mty)}`);
     const vmty = values_1.evaluate(mty, list_1.Nil);
+    config_1.log(() => `new meta type val: ${S.showVal(vmty)}`);
     return list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty)), spine);
 };
 const inst = (local, ty_) => {
@@ -359,21 +416,21 @@ const check = (local, tm, ty) => {
         return core_1.Pair(fst, snd, values_1.quote(ty, local.index));
     }
     if (tm.tag === 'Let') {
-        let type;
-        let ty;
+        let vtype;
+        let vty;
         let val;
         if (tm.type) {
-            type = check(local, tm.type, values_1.VType);
-            ty = values_1.evaluate(type, local.vs);
+            vtype = check(local, tm.type, values_1.VType);
+            vty = values_1.evaluate(vtype, local.vs);
             val = check(local, tm.val, ty);
         }
         else {
-            [val, ty] = synth(local, tm.val);
-            type = values_1.quote(ty, local.index);
+            [val, vty] = synth(local, tm.val);
+            vtype = values_1.quote(ty, local.index);
         }
         const v = values_1.evaluate(val, local.vs);
-        const body = check(localExtend(local, tm.name, ty, C.Expl, false, false, v), tm.body, ty);
-        return core_1.Let(tm.name, type, val, body);
+        const body = check(localExtend(local, tm.name, vty, C.Expl, false, false, v), tm.body, ty);
+        return core_1.Let(tm.name, vtype, val, body);
     }
     const [term, ty2] = synth(local, tm);
     const [ty2inst, ms] = inst(local, ty2);
@@ -537,10 +594,12 @@ const synthapp = (local, ty, mode, tm, full) => {
     }
     return utils_1.terr(`not a correct pi type in synthapp in ${surface_1.show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
 };
+const MAX_SOLVING_COUNT = 1000;
 const tryToSolveBlockedProblems = () => {
     if (context_1.amountOfProblems() > 0) {
         let changed = true;
-        while (changed) {
+        let count = 0;
+        while (changed && count++ < MAX_SOLVING_COUNT) {
             const blocked = context_1.allProblems();
             changed = false;
             for (let i = 0, l = blocked.length; i < l; i++) {
@@ -2266,8 +2325,8 @@ exports.velimprim = (name, v, args) => {
             return exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]);
         }
         if (exports.isVPrim('IRec', v)) {
-            const [, i, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', exports.vappEs([P, i, exports.vproj('fst', xs)]), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
+            const [, j, d] = exports.vprimArgs(v);
+            return exports.VSigma('_', exports.vappEs([P, j, exports.vproj('fst', xs)]), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
         }
         if (exports.isVPrim('IHRec', v)) {
             const [, A, fi, d] = exports.vprimArgs(v);

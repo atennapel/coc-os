@@ -20,10 +20,11 @@ Currently done:
 - type-in-type
 - indexed descriptions ala "Gentle Art of Levitation"
 - generic constructors from "Generic Constructors and Eliminators from Descriptions"
+- generic eliminators from "Generic Constructors and Eliminators from Descriptions" (just for boolean-tagged datatypes for now)
 - named holes (_name)
 
 Not yet done:
-- generic eliminators from "Generic Constructors and Eliminators from Descriptions"
+- generic eliminators for Fin tagged datatypes
 - explicit erasure annotations
 - CEK machine for erased terms
 - hash-based content-addressed references
@@ -37,8 +38,7 @@ Future work:
 
 ```
 TODO:
-- implement induction nats and lists
-- implement generic elimination
+- fix infinite loop in postponements
 - allow meta as head of glued value
 - glued lets
 - optimize importing
@@ -47,6 +47,7 @@ TODO:
 - implement instance search
 - specialize meta when checking pair
 - support some impredicative instantiation
+- write more prelude functions
 
 QUESTIONS:
 - how to levitate in my core theory?

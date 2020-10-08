@@ -24,5 +24,6 @@ import lib/maybe.p
 
 import lib/nat.p
 import lib/list.p
+import lib/string.p
 import lib/fin.p
 import lib/vec.p

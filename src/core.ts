@@ -53,17 +53,40 @@ export const PiU = (name: Name, type: Term, body: Term): Pi => Pi(ImplUnif, name
 
 export const showMode = (m: Mode): string => m === 'ImplUnif' ? 'impl' : '';
 
+export const flattenApp = (t: Term): [Term, [Mode, Term][]] => {
+  const r: [Mode, Term][] = [];
+  while (t.tag === 'App') {
+    r.push([t.mode, t.right]);
+    t = t.left;
+  }
+  return [t, r.reverse()];
+};
+export const flattenPi = (t: Term): [[Name, Mode, Term][], Term] => {
+  const r: [Name, Mode, Term][] = [];
+  while (t.tag === 'Pi') {
+    r.push([t.name, t.mode, t.type]);
+    t = t.body;
+  }
+  return [r, t];
+};
+
 export const show = (t: Term): string => {
   if (t.tag === 'Var') return `${t.index}`;
   if (t.tag === 'Prim') return t.name === 'Type' ? '*' : `%${t.name}`;
   if (t.tag === 'Global') return `${t.name}`;
   if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'App') return `(${show(t.left)} ${t.mode === ImplUnif ? '{' : ''}${show(t.right)}${t.mode === ImplUnif ? '}' : ''})`;
+  if (t.tag === 'App') {
+    const [f, as] = flattenApp(t);
+    return `(${show(f)} ${as.map(([m, a]) => `${m === ImplUnif ? '{' : ''}${show(a)}${m === ImplUnif ? '}' : ''}`).join(' ')})`;
+  }
   if (t.tag === 'Abs') return `(\\${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'}. ${show(t.body)})`;
   if (t.tag === 'Pair') return `(${show(t.fst)}, ${show(t.snd)} : ${show(t.type)})`;
   if (t.tag === 'Proj') return `(${t.proj} ${show(t.term)})`;
   if (t.tag === 'Let') return `(let ${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
-  if (t.tag === 'Pi') return `(${t.mode === ImplUnif ? '{' : '('}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'} -> ${show(t.body)})`;
+  if (t.tag === 'Pi') {
+    const [as, r] = flattenPi(t);
+    return `(${as.map(([x, m, ty]) => `${m === ImplUnif ? '{' : '('}${x} : ${show(ty)}${m === ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(r)})`;
+  }
   if (t.tag === 'Sigma') return `((${t.name} : ${show(t.type)}) ** ${show(t.body)})`;
   return t;
 };
@@ -80,5 +103,20 @@ export const eq = (t: Term, o: Term): boolean => {
   if (t.tag === 'Let') return o.tag === 'Let' && eq(t.type, o.type) && eq(t.val, o.val) && eq(t.body, o.body);
   if (t.tag === 'Pi') return o.tag === 'Pi' && eq(t.type, o.type) && eq(t.body, o.body);
   if (t.tag === 'Sigma') return o.tag === 'Sigma' && eq(t.type, o.type) && eq(t.body, o.body);
+  return t;
+};
+
+export const shift = (d: Ix, c: Ix, t: Term): Term => {
+  if (t.tag === 'Var') return t.index < c ? t : Var(t.index + d);
+  if (t.tag === 'Prim') return t;
+  if (t.tag === 'Global') return t;
+  if (t.tag === 'Meta') return t;
+  if (t.tag === 'App') return App(shift(d, c, t.left), t.mode, shift(d, c, t.right));
+  if (t.tag === 'Abs') return Abs(t.mode, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Pair') return Pair(shift(d, c, t.fst), shift(d, c, t.snd), shift(d, c, t.type));
+  if (t.tag === 'Proj') return Proj(t.proj, shift(d, c, t.term));
+  if (t.tag === 'Let') return Let(t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
+  if (t.tag === 'Pi') return Pi(t.mode, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Sigma') return Sigma(t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   return t;
 };

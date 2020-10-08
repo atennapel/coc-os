@@ -1,7 +1,10 @@
 -- these definitions are from the paper
 -- "Generic Constructors and Eliminators from Descriptions"
 import lib/idesc.p
+import lib/desc.p
 import lib/eq.p
+import lib/unit.p
+import lib/bool.p
 
 -- generic constructors
 def UncurriedEl
@@ -45,14 +48,78 @@ def CurriedHyps
       (\A fi d r cn. (g : (a : A) -> X (fi a)) -> ((a : A) -> P (fi a) (g a)) -> r (\xs. cn (g, xs)))
       D
 
--- TODO 6.3 and on
---def uncurryHyps
---  : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *)
---      -> (cn : UncurriedEl D X) -> CurriedHyps D X P cn -> UncurriedHyps D X P cn
---  = \{I} D X P. indIDesc {I} {\D. (cn : UncurriedEl D X) -> CurriedHyps D X P cn -> UncurriedHyps D X P cn}
---      (\i cn pf j refl tt. _a)
---      (\A f r cn pf i p ihs. let a = p.fst in r a (\ys. cn (a, ys)) (pf a) i p.snd ihs)
---      (\A d r cn pf i p ihs. let a = p.fst in r (\ys. cn (a, ys)) (pf a) i p.snd ihs)
---      (\i d r cn. _b)
---      (\A fi d r cn. _c)
---      D
+def uncurryHyps
+  : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *)
+      -> (cn : UncurriedEl D X) -> CurriedHyps D X P cn -> UncurriedHyps D X P cn
+  = \{I} D X P. indIDesc {I} {\D. (cn : UncurriedEl D X) -> CurriedHyps D X P cn -> UncurriedHyps D X P cn}
+      (\i cn pf j refl tt. elimEq {I} {i} {\k q. P k (cn {k} q)} pf {j} refl)
+      (\A f r cn pf i p ihs.
+        let a = p.fst in
+        let xs = p.snd in
+        r a (\ys. cn (a, ys)) (pf a) i xs ihs)
+      (\A d r cn pf i p ihs.
+        let a = p.fst in
+        let xs = p.snd in
+        r (\ys. cn (a, ys)) (pf a) i xs ihs)
+      (\j d r cn pf i p h.
+        let x = p.fst in
+        let xs = p.snd in
+        let ih = h.fst in
+        let ihs = h.snd in
+        r (\ys. cn (x, ys)) (pf x ih) i xs ihs)
+      (\A fi d r cn pf i p h.
+        let xg = p.fst in
+        let xs = p.snd in
+        let ihg = h.fst in
+        let ihs = h.snd in
+        r (\ys. cn (xg, ys)) (pf xg ihg) i xs ihs)
+      D
+
+def indCurried
+  : {I : *}
+    -> (D : IDesc I)
+    -> (P : (i : I) -> IData D i -> *)
+    -> CurriedHyps D (IData D) P ICon
+    -> (i : I)
+    -> (x : IData D i)
+    -> P i x
+  = \{I} D P f i x. indI {I} {D} {P} (uncurryHyps {I} D (IData D) P ICon f) {i} x
+
+-- TODO: generalize from Bool to Fin n
+def SumCurriedHypsBool
+  : {I : *}
+    -> (C : Bool -> IDesc I)
+    -> (P : (i : I) -> IData (IArg {I} {Bool} C) i -> *)
+    -> (a : Bool)
+    -> *
+  = \{I} C P a.
+    let D = IArg {I} {Bool} C in
+    CurriedHyps (C a) (IData D) P (\xs. ICon {I} {D} (a, xs)) 
+
+def elimIBool
+  : {I : *}
+    -> (C : Bool -> IDesc I)
+    -> (
+      let D = IArg {I} {Bool} C in
+      {P : (i : I) -> IData D i -> *}
+      -> SumCurriedHypsBool C P True
+      -> SumCurriedHypsBool C P False
+      -> {i : I}
+      -> (x : IData D i)
+      -> P i x
+    )
+  = \{I} C {P} ct cf {i} x.
+      let D = IArg {I} {Bool} C in
+      indCurried D P (indBool {SumCurriedHypsBool C P} ct cf) i x
+
+def elimBool
+  : (C : Bool -> Desc)
+    -> (
+      let D = Arg {Bool} C in
+      {P : Data D -> *}
+      -> SumCurriedHypsBool C (\_. P) True
+      -> SumCurriedHypsBool C (\_. P) False
+      -> (x : Data D)
+      -> P x
+    )
+  = \C {P} ct cf x. elimIBool C {\_. P} ct cf {()} x
