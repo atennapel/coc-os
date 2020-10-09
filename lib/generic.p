@@ -85,7 +85,6 @@ def indCurried
     -> P i x
   = \{I} D P f i x. indI {I} {D} {P} (uncurryHyps {I} D (IData D) P ICon f) {i} x
 
--- TODO: generalize from Bool to Fin n
 def SumCurriedHypsBool
   : {I : *}
     -> (C : Bool -> IDesc I)
@@ -94,7 +93,7 @@ def SumCurriedHypsBool
     -> *
   = \{I} C P a.
     let D = IArg {I} {Bool} C in
-    CurriedHyps (C a) (IData D) P (\xs. ICon {I} {D} (a, xs)) 
+    CurriedHyps (C a) (IData D) P (\xs. ICon {I} {D} (a, xs))
 
 def elimIBool
   : {I : *}

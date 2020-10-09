@@ -22,9 +22,10 @@ Currently done:
 - generic constructors from "Generic Constructors and Eliminators from Descriptions"
 - generic eliminators from "Generic Constructors and Eliminators from Descriptions" (just for boolean-tagged datatypes for now)
 - named holes (_name)
+- generic eliminators for Fin tagged datatypes
 
 Not yet done:
-- generic eliminators for Fin tagged datatypes
+- generic eliminators for Fin tagged non-indexed datatypes
 - explicit erasure annotations
 - CEK machine for erased terms
 - hash-based content-addressed references
@@ -39,6 +40,7 @@ Future work:
 ```
 TODO:
 - fix infinite loop in postponements
+- fix _ being used in elaboration
 - allow meta as head of glued value
 - glued lets
 - optimize importing

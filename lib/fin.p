@@ -79,3 +79,31 @@ def dcase
 def case
   : {n : Nat} -> {t : *} -> (x : Fin n) -> Branches n (\_. t) -> t
   = \{n} {t} x b. dcase {n} {\_. t} x b
+
+def UncurriedBranches : (n : Nat) -> (P : Fin n -> *) -> * -> *
+  = \n P X. Branches n P -> X
+
+def CurriedBranches : (n : Nat) -> (P : Fin n -> *) -> * -> *
+  = \n. indNat {\n. (P : Fin n -> *) -> * -> *} (\P X. X) (\m r P X. P FZ -> r (\f. P (FS f)) X) n
+
+def curryBranchesE
+  : (n : Nat) -> (P : Fin n -> *) -> (X : *) -> UncurriedBranches n P X -> CurriedBranches n P X
+  = \n. indNat {\n. (P : Fin n -> *) -> (X : *) -> UncurriedBranches n P X -> CurriedBranches n P X}
+      (\P X b. b ())
+      (\m r P X b c. r (\f. P (FS f)) X (\cs. b (c, cs)))
+      n
+
+def uncurryBranchesE
+  : (n : Nat) -> (P : Fin n -> *) -> (X : *) -> CurriedBranches n P X -> UncurriedBranches n P X
+  = \n. indNat {\n. (P : Fin n -> *) -> (X : *) -> CurriedBranches n P X -> UncurriedBranches n P X}
+      (\P X b _. b)
+      (\m r P X b p. r (\f. P (FS f)) X (b p.fst) p.snd)
+      n
+
+def curryBranches
+  : {n : Nat} -> {P : Fin n -> *} -> {X : *} -> UncurriedBranches n P X -> CurriedBranches n P X
+  = \{n} {P} {X}. curryBranchesE n P X
+
+def uncurryBranches
+  : {n : Nat} -> {P : Fin n -> *} -> {X : *} -> CurriedBranches n P X -> UncurriedBranches n P X
+  = \{n} {P} {X}. uncurryBranchesE n P X
