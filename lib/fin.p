@@ -16,3 +16,58 @@ def indFin
     -> (x : Fin n)
     -> P n x
   = \{P} z s {n} x. elimIBool {Nat} (\b. if b (IArg \n. IEnd (S n)) (IArg \n. IRec n (IEnd (S n)))) {P} z s {n} x
+
+def dcaseFin
+  : {P : (n : Nat) -> Fin n -> *}
+    -> ((n : Nat) -> P (S n) (FZ {n}))
+    -> ((n : Nat) -> (f : Fin n) -> P (S n) (FS {n} f))
+    -> {n : Nat}
+    -> (x : Fin n)
+    -> P n x
+  = \{P} z s {n} x. indFin {P} z (\m f _. s m f) {n} x
+
+def paraFin
+  : {t : *}
+    -> {n : Nat}
+    -> Fin n
+    -> (Nat -> t)
+    -> ((m : Nat) -> Fin m -> t -> t)
+    -> t
+  = \{t} {n} x z s. indFin {\_ _. t} z s {n} x
+
+def cataFin
+  : {t : *}
+    -> {n : Nat}
+    -> Fin n
+    -> (Nat -> t)
+    -> (Nat -> t -> t)
+    -> t
+  = \{t} {n} x z s. paraFin {t} {n} x z (\n _ r. s n r)
+
+def caseFin
+  : {t : *}
+    -> {n : Nat}
+    -> Fin n
+    -> (Nat -> t)
+    -> ((m : Nat) -> Fin m -> t)
+    -> t
+  = \{t} {n} x z s. paraFin {t} {n} x z (\n f _. s n f)
+
+def CaseF
+  : (n : Nat) -> Fin n -> *
+  = \n. dcaseNat {\n. Fin n -> *}
+          (\x. (P : Fin 0 -> *) -> P x)
+          (\m x. (P : Fin (S m) -> *) -> P FZ -> ((y : Fin m) -> P (FS y)) -> P x)
+          n
+
+def caseF
+  : (n : Nat) -> (x : Fin n) -> CaseF n x
+  = \n x. dcaseFin {CaseF} (\m P HZ HS. HZ) (\m y P HZ HS. HS y) x
+
+def Branches
+  : (n : Nat) -> (Fin n -> *) -> *
+  = \n. indNat {\n. (Fin n -> *) -> *} (\_. U) (\m r P. P FZ ** r (\f. P (FS f))) n
+
+def case
+  : {n : Nat} -> (x : Fin n) -> (P : Fin n -> *) -> Branches n P -> P x
+  = \{n} x. indFin {\n f. (P : Fin n -> *) -> Branches n P -> P f} (\m P b. b.fst) (\m f r P b. r (\f. P (FS f)) b.snd) x

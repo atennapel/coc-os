@@ -35,7 +35,7 @@ def elimEq
 
 def rewrite
   : {t : *} -> {f : t -> *} -> {a b : t} -> Eq {t} a b -> f a -> f b
-  = \{t} {f} {a} {b} p x. elimEq {t} {a} {\_ _. f b} x {b} p
+  = \{t} {f} {a} {b} p x. elimEq {t} {a} {\b _. f b} x {b} p
 
 def cast
   : {a b : *} -> Eq a b -> a -> b

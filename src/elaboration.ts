@@ -51,8 +51,6 @@ export type HoleInfo = [Val, Val, Local];
 
 const showVal = (local: Local, val: Val): string => S.showValZ(val, local.vs, local.index, local.ns);
 
-const selectName = (a: Name, b: Name): Name => a === '_' ? b : a;
-
 const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix = 0, skipped: Ix = 0): Term => {
   if (l.tag === 'Cons') {
     const [, x, e] = l.head;
@@ -99,7 +97,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
   const fty = force(ty);
   if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
     const v = VVar(local.index);
-    const x = selectName(tm.name, fty.name);
+    const x = tm.name;
     const body = check(localExtend(local, x, fty.type, tm.mode, true, false, v), tm.body, vinst(fty, v));
     return Abs(tm.mode, x, quote(fty.type, local.index), body);
   }

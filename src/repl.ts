@@ -4,10 +4,9 @@ import { ImportMap, parse, parseDefs } from './parser';
 import { show, showCore, showVal } from './surface';
 import * as C from './core';
 import { typecheck } from './typecheck';
-import { evaluate, normalize } from './values';
-import { deleteGlobal, getGlobal, getGlobals, hasGlobal, setGlobal } from './globals';
+import { normalize } from './values';
+import { deleteGlobal, getGlobal, getGlobals } from './globals';
 import { Nil } from './utils/list';
-import { Name } from './names';
 import { loadFile } from './utils/utils';
 
 const help = `
@@ -108,15 +107,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       return cb(showVal(res.val, 0, Nil, true));
     }
 
-    let code = s;
-    let g: Name | null = null;
-    if (s.startsWith(':def')) {
-      const spl = s.slice(4).trim().split('=');
-      g = spl[0].trim();
-      code = spl.slice(1).join('=');
-    }
-
-    const term = parse(code);
+    const term = parse(s);
     log(() => show(term));
 
     log(() => 'ELABORATE');
@@ -134,17 +125,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => C.show(ttype));
     log(() => showCore(ttype));
 
-    log(() => 'NORMALIZE');
-    const norm = normalize(eterm, true);
-    log(() => C.show(norm));
-    log(() => showCore(norm));
-
-    if (g) {
-      if (hasGlobal(g)) deleteGlobal(g);
-      setGlobal(g, eterm, evaluate(eterm, Nil), evaluate(etype, Nil));
-    }
-
-    return cb(`${g ? `defined ${g}\n` : ''}term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}\nnorm: ${showCore(norm)}`);
+    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}`);
   } catch (err) {
     return cb(`${err}`, true);
   }

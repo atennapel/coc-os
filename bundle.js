@@ -354,7 +354,6 @@ const Local = (index, ns, nsSurface, ts, vs) => ({ index, ns, nsSurface, ts, vs 
 const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, list_1.Nil);
 const localExtend = (local, name, ty, mode, bound = true, inserted = false, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), inserted ? local.nsSurface : list_1.Cons(name, local.nsSurface), list_1.Cons(EntryT(ty, bound, mode, inserted), local.ts), list_1.Cons(val, local.vs));
 const showVal = (local, val) => S.showValZ(val, local.vs, local.index, local.ns);
-const selectName = (a, b) => a === '_' ? b : a;
 const constructMetaType = (l, b, k = 0, skipped = 0) => {
     if (l.tag === 'Cons') {
         const [, x, e] = l.head;
@@ -401,7 +400,7 @@ const check = (local, tm, ty) => {
     const fty = values_1.force(ty);
     if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
         const v = values_1.VVar(local.index);
-        const x = selectName(tm.name, fty.name);
+        const x = tm.name;
         const body = check(localExtend(local, x, fty.type, tm.mode, true, false, v), tm.body, values_1.vinst(fty, v));
         return core_1.Abs(tm.mode, x, values_1.quote(fty.type, local.index), body);
     }
@@ -1423,14 +1422,7 @@ exports.runREPL = (s_, cb) => {
                 return cb(`undefined global: ${name}`, true);
             return cb(surface_1.showVal(res.val, 0, list_1.Nil, true));
         }
-        let code = s;
-        let g = null;
-        if (s.startsWith(':def')) {
-            const spl = s.slice(4).trim().split('=');
-            g = spl[0].trim();
-            code = spl.slice(1).join('=');
-        }
-        const term = parser_1.parse(code);
+        const term = parser_1.parse(s);
         config_1.log(() => surface_1.show(term));
         config_1.log(() => 'ELABORATE');
         const [eterm, etype] = elaboration_1.elaborate(term);
@@ -1444,16 +1436,7 @@ exports.runREPL = (s_, cb) => {
         const ttype = typecheck_1.typecheck(eterm);
         config_1.log(() => C.show(ttype));
         config_1.log(() => surface_1.showCore(ttype));
-        config_1.log(() => 'NORMALIZE');
-        const norm = values_1.normalize(eterm, true);
-        config_1.log(() => C.show(norm));
-        config_1.log(() => surface_1.showCore(norm));
-        if (g) {
-            if (globals_1.hasGlobal(g))
-                globals_1.deleteGlobal(g);
-            globals_1.setGlobal(g, eterm, values_1.evaluate(eterm, list_1.Nil), values_1.evaluate(etype, list_1.Nil));
-        }
-        return cb(`${g ? `defined ${g}\n` : ''}term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\netru: ${surface_1.showCore(unfolded)}\nnorm: ${surface_1.showCore(norm)}`);
+        return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\netru: ${surface_1.showCore(unfolded)}`);
     }
     catch (err) {
         return cb(`${err}`, true);
@@ -2366,8 +2349,8 @@ exports.velimprim = (name, v, args) => {
         if (exports.isVPrim('ICon', v)) {
             const [I, d, P, h, i] = args;
             const [, , , c] = exports.vprimArgs(v);
-            // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind d P i x) c)
-            return exports.vappEs([h, i, c, exports.velimprim('allI', d, [I, exports.vappEs([exports.VIData, I, d]), P, exports.VAbsE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i]))), c])]);
+            // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind d P i x) i c)
+            return exports.vappEs([h, i, c, exports.velimprim('allI', d, [I, exports.vappEs([exports.VIData, I, d]), P, exports.VAbsE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i]))), i, c])]);
         }
     }
     if (v.tag === 'VNe')

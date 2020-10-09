@@ -17,6 +17,13 @@ def indNat
     -> (n : Nat)
     -> P n
   = \{P} z s n. elimBool (\b. if b End (Rec End)) {P} z s n
+def dcaseNat
+  : {P : Nat -> *}
+    -> P Z
+    -> ((m : Nat) -> P (S m))
+    -> (n : Nat)
+    -> P n
+  = \{P} z s n. indNat {P} z (\m _. s m) n
 
 def paraNat : {t : *} -> Nat -> t -> (Nat -> t -> t) -> t = \{t} n z s. indNat {\_. t} z s n
 def cataNat : {t : *} -> Nat -> t -> (t -> t) -> t = \{t} n z s. paraNat {t} n z (\_. s)
