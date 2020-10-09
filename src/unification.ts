@@ -1,9 +1,9 @@
-import { log } from './config';
+import { config, log } from './config';
 import { eqHead } from './conversion';
 import { Abs, App, Pair, Pi, Proj, show, Sigma, Term, Var } from './core';
 import { Ix } from './names';
 import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil, toArray, zipWithR_ } from './utils/list';
-import { hasDuplicates, impossible, terr, tryT } from './utils/utils';
+import { hasDuplicates, impossible, terr, tryT, tryTE } from './utils/utils';
 import { Elim, force, Spine, Val, vapp, vproj, vinst, VVar, VMeta, quote, evaluate, showVal, isVPrim } from './values';
 import * as V from './values';
 import { discardContext, getMeta, isMetaSolved, markContext, postpone, problemsBlockedBy, solveMeta, undoContext, Unsolved } from './context';
@@ -103,7 +103,14 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
     }
     if (hasDuplicates(toArray(spinex, x => x))) return terr(`meta spine contains duplicates`);
     const rhs = quote(val, k);
-    const body = checkSolution(k, m, spinex, rhs);
+    const body = tryTE(() => checkSolution(k, m, spinex, rhs));
+    if (body instanceof TypeError) {
+      if (config.postponeInvalidSolution) {
+        // postpone if solution is invalid
+        postpone(k, VMeta(m, spine), val, [m]);
+        return;
+      } else throw body;
+    }
     log(() => `spine ${listToString(spinex, s => `${s}`)}`);
     const meta = getMeta(m) as Unsolved;
     const type = meta.type;

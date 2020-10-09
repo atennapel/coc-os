@@ -68,7 +68,6 @@ const newMeta = (local: Local, ty: Val): Term => {
   log(() => `new meta spine (${local.index}, ${length(boundOnly)}): ${listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
   const spine: List<[Mode, Term]> = map(boundOnly, x => [x[2].mode, Var(x[0])] as [Mode, Term]);
   log(() => `new meta spine: ${listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
-  log(() => `${local.index}`);
   const mty = constructMetaType(reverse(zipped), ty);
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);

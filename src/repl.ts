@@ -24,6 +24,7 @@ COMMANDS
 [:def definitions] define names
 [:import files] import a file
 [:addunfold x y z] always unfold globals
+[:postponeInvalidSolution] postpone more invalid meta solutions
 `.trim();
 
 let importMap: ImportMap = {};
@@ -48,6 +49,11 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const u = config.unfold;
       xs.forEach(x => u.push(x));
       return cb(`unfold: ${u.join(' ')}`);
+    }
+    if (s === ':postponeInvalidSolution') {
+      const d = !config.postponeInvalidSolution;
+      setConfig({ postponeInvalidSolution: d });
+      return cb(`postponeInvalidSolution: ${d}`);
     }
     if (s === ':defs') {
       const gs = getGlobals();

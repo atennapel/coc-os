@@ -68,6 +68,14 @@ def Branches
   : (n : Nat) -> (Fin n -> *) -> *
   = \n. indNat {\n. (Fin n -> *) -> *} (\_. U) (\m r P. P FZ ** r (\f. P (FS f))) n
 
-def case
+def caseP
   : {n : Nat} -> (x : Fin n) -> (P : Fin n -> *) -> Branches n P -> P x
   = \{n} x. indFin {\n f. (P : Fin n -> *) -> Branches n P -> P f} (\m P b. b.fst) (\m f r P b. r (\f. P (FS f)) b.snd) x
+
+def dcase
+  : {n : Nat} -> {P : Fin n -> *} -> (x : Fin n) -> Branches n P -> P x
+  = \{n} {P} x b. caseP {n} x P b
+
+def case
+  : {n : Nat} -> {t : *} -> (x : Fin n) -> Branches n (\_. t) -> t
+  = \{n} {t} x b. dcase {n} {\_. t} x b

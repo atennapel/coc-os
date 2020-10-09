@@ -49,6 +49,7 @@ export const tryT = <T>(v: () => T, e: (err: TypeError) => T, throwErr: boolean 
     return r;
   }
 };
+export const tryTE = <T>(v: () => T | TypeError): T | TypeError => tryT(v, err => err);
 
 export const mapObj = <K extends string, A, B>(o: { [key in K]: A }, fn: (val: A) => B): { [key in K]: B } => {
   const n: { [key in K]: B } = {} as any;

@@ -6,6 +6,7 @@ exports.config = {
     debug: false,
     showEnvs: false,
     unfold: [],
+    postponeInvalidSolution: false,
 };
 exports.setConfig = (c) => {
     for (let k in c)
@@ -372,7 +373,6 @@ const newMeta = (local, ty) => {
     config_1.log(() => `new meta spine (${local.index}, ${list_1.length(boundOnly)}): ${list_1.listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
     const spine = list_1.map(boundOnly, x => [x[2].mode, core_1.Var(x[0])]);
     config_1.log(() => `new meta spine: ${list_1.listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
-    config_1.log(() => `${local.index}`);
     const mty = constructMetaType(list_1.reverse(zipped), ty);
     config_1.log(() => `new meta type: ${C.show(mty)}`);
     const vmty = values_1.evaluate(mty, list_1.Nil);
@@ -1338,6 +1338,7 @@ COMMANDS
 [:def definitions] define names
 [:import files] import a file
 [:addunfold x y z] always unfold globals
+[:postponeInvalidSolution] postpone more invalid meta solutions
 `.trim();
 let importMap = {};
 exports.initREPL = () => {
@@ -1359,6 +1360,11 @@ exports.runREPL = (s_, cb) => {
             const u = config_1.config.unfold;
             xs.forEach(x => u.push(x));
             return cb(`unfold: ${u.join(' ')}`);
+        }
+        if (s === ':postponeInvalidSolution') {
+            const d = !config_1.config.postponeInvalidSolution;
+            config_1.setConfig({ postponeInvalidSolution: d });
+            return cb(`postponeInvalidSolution: ${d}`);
         }
         if (s === ':defs') {
             const gs = globals_1.getGlobals();
@@ -1809,7 +1815,16 @@ const solve = (k, m, spine, val) => {
         if (utils_1.hasDuplicates(list_1.toArray(spinex, x => x)))
             return utils_1.terr(`meta spine contains duplicates`);
         const rhs = values_1.quote(val, k);
-        const body = checkSolution(k, m, spinex, rhs);
+        const body = utils_1.tryTE(() => checkSolution(k, m, spinex, rhs));
+        if (body instanceof TypeError) {
+            if (config_1.config.postponeInvalidSolution) {
+                // postpone if solution is invalid
+                context_1.postpone(k, values_1.VMeta(m, spine), val, [m]);
+                return;
+            }
+            else
+                throw body;
+        }
         config_1.log(() => `spine ${list_1.listToString(spinex, s => `${s}`)}`);
         const meta = context_1.getMeta(m);
         const type = meta.type;
@@ -2052,7 +2067,7 @@ exports.last = (l) => {
 },{}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapObj = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
+exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
 exports.impossible = (msg) => {
     throw new Error(`impossible: ${msg}`);
 };
@@ -2105,6 +2120,7 @@ exports.tryT = (v, e, throwErr = false) => {
         return r;
     }
 };
+exports.tryTE = (v) => exports.tryT(v, err => err);
 exports.mapObj = (o, fn) => {
     const n = {};
     for (const k in o)
