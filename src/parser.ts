@@ -47,7 +47,7 @@ const tokenize = (sc: string): Token[] => {
       else if (c === '"') state = STRING;
       else if (c === '.' && !/[\.\%\_a-z]/i.test(next)) r.push(TName('.'));
       else if (c + next === '--') i++, state = COMMENT;
-      else if (/[\.\?\@\#\%\_a-z]/i.test(c)) t += c, state = NAME;
+      else if (/[\-\.\?\@\#\%\_a-z]/i.test(c)) t += c, state = NAME;
       else if (/[0-9]/.test(c)) t += c, state = NUMBER;
       else if(c === '(' || c === '{') b.push(c), p.push(r), r = [];
       else if(c === ')' || c === '}') {
@@ -312,7 +312,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     }
     if (!found) return serr(`. not found after \\ or there was no whitespace after .`);
     const body = exprs(ts.slice(i + 1), '(');
-    return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? ImplUnif : Expl, name, ty, x), body);
+    return args.reduceRight((x, [name, impl, ty]) => Abs(impl ? ImplUnif : Expl, name[0] === '-', name[0] === '-' ? name.slice(1) : name, ty, x), body);
   }
   if (ts[0].tag === 'Name' && ts[0].name[0] === '.') {
     const x = ts[0].name.slice(1);
@@ -334,7 +334,7 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')] as [Name, boolean, Term]])
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(');
-    return args.reduceRight((x, [name, impl, ty]) => Pi(impl ? ImplUnif : Expl, name, ty, x), body);
+    return args.reduceRight((x, [name, impl, ty]) => Pi(impl ? ImplUnif : Expl, name[0] === '-', name[0] === '-' ? name.slice(1) : name, ty, x), body);
   }
   const jp = ts.findIndex(x => isName(x, ','));
   if (jp >= 0) {

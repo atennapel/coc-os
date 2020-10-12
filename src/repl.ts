@@ -3,6 +3,7 @@ import { elaborate, elaborateDefs } from './elaboration';
 import { ImportMap, parse, parseDefs } from './parser';
 import { show, showCore, showVal } from './surface';
 import * as C from './core';
+import * as E from './erased';
 import { typecheck } from './typecheck';
 import { normalize } from './values';
 import { deleteGlobal, getGlobal, getGlobals } from './globals';
@@ -127,11 +128,12 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => showCore(unfolded));
 
     log(() => 'TYPECHECK');
-    const ttype = typecheck(eterm);
+    const [ttype, er] = typecheck(eterm);
     log(() => C.show(ttype));
     log(() => showCore(ttype));
+    log(() => E.show(er));
 
-    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}`);
+    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}\neras: ${E.show(er)}`);
   } catch (err) {
     return cb(`${err}`, true);
   }

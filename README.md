@@ -23,10 +23,9 @@ Currently done:
 - generic eliminators from "Generic Constructors and Eliminators from Descriptions" (just for boolean-tagged datatypes for now)
 - named holes (_name)
 - generic eliminators for Fin tagged datatypes
+- explicit erasure annotations
 
 Not yet done:
-- generic eliminators for Fin tagged non-indexed datatypes
-- explicit erasure annotations
 - CEK machine for erased terms
 - hash-based content-addressed references
 - IO monad for system calls
@@ -39,6 +38,13 @@ Future work:
 
 ```
 TODO:
+- correctly erase primitives
+- update primitives to allow for erasure
+- update descriptions to allow for erasure
+- update lib to use erasure
+- erased let
+- erased sigma
+- generic eliminators for Fin tagged non-indexed datatypes
 - fix infinite loop in postponements
 - fix _ being used in elaboration
 - allow meta as head of glued value

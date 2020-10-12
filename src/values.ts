@@ -35,12 +35,12 @@ export type VNe = { tag: 'VNe', head: Head, spine: Spine };
 export const VNe = (head: Head, spine: Spine): VNe => ({ tag: 'VNe', head, spine });
 export type VGlobal = { tag: 'VGlobal', head: Name, args: List<Elim>, val: Lazy<Val> };
 export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): VGlobal => ({ tag: 'VGlobal', head, args, val });
-export type VAbs = { tag: 'VAbs', mode: Mode, name: Name, type: Val, clos: Clos };
-export const VAbs = (mode: Mode, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', mode, name, type, clos });
+export type VAbs = { tag: 'VAbs', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos };
+export const VAbs = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', mode, erased, name, type, clos });
 export type VPair = { tag: 'VPair', fst: Val, snd: Val, type: Val };
 export const VPair = (fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', fst, snd, type });
-export type VPi = { tag: 'VPi', mode: Mode, name: Name, type: Val, clos: Clos };
-export const VPi = (mode: Mode, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', mode, name, type, clos });
+export type VPi = { tag: 'VPi', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos };
+export const VPi = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', mode, erased, name, type, clos });
 export type VSigma = { tag: 'VSigma', name: Name, type: Val, clos: Clos };
 export const VSigma = (name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', name, type, clos });
 
@@ -82,10 +82,10 @@ export const vinterpI = (I: Val, d: Val, r: Val, i: Val) => velimprim('interpI',
 export const VAllI = VPrim('AllI');
 export const vAllI = (I: Val, d: Val, X: Val, P: Val, i: Val, xs: Val) => velimprim('AllI', d, [I, X, P, i, xs]);
 
-export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, name, type, clos);
-export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, name, type, clos);
-export const VAbsE = (name: Name, type: Val, clos: Clos): VAbs => VAbs(Expl, name, type, clos);
-export const VAbsU = (name: Name, type: Val, clos: Clos): VAbs => VAbs(ImplUnif, name, type, clos);
+export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, false, name, type, clos);
+export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, false, name, type, clos);
+export const VAbsE = (name: Name, type: Val, clos: Clos): VAbs => VAbs(Expl, false, name, type, clos);
+export const VAbsU = (name: Name, type: Val, clos: Clos): VAbs => VAbs(ImplUnif, false, name, type, clos);
 
 export const vinst = (val: VAbs | VPi | VSigma, arg: Val): Val => val.clos(arg);
 
@@ -270,11 +270,11 @@ export const VUnit = vreflheq(VType, VVoid);
 
 export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Abs')
-    return VAbs(t.mode, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
+    return VAbs(t.mode, t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Pair')
     return VPair(evaluate(t.fst, vs), evaluate(t.snd, vs), evaluate(t.type, vs));
   if (t.tag === 'Pi')
-    return VPi(t.mode, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
+    return VPi(t.mode, t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Sigma')
     return VSigma(t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Meta') {
@@ -396,9 +396,9 @@ export const quote = (v_: Val, k: Ix, full: boolean = false): Term => {
   if (v.tag === 'VPair')
     return Pair(quote(v.fst, k, full), quote(v.snd, k, full), quote(v.type, k, full));
   if (v.tag === 'VAbs')
-    return Abs(v.mode, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
+    return Abs(v.mode, v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VPi')
-    return Pi(v.mode, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
+    return Pi(v.mode, v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VSigma')
     return Sigma(v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   return v;
@@ -427,13 +427,13 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
     return s.tag === 'Solved' ? quote(s.val, k, full) : tm;
   }
   if (tm.tag === 'Pi')
-    return Pi(tm.mode, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
+    return Pi(tm.mode, tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Sigma')
     return Sigma(tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Let')
     return Let(tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Abs')
-    return Abs(tm.mode, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
+    return Abs(tm.mode, tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Pair')
     return Pair(zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full), zonk(tm.type, vs, k, full));
   if (tm.tag === 'Proj')

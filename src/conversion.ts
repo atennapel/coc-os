@@ -28,7 +28,7 @@ export const conv = (k: Ix, a_: Val, b_: Val): void => {
   const b = force(b_, false);
   log(() => `conv(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
-  if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
+  if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode && a.erased === b.erased) {
     conv(k, a.type, b.type);
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vinst(b, v));
@@ -38,7 +38,7 @@ export const conv = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vinst(b, v));
   }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode) {
+  if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode && a.erased === b.erased) {
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vinst(b, v));
   }

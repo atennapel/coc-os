@@ -25,7 +25,7 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
   const b = force(b_, false);
   log(() => `unify(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
-  if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
+  if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode && a.erased === b.erased) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
@@ -35,7 +35,7 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode) {
+  if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode && a.erased === b.erased) {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }
@@ -132,7 +132,7 @@ const constructSolution = (k: Ix, ty_: Val, body: Term): Term => {
   const ty = force(ty_);
   if (ty.tag === 'VPi') {
     const v = VVar(k);
-    return Abs(ty.mode, ty.name, quote(ty.type, k), constructSolution(k + 1, vinst(ty, v), body));
+    return Abs(ty.mode, ty.erased, ty.name, quote(ty.type, k), constructSolution(k + 1, vinst(ty, v), body));
   } else return body;
 };
 
@@ -182,12 +182,12 @@ const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
   if (t.tag === 'Abs') {
     const ty = checkSolution(k, m, is, t.type);
     const body = checkSolution(k + 1, m, Cons(k, is), t.body);
-    return Abs(t.mode, t.name, ty, body);
+    return Abs(t.mode, t.erased, t.name, ty, body);
   }
   if (t.tag === 'Pi') {
     const ty = checkSolution(k, m, is, t.type);
     const body = checkSolution(k + 1, m, Cons(k, is), t.body);
-    return Pi(t.mode, t.name, ty, body);
+    return Pi(t.mode, t.erased, t.name, ty, body);
   }
   if (t.tag === 'Sigma') {
     const ty = checkSolution(k, m, is, t.type);

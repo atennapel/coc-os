@@ -98,7 +98,7 @@ exports.registerHole = (name, info) => {
 exports.getHoles = () => context.holes;
 exports.getHoleEntries = () => Object.entries(exports.getHoles());
 
-},{"./utils/utils":16}],3:[function(require,module,exports){
+},{"./utils/utils":17}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.conv = exports.eqHead = void 0;
@@ -138,7 +138,7 @@ exports.conv = (k, a_, b_) => {
     config_1.log(() => `conv(${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
     if (a === b)
         return;
-    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode && a.erased === b.erased) {
         exports.conv(k, a.type, b.type);
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -148,7 +148,7 @@ exports.conv = (k, a_, b_) => {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
-    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode) {
+    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode && a.erased === b.erased) {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
@@ -188,7 +188,7 @@ exports.conv = (k, a_, b_) => {
     return utils_1.terr(`conv failed (${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
 };
 
-},{"./config":1,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16,"./values":17}],4:[function(require,module,exports){
+},{"./config":1,"./utils/lazy":15,"./utils/list":16,"./utils/utils":17,"./values":18}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shift = exports.eq = exports.show = exports.flattenPi = exports.flattenApp = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
@@ -198,11 +198,11 @@ exports.Var = (index) => ({ tag: 'Var', index });
 exports.Prim = (name) => ({ tag: 'Prim', name });
 exports.Global = (name) => ({ tag: 'Global', name });
 exports.App = (left, mode, right) => ({ tag: 'App', left, mode, right });
-exports.Abs = (mode, name, type, body) => ({ tag: 'Abs', name, mode, type, body });
+exports.Abs = (mode, erased, name, type, body) => ({ tag: 'Abs', name, erased, mode, type, body });
 exports.Pair = (fst, snd, type) => ({ tag: 'Pair', fst, snd, type });
 exports.Proj = (proj, term) => ({ tag: 'Proj', proj, term });
 exports.Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
-exports.Pi = (mode, name, type, body) => ({ tag: 'Pi', mode, name, type, body });
+exports.Pi = (mode, erased, name, type, body) => ({ tag: 'Pi', mode, erased, name, type, body });
 exports.Sigma = (name, type, body) => ({ tag: 'Sigma', name, type, body });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.isPrimName = (name) => exports.primNames.includes(name);
@@ -216,10 +216,10 @@ exports.primNames = [
 exports.Type = exports.Prim('Type');
 exports.AppE = (left, right) => exports.App(left, exports.Expl, right);
 exports.AppU = (left, right) => exports.App(left, exports.ImplUnif, right);
-exports.AbsE = (name, type, body) => exports.Abs(exports.Expl, name, type, body);
-exports.AbsU = (name, type, body) => exports.Abs(exports.ImplUnif, name, type, body);
-exports.PiE = (name, type, body) => exports.Pi(exports.Expl, name, type, body);
-exports.PiU = (name, type, body) => exports.Pi(exports.ImplUnif, name, type, body);
+exports.AbsE = (name, type, body) => exports.Abs(exports.Expl, false, name, type, body);
+exports.AbsU = (name, type, body) => exports.Abs(exports.ImplUnif, false, name, type, body);
+exports.PiE = (name, type, body) => exports.Pi(exports.Expl, false, name, type, body);
+exports.PiU = (name, type, body) => exports.Pi(exports.ImplUnif, false, name, type, body);
 exports.showMode = (m) => m === 'ImplUnif' ? 'impl' : '';
 exports.flattenApp = (t) => {
     const r = [];
@@ -232,7 +232,7 @@ exports.flattenApp = (t) => {
 exports.flattenPi = (t) => {
     const r = [];
     while (t.tag === 'Pi') {
-        r.push([t.name, t.mode, t.type]);
+        r.push([t.name, t.mode, t.erased, t.type]);
         t = t.body;
     }
     return [r, t];
@@ -251,7 +251,7 @@ exports.show = (t) => {
         return `(${exports.show(f)} ${as.map(([m, a]) => `${m === exports.ImplUnif ? '{' : ''}${exports.show(a)}${m === exports.ImplUnif ? '}' : ''}`).join(' ')})`;
     }
     if (t.tag === 'Abs')
-        return `(\\${t.mode === exports.ImplUnif ? '{' : '('}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'}. ${exports.show(t.body)})`;
+        return `(\\${t.mode === exports.ImplUnif ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'}. ${exports.show(t.body)})`;
     if (t.tag === 'Pair')
         return `(${exports.show(t.fst)}, ${exports.show(t.snd)} : ${exports.show(t.type)})`;
     if (t.tag === 'Proj')
@@ -260,7 +260,7 @@ exports.show = (t) => {
         return `(let ${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
     if (t.tag === 'Pi') {
         const [as, r] = exports.flattenPi(t);
-        return `(${as.map(([x, m, ty]) => `${m === exports.ImplUnif ? '{' : '('}${x} : ${exports.show(ty)}${m === exports.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(r)})`;
+        return `(${as.map(([x, m, e, ty]) => `${m === exports.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(ty)}${m === exports.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(r)})`;
     }
     if (t.tag === 'Sigma')
         return `((${t.name} : ${exports.show(t.type)}) ** ${exports.show(t.body)})`;
@@ -278,7 +278,7 @@ exports.eq = (t, o) => {
     if (t.tag === 'App')
         return o.tag === 'App' && exports.eq(t.left, o.left) && exports.eq(t.right, o.right);
     if (t.tag === 'Abs')
-        return o.tag === 'Abs' && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
+        return o.tag === 'Abs' && t.mode === o.mode && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Pair')
         return o.tag === 'Pair' && exports.eq(t.fst, o.snd) && exports.eq(t.fst, o.snd);
     if (t.tag === 'Proj')
@@ -286,7 +286,7 @@ exports.eq = (t, o) => {
     if (t.tag === 'Let')
         return o.tag === 'Let' && exports.eq(t.type, o.type) && exports.eq(t.val, o.val) && exports.eq(t.body, o.body);
     if (t.tag === 'Pi')
-        return o.tag === 'Pi' && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
+        return o.tag === 'Pi' && t.mode === o.mode && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Sigma')
         return o.tag === 'Sigma' && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     return t;
@@ -303,7 +303,7 @@ exports.shift = (d, c, t) => {
     if (t.tag === 'App')
         return exports.App(exports.shift(d, c, t.left), t.mode, exports.shift(d, c, t.right));
     if (t.tag === 'Abs')
-        return exports.Abs(t.mode, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+        return exports.Abs(t.mode, t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Pair')
         return exports.Pair(exports.shift(d, c, t.fst), exports.shift(d, c, t.snd), exports.shift(d, c, t.type));
     if (t.tag === 'Proj')
@@ -311,7 +311,7 @@ exports.shift = (d, c, t) => {
     if (t.tag === 'Let')
         return exports.Let(t.name, exports.shift(d, c, t.type), exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Pi')
-        return exports.Pi(t.mode, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+        return exports.Pi(t.mode, t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Sigma')
         return exports.Sigma(t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     return t;
@@ -333,7 +333,7 @@ const context_1 = require("./context");
 const unification_1 = require("./unification");
 const primitives_1 = require("./primitives");
 const globals_1 = require("./globals");
-const EntryT = (type, bound, mode, inserted) => ({ type, bound, mode, inserted });
+const EntryT = (type, bound, mode, erased, inserted) => ({ type, bound, mode, erased, inserted });
 const indexT = (ts, ix) => {
     let l = ts;
     let i = 0;
@@ -351,9 +351,10 @@ const indexT = (ts, ix) => {
     }
     return null;
 };
-const Local = (index, ns, nsSurface, ts, vs) => ({ index, ns, nsSurface, ts, vs });
-const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, list_1.Nil);
-const localExtend = (local, name, ty, mode, bound = true, inserted = false, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), inserted ? local.nsSurface : list_1.Cons(name, local.nsSurface), list_1.Cons(EntryT(ty, bound, mode, inserted), local.ts), list_1.Cons(val, local.vs));
+const Local = (index, ns, nsSurface, ts, vs, erased) => ({ index, ns, nsSurface, ts, vs, erased });
+const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, list_1.Nil, false);
+const localExtend = (local, name, ty, mode, erased, bound = true, inserted = false, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), inserted ? local.nsSurface : list_1.Cons(name, local.nsSurface), list_1.Cons(EntryT(ty, bound, mode, erased, inserted), local.ts), list_1.Cons(val, local.vs), local.erased);
+const localErased = (local) => Local(local.index, local.ns, local.nsSurface, local.ts, local.vs, true);
 const showVal = (local, val) => S.showValZ(val, local.vs, local.index, local.ns);
 const constructMetaType = (l, b, k = 0, skipped = 0) => {
     if (l.tag === 'Cons') {
@@ -362,7 +363,7 @@ const constructMetaType = (l, b, k = 0, skipped = 0) => {
             return constructMetaType(l.tail, b, k + 1, skipped + 1);
         const q = values_1.quote(e.type, k);
         const sq = C.shift(-skipped, k - skipped, q);
-        return core_1.Pi(e.mode, x, sq, constructMetaType(l.tail, b, k + 1, skipped));
+        return core_1.Pi(e.mode, e.erased, x, sq, constructMetaType(l.tail, b, k + 1, skipped));
     }
     return C.shift(-skipped, k - skipped, values_1.quote(b, k));
 };
@@ -399,15 +400,17 @@ const check = (local, tm, ty) => {
     }
     const fty = values_1.force(ty);
     if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
+        if (tm.erased !== fty.erased)
+            return utils_1.terr(`erasability mismatch in check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
         const v = values_1.VVar(local.index);
         const x = tm.name;
-        const body = check(localExtend(local, x, fty.type, tm.mode, true, false, v), tm.body, values_1.vinst(fty, v));
-        return core_1.Abs(tm.mode, x, values_1.quote(fty.type, local.index), body);
+        const body = check(localExtend(local, x, fty.type, tm.mode, tm.erased, true, false, v), tm.body, values_1.vinst(fty, v));
+        return core_1.Abs(tm.mode, tm.erased, x, values_1.quote(fty.type, local.index), body);
     }
     if (fty.tag === 'VPi' && fty.mode === C.ImplUnif) {
         const v = values_1.VVar(local.index);
-        const term = check(localExtend(local, fty.name, fty.type, fty.mode, true, true, v), tm, values_1.vinst(fty, v));
-        return core_1.Abs(fty.mode, fty.name, values_1.quote(fty.type, local.index), term);
+        const term = check(localExtend(local, fty.name, fty.type, fty.mode, fty.erased, true, true, v), tm, values_1.vinst(fty, v));
+        return core_1.Abs(fty.mode, fty.erased, fty.name, values_1.quote(fty.type, local.index), term);
     }
     if (tm.tag === 'Pair' && fty.tag === 'VSigma') {
         const fst = check(local, tm.fst, fty.type);
@@ -419,7 +422,7 @@ const check = (local, tm, ty) => {
         let vty;
         let val;
         if (tm.type) {
-            vtype = check(local, tm.type, values_1.VType);
+            vtype = check(localErased(local), tm.type, values_1.VType);
             vty = values_1.evaluate(vtype, local.vs);
             val = check(local, tm.val, ty);
         }
@@ -428,7 +431,7 @@ const check = (local, tm, ty) => {
             vtype = values_1.quote(ty, local.index);
         }
         const v = values_1.evaluate(val, local.vs);
-        const body = check(localExtend(local, tm.name, vty, C.Expl, false, false, v), tm.body, ty);
+        const body = check(localExtend(local, tm.name, vty, C.Expl, false, false, false, v), tm.body, ty);
         return core_1.Let(tm.name, vtype, val, body);
     }
     const [term, ty2] = synth(local, tm);
@@ -439,11 +442,11 @@ const check = (local, tm, ty) => {
         return list_1.foldl((a, m) => core_1.App(a, C.ImplUnif, m), term, ms);
     }, e => utils_1.terr(`check failed (${surface_1.show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
 };
-const freshPi = (local, mode, x) => {
+const freshPi = (local, mode, erased, x) => {
     const a = newMeta(local, values_1.VType);
     const va = values_1.evaluate(a, local.vs);
-    const b = newMeta(localExtend(local, '_', va, mode), values_1.VType);
-    return values_1.evaluate(core_1.Pi(mode, x, a, b), local.vs);
+    const b = newMeta(localExtend(local, '_', va, mode, erased), values_1.VType);
+    return values_1.evaluate(core_1.Pi(mode, erased, x, a, b), local.vs);
 };
 const synth = (local, tm) => {
     config_1.log(() => `synth ${surface_1.show(tm)}`);
@@ -459,6 +462,8 @@ const synth = (local, tm) => {
         }
         else {
             const [entry, j] = indexT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
+            if (entry.erased && !local.erased)
+                return utils_1.terr(`erased var used: ${surface_1.show(tm)}`);
             return [core_1.Var(j), entry.type];
         }
     }
@@ -469,14 +474,14 @@ const synth = (local, tm) => {
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
-            const type = check(local, tm.type, values_1.VType);
+            const type = check(localErased(local), tm.type, values_1.VType);
             const ty = values_1.evaluate(type, local.vs);
-            const [body, rty] = synth(localExtend(local, tm.name, ty, tm.mode), tm.body);
-            const pi = values_1.evaluate(core_1.Pi(tm.mode, tm.name, type, values_1.quote(rty, local.index + 1)), local.vs);
-            return [core_1.Abs(tm.mode, tm.name, type, body), pi];
+            const [body, rty] = synth(localExtend(local, tm.name, ty, tm.mode, tm.erased), tm.body);
+            const pi = values_1.evaluate(core_1.Pi(tm.mode, tm.erased, tm.name, type, values_1.quote(rty, local.index + 1)), local.vs);
+            return [core_1.Abs(tm.mode, tm.erased, tm.name, type, body), pi];
         }
         else {
-            const pi = freshPi(local, tm.mode, tm.name);
+            const pi = freshPi(local, tm.mode, tm.erased, tm.name);
             const term = check(local, tm, pi);
             return [term, pi];
         }
@@ -532,15 +537,15 @@ const synth = (local, tm) => {
         }
     }
     if (tm.tag === 'Pi') {
-        const type = check(local, tm.type, values_1.VType);
+        const type = check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const body = check(localExtend(local, tm.name, ty, tm.mode), tm.body, values_1.VType);
-        return [core_1.Pi(tm.mode, tm.name, type, body), values_1.VType];
+        const body = check(localExtend(local, tm.name, ty, tm.mode, tm.erased), tm.body, values_1.VType);
+        return [core_1.Pi(tm.mode, tm.erased, tm.name, type, body), values_1.VType];
     }
     if (tm.tag === 'Sigma') {
-        const type = check(local, tm.type, values_1.VType);
+        const type = check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const body = check(localExtend(local, tm.name, ty, C.Expl), tm.body, values_1.VType);
+        const body = check(localExtend(local, tm.name, ty, C.Expl, false), tm.body, values_1.VType);
         return [core_1.Sigma(tm.name, type, body), values_1.VType];
     }
     if (tm.tag === 'Let') {
@@ -548,7 +553,7 @@ const synth = (local, tm) => {
         let ty;
         let val;
         if (tm.type) {
-            type = check(local, tm.type, values_1.VType);
+            type = check(localErased(local), tm.type, values_1.VType);
             ty = values_1.evaluate(type, local.vs);
             val = check(local, tm.val, ty);
         }
@@ -557,7 +562,7 @@ const synth = (local, tm) => {
             type = values_1.quote(ty, local.index);
         }
         const v = values_1.evaluate(val, local.vs);
-        const [body, rty] = synth(localExtend(local, tm.name, ty, C.Expl, false, false, v), tm.body);
+        const [body, rty] = synth(localExtend(local, tm.name, ty, C.Expl, false, false, false, v), tm.body);
         return [core_1.Let(tm.name, type, val, body), rty];
     }
     if (tm.tag === 'Hole') {
@@ -573,7 +578,7 @@ const synthapp = (local, ty, mode, tm, full) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
     const fty = values_1.force(ty);
     if (fty.tag === 'VPi' && fty.mode === mode) {
-        const term = check(local, tm, fty.type);
+        const term = check(fty.erased ? localErased(local) : local, tm, fty.type);
         const v = values_1.evaluate(term, local.vs);
         return [term, values_1.vinst(fty, v), list_1.Nil];
     }
@@ -587,7 +592,7 @@ const synthapp = (local, ty, mode, tm, full) => {
         const mty = context_1.getMeta(ty.head.index).type;
         const a = context_1.freshMeta(mty);
         const b = context_1.freshMeta(mty);
-        const pi = values_1.evaluate(core_1.Pi(mode, '_', values_1.quote(values_1.VNe(values_1.HMeta(a), ty.spine), local.index), values_1.quote(values_1.VNe(values_1.HMeta(b), ty.spine), local.index + 1)), local.vs);
+        const pi = values_1.evaluate(core_1.Pi(mode, false, '_', values_1.quote(values_1.VNe(values_1.HMeta(a), ty.spine), local.index), values_1.quote(values_1.VNe(values_1.HMeta(b), ty.spine), local.index + 1)), local.vs);
         unification_1.unify(local.index, ty, pi);
         return synthapp(local, pi, mode, tm, full);
     }
@@ -669,7 +674,66 @@ const showHoles = (tm, ty) => {
     return utils_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
 };
 
-},{"./config":1,"./context":2,"./core":4,"./globals":6,"./primitives":9,"./surface":11,"./unification":13,"./utils/list":15,"./utils/utils":16,"./values":17}],6:[function(require,module,exports){
+},{"./config":1,"./context":2,"./core":4,"./globals":7,"./primitives":10,"./surface":12,"./unification":14,"./utils/list":16,"./utils/utils":17,"./values":18}],6:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.show = exports.flattenPair = exports.flattenAbs = exports.flattenApp = exports.termId = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Var = void 0;
+exports.Var = (index) => ({ tag: 'Var', index });
+exports.Global = (name) => ({ tag: 'Global', name });
+exports.App = (left, right) => ({ tag: 'App', left, right });
+exports.Abs = (name, body) => ({ tag: 'Abs', name, body });
+exports.Pair = (fst, snd) => ({ tag: 'Pair', fst, snd });
+exports.Proj = (proj, term) => ({ tag: 'Proj', proj, term });
+exports.Let = (name, val, body) => ({ tag: 'Let', name, val, body });
+exports.termId = exports.Abs('x', exports.Var(0));
+exports.flattenApp = (t) => {
+    const r = [];
+    while (t.tag === 'App') {
+        r.push(t.right);
+        t = t.left;
+    }
+    return [t, r.reverse()];
+};
+exports.flattenAbs = (t) => {
+    const r = [];
+    while (t.tag === 'Abs') {
+        r.push(t.name);
+        t = t.body;
+    }
+    return [r, t];
+};
+exports.flattenPair = (t) => {
+    const r = [];
+    while (t.tag === 'Pair') {
+        r.push(t.fst);
+        t = t.snd;
+    }
+    r.push(t);
+    return r;
+};
+exports.show = (t) => {
+    if (t.tag === 'Var')
+        return `${t.index}`;
+    if (t.tag === 'Global')
+        return `${t.name}`;
+    if (t.tag === 'App') {
+        const [f, as] = exports.flattenApp(t);
+        return `(${exports.show(f)} ${as.map(exports.show).join(' ')})`;
+    }
+    if (t.tag === 'Abs') {
+        const [ns, b] = exports.flattenAbs(t);
+        return `\\${ns.join(' ')}. ${exports.show(b)}`;
+    }
+    if (t.tag === 'Pair')
+        return `(${exports.flattenPair(t).join(', ')})`;
+    if (t.tag === 'Proj')
+        return `(${t.proj} ${exports.show(t.term)})`;
+    if (t.tag === 'Let')
+        return `(let ${t.name} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
+    return t;
+};
+
+},{}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteGlobal = exports.setGlobal = exports.hasGlobal = exports.getGlobal = exports.getGlobals = exports.resetGlobals = void 0;
@@ -689,7 +753,7 @@ exports.deleteGlobal = (name) => {
     env.delete(name);
 };
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -704,7 +768,7 @@ exports.nextName = (x) => {
 };
 exports.chooseName = (x, ns) => x === '_' ? x : list_1.contains(ns, x) ? exports.chooseName(exports.nextName(x), ns) : x;
 
-},{"./utils/list":15}],8:[function(require,module,exports){
+},{"./utils/list":16}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseDefs = exports.parseDef = exports.parse = void 0;
@@ -754,7 +818,7 @@ const tokenize = (sc) => {
                 r.push(TName('.'));
             else if (c + next === '--')
                 i++, state = COMMENT;
-            else if (/[\.\?\@\#\%\_a-z]/i.test(c))
+            else if (/[\-\.\?\@\#\%\_a-z]/i.test(c))
                 t += c, state = NAME;
             else if (/[0-9]/.test(c))
                 t += c, state = NUMBER;
@@ -1067,7 +1131,7 @@ const exprs = (ts, br) => {
         if (!found)
             return utils_1.serr(`. not found after \\ or there was no whitespace after .`);
         const body = exprs(ts.slice(i + 1), '(');
-        return args.reduceRight((x, [name, impl, ty]) => surface_1.Abs(impl ? core_1.ImplUnif : core_1.Expl, name, ty, x), body);
+        return args.reduceRight((x, [name, impl, ty]) => surface_1.Abs(impl ? core_1.ImplUnif : core_1.Expl, name[0] === '-', name[0] === '-' ? name.slice(1) : name, ty, x), body);
     }
     if (ts[0].tag === 'Name' && ts[0].name[0] === '.') {
         const x = ts[0].name.slice(1);
@@ -1092,7 +1156,7 @@ const exprs = (ts, br) => {
             .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')]])
             .reduce((x, y) => x.concat(y), []);
         const body = exprs(s[s.length - 1], '(');
-        return args.reduceRight((x, [name, impl, ty]) => surface_1.Pi(impl ? core_1.ImplUnif : core_1.Expl, name, ty, x), body);
+        return args.reduceRight((x, [name, impl, ty]) => surface_1.Pi(impl ? core_1.ImplUnif : core_1.Expl, name[0] === '-', name[0] === '-' ? name.slice(1) : name, ty, x), body);
     }
     const jp = ts.findIndex(x => isName(x, ','));
     if (jp >= 0) {
@@ -1244,7 +1308,7 @@ exports.parseDefs = async (s, importMap) => {
     return ds.reduce((x, y) => x.concat(y), []);
 };
 
-},{"./config":1,"./core":4,"./surface":11,"./utils/utils":16}],9:[function(require,module,exports){
+},{"./config":1,"./core":4,"./surface":12,"./utils/utils":17}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.primType = void 0;
@@ -1309,7 +1373,7 @@ const primTypes = {
 };
 exports.primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
 
-},{"./utils/utils":16,"./values":17}],10:[function(require,module,exports){
+},{"./utils/utils":17,"./values":18}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runREPL = exports.initREPL = void 0;
@@ -1318,6 +1382,7 @@ const elaboration_1 = require("./elaboration");
 const parser_1 = require("./parser");
 const surface_1 = require("./surface");
 const C = require("./core");
+const E = require("./erased");
 const typecheck_1 = require("./typecheck");
 const values_1 = require("./values");
 const globals_1 = require("./globals");
@@ -1439,17 +1504,18 @@ exports.runREPL = (s_, cb) => {
         const unfolded = values_1.normalize(eterm, false);
         config_1.log(() => surface_1.showCore(unfolded));
         config_1.log(() => 'TYPECHECK');
-        const ttype = typecheck_1.typecheck(eterm);
+        const [ttype, er] = typecheck_1.typecheck(eterm);
         config_1.log(() => C.show(ttype));
         config_1.log(() => surface_1.showCore(ttype));
-        return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\netru: ${surface_1.showCore(unfolded)}`);
+        config_1.log(() => E.show(er));
+        return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\netru: ${surface_1.showCore(unfolded)}\neras: ${E.show(er)}`);
     }
     catch (err) {
         return cb(`${err}`, true);
     }
 };
 
-},{"./config":1,"./core":4,"./elaboration":5,"./globals":6,"./parser":8,"./surface":11,"./typecheck":12,"./utils/list":15,"./utils/utils":16,"./values":17}],11:[function(require,module,exports){
+},{"./config":1,"./core":4,"./elaboration":5,"./erased":6,"./globals":7,"./parser":9,"./surface":12,"./typecheck":13,"./utils/list":16,"./utils/utils":17,"./values":18}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showDefs = exports.showDef = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
@@ -1464,11 +1530,11 @@ exports.PCore = (proj) => ({ tag: 'PCore', proj });
 exports.Var = (name) => ({ tag: 'Var', name });
 exports.Prim = (name) => ({ tag: 'Prim', name });
 exports.App = (left, mode, right) => ({ tag: 'App', left, mode, right });
-exports.Abs = (mode, name, type, body) => ({ tag: 'Abs', mode, name, type, body });
+exports.Abs = (mode, erased, name, type, body) => ({ tag: 'Abs', mode, erased, name, type, body });
 exports.Pair = (fst, snd) => ({ tag: 'Pair', fst, snd });
 exports.Proj = (proj, term) => ({ tag: 'Proj', proj, term });
 exports.Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
-exports.Pi = (mode, name, type, body) => ({ tag: 'Pi', mode, name, type, body });
+exports.Pi = (mode, erased, name, type, body) => ({ tag: 'Pi', mode, erased, name, type, body });
 exports.Sigma = (name, type, body) => ({ tag: 'Sigma', name, type, body });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.Hole = (name) => ({ tag: 'Hole', name });
@@ -1484,7 +1550,7 @@ exports.flattenApp = (t) => {
 exports.flattenAbs = (t) => {
     const r = [];
     while (t.tag === 'Abs') {
-        r.push([t.name, t.mode, t.type]);
+        r.push([t.name, t.mode, t.erased, t.type]);
         t = t.body;
     }
     return [r, t];
@@ -1492,7 +1558,7 @@ exports.flattenAbs = (t) => {
 exports.flattenPi = (t) => {
     const r = [];
     while (t.tag === 'Pi') {
-        r.push([t.name, t.mode, t.type]);
+        r.push([t.name, t.mode, t.erased, t.type]);
         t = t.body;
     }
     return [r, t];
@@ -1531,15 +1597,15 @@ exports.show = (t) => {
     }
     if (t.tag === 'Abs') {
         const [as, b] = exports.flattenAbs(t);
-        return `\\${as.map(([x, m, t]) => !t ?
-            (m === C.ImplUnif ? `{${x}}` : x) :
-            `${m === C.ImplUnif ? '{' : '('}${x} : ${exports.show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' ')}. ${exports.show(b)}`;
+        return `\\${as.map(([x, m, e, t]) => !t ?
+            (m === C.ImplUnif ? `{${e ? '-' : ''}${x}}` : `${e ? '-' : ''}${x}`) :
+            `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' ')}. ${exports.show(b)}`;
     }
     if (t.tag === 'Pi') {
         const [as, b] = exports.flattenPi(t);
-        return `${as.map(([x, m, t]) => x === '_' ?
+        return `${as.map(([x, m, e, t]) => x === '_' && !e ?
             (m === C.ImplUnif ? `{${exports.show(t)}}` : showP(!isSimple(t) && t.tag !== 'App', t)) :
-            `${m === C.ImplUnif ? '{' : '('}${x} : ${exports.show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(b)}`;
+            `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(b)}`;
     }
     if (t.tag === 'Let')
         return `let ${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${exports.show(t.body)}`;
@@ -1576,11 +1642,11 @@ exports.toSurface = (t, ns = list_1.Nil) => {
         return exports.Proj(exports.PCore(t.proj), exports.toSurface(t.term, ns));
     if (t.tag === 'Abs') {
         const x = names_1.chooseName(t.name, ns);
-        return exports.Abs(t.mode, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
+        return exports.Abs(t.mode, t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
     }
     if (t.tag === 'Pi') {
         const x = names_1.chooseName(t.name, ns);
-        return exports.Pi(t.mode, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
+        return exports.Pi(t.mode, t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
     }
     if (t.tag === 'Sigma') {
         const x = names_1.chooseName(t.name, ns);
@@ -1604,7 +1670,7 @@ exports.showDef = (d) => {
 };
 exports.showDefs = (ds) => ds.map(exports.showDef).join('\n');
 
-},{"./core":4,"./names":7,"./utils/list":15,"./utils/utils":16,"./values":17}],12:[function(require,module,exports){
+},{"./core":4,"./names":8,"./utils/list":16,"./utils/utils":17,"./values":18}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.typecheck = void 0;
@@ -1616,76 +1682,97 @@ const primitives_1 = require("./primitives");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
-const Local = (index, ts, vs) => ({ index, ts, vs });
-const localEmpty = Local(0, list_1.Nil, list_1.Nil);
-const localExtend = (local, ty, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(ty, local.ts), list_1.Cons(val, local.vs));
+const E = require("./erased");
+const Local = (index, ts, vs, erased) => ({ index, ts, vs, erased });
+const localEmpty = Local(0, list_1.Nil, list_1.Nil, false);
+const localExtend = (local, ty, erased, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons([ty, erased], local.ts), list_1.Cons(val, local.vs), local.erased);
+const localErased = (local) => Local(local.index, local.ts, local.vs, true);
+const indexT = (ts, ix) => {
+    let l = ts;
+    let i = 0;
+    let erased = 0;
+    while (l.tag === 'Cons') {
+        if (ix === 0)
+            return [l.head, i, erased];
+        if (l.head[1])
+            erased++;
+        i++;
+        ix--;
+        l = l.tail;
+    }
+    return null;
+};
 const showVal = (local, val) => values_1.showValZ(val, local.vs, local.index);
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${core_1.show(tm)} : ${showVal(local, ty)}`);
-    const ty2 = synth(local, tm);
+    const [ty2, er] = synth(local, tm);
     utils_1.tryT(() => conversion_1.conv(local.index, ty2, ty), e => utils_1.terr(`check failed (${core_1.show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
+    return er;
 };
 const synth = (local, tm) => {
     config_1.log(() => `synth ${core_1.show(tm)}`);
     if (tm.tag === 'Prim')
-        return primitives_1.primType(tm.name);
+        return [primitives_1.primType(tm.name), E.termId]; // TODO
     if (tm.tag === 'Var') {
-        const ty = list_1.index(local.ts, tm.index);
-        if (!ty)
-            return utils_1.terr(`undefined index ${tm.index}`);
-        return ty;
+        const i = tm.index;
+        const [entry, , erasedNo] = indexT(local.ts, i) || utils_1.terr(`undefined index ${tm.index}`);
+        if (entry[1] && !local.erased)
+            return utils_1.terr(`erased var used: ${core_1.show(tm)}`);
+        return [entry[0], E.Var(i - erasedNo)];
     }
     if (tm.tag === 'Global') {
         const entry = globals_1.getGlobal(tm.name);
         if (!entry)
             return utils_1.terr(`global ${tm.name} not found`);
-        return entry.type;
+        return [entry.type, E.Global(tm.name)];
     }
     if (tm.tag === 'App') {
-        const ty = synth(local, tm.left);
-        return synthapp(local, ty, tm.mode, tm.right);
+        const [ty, er] = synth(local, tm.left);
+        const [ret, arg] = synthapp(local, ty, tm.mode, tm.right);
+        return [ret, arg ? E.App(er, arg) : er];
     }
     if (tm.tag === 'Abs') {
-        check(local, tm.type, values_1.VType);
+        check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const rty = synth(localExtend(local, ty), tm.body);
-        return values_1.evaluate(core_1.Pi(tm.mode, tm.name, tm.type, values_1.quote(rty, local.index + 1)), local.vs);
+        const [rty, body] = synth(localExtend(local, ty, tm.erased), tm.body);
+        return [values_1.evaluate(core_1.Pi(tm.mode, tm.erased, tm.name, tm.type, values_1.quote(rty, local.index + 1)), local.vs), tm.erased ? body : E.Abs(tm.name, body)];
     }
     if (tm.tag === 'Pair') {
-        check(local, tm.type, values_1.VType);
+        check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
         const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
             return utils_1.terr(`not a sigma type in pair: ${core_1.show(tm)}`);
-        check(local, tm.fst, fty.type);
-        check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(tm.fst, local.vs)));
-        return ty;
+        const fst = check(local, tm.fst, fty.type);
+        const snd = check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(tm.fst, local.vs)));
+        return [ty, E.Pair(fst, snd)];
     }
     if (tm.tag === 'Proj') {
-        const ty = synth(local, tm.term);
+        const [ty, er] = synth(local, tm.term);
         const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
             return utils_1.terr(`not a sigma type in ${tm.proj}: ${core_1.show(tm)}: ${showVal(local, ty)}`);
-        return tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(tm.term, local.vs)));
+        return [tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(tm.term, local.vs))), E.Proj(tm.proj, er)];
     }
     if (tm.tag === 'Pi') {
-        check(local, tm.type, values_1.VType);
+        check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(localExtend(local, ty), tm.body, values_1.VType);
-        return values_1.VType;
+        check(localExtend(local, ty, false), tm.body, values_1.VType);
+        return [values_1.VType, E.termId];
     }
     if (tm.tag === 'Sigma') {
-        check(local, tm.type, values_1.VType);
+        check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(localExtend(local, ty), tm.body, values_1.VType);
-        return values_1.VType;
+        check(localExtend(local, ty, false), tm.body, values_1.VType);
+        return [values_1.VType, E.termId];
     }
     if (tm.tag === 'Let') {
-        check(local, tm.type, values_1.VType);
+        check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(local, tm.val, ty);
+        const valEr = check(local, tm.val, ty);
         const val = values_1.evaluate(tm.val, local.vs);
-        return synth(localExtend(local, ty, val), tm.body);
+        const [ret, body] = synth(localExtend(local, ty, false, val), tm.body);
+        return [ret, E.Let(tm.name, valEr, body)];
     }
     return utils_1.terr(`synth failed: ${core_1.show(tm)}`);
 };
@@ -1693,18 +1780,18 @@ const synthapp = (local, ty, mode, tm) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${core_1.show(tm)}`);
     const fty = values_1.force(ty);
     if (fty.tag === 'VPi' && fty.mode === mode) {
-        check(local, tm, fty.type);
+        const er = check(fty.erased ? localErased(local) : local, tm, fty.type);
         const v = values_1.evaluate(tm, local.vs);
-        return values_1.vinst(fty, v);
+        return [values_1.vinst(fty, v), fty.erased ? null : er];
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${core_1.show(tm)}`);
 };
 exports.typecheck = (t) => {
-    const ty = synth(localEmpty, t);
-    return values_1.quote(ty, 0);
+    const [ty, er] = synth(localEmpty, t);
+    return [values_1.quote(ty, 0), er];
 };
 
-},{"./config":1,"./conversion":3,"./core":4,"./globals":6,"./primitives":9,"./utils/list":15,"./utils/utils":16,"./values":17}],13:[function(require,module,exports){
+},{"./config":1,"./conversion":3,"./core":4,"./erased":6,"./globals":7,"./primitives":10,"./utils/list":16,"./utils/utils":17,"./values":18}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.unify = void 0;
@@ -1737,7 +1824,7 @@ exports.unify = (k, a_, b_) => {
     config_1.log(() => `unify(${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
     if (a === b)
         return;
-    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode) {
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode && a.erased === b.erased) {
         exports.unify(k, a.type, b.type);
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -1747,7 +1834,7 @@ exports.unify = (k, a_, b_) => {
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
-    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode) {
+    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode && a.erased === b.erased) {
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
@@ -1843,7 +1930,7 @@ const constructSolution = (k, ty_, body) => {
     const ty = values_1.force(ty_);
     if (ty.tag === 'VPi') {
         const v = values_1.VVar(k);
-        return core_1.Abs(ty.mode, ty.name, values_1.quote(ty.type, k), constructSolution(k + 1, values_1.vinst(ty, v), body));
+        return core_1.Abs(ty.mode, ty.erased, ty.name, values_1.quote(ty.type, k), constructSolution(k + 1, values_1.vinst(ty, v), body));
     }
     else
         return body;
@@ -1892,12 +1979,12 @@ const checkSolution = (k, m, is, t) => {
     if (t.tag === 'Abs') {
         const ty = checkSolution(k, m, is, t.type);
         const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
-        return core_1.Abs(t.mode, t.name, ty, body);
+        return core_1.Abs(t.mode, t.erased, t.name, ty, body);
     }
     if (t.tag === 'Pi') {
         const ty = checkSolution(k, m, is, t.type);
         const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
-        return core_1.Pi(t.mode, t.name, ty, body);
+        return core_1.Pi(t.mode, t.erased, t.name, ty, body);
     }
     if (t.tag === 'Sigma') {
         const ty = checkSolution(k, m, is, t.type);
@@ -1907,7 +1994,7 @@ const checkSolution = (k, m, is, t) => {
     return utils_1.impossible(`checkSolution ?${m}: non-normal term: ${core_1.show(t)}`);
 };
 
-},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16,"./values":17}],14:[function(require,module,exports){
+},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./utils/lazy":15,"./utils/list":16,"./utils/utils":17,"./values":18}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapLazy = exports.forceLazy = exports.lazyOf = exports.Lazy = void 0;
@@ -1923,7 +2010,7 @@ exports.forceLazy = (lazy) => {
 };
 exports.mapLazy = (lazy, fn) => exports.Lazy(() => fn(exports.forceLazy(lazy)));
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
@@ -2064,7 +2151,7 @@ exports.last = (l) => {
     return null;
 };
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
@@ -2128,7 +2215,7 @@ exports.mapObj = (o, fn) => {
     return n;
 };
 
-},{"fs":19}],17:[function(require,module,exports){
+},{"fs":20}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.vAllI = exports.VAllI = exports.vinterpI = exports.VInterpI = exports.vicon = exports.VICon = exports.vidata = exports.VIData = exports.VIHRec = exports.VIRec = exports.VIFArg = exports.VIArg = exports.VIEnd = exports.videsc = exports.VIDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
@@ -2147,9 +2234,9 @@ exports.EProj = (proj) => ({ tag: 'EProj', proj });
 exports.EPrim = (name, args) => ({ tag: 'EPrim', name, args });
 exports.VNe = (head, spine) => ({ tag: 'VNe', head, spine });
 exports.VGlobal = (head, args, val) => ({ tag: 'VGlobal', head, args, val });
-exports.VAbs = (mode, name, type, clos) => ({ tag: 'VAbs', mode, name, type, clos });
+exports.VAbs = (mode, erased, name, type, clos) => ({ tag: 'VAbs', mode, erased, name, type, clos });
 exports.VPair = (fst, snd, type) => ({ tag: 'VPair', fst, snd, type });
-exports.VPi = (mode, name, type, clos) => ({ tag: 'VPi', mode, name, type, clos });
+exports.VPi = (mode, erased, name, type, clos) => ({ tag: 'VPi', mode, erased, name, type, clos });
 exports.VSigma = (name, type, clos) => ({ tag: 'VSigma', name, type, clos });
 exports.VVar = (index, spine = list_1.Nil) => exports.VNe(exports.HVar(index), spine);
 exports.VPrim = (name, spine = list_1.Nil) => exports.VNe(exports.HPrim(name), spine);
@@ -2187,10 +2274,10 @@ exports.VInterpI = exports.VPrim('interpI');
 exports.vinterpI = (I, d, r, i) => exports.velimprim('interpI', d, [I, r, i]);
 exports.VAllI = exports.VPrim('AllI');
 exports.vAllI = (I, d, X, P, i, xs) => exports.velimprim('AllI', d, [I, X, P, i, xs]);
-exports.VPiE = (name, type, clos) => exports.VPi(core_1.Expl, name, type, clos);
-exports.VPiU = (name, type, clos) => exports.VPi(core_1.ImplUnif, name, type, clos);
-exports.VAbsE = (name, type, clos) => exports.VAbs(core_1.Expl, name, type, clos);
-exports.VAbsU = (name, type, clos) => exports.VAbs(core_1.ImplUnif, name, type, clos);
+exports.VPiE = (name, type, clos) => exports.VPi(core_1.Expl, false, name, type, clos);
+exports.VPiU = (name, type, clos) => exports.VPi(core_1.ImplUnif, false, name, type, clos);
+exports.VAbsE = (name, type, clos) => exports.VAbs(core_1.Expl, false, name, type, clos);
+exports.VAbsU = (name, type, clos) => exports.VAbs(core_1.ImplUnif, false, name, type, clos);
 exports.vinst = (val, arg) => val.clos(arg);
 exports.force = (v, forceGlobal = true) => {
     if (v.tag === 'VGlobal' && forceGlobal)
@@ -2380,11 +2467,11 @@ exports.VU = exports.vheq(exports.VType, exports.VType, exports.VVoid, exports.V
 exports.VUnit = exports.vreflheq(exports.VType, exports.VVoid);
 exports.evaluate = (t, vs) => {
     if (t.tag === 'Abs')
-        return exports.VAbs(t.mode, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+        return exports.VAbs(t.mode, t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Pair')
         return exports.VPair(exports.evaluate(t.fst, vs), exports.evaluate(t.snd, vs), exports.evaluate(t.type, vs));
     if (t.tag === 'Pi')
-        return exports.VPi(t.mode, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+        return exports.VPi(t.mode, t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Sigma')
         return exports.VSigma(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Meta') {
@@ -2462,9 +2549,9 @@ exports.quote = (v_, k, full = false) => {
     if (v.tag === 'VPair')
         return core_1.Pair(exports.quote(v.fst, k, full), exports.quote(v.snd, k, full), exports.quote(v.type, k, full));
     if (v.tag === 'VAbs')
-        return core_1.Abs(v.mode, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
+        return core_1.Abs(v.mode, v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VPi')
-        return core_1.Pi(v.mode, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
+        return core_1.Pi(v.mode, v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VSigma')
         return core_1.Sigma(v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     return v;
@@ -2491,13 +2578,13 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
         return s.tag === 'Solved' ? exports.quote(s.val, k, full) : tm;
     }
     if (tm.tag === 'Pi')
-        return core_1.Pi(tm.mode, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
+        return core_1.Pi(tm.mode, tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Sigma')
         return core_1.Sigma(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Let')
         return core_1.Let(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Abs')
-        return core_1.Abs(tm.mode, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
+        return core_1.Abs(tm.mode, tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Pair')
         return core_1.Pair(exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full), exports.zonk(tm.type, vs, k, full));
     if (tm.tag === 'Proj')
@@ -2513,7 +2600,7 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
 exports.showVal = (v, k = 0, full = false) => core_1.show(exports.quote(v, k, full));
 exports.showValZ = (v, vs = list_1.Nil, k = 0, full = false) => core_1.show(exports.zonk(exports.quote(v, k, full), vs, k, full));
 
-},{"./config":1,"./context":2,"./core":4,"./globals":6,"./utils/lazy":14,"./utils/list":15,"./utils/utils":16}],18:[function(require,module,exports){
+},{"./config":1,"./context":2,"./core":4,"./globals":7,"./utils/lazy":15,"./utils/list":16,"./utils/utils":17}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -2569,6 +2656,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":10}],19:[function(require,module,exports){
+},{"./repl":11}],20:[function(require,module,exports){
 
-},{}]},{},[18]);
+},{}]},{},[19]);

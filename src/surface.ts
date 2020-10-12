@@ -21,16 +21,16 @@ export type Prim = { tag: 'Prim', name: PrimName };
 export const Prim = (name: PrimName): Prim => ({ tag: 'Prim', name });
 export type App = { tag: 'App', left: Term, mode: Mode, right: Term };
 export const App = (left: Term, mode: Mode, right: Term): App => ({ tag: 'App', left, mode, right });
-export type Abs = { tag: 'Abs', mode: Mode, name: Name, type: Term | null, body: Term };
-export const Abs = (mode: Mode, name: Name, type: Term | null, body: Term): Abs => ({ tag: 'Abs', mode, name, type, body });
+export type Abs = { tag: 'Abs', mode: Mode, erased: boolean, name: Name, type: Term | null, body: Term };
+export const Abs = (mode: Mode, erased: boolean, name: Name, type: Term | null, body: Term): Abs => ({ tag: 'Abs', mode, erased, name, type, body });
 export type Pair = { tag: 'Pair', fst: Term, snd: Term };
 export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
 export type Proj = { tag: 'Proj', proj: ProjType, term: Term };
 export const Proj = (proj: ProjType, term: Term): Proj => ({ tag: 'Proj', proj, term });
 export type Let = { tag: 'Let', name: Name, type: Term | null, val: Term, body: Term };
 export const Let = (name: Name, type: Term | null, val: Term, body: Term): Let => ({ tag: 'Let', name, type, val, body });
-export type Pi = { tag: 'Pi', mode: Mode, name: Name, type: Term, body: Term };
-export const Pi = (mode: Mode, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', mode, name, type, body });
+export type Pi = { tag: 'Pi', mode: Mode, erased: boolean, name: Name, type: Term, body: Term };
+export const Pi = (mode: Mode, erased: boolean, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', mode, erased, name, type, body });
 export type Sigma = { tag: 'Sigma', name: Name, type: Term, body: Term };
 export const Sigma = (name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', name, type, body });
 export type Meta = { tag: 'Meta', index: Ix };
@@ -48,18 +48,18 @@ export const flattenApp = (t: Term): [Term, [Mode, Term][]] => {
   }
   return [t, r.reverse()];
 };
-export const flattenAbs = (t: Term): [[Name, Mode, Term | null][], Term] => {
-  const r: [Name, Mode, Term | null][] = [];
+export const flattenAbs = (t: Term): [[Name, Mode, boolean, Term | null][], Term] => {
+  const r: [Name, Mode, boolean, Term | null][] = [];
   while (t.tag === 'Abs') {
-    r.push([t.name, t.mode, t.type]);
+    r.push([t.name, t.mode, t.erased, t.type]);
     t = t.body;
   }
   return [r, t];
 };
-export const flattenPi = (t: Term): [[Name, Mode, Term][], Term] => {
-  const r: [Name, Mode, Term][] = [];
+export const flattenPi = (t: Term): [[Name, Mode, boolean, Term][], Term] => {
+  const r: [Name, Mode, boolean, Term][] = [];
   while (t.tag === 'Pi') {
-    r.push([t.name, t.mode, t.type]);
+    r.push([t.name, t.mode, t.erased, t.type]);
     t = t.body;
   }
   return [r, t];
@@ -97,15 +97,15 @@ export const show = (t: Term): string => {
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
-    return `\\${as.map(([x, m, t]) => !t ?
-      (m === C.ImplUnif ? `{${x}}` : x) :
-      `${m === C.ImplUnif ? '{' : '('}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' ')}. ${show(b)}`;
+    return `\\${as.map(([x, m, e, t]) => !t ?
+      (m === C.ImplUnif ? `{${e ? '-' : ''}${x}}` : `${e ? '-' : ''}${x}`) :
+      `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' ')}. ${show(b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
-    return `${as.map(([x, m, t]) => x === '_' ?
+    return `${as.map(([x, m, e, t]) => x === '_' && !e?
       (m === C.ImplUnif ? `{${show(t)}}` : showP(!isSimple(t) && t.tag !== 'App', t)) :
-      `${m === C.ImplUnif ? '{' : '('}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(b)}`;
+      `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(b)}`;
   }
   if (t.tag === 'Let')
     return `let ${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
@@ -135,11 +135,11 @@ export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Proj') return Proj(PCore(t.proj), toSurface(t.term, ns));
   if (t.tag === 'Abs') {
     const x = chooseName(t.name, ns);
-    return Abs(t.mode, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
+    return Abs(t.mode, t.erased, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Pi') {
     const x = chooseName(t.name, ns);
-    return Pi(t.mode, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
+    return Pi(t.mode, t.erased, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Sigma') {
     const x = chooseName(t.name, ns);
