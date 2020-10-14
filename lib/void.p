@@ -1,9 +1,9 @@
-def Void : * = (t : *) -> t
+def Void : * = {-t : *} -> t
 
 def caseVoid
-  : {t : *} -> Void -> t
-  = \{t} x. x t
+  : {-t : *} -> Void -> t
+  = \{t} x. x {t}
 
 def indVoid
-  : {P : Void -> *} -> (x : Void) -> P x
-  = \{P} x. x (P x)
+  : {-P : Void -> *} -> (x : Void) -> P x
+  = \{P} x. x {P x}

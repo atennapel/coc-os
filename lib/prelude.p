@@ -26,4 +26,6 @@ import lib/nat.p
 import lib/list.p
 import lib/string.p
 import lib/fin.p
+
+import lib/taggeddesc.p
 import lib/vec.p

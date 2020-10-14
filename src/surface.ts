@@ -27,12 +27,12 @@ export type Pair = { tag: 'Pair', fst: Term, snd: Term };
 export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
 export type Proj = { tag: 'Proj', proj: ProjType, term: Term };
 export const Proj = (proj: ProjType, term: Term): Proj => ({ tag: 'Proj', proj, term });
-export type Let = { tag: 'Let', name: Name, type: Term | null, val: Term, body: Term };
-export const Let = (name: Name, type: Term | null, val: Term, body: Term): Let => ({ tag: 'Let', name, type, val, body });
+export type Let = { tag: 'Let', erased: boolean, name: Name, type: Term | null, val: Term, body: Term };
+export const Let = (erased: boolean, name: Name, type: Term | null, val: Term, body: Term): Let => ({ tag: 'Let', erased, name, type, val, body });
 export type Pi = { tag: 'Pi', mode: Mode, erased: boolean, name: Name, type: Term, body: Term };
 export const Pi = (mode: Mode, erased: boolean, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', mode, erased, name, type, body });
-export type Sigma = { tag: 'Sigma', name: Name, type: Term, body: Term };
-export const Sigma = (name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', name, type, body });
+export type Sigma = { tag: 'Sigma', erased: boolean, name: Name, type: Term, body: Term };
+export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', erased, name, type, body });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 export type Hole = { tag: 'Hole', name: Name | null };
@@ -64,10 +64,10 @@ export const flattenPi = (t: Term): [[Name, Mode, boolean, Term][], Term] => {
   }
   return [r, t];
 };
-export const flattenSigma = (t: Term): [[Name, Term][], Term] => {
-  const r: [Name, Term][] = [];
+export const flattenSigma = (t: Term): [[Name, boolean, Term][], Term] => {
+  const r: [Name, boolean, Term][] = [];
   while (t.tag === 'Sigma') {
-    r.push([t.name, t.type]);
+    r.push([t.name, t.erased, t.type]);
     t = t.body;
   }
   return [r, t];
@@ -108,10 +108,10 @@ export const show = (t: Term): string => {
       `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(b)}`;
   }
   if (t.tag === 'Let')
-    return `let ${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
+    return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
   if (t.tag === 'Sigma') {
     const [as, b] = flattenSigma(t);
-    return `${as.map(([x, t]) => x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `(${x} : ${showP(t.tag === 'Let', t)})`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`
+    return `${as.map(([x, e, t]) => !e && x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `(${e ? '-' : ''}${x} : ${showP(t.tag === 'Let', t)})`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`
   }
   if (t.tag === 'Pair') {
     const ps = flattenPair(t);
@@ -143,11 +143,11 @@ export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
   }
   if (t.tag === 'Sigma') {
     const x = chooseName(t.name, ns);
-    return Sigma(x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
+    return Sigma(t.erased, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));
   }
   if (t.tag === 'Let') {
     const x = chooseName(t.name, ns);
-    return Let(x, toSurface(t.type, ns), toSurface(t.val, ns), toSurface(t.body, Cons(x, ns)));
+    return Let(t.erased, x, toSurface(t.type, ns), toSurface(t.val, ns), toSurface(t.body, Cons(x, ns)));
   }
   return t;
 };

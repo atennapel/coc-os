@@ -86,28 +86,29 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
   if (tm.tag === 'Proj') {
     const [ty, er] = synth(local, tm.term);
     const fty = force(ty);
-    if (fty.tag !== 'VSigma') return terr(`not a sigma type in ${tm.proj}: ${show(tm)}: ${showVal(local, ty)}`);
-    return [tm.proj === 'fst' ? fty.type : vinst(fty, vproj('fst', evaluate(tm.term, local.vs))), E.Proj(tm.proj, er)];
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, ty)}`);
+    if (tm.proj === 'fst' && fty.erased && !local.erased) return terr(`cannot project from erased sigma in non-erased context in ${show(tm)}: ${showVal(local, ty)}`);
+    return [tm.proj === 'fst' ? fty.type : vinst(fty, vproj('fst', evaluate(tm.term, local.vs))), fty.erased ? er : E.Proj(tm.proj, er)];
   }
   if (tm.tag === 'Pi') {
     check(localErased(local), tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
-    check(localExtend(local, ty, false), tm.body, VType);
+    check(localErased(localExtend(local, ty, tm.erased)), tm.body, VType);
     return [VType, E.termId];
   }
   if (tm.tag === 'Sigma') {
     check(localErased(local), tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
-    check(localExtend(local, ty, false), tm.body, VType);
+    check(localErased(localExtend(local, ty, tm.erased)), tm.body, VType);
     return [VType, E.termId];
   }
   if (tm.tag === 'Let') {
     check(localErased(local), tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
-    const valEr = check(local, tm.val, ty);
+    const valEr = check(tm.erased ? localErased(local) : local, tm.val, ty);
     const val = evaluate(tm.val, local.vs);
-    const [ret, body] = synth(localExtend(local, ty, false, val), tm.body);
-    return [ret, E.Let(tm.name, valEr, body)];
+    const [ret, body] = synth(localExtend(local, ty, tm.erased, val), tm.body);
+    return [ret, tm.erased ? body : E.Let(tm.name, valEr, body)];
   }
   return terr(`synth failed: ${show(tm)}`);
 };

@@ -7,14 +7,14 @@ def True : Bool = %1
 def False : Bool = %0
 
 def indBool
-  : {P : Bool -> *}
+  : {-P : Bool -> *}
     -> P True
     -> P False
     -> (b : Bool) -> P b
   = \{P} t f b. %elimB P f t b
 
 def if
-  : {t : *} -> Bool -> t -> t -> t
+  : {-t : *} -> Bool -> t -> t -> t
   = \{t} c a b. indBool {\_. t} a b c
 
 def not : Bool -> Bool = \b. if b False True

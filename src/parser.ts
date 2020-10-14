@@ -288,15 +288,17 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     if (vals.length === 0) return serr(`empty val in let`);
     const val = exprs(vals, '(');
     const body = exprs(ts.slice(i + 1), '(');
+    const erased = name[0] === '-';
+    const name2 = name[0] === '-' ? name.slice(1) : name;
     if (ty)
-      return Let(name, ty, val, body);
-    return Let(name, null, val, body);
+      return Let(erased, name2, ty, val, body);
+    return Let(erased, name2, null, val, body);
   }
   const i = ts.findIndex(x => isName(x, ':'));
   if (i >= 0) {
     const a = ts.slice(0, i);
     const b = ts.slice(i + 1);
-    return Let('x', exprs(b, '('), exprs(a, '('), Var('x'));
+    return Let(false, 'x', exprs(b, '('), exprs(a, '('), Var('x'));
   }
   if (isName(ts[0], '\\')) {
     const args: [Name, boolean, Term | null][] = [];
@@ -371,8 +373,14 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       else body = [exprs(s[s.length - 1], '('), false];
     } else body = [exprs(s[s.length - 1], '('), false];
     const last = args[args.length - 1];
-    const lastitem = Sigma(last[0], last[2], body[0]);
-    return args.slice(0, -1).reduceRight((x, [name, _impl, ty]) => Sigma(name, ty, x), lastitem);
+    const lasterased = last[0][0] === '-';
+    const lastname = last[0][0] === '-' ? last[0].slice(1) : last[0];
+    const lastitem = Sigma(lasterased, lastname, last[2], body[0]);
+    return args.slice(0, -1).reduceRight((x, [name, _impl, ty]) => {
+      const erased = name[0] === '-';
+      const name2 = name[0] === '-' ? name.slice(1) : name;
+      return Sigma(erased, name2, ty, x);
+    }, lastitem);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];
@@ -445,7 +453,7 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
         }
         const ety = exprs(tyts, '(');
         const body = exprs(c.slice(j + 1), '(');
-        return [DDef(name, Let(name, ety, body, Var(name)))];
+        return [DDef(name, Let(false, name, ety, body, Var(name)))];
       } else return serr(`def: : or = expected but got ${sym.name}`);
     } else return serr(`def should start with a name`);
   } else return serr(`def should start with def or import`);

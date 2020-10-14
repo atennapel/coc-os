@@ -143,7 +143,7 @@ exports.conv = (k, a_, b_) => {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
-    if (a.tag === 'VSigma' && b.tag === 'VSigma') {
+    if (a.tag === 'VSigma' && b.tag === 'VSigma' && a.erased === b.erased) {
         exports.conv(k, a.type, b.type);
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -201,9 +201,9 @@ exports.App = (left, mode, right) => ({ tag: 'App', left, mode, right });
 exports.Abs = (mode, erased, name, type, body) => ({ tag: 'Abs', name, erased, mode, type, body });
 exports.Pair = (fst, snd, type) => ({ tag: 'Pair', fst, snd, type });
 exports.Proj = (proj, term) => ({ tag: 'Proj', proj, term });
-exports.Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
+exports.Let = (erased, name, type, val, body) => ({ tag: 'Let', erased, name, type, val, body });
 exports.Pi = (mode, erased, name, type, body) => ({ tag: 'Pi', mode, erased, name, type, body });
-exports.Sigma = (name, type, body) => ({ tag: 'Sigma', name, type, body });
+exports.Sigma = (erased, name, type, body) => ({ tag: 'Sigma', erased, name, type, body });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.isPrimName = (name) => exports.primNames.includes(name);
 exports.primNames = [
@@ -257,13 +257,13 @@ exports.show = (t) => {
     if (t.tag === 'Proj')
         return `(${t.proj} ${exports.show(t.term)})`;
     if (t.tag === 'Let')
-        return `(let ${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
+        return `(let ${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
     if (t.tag === 'Pi') {
         const [as, r] = exports.flattenPi(t);
         return `(${as.map(([x, m, e, ty]) => `${m === exports.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(ty)}${m === exports.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(r)})`;
     }
     if (t.tag === 'Sigma')
-        return `((${t.name} : ${exports.show(t.type)}) ** ${exports.show(t.body)})`;
+        return `((${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)}) ** ${exports.show(t.body)})`;
     return t;
 };
 exports.eq = (t, o) => {
@@ -284,11 +284,11 @@ exports.eq = (t, o) => {
     if (t.tag === 'Proj')
         return o.tag === 'Proj' && t.proj === o.proj && exports.eq(t.term, o.term);
     if (t.tag === 'Let')
-        return o.tag === 'Let' && exports.eq(t.type, o.type) && exports.eq(t.val, o.val) && exports.eq(t.body, o.body);
+        return o.tag === 'Let' && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.val, o.val) && exports.eq(t.body, o.body);
     if (t.tag === 'Pi')
         return o.tag === 'Pi' && t.mode === o.mode && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Sigma')
-        return o.tag === 'Sigma' && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
+        return o.tag === 'Sigma' && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     return t;
 };
 exports.shift = (d, c, t) => {
@@ -309,11 +309,11 @@ exports.shift = (d, c, t) => {
     if (t.tag === 'Proj')
         return exports.Proj(t.proj, exports.shift(d, c, t.term));
     if (t.tag === 'Let')
-        return exports.Let(t.name, exports.shift(d, c, t.type), exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
+        return exports.Let(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Pi')
         return exports.Pi(t.mode, t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Sigma')
-        return exports.Sigma(t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+        return exports.Sigma(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     return t;
 };
 
@@ -400,12 +400,12 @@ const check = (local, tm, ty) => {
     }
     const fty = values_1.force(ty);
     if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
-        if (tm.erased !== fty.erased)
+        if (tm.erased && !fty.erased)
             return utils_1.terr(`erasability mismatch in check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
         const v = values_1.VVar(local.index);
         const x = tm.name;
-        const body = check(localExtend(local, x, fty.type, tm.mode, tm.erased, true, false, v), tm.body, values_1.vinst(fty, v));
-        return core_1.Abs(tm.mode, tm.erased, x, values_1.quote(fty.type, local.index), body);
+        const body = check(localExtend(local, x, fty.type, tm.mode, fty.erased, true, false, v), tm.body, values_1.vinst(fty, v));
+        return core_1.Abs(tm.mode, fty.erased, x, values_1.quote(fty.type, local.index), body);
     }
     if (fty.tag === 'VPi' && fty.mode === C.ImplUnif) {
         const v = values_1.VVar(local.index);
@@ -424,15 +424,15 @@ const check = (local, tm, ty) => {
         if (tm.type) {
             vtype = check(localErased(local), tm.type, values_1.VType);
             vty = values_1.evaluate(vtype, local.vs);
-            val = check(local, tm.val, ty);
+            val = check(tm.erased ? localErased(local) : local, tm.val, ty);
         }
         else {
-            [val, vty] = synth(local, tm.val);
+            [val, vty] = synth(tm.erased ? localErased(local) : local, tm.val);
             vtype = values_1.quote(ty, local.index);
         }
         const v = values_1.evaluate(val, local.vs);
-        const body = check(localExtend(local, tm.name, vty, C.Expl, false, false, false, v), tm.body, ty);
-        return core_1.Let(tm.name, vtype, val, body);
+        const body = check(localExtend(local, tm.name, vty, C.Expl, tm.erased, false, false, v), tm.body, ty);
+        return core_1.Let(tm.erased, tm.name, vtype, val, body);
     }
     const [term, ty2] = synth(local, tm);
     const [ty2inst, ms] = inst(local, ty2);
@@ -489,7 +489,7 @@ const synth = (local, tm) => {
     if (tm.tag === 'Pair') {
         const [fst, fstty] = synth(local, tm.fst);
         const [snd, sndty] = synth(local, tm.snd);
-        const ty = core_1.Sigma('_', values_1.quote(fstty, local.index), values_1.quote(sndty, local.index + 1));
+        const ty = core_1.Sigma(false, '_', values_1.quote(fstty, local.index), values_1.quote(sndty, local.index + 1));
         return [core_1.Pair(fst, snd, ty), values_1.evaluate(ty, local.vs)];
     }
     if (tm.tag === 'Proj') {
@@ -500,6 +500,8 @@ const synth = (local, tm) => {
         const proj = tm.proj;
         if (proj.tag === 'PCore') {
             const tag = proj.proj;
+            if (tag === 'fst' && fty.erased && !local.erased)
+                return utils_1.terr(`cannot project from erased sigma in non-erased context in ${surface_1.show(tm)}: ${showVal(local, ty)}`);
             const e = core_1.Proj(tag, term);
             return tag === 'fst' ? [e, fty.type] : [e, values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(term, local.vs)))];
         }
@@ -516,6 +518,8 @@ const synth = (local, tm) => {
             }
             if (t.tag !== 'VSigma')
                 return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, t)}`);
+            if (t.erased && !local.erased)
+                return utils_1.terr(`cannot project from erased sigma in non-erased context in ${surface_1.show(tm)}: ${showVal(local, ty)}`);
             return [core_1.Proj('fst', c), t.type];
         }
         else if (proj.tag === 'PName') {
@@ -533,20 +537,22 @@ const synth = (local, tm) => {
             }
             if (t.tag !== 'VSigma')
                 return utils_1.terr(`not a sigma type in ${surface_1.show(tm)}: ${showVal(local, t)}`);
+            if (t.erased && !local.erased)
+                return utils_1.terr(`cannot project from erased sigma in non-erased context in ${surface_1.show(tm)}: ${showVal(local, ty)}`);
             return [core_1.Proj('fst', c), t.type];
         }
     }
     if (tm.tag === 'Pi') {
         const type = check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const body = check(localExtend(local, tm.name, ty, tm.mode, tm.erased), tm.body, values_1.VType);
+        const body = check(localErased(localExtend(local, tm.name, ty, tm.mode, tm.erased)), tm.body, values_1.VType);
         return [core_1.Pi(tm.mode, tm.erased, tm.name, type, body), values_1.VType];
     }
     if (tm.tag === 'Sigma') {
         const type = check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const body = check(localExtend(local, tm.name, ty, C.Expl, false), tm.body, values_1.VType);
-        return [core_1.Sigma(tm.name, type, body), values_1.VType];
+        const body = check(localErased(localExtend(local, tm.name, ty, C.Expl, tm.erased)), tm.body, values_1.VType);
+        return [core_1.Sigma(tm.erased, tm.name, type, body), values_1.VType];
     }
     if (tm.tag === 'Let') {
         let type;
@@ -555,15 +561,15 @@ const synth = (local, tm) => {
         if (tm.type) {
             type = check(localErased(local), tm.type, values_1.VType);
             ty = values_1.evaluate(type, local.vs);
-            val = check(local, tm.val, ty);
+            val = check(tm.erased ? localErased(local) : local, tm.val, ty);
         }
         else {
-            [val, ty] = synth(local, tm.val);
+            [val, ty] = synth(tm.erased ? localErased(local) : local, tm.val);
             type = values_1.quote(ty, local.index);
         }
         const v = values_1.evaluate(val, local.vs);
-        const [body, rty] = synth(localExtend(local, tm.name, ty, C.Expl, false, false, false, v), tm.body);
-        return [core_1.Let(tm.name, type, val, body), rty];
+        const [body, rty] = synth(localExtend(local, tm.name, ty, C.Expl, tm.erased, false, false, v), tm.body);
+        return [core_1.Let(tm.erased, tm.name, type, val, body), rty];
     }
     if (tm.tag === 'Hole') {
         const t = newMeta(local, values_1.VType);
@@ -1106,15 +1112,17 @@ const exprs = (ts, br) => {
             return utils_1.serr(`empty val in let`);
         const val = exprs(vals, '(');
         const body = exprs(ts.slice(i + 1), '(');
+        const erased = name[0] === '-';
+        const name2 = name[0] === '-' ? name.slice(1) : name;
         if (ty)
-            return surface_1.Let(name, ty, val, body);
-        return surface_1.Let(name, null, val, body);
+            return surface_1.Let(erased, name2, ty, val, body);
+        return surface_1.Let(erased, name2, null, val, body);
     }
     const i = ts.findIndex(x => isName(x, ':'));
     if (i >= 0) {
         const a = ts.slice(0, i);
         const b = ts.slice(i + 1);
-        return surface_1.Let('x', exprs(b, '('), exprs(a, '('), surface_1.Var('x'));
+        return surface_1.Let(false, 'x', exprs(b, '('), exprs(a, '('), surface_1.Var('x'));
     }
     if (isName(ts[0], '\\')) {
         const args = [];
@@ -1200,8 +1208,14 @@ const exprs = (ts, br) => {
         else
             body = [exprs(s[s.length - 1], '('), false];
         const last = args[args.length - 1];
-        const lastitem = surface_1.Sigma(last[0], last[2], body[0]);
-        return args.slice(0, -1).reduceRight((x, [name, _impl, ty]) => surface_1.Sigma(name, ty, x), lastitem);
+        const lasterased = last[0][0] === '-';
+        const lastname = last[0][0] === '-' ? last[0].slice(1) : last[0];
+        const lastitem = surface_1.Sigma(lasterased, lastname, last[2], body[0]);
+        return args.slice(0, -1).reduceRight((x, [name, _impl, ty]) => {
+            const erased = name[0] === '-';
+            const name2 = name[0] === '-' ? name.slice(1) : name;
+            return surface_1.Sigma(erased, name2, ty, x);
+        }, lastitem);
     }
     const l = ts.findIndex(x => isName(x, '\\'));
     let all = [];
@@ -1286,7 +1300,7 @@ exports.parseDef = async (c, importMap) => {
                 }
                 const ety = exprs(tyts, '(');
                 const body = exprs(c.slice(j + 1), '(');
-                return [surface_1.DDef(name, surface_1.Let(name, ety, body, surface_1.Var(name)))];
+                return [surface_1.DDef(name, surface_1.Let(false, name, ety, body, surface_1.Var(name)))];
             }
             else
                 return utils_1.serr(`def: : or = expected but got ${sym.name}`);
@@ -1319,23 +1333,23 @@ const primTypes = {
     'B': values_1.VType,
     '0': values_1.VB,
     '1': values_1.VB,
-    // (P : %B -> *) -> P %0 -> P %1 -> (b : %B) -> P b
-    'elimB': values_1.VPiE('P', values_1.VPiE('_', values_1.VB, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.V0), _ => values_1.VPiE('_', values_1.vappE(P, values_1.V1), _ => values_1.VPiE('b', values_1.VB, b => values_1.vappE(P, b))))),
+    // (-P : %B -> *) -> P %0 -> P %1 -> (b : %B) -> P b
+    'elimB': values_1.VPiEE('P', values_1.VPiE('_', values_1.VB, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.V0), _ => values_1.VPiE('_', values_1.vappE(P, values_1.V1), _ => values_1.VPiE('b', values_1.VB, b => values_1.vappE(P, b))))),
     // (A : *) -> (B : *) -> A -> B -> *
     'HEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('B', values_1.VType, B => values_1.VPiE('_', A, _ => values_1.VPiE('_', B, _ => values_1.VType)))),
-    // (A : *) -> (a : A) -> HEq A A a a
-    'ReflHEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('a', A, a => values_1.vheq(A, A, a, a))),
-    // (A : *) -> (a : A) -> (P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (b : A) -> (p : HEq A A a b) -> P b p
-    'elimHEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('a', A, a => values_1.VPiE('P', values_1.VPiE('b', A, b => values_1.VPiE('_', values_1.vheq(A, A, a, b), _ => values_1.VType)), P => values_1.VPiE('_', values_1.vappE(values_1.vappE(P, a), values_1.vreflheq(A, a)), _ => values_1.VPiE('b', A, b => values_1.VPiE('p', values_1.vheq(A, A, a, b), p => values_1.vappE(values_1.vappE(P, b), p))))))),
+    // (-A : *) -> (-a : A) -> HEq A A a a
+    'ReflHEq': values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('a', A, a => values_1.vheq(A, A, a, a))),
+    // (-A : *) -> (-a : A) -> (-P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (-b : A) -> (-p : HEq A A a b) -> P b p
+    'elimHEq': values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('a', A, a => values_1.VPiEE('P', values_1.VPiE('b', A, b => values_1.VPiE('_', values_1.vheq(A, A, a, b), _ => values_1.VType)), P => values_1.VPiE('_', values_1.vappE(values_1.vappE(P, a), values_1.vreflheq(A, a)), _ => values_1.VPiEE('b', A, b => values_1.VPiEE('p', values_1.vheq(A, A, a, b), p => values_1.vappE(values_1.vappE(P, b), p))))))),
     'IDesc': values_1.VPiE('_', values_1.VType, _ => values_1.VType),
-    'IEnd': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.videsc(I))),
-    'IArg': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
-    'IFArg': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.VType, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
-    'IRec': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
-    'IHRec': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => I), _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I))))),
+    'IEnd': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.videsc(I))),
+    'IArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
+    'IFArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('_', values_1.VType, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IHRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => I), _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I))))),
     /*
-      (I : *)
-      -> (P : IDesc I -> *)
+      (-I : *)
+      -> (-P : IDesc I -> *)
       -> ((i : I) -> P (IEnd i))
       -> ((A : *) -> (f : A -> IDesc I) -> ((a : A) -> P (f a)) -> P (IArg A f))
       -> ((A : *) -> (d : IDesc I) -> P d -> P (IFOArg A d))
@@ -1344,32 +1358,32 @@ const primTypes = {
       -> (d : IDesc I)
       -> P d
     */
-    'elimIDesc': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('P', values_1.VPiE('_', values_1.videsc(I), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.vappE(P, values_1.vappE(values_1.VIEnd, i))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIFArg, A, d]))))), _ => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIRec, i, d]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => I), f => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIHRec, A, f, d])))))), _ => values_1.VPiE('d', values_1.videsc(I), d => values_1.vappE(P, d))))))))),
+    'elimIDesc': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('P', values_1.VPiE('_', values_1.videsc(I), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.vappE(P, values_1.vappE(values_1.VIEnd, i))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIFArg, A, d]))))), _ => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIRec, i, d]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => I), f => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIHRec, A, f, d])))))), _ => values_1.VPiE('d', values_1.videsc(I), d => values_1.vappE(P, d))))))))),
     // (I : *) -> IDesc I -> (I -> *) -> I -> *
     'interpI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', values_1.VPiE('_', I, _ => values_1.VType), _ => values_1.VPiE('_', I, _ => values_1.VType)))),
     // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *
     'AllI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), _ => values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vinterpI(I, d, X, i), _ => values_1.VType)))))),
-    // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> ((i : I) -> (x : X i) -> P i x) -> (i : I) -> (xs : interpI I d X i) -> All I d X P i xs
-    'allI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('x', values_1.vappE(X, i), x => values_1.vappEs([P, i, x]))), _ => values_1.VPiE('i', I, i => values_1.VPiE('xs', values_1.vinterpI(I, d, X, i), xs => values_1.vAllI(I, d, X, P, i, xs)))))))),
+    // (-I : *) -> (d : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *) -> ((-i : I) -> (x : X i) -> P i x) -> (-i : I) -> (xs : interpI I d X i) -> All I d X P i xs
+    'allI': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiEE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiEE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('x', values_1.vappE(X, i), x => values_1.vappEs([P, i, x]))), _ => values_1.VPiEE('i', I, i => values_1.VPiE('xs', values_1.vinterpI(I, d, X, i), xs => values_1.vAllI(I, d, X, P, i, xs)))))))),
     // (I : *) -> IDesc I -> I -> *
     'IData': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', I, _ => values_1.VType))),
-    // (I : *) -> (d : IDesc I) -> (i : I) -> interpI I d (IData I d) i -> IData I d i
-    'ICon': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vinterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), _ => values_1.vidata(I, d, i))))),
+    // (-I : *) -> (-d : IDesc I) -> (-i : I) -> interpI I d (IData I d) i -> IData I d i
+    'ICon': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('d', values_1.videsc(I), d => values_1.VPiEE('i', I, i => values_1.VPiE('_', values_1.vinterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), _ => values_1.vidata(I, d, i))))),
     /*
-      (I : *)
+      (-I : *)
       -> (d : IDesc I)
-      -> (P : (i : I) -> IData I d i -> *)
+      -> (-P : (i : I) -> IData I d i -> *)
       -> (
-        (i : I)
+        (-i : I)
         -> (y : interpI I d (IData I d) i)
         -> AllI I d (IData I d) P i y
         -> P i (ICon I d i y)
       )
-      -> (i : I)
+      -> (-i : I)
       -> (x : IData I d i)
       -> P i x
     */
-    'indI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vidata(I, d, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('y', values_1.vinterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), y => values_1.VPiE('_', values_1.vAllI(I, d, values_1.vappEs([values_1.VIData, I, d]), P, i, y), _ => values_1.vappEs([P, i, values_1.vicon(I, d, i, y)])))), _ => values_1.VPiE('i', I, i => values_1.VPiE('x', values_1.vidata(I, d, i), x => values_1.vappEs([P, i, x]))))))),
+    'indI': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiEE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vidata(I, d, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('y', values_1.vinterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), y => values_1.VPiE('_', values_1.vAllI(I, d, values_1.vappEs([values_1.VIData, I, d]), P, i, y), _ => values_1.vappEs([P, i, values_1.vicon(I, d, i, y)])))), _ => values_1.VPiEE('i', I, i => values_1.VPiE('x', values_1.vidata(I, d, i), x => values_1.vappEs([P, i, x]))))))),
 };
 exports.primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
 
@@ -1533,9 +1547,9 @@ exports.App = (left, mode, right) => ({ tag: 'App', left, mode, right });
 exports.Abs = (mode, erased, name, type, body) => ({ tag: 'Abs', mode, erased, name, type, body });
 exports.Pair = (fst, snd) => ({ tag: 'Pair', fst, snd });
 exports.Proj = (proj, term) => ({ tag: 'Proj', proj, term });
-exports.Let = (name, type, val, body) => ({ tag: 'Let', name, type, val, body });
+exports.Let = (erased, name, type, val, body) => ({ tag: 'Let', erased, name, type, val, body });
 exports.Pi = (mode, erased, name, type, body) => ({ tag: 'Pi', mode, erased, name, type, body });
-exports.Sigma = (name, type, body) => ({ tag: 'Sigma', name, type, body });
+exports.Sigma = (erased, name, type, body) => ({ tag: 'Sigma', erased, name, type, body });
 exports.Meta = (index) => ({ tag: 'Meta', index });
 exports.Hole = (name) => ({ tag: 'Hole', name });
 exports.Type = exports.Prim('Type');
@@ -1566,7 +1580,7 @@ exports.flattenPi = (t) => {
 exports.flattenSigma = (t) => {
     const r = [];
     while (t.tag === 'Sigma') {
-        r.push([t.name, t.type]);
+        r.push([t.name, t.erased, t.type]);
         t = t.body;
     }
     return [r, t];
@@ -1608,10 +1622,10 @@ exports.show = (t) => {
             `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(b)}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${exports.show(t.body)}`;
+        return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${exports.show(t.body)}`;
     if (t.tag === 'Sigma') {
         const [as, b] = exports.flattenSigma(t);
-        return `${as.map(([x, t]) => x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `(${x} : ${showP(t.tag === 'Let', t)})`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`;
+        return `${as.map(([x, e, t]) => !e && x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `(${e ? '-' : ''}${x} : ${showP(t.tag === 'Let', t)})`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`;
     }
     if (t.tag === 'Pair') {
         const ps = exports.flattenPair(t);
@@ -1650,11 +1664,11 @@ exports.toSurface = (t, ns = list_1.Nil) => {
     }
     if (t.tag === 'Sigma') {
         const x = names_1.chooseName(t.name, ns);
-        return exports.Sigma(x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
+        return exports.Sigma(t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
     }
     if (t.tag === 'Let') {
         const x = names_1.chooseName(t.name, ns);
-        return exports.Let(x, exports.toSurface(t.type, ns), exports.toSurface(t.val, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
+        return exports.Let(t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.val, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
     }
     return t;
 };
@@ -1751,28 +1765,30 @@ const synth = (local, tm) => {
         const [ty, er] = synth(local, tm.term);
         const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
-            return utils_1.terr(`not a sigma type in ${tm.proj}: ${core_1.show(tm)}: ${showVal(local, ty)}`);
-        return [tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(tm.term, local.vs))), E.Proj(tm.proj, er)];
+            return utils_1.terr(`not a sigma type in ${core_1.show(tm)}: ${showVal(local, ty)}`);
+        if (tm.proj === 'fst' && fty.erased && !local.erased)
+            return utils_1.terr(`cannot project from erased sigma in non-erased context in ${core_1.show(tm)}: ${showVal(local, ty)}`);
+        return [tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(tm.term, local.vs))), fty.erased ? er : E.Proj(tm.proj, er)];
     }
     if (tm.tag === 'Pi') {
         check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(localExtend(local, ty, false), tm.body, values_1.VType);
+        check(localErased(localExtend(local, ty, tm.erased)), tm.body, values_1.VType);
         return [values_1.VType, E.termId];
     }
     if (tm.tag === 'Sigma') {
         check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(localExtend(local, ty, false), tm.body, values_1.VType);
+        check(localErased(localExtend(local, ty, tm.erased)), tm.body, values_1.VType);
         return [values_1.VType, E.termId];
     }
     if (tm.tag === 'Let') {
         check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const valEr = check(local, tm.val, ty);
+        const valEr = check(tm.erased ? localErased(local) : local, tm.val, ty);
         const val = values_1.evaluate(tm.val, local.vs);
-        const [ret, body] = synth(localExtend(local, ty, false, val), tm.body);
-        return [ret, E.Let(tm.name, valEr, body)];
+        const [ret, body] = synth(localExtend(local, ty, tm.erased, val), tm.body);
+        return [ret, tm.erased ? body : E.Let(tm.name, valEr, body)];
     }
     return utils_1.terr(`synth failed: ${core_1.show(tm)}`);
 };
@@ -1829,7 +1845,7 @@ exports.unify = (k, a_, b_) => {
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
-    if (a.tag === 'VSigma' && b.tag === 'VSigma') {
+    if (a.tag === 'VSigma' && b.tag === 'VSigma' && a.erased === b.erased) {
         exports.unify(k, a.type, b.type);
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -1989,7 +2005,7 @@ const checkSolution = (k, m, is, t) => {
     if (t.tag === 'Sigma') {
         const ty = checkSolution(k, m, is, t.type);
         const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
-        return core_1.Sigma(t.name, ty, body);
+        return core_1.Sigma(t.erased, t.name, ty, body);
     }
     return utils_1.impossible(`checkSolution ?${m}: non-normal term: ${core_1.show(t)}`);
 };
@@ -2218,7 +2234,7 @@ exports.mapObj = (o, fn) => {
 },{"fs":20}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsE = exports.VPiU = exports.VPiE = exports.vAllI = exports.VAllI = exports.vinterpI = exports.VInterpI = exports.vicon = exports.VICon = exports.vidata = exports.VIData = exports.VIHRec = exports.VIRec = exports.VIFArg = exports.VIArg = exports.VIEnd = exports.videsc = exports.VIDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
+exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsEE = exports.VAbsE = exports.VPiU = exports.VPiEE = exports.VPiE = exports.vAllI = exports.VAllI = exports.vinterpI = exports.VInterpI = exports.vicon = exports.VICon = exports.vidata = exports.VIData = exports.VIHRec = exports.VIRec = exports.VIFArg = exports.VIArg = exports.VIEnd = exports.videsc = exports.VIDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
 const config_1 = require("./config");
 const context_1 = require("./context");
 const core_1 = require("./core");
@@ -2237,7 +2253,7 @@ exports.VGlobal = (head, args, val) => ({ tag: 'VGlobal', head, args, val });
 exports.VAbs = (mode, erased, name, type, clos) => ({ tag: 'VAbs', mode, erased, name, type, clos });
 exports.VPair = (fst, snd, type) => ({ tag: 'VPair', fst, snd, type });
 exports.VPi = (mode, erased, name, type, clos) => ({ tag: 'VPi', mode, erased, name, type, clos });
-exports.VSigma = (name, type, clos) => ({ tag: 'VSigma', name, type, clos });
+exports.VSigma = (erased, name, type, clos) => ({ tag: 'VSigma', erased, name, type, clos });
 exports.VVar = (index, spine = list_1.Nil) => exports.VNe(exports.HVar(index), spine);
 exports.VPrim = (name, spine = list_1.Nil) => exports.VNe(exports.HPrim(name), spine);
 exports.VMeta = (index, spine = list_1.Nil) => exports.VNe(exports.HMeta(index), spine);
@@ -2275,8 +2291,10 @@ exports.vinterpI = (I, d, r, i) => exports.velimprim('interpI', d, [I, r, i]);
 exports.VAllI = exports.VPrim('AllI');
 exports.vAllI = (I, d, X, P, i, xs) => exports.velimprim('AllI', d, [I, X, P, i, xs]);
 exports.VPiE = (name, type, clos) => exports.VPi(core_1.Expl, false, name, type, clos);
+exports.VPiEE = (name, type, clos) => exports.VPi(core_1.Expl, true, name, type, clos);
 exports.VPiU = (name, type, clos) => exports.VPi(core_1.ImplUnif, false, name, type, clos);
 exports.VAbsE = (name, type, clos) => exports.VAbs(core_1.Expl, false, name, type, clos);
+exports.VAbsEE = (name, type, clos) => exports.VAbs(core_1.Expl, true, name, type, clos);
 exports.VAbsU = (name, type, clos) => exports.VAbs(core_1.ImplUnif, false, name, type, clos);
 exports.vinst = (val, arg) => val.clos(arg);
 exports.force = (v, forceGlobal = true) => {
@@ -2368,19 +2386,19 @@ exports.velimprim = (name, v, args) => {
         }
         if (exports.isVPrim('IArg', v)) {
             const [, A, f] = exports.vprimArgs(v);
-            return exports.VSigma('x', A, x => exports.velimprim('interpI', exports.vappE(f, x), args));
+            return exports.VSigma(false, 'x', A, x => exports.velimprim('interpI', exports.vappE(f, x), args));
         }
         if (exports.isVPrim('IFArg', v)) {
             const [, A, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', A, _ => exports.velimprim('interpI', d, args));
+            return exports.VSigma(false, '_', A, _ => exports.velimprim('interpI', d, args));
         }
         if (exports.isVPrim('IRec', v)) {
             const [, i, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', exports.vappE(X, i), _ => exports.velimprim('interpI', d, args));
+            return exports.VSigma(false, '_', exports.vappE(X, i), _ => exports.velimprim('interpI', d, args));
         }
         if (exports.isVPrim('IHRec', v)) {
             const [, A, f, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', exports.VPiE('a', A, a => exports.vappE(X, exports.vappE(f, a))), _ => exports.velimprim('interpI', d, args));
+            return exports.VSigma(false, '_', exports.VPiE('a', A, a => exports.vappE(X, exports.vappE(f, a))), _ => exports.velimprim('interpI', d, args));
         }
         // interpretI I (elimB Pb f t b) X i ~> elimB * (interpretI I f X i) (interpretI I t X i) b
         if (v.tag === 'VNe' && v.spine.tag === 'Cons' && v.spine.head.tag === 'EPrim' && v.spine.head.name === 'elimB') {
@@ -2412,11 +2430,11 @@ exports.velimprim = (name, v, args) => {
         }
         if (exports.isVPrim('IRec', v)) {
             const [, j, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', exports.vappEs([P, j, exports.vproj('fst', xs)]), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
+            return exports.VSigma(false, '_', exports.vappEs([P, j, exports.vproj('fst', xs)]), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
         }
         if (exports.isVPrim('IHRec', v)) {
             const [, A, fi, d] = exports.vprimArgs(v);
-            return exports.VSigma('_', exports.VPiE('a', A, a => exports.vappEs([P, exports.vappE(fi, a), exports.vappE(exports.vproj('fst', xs), a)])), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
+            return exports.VSigma(false, '_', exports.VPiE('a', A, a => exports.vappEs([P, exports.vappE(fi, a), exports.vappE(exports.vproj('fst', xs), a)])), _ => exports.velimprim('AllI', d, [I, X, P, i, exports.vproj('snd', xs)]));
         }
     }
     if (name === 'allI') {
@@ -2453,7 +2471,7 @@ exports.velimprim = (name, v, args) => {
             const [I, d, P, h, i] = args;
             const [, , , c] = exports.vprimArgs(v);
             // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind d P i x) i c)
-            return exports.vappEs([h, i, c, exports.velimprim('allI', d, [I, exports.vappEs([exports.VIData, I, d]), P, exports.VAbsE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i]))), i, c])]);
+            return exports.vappEs([h, i, c, exports.velimprim('allI', d, [I, exports.vappEs([exports.VIData, I, d]), P, exports.VAbsEE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i]))), i, c])]);
         }
     }
     if (v.tag === 'VNe')
@@ -2473,7 +2491,7 @@ exports.evaluate = (t, vs) => {
     if (t.tag === 'Pi')
         return exports.VPi(t.mode, t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Sigma')
-        return exports.VSigma(t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+        return exports.VSigma(t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Meta') {
         const s = context_1.getMeta(t.index);
         return s.tag === 'Solved' ? s.val : exports.VMeta(t.index);
@@ -2492,23 +2510,23 @@ exports.evaluate = (t, vs) => {
         return exports.vproj(t.proj, exports.evaluate(t.term, vs));
     if (t.tag === 'Prim') {
         if (t.name === 'elimB') {
-            return exports.VAbsE('P', exports.VPiE('_', exports.VB, _ => exports.VType), P => exports.VAbsE('f', exports.vappE(P, exports.V0), f => exports.VAbsE('t', exports.vappE(P, exports.V1), t => exports.VAbsE('b', exports.VB, b => exports.velimprim('elimB', b, [P, f, t])))));
+            return exports.VAbsEE('P', exports.VPiE('_', exports.VB, _ => exports.VType), P => exports.VAbsE('f', exports.vappE(P, exports.V0), f => exports.VAbsE('t', exports.vappE(P, exports.V1), t => exports.VAbsE('b', exports.VB, b => exports.velimprim('elimB', b, [P, f, t])))));
         }
         if (t.name === 'elimHEq') {
-            return exports.VAbsE('A', exports.VType, A => exports.VAbsE('a', A, a => exports.VAbsE('P', exports.VPiE('b', A, b => exports.VPiE('_', exports.vheq(A, A, a, b), _ => exports.VType)), P => exports.VAbsE('h', exports.vappE(exports.vappE(P, a), exports.vreflheq(A, a)), h => exports.VAbsE('b', A, b => exports.VAbsE('p', exports.vheq(A, A, a, b), p => exports.velimprim('elimHEq', p, [A, a, P, h, b])))))));
+            return exports.VAbsEE('A', exports.VType, A => exports.VAbsEE('a', A, a => exports.VAbsEE('P', exports.VPiE('b', A, b => exports.VPiE('_', exports.vheq(A, A, a, b), _ => exports.VType)), P => exports.VAbsE('h', exports.vappE(exports.vappE(P, a), exports.vreflheq(A, a)), h => exports.VAbsEE('b', A, b => exports.VAbsEE('p', exports.vheq(A, A, a, b), p => exports.velimprim('elimHEq', p, [A, a, P, h, b])))))));
         }
         if (t.name === 'elimIDesc') {
-            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('P', exports.VPiE('_', exports.videsc(I), _ => exports.VType), P => exports.VAbsE('end', exports.VPiE('i', I, i => exports.vappE(P, exports.vappE(exports.VIEnd, i))), end => exports.VAbsE('arg', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => exports.videsc(I)), f => exports.VPiE('_', exports.VPiE('a', A, a => exports.vappE(P, exports.vappE(f, a))), _ => exports.vappE(P, exports.vappEs([exports.VIArg, A, f]))))), arg => exports.VAbsE('farg', exports.VPiE('A', exports.VType, A => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIFArg, A, d]))))), farg => exports.VAbsE('rec', exports.VPiE('i', I, i => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIRec, i, d]))))), rec => exports.VAbsE('hrec', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => I), f => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIHRec, A, f, d])))))), hrec => exports.VAbsE('d', exports.videsc(I), d => exports.velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
+            return exports.VAbsEE('I', exports.VType, I => exports.VAbsEE('P', exports.VPiE('_', exports.videsc(I), _ => exports.VType), P => exports.VAbsE('end', exports.VPiE('i', I, i => exports.vappE(P, exports.vappE(exports.VIEnd, i))), end => exports.VAbsE('arg', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => exports.videsc(I)), f => exports.VPiE('_', exports.VPiE('a', A, a => exports.vappE(P, exports.vappE(f, a))), _ => exports.vappE(P, exports.vappEs([exports.VIArg, A, f]))))), arg => exports.VAbsE('farg', exports.VPiE('A', exports.VType, A => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIFArg, A, d]))))), farg => exports.VAbsE('rec', exports.VPiE('i', I, i => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIRec, i, d]))))), rec => exports.VAbsE('hrec', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => I), f => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIHRec, A, f, d])))))), hrec => exports.VAbsE('d', exports.videsc(I), d => exports.velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
         }
         if (t.name === 'interpI')
             return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('r', exports.VPiE('_', I, _ => exports.VType), r => exports.VAbsE('i', I, i => exports.velimprim('interpI', d, [I, r, i])))));
         if (t.name === 'AllI')
             return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('X', exports.VPiE('_', I, _ => exports.VType), X => exports.VAbsE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vappE(X, i), _ => exports.VType)), P => exports.VAbsE('i', I, i => exports.VAbsE('xs', exports.vinterpI(I, d, X, i), xs => exports.velimprim('AllI', d, [I, X, P, i, xs])))))));
         if (t.name === 'allI') {
-            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('X', exports.VPiE('_', I, _ => exports.VType), X => exports.VAbsE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vappE(X, i), _ => exports.VType)), P => exports.VAbsE('p', exports.VPiE('i', I, i => exports.VPiE('x', exports.vappE(X, i), x => exports.vappEs([P, i, x]))), p => exports.VAbsE('i', I, i => exports.VAbsE('xs', exports.vinterpI(I, d, X, i), xs => exports.velimprim('allI', d, [I, X, P, p, i, xs]))))))));
+            return exports.VAbsEE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsEE('X', exports.VPiE('_', I, _ => exports.VType), X => exports.VAbsEE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vappE(X, i), _ => exports.VType)), P => exports.VAbsE('p', exports.VPiEE('i', I, i => exports.VPiE('x', exports.vappE(X, i), x => exports.vappEs([P, i, x]))), p => exports.VAbsEE('i', I, i => exports.VAbsE('xs', exports.vinterpI(I, d, X, i), xs => exports.velimprim('allI', d, [I, X, P, p, i, xs]))))))));
         }
         if (t.name === 'indI') {
-            return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vidata(I, d, i), _ => exports.VType)), P => exports.VAbsE('h', exports.VPiE('i', I, i => exports.VPiE('y', exports.vinterpI(I, d, exports.vappEs([exports.VIData, I, d]), i), y => exports.VPiE('_', exports.vAllI(I, d, exports.vappEs([exports.VIData, I,]), P, i, y), _ => exports.vappEs([P, i, exports.vicon(I, d, i, y)])))), h => exports.VAbsE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i])))))));
+            return exports.VAbsEE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsEE('P', exports.VPiE('i', I, i => exports.VPiE('_', exports.vidata(I, d, i), _ => exports.VType)), P => exports.VAbsE('h', exports.VPiEE('i', I, i => exports.VPiE('y', exports.vinterpI(I, d, exports.vappEs([exports.VIData, I, d]), i), y => exports.VPiE('_', exports.vAllI(I, d, exports.vappEs([exports.VIData, I,]), P, i, y), _ => exports.vappEs([P, i, exports.vicon(I, d, i, y)])))), h => exports.VAbsEE('i', I, i => exports.VAbsE('x', exports.vidata(I, d, i), x => exports.velimprim('indI', x, [I, d, P, h, i])))))));
         }
         return exports.VPrim(t.name);
     }
@@ -2553,7 +2571,7 @@ exports.quote = (v_, k, full = false) => {
     if (v.tag === 'VPi')
         return core_1.Pi(v.mode, v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VSigma')
-        return core_1.Sigma(v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
+        return core_1.Sigma(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     return v;
 };
 exports.normalize = (t, full = false) => exports.quote(exports.evaluate(t, list_1.Nil), 0, full);
@@ -2580,9 +2598,9 @@ exports.zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
     if (tm.tag === 'Pi')
         return core_1.Pi(tm.mode, tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Sigma')
-        return core_1.Sigma(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
+        return core_1.Sigma(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Let')
-        return core_1.Let(tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
+        return core_1.Let(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Abs')
         return core_1.Abs(tm.mode, tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Pair')

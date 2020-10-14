@@ -22,12 +22,12 @@ export type Pair = { tag: 'Pair', fst: Term, snd: Term, type: Term };
 export const Pair = (fst: Term, snd: Term, type: Term): Pair => ({ tag: 'Pair', fst, snd, type });
 export type Proj = { tag: 'Proj', proj: 'fst' | 'snd', term: Term };
 export const Proj = (proj: 'fst' | 'snd', term: Term): Proj => ({ tag: 'Proj', proj, term });
-export type Let = { tag: 'Let', name: Name, type: Term, val: Term, body: Term };
-export const Let = (name: Name, type: Term, val: Term, body: Term): Let => ({ tag: 'Let', name, type, val, body });
+export type Let = { tag: 'Let', erased: boolean, name: Name, type: Term, val: Term, body: Term };
+export const Let = (erased: boolean, name: Name, type: Term, val: Term, body: Term): Let => ({ tag: 'Let', erased, name, type, val, body });
 export type Pi = { tag: 'Pi', mode: Mode, erased: boolean, name: Name, type: Term, body: Term };
 export const Pi = (mode: Mode, erased: boolean,  name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', mode, erased, name, type, body });
-export type Sigma = { tag: 'Sigma', name: Name, type: Term, body: Term };
-export const Sigma = (name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', name, type, body });
+export type Sigma = { tag: 'Sigma', erased: boolean, name: Name, type: Term, body: Term };
+export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', erased, name, type, body });
 export type Meta = { tag: 'Meta', index: Ix };
 export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
 
@@ -82,12 +82,12 @@ export const show = (t: Term): string => {
   if (t.tag === 'Abs') return `(\\${t.mode === ImplUnif ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'}. ${show(t.body)})`;
   if (t.tag === 'Pair') return `(${show(t.fst)}, ${show(t.snd)} : ${show(t.type)})`;
   if (t.tag === 'Proj') return `(${t.proj} ${show(t.term)})`;
-  if (t.tag === 'Let') return `(let ${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
+  if (t.tag === 'Let') return `(let ${t.erased ? '-' : ''}${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
   if (t.tag === 'Pi') {
     const [as, r] = flattenPi(t);
     return `(${as.map(([x, m, e, ty]) => `${m === ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(ty)}${m === ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(r)})`;
   }
-  if (t.tag === 'Sigma') return `((${t.name} : ${show(t.type)}) ** ${show(t.body)})`;
+  if (t.tag === 'Sigma') return `((${t.erased ? '-' : ''}${t.name} : ${show(t.type)}) ** ${show(t.body)})`;
   return t;
 };
 
@@ -100,9 +100,9 @@ export const eq = (t: Term, o: Term): boolean => {
   if (t.tag === 'Abs') return o.tag === 'Abs' && t.mode === o.mode && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
   if (t.tag === 'Pair') return o.tag === 'Pair' && eq(t.fst, o.snd) && eq(t.fst, o.snd);
   if (t.tag === 'Proj') return o.tag === 'Proj' && t.proj === o.proj && eq(t.term, o.term);
-  if (t.tag === 'Let') return o.tag === 'Let' && eq(t.type, o.type) && eq(t.val, o.val) && eq(t.body, o.body);
+  if (t.tag === 'Let') return o.tag === 'Let' && t.erased === o.erased && eq(t.type, o.type) && eq(t.val, o.val) && eq(t.body, o.body);
   if (t.tag === 'Pi') return o.tag === 'Pi' && t.mode === o.mode && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
-  if (t.tag === 'Sigma') return o.tag === 'Sigma' && eq(t.type, o.type) && eq(t.body, o.body);
+  if (t.tag === 'Sigma') return o.tag === 'Sigma' && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
   return t;
 };
 
@@ -115,8 +115,8 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Abs') return Abs(t.mode, t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Pair') return Pair(shift(d, c, t.fst), shift(d, c, t.snd), shift(d, c, t.type));
   if (t.tag === 'Proj') return Proj(t.proj, shift(d, c, t.term));
-  if (t.tag === 'Let') return Let(t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
+  if (t.tag === 'Let') return Let(t.erased, t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
   if (t.tag === 'Pi') return Pi(t.mode, t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
-  if (t.tag === 'Sigma') return Sigma(t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   return t;
 };

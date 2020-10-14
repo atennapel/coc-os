@@ -30,7 +30,7 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }
-  if (a.tag === 'VSigma' && b.tag === 'VSigma') {
+  if (a.tag === 'VSigma' && b.tag === 'VSigma' && a.erased === b.erased) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
@@ -192,7 +192,7 @@ const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
   if (t.tag === 'Sigma') {
     const ty = checkSolution(k, m, is, t.type);
     const body = checkSolution(k + 1, m, Cons(k, is), t.body);
-    return Sigma(t.name, ty, body);
+    return Sigma(t.erased, t.name, ty, body);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${show(t)}`);
 };

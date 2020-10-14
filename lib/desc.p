@@ -10,7 +10,7 @@ def HRec : * -> Desc -> Desc = \A d. IHRec {U} {A} (\_. ()) d
 def SumD : Desc -> Desc -> Desc = \a b. Arg {Bool} \c. if c a b
 
 def indDesc
-  : {P : Desc -> *}
+  : {-P : Desc -> *}
     -> P End
     -> ((A : *) -> (f : A -> Desc) -> ((a : A) -> P (f a)) -> P (Arg {A} f))
     -> ((A : *) -> (d : Desc) -> P d -> P (FArg A d))
@@ -23,14 +23,14 @@ def indDesc
 def interp : Desc -> * -> * = \d x. interpI {U} d (\_. x) ()
 def AllDesc : (d : Desc) -> (X : *) -> (X -> *) -> interp d X -> * = \d X P c. AllIDesc U d (\_. X) (\_. P) () c
 def allDesc
-  : (d : Desc) -> (X : *) -> (P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> AllDesc d X P xs
+  : (d : Desc) -> (-X : *) -> (-P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> AllDesc d X P xs
   = \d X P p xs. allIDesc {U} d (\_. X) (\_. P) (\_. p) () xs
 
 def Data : Desc -> * = \d. IData {U} d ()
-def Con : {d : Desc} -> interp d (Data d) -> Data d = \{d} x. ICon {U} {d} {()} x
+def Con : {-d : Desc} -> interp d (Data d) -> Data d = \{d} x. ICon {U} {d} {()} x
 def ind
   : {d : Desc}
-    -> {P : Data d -> *}
+    -> {-P : Data d -> *}
     -> (
       (y : interp d (Data d))
       -> AllDesc d (Data d) P y
@@ -38,4 +38,4 @@ def ind
     )
     -> (x : Data d)
     -> P x
-  = \{d} {P} h x. indI {U} {d} {\_. P} (\_. h) {()} x
+  = \{d} {P} h x. indI {U} {d} {\_. P} h {()} x

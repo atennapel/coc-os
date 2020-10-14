@@ -41,8 +41,8 @@ export type VPair = { tag: 'VPair', fst: Val, snd: Val, type: Val };
 export const VPair = (fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', fst, snd, type });
 export type VPi = { tag: 'VPi', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos };
 export const VPi = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', mode, erased, name, type, clos });
-export type VSigma = { tag: 'VSigma', name: Name, type: Val, clos: Clos };
-export const VSigma = (name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', name, type, clos });
+export type VSigma = { tag: 'VSigma', erased: boolean, name: Name, type: Val, clos: Clos };
+export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', erased, name, type, clos });
 
 export const VVar = (index: Ix, spine: Spine = Nil): VNe => VNe(HVar(index), spine);
 export const VPrim = (name: PrimName, spine: Spine = Nil): VNe => VNe(HPrim(name), spine);
@@ -83,8 +83,10 @@ export const VAllI = VPrim('AllI');
 export const vAllI = (I: Val, d: Val, X: Val, P: Val, i: Val, xs: Val) => velimprim('AllI', d, [I, X, P, i, xs]);
 
 export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, false, name, type, clos);
+export const VPiEE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, true, name, type, clos);
 export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, false, name, type, clos);
 export const VAbsE = (name: Name, type: Val, clos: Clos): VAbs => VAbs(Expl, false, name, type, clos);
+export const VAbsEE = (name: Name, type: Val, clos: Clos): VAbs => VAbs(Expl, true, name, type, clos);
 export const VAbsU = (name: Name, type: Val, clos: Clos): VAbs => VAbs(ImplUnif, false, name, type, clos);
 
 export const vinst = (val: VAbs | VPi | VSigma, arg: Val): Val => val.clos(arg);
@@ -172,19 +174,19 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     }
     if (isVPrim('IArg', v)) {
       const [, A, f] = vprimArgs(v);
-      return VSigma('x', A, x => velimprim('interpI', vappE(f, x), args));
+      return VSigma(false, 'x', A, x => velimprim('interpI', vappE(f, x), args));
     }
     if (isVPrim('IFArg', v)) {
       const [, A, d] = vprimArgs(v);
-      return VSigma('_', A, _ => velimprim('interpI', d, args));
+      return VSigma(false, '_', A, _ => velimprim('interpI', d, args));
     }
     if (isVPrim('IRec', v)) {
       const [, i, d] = vprimArgs(v);
-      return VSigma('_', vappE(X, i), _ => velimprim('interpI', d, args));
+      return VSigma(false, '_', vappE(X, i), _ => velimprim('interpI', d, args));
     }
     if (isVPrim('IHRec', v)) {
       const [, A, f, d] = vprimArgs(v);
-      return VSigma('_', VPiE('a', A, a => vappE(X, vappE(f, a))), _ => velimprim('interpI', d, args));
+      return VSigma(false, '_', VPiE('a', A, a => vappE(X, vappE(f, a))), _ => velimprim('interpI', d, args));
     }
     // interpretI I (elimB Pb f t b) X i ~> elimB * (interpretI I f X i) (interpretI I t X i) b
     if (v.tag === 'VNe' && v.spine.tag === 'Cons' && v.spine.head.tag === 'EPrim' && v.spine.head.name === 'elimB') {
@@ -215,11 +217,11 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     }
     if (isVPrim('IRec', v)) {
       const [, j, d] = vprimArgs(v);
-      return VSigma('_', vappEs([P, j, vproj('fst', xs)]), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
+      return VSigma(false, '_', vappEs([P, j, vproj('fst', xs)]), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
     }
     if (isVPrim('IHRec', v)) {
       const [, A, fi, d] = vprimArgs(v);
-      return VSigma('_', VPiE('a', A, a => vappEs([P, vappE(fi, a), vappE(vproj('fst', xs), a)])), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
+      return VSigma(false, '_', VPiE('a', A, a => vappEs([P, vappE(fi, a), vappE(vproj('fst', xs), a)])), _ => velimprim('AllI', d, [I, X, P, i, vproj('snd', xs)]));
     }
   }
   if (name === 'allI') {
@@ -255,7 +257,7 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
       const [I, d, P, h, i] = args;
       const [, , , c] = vprimArgs(v);
       // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind d P i x) i c)
-      return vappEs([h, i, c, velimprim('allI', d, [I, vappEs([VIData, I, d]), P, VAbsE('i', I, i => VAbsE('x', vidata(I, d, i), x => velimprim('indI', x, [I, d, P, h, i]))), i, c])]);
+      return vappEs([h, i, c, velimprim('allI', d, [I, vappEs([VIData, I, d]), P, VAbsEE('i', I, i => VAbsE('x', vidata(I, d, i), x => velimprim('indI', x, [I, d, P, h, i]))), i, c])]);
     }
   }
   if (v.tag === 'VNe') return VNe(v.head, Cons(EPrim(name, args), v.spine));
@@ -276,7 +278,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Pi')
     return VPi(t.mode, t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Sigma')
-    return VSigma(t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
+    return VSigma(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Meta') {
     const s = getMeta(t.index);
     return s.tag === 'Solved' ? s.val : VMeta(t.index);
@@ -295,24 +297,24 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return vproj(t.proj, evaluate(t.term, vs));
   if (t.tag === 'Prim') {
     if (t.name === 'elimB') {
-      return VAbsE('P', VPiE('_', VB, _ => VType), P =>
+      return VAbsEE('P', VPiE('_', VB, _ => VType), P =>
         VAbsE('f', vappE(P, V0), f =>
         VAbsE('t', vappE(P, V1), t =>
         VAbsE('b', VB, b =>
         velimprim('elimB', b, [P, f, t])))));
     }
     if (t.name === 'elimHEq') {
-      return VAbsE('A', VType, A =>
-        VAbsE('a', A, a =>
-        VAbsE('P', VPiE('b', A, b => VPiE('_', vheq(A, A, a, b), _ => VType)), P =>
+      return VAbsEE('A', VType, A =>
+        VAbsEE('a', A, a =>
+        VAbsEE('P', VPiE('b', A, b => VPiE('_', vheq(A, A, a, b), _ => VType)), P =>
         VAbsE('h', vappE(vappE(P, a), vreflheq(A, a)), h =>
-        VAbsE('b', A, b =>
-        VAbsE('p', vheq(A, A, a, b), p =>
+        VAbsEE('b', A, b =>
+        VAbsEE('p', vheq(A, A, a, b), p =>
         velimprim('elimHEq', p, [A, a, P, h, b])))))));
     }
     if (t.name === 'elimIDesc') {
-      return VAbsE('I', VType, I =>
-        VAbsE('P', VPiE('_', videsc(I), _ => VType), P =>
+      return VAbsEE('I', VType, I =>
+        VAbsEE('P', VPiE('_', videsc(I), _ => VType), P =>
         VAbsE('end', VPiE('i', I, i => vappE(P, vappE(VIEnd, i))), end =>
         VAbsE('arg', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), arg =>
         VAbsE('farg', VPiE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), farg =>
@@ -336,21 +338,21 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
         VAbsE('xs', vinterpI(I, d, X, i), xs =>
         velimprim('AllI', d, [I, X, P, i, xs])))))));
     if (t.name === 'allI') {
-      return VAbsE('I', VType, I =>
+      return VAbsEE('I', VType, I =>
         VAbsE('d', videsc(I), d =>
-        VAbsE('X', VPiE('_', I, _ => VType), X =>
-        VAbsE('P', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), P =>
-        VAbsE('p', VPiE('i', I, i => VPiE('x', vappE(X, i), x => vappEs([P, i, x]))), p =>
-        VAbsE('i', I, i =>
+        VAbsEE('X', VPiE('_', I, _ => VType), X =>
+        VAbsEE('P', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), P =>
+        VAbsE('p', VPiEE('i', I, i => VPiE('x', vappE(X, i), x => vappEs([P, i, x]))), p =>
+        VAbsEE('i', I, i =>
         VAbsE('xs', vinterpI(I, d, X, i), xs =>
         velimprim('allI', d, [I, X, P, p, i, xs]))))))));
     }
     if (t.name === 'indI') {
-      return VAbsE('I', VType, I =>
+      return VAbsEE('I', VType, I =>
         VAbsE('d', videsc(I), d =>
-        VAbsE('P', VPiE('i', I, i => VPiE('_', vidata(I, d, i), _ => VType)), P =>
-        VAbsE('h', VPiE('i', I, i => VPiE('y', vinterpI(I, d, vappEs([VIData, I, d]), i), y => VPiE('_', vAllI(I, d, vappEs([VIData, I,]), P, i, y), _ => vappEs([P, i, vicon(I, d, i, y)])))), h =>
-        VAbsE('i', I, i =>
+        VAbsEE('P', VPiE('i', I, i => VPiE('_', vidata(I, d, i), _ => VType)), P =>
+        VAbsE('h', VPiEE('i', I, i => VPiE('y', vinterpI(I, d, vappEs([VIData, I, d]), i), y => VPiE('_', vAllI(I, d, vappEs([VIData, I,]), P, i, y), _ => vappEs([P, i, vicon(I, d, i, y)])))), h =>
+        VAbsEE('i', I, i =>
         VAbsE('x', vidata(I, d, i), x =>
         velimprim('indI', x, [I, d, P, h, i])))))));
     }
@@ -400,7 +402,7 @@ export const quote = (v_: Val, k: Ix, full: boolean = false): Term => {
   if (v.tag === 'VPi')
     return Pi(v.mode, v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VSigma')
-    return Sigma(v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
+    return Sigma(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   return v;
 };
 
@@ -429,9 +431,9 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
   if (tm.tag === 'Pi')
     return Pi(tm.mode, tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Sigma')
-    return Sigma(tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
+    return Sigma(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Let')
-    return Let(tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
+    return Let(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Abs')
     return Abs(tm.mode, tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Pair')

@@ -38,13 +38,15 @@ Future work:
 
 ```
 TODO:
+- check that inference will not use erased values
+- check that evaluation does not use erased values
+- Allow description datatypes arguments to be erased
 - correctly erase primitives
-- update primitives to allow for erasure
-- update descriptions to allow for erasure
+- add normalization for erased terms
 - update lib to use erasure
-- erased let
-- erased sigma
 - generic eliminators for Fin tagged non-indexed datatypes
+- allow second component of pair to be erased
+- find alternate definitions of symm, trans, eqRefl and uip, to allow for erasure of the proofs
 - fix infinite loop in postponements
 - fix _ being used in elaboration
 - allow meta as head of glued value
@@ -60,4 +62,10 @@ TODO:
 QUESTIONS:
 - how to levitate in my core theory?
 - is a first-order Arg description useful? (IFArg)
+
+LIBRARIES:
+- List parameters should be erased where possible
+- Fin indeces should be erased
+- taggeddesc does not erase enough parameters in elim
+- Vec indeces should be erased
 ```

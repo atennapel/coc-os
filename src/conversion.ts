@@ -33,7 +33,7 @@ export const conv = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vinst(b, v));
   }
-  if (a.tag === 'VSigma' && b.tag === 'VSigma') {
+  if (a.tag === 'VSigma' && b.tag === 'VSigma' && a.erased === b.erased) {
     conv(k, a.type, b.type);
     const v = VVar(k);
     return conv(k + 1, vinst(a, v), vinst(b, v));

@@ -16,7 +16,7 @@ def indVec
     -> {P : (n : Nat) -> Vec n t -> *}
     -> P Z VNil
     -> ((n : Nat) -> (hd : t) -> (tl : Vec n t) -> P n tl -> P (S n) (VCons hd tl))
-    -> {n : Nat}
+    -> {-n : Nat}
     -> (x : Vec n t)
     -> P n x
   = \{t} {P} nil cons {n} x. elimTagged (VecD t) {P} nil cons {n} x

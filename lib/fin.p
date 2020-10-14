@@ -9,26 +9,26 @@ def FZ : {n : Nat} -> Fin (S n) = \{n}. inj FinD True n
 def FS : {n : Nat} -> Fin n -> Fin (S n) = \{n}. inj FinD False n
 
 def indFin
-  : {P : (n : Nat) -> Fin n -> *}
+  : {-P : (n : Nat) -> Fin n -> *}
     -> ((n : Nat) -> P (S n) (FZ {n}))
     -> ((n : Nat) -> (f : Fin n) -> P n f -> P (S n) (FS {n} f))
-    -> {n : Nat}
+    -> {-n : Nat}
     -> (x : Fin n)
     -> P n x
   = \{P} z s {n} x. elimIBool {Nat} (\b. if b (IArg \n. IEnd (S n)) (IArg \n. IRec n (IEnd (S n)))) {P} z s {n} x
 
 def dcaseFin
-  : {P : (n : Nat) -> Fin n -> *}
+  : {-P : (n : Nat) -> Fin n -> *}
     -> ((n : Nat) -> P (S n) (FZ {n}))
     -> ((n : Nat) -> (f : Fin n) -> P (S n) (FS {n} f))
-    -> {n : Nat}
+    -> {-n : Nat}
     -> (x : Fin n)
     -> P n x
   = \{P} z s {n} x. indFin {P} z (\m f _. s m f) {n} x
 
 def paraFin
-  : {t : *}
-    -> {n : Nat}
+  : {-t : *}
+    -> {-n : Nat}
     -> Fin n
     -> (Nat -> t)
     -> ((m : Nat) -> Fin m -> t -> t)
@@ -36,8 +36,8 @@ def paraFin
   = \{t} {n} x z s. indFin {\_ _. t} z s {n} x
 
 def cataFin
-  : {t : *}
-    -> {n : Nat}
+  : {-t : *}
+    -> {-n : Nat}
     -> Fin n
     -> (Nat -> t)
     -> (Nat -> t -> t)
@@ -45,8 +45,8 @@ def cataFin
   = \{t} {n} x z s. paraFin {t} {n} x z (\n _ r. s n r)
 
 def caseFin
-  : {t : *}
-    -> {n : Nat}
+  : {-t : *}
+    -> {-n : Nat}
     -> Fin n
     -> (Nat -> t)
     -> ((m : Nat) -> Fin m -> t)
@@ -69,15 +69,15 @@ def Branches
   = \n. indNat {\n. (Fin n -> *) -> *} (\_. U) (\m r P. P FZ ** r (\f. P (FS f))) n
 
 def caseP
-  : {n : Nat} -> (x : Fin n) -> (P : Fin n -> *) -> Branches n P -> P x
-  = \{n} x. indFin {\n f. (P : Fin n -> *) -> Branches n P -> P f} (\m P b. b.fst) (\m f r P b. r (\f. P (FS f)) b.snd) x
+  : {-n : Nat} -> (x : Fin n) -> (-P : Fin n -> *) -> Branches n P -> P x
+  = \{n} x. indFin {\n f. (-P : Fin n -> *) -> Branches n P -> P f} (\m P b. b.fst) (\m f r P b. r (\f. P (FS f)) b.snd) x
 
 def dcase
-  : {n : Nat} -> {P : Fin n -> *} -> (x : Fin n) -> Branches n P -> P x
+  : {-n : Nat} -> {-P : Fin n -> *} -> (x : Fin n) -> Branches n P -> P x
   = \{n} {P} x b. caseP {n} x P b
 
 def case
-  : {n : Nat} -> {t : *} -> (x : Fin n) -> Branches n (\_. t) -> t
+  : {-n : Nat} -> {-t : *} -> (x : Fin n) -> Branches n (\_. t) -> t
   = \{n} {t} x b. dcase {n} {\_. t} x b
 
 def UncurriedBranches : (n : Nat) -> (P : Fin n -> *) -> * -> *

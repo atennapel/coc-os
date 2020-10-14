@@ -97,11 +97,11 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
   }
   const fty = force(ty);
   if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
-    if (tm.erased !== fty.erased) return terr(`erasability mismatch in check ${show(tm)} : ${showVal(local, ty)}`);
+    if (tm.erased && !fty.erased) return terr(`erasability mismatch in check ${show(tm)} : ${showVal(local, ty)}`);
     const v = VVar(local.index);
     const x = tm.name;
-    const body = check(localExtend(local, x, fty.type, tm.mode, tm.erased, true, false, v), tm.body, vinst(fty, v));
-    return Abs(tm.mode, tm.erased, x, quote(fty.type, local.index), body);
+    const body = check(localExtend(local, x, fty.type, tm.mode, fty.erased, true, false, v), tm.body, vinst(fty, v));
+    return Abs(tm.mode, fty.erased, x, quote(fty.type, local.index), body);
   }
   if (fty.tag === 'VPi' && fty.mode === C.ImplUnif) {
     const v = VVar(local.index);
@@ -120,14 +120,14 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     if (tm.type) {
       vtype = check(localErased(local), tm.type, VType);
       vty = evaluate(vtype, local.vs);
-      val = check(local, tm.val, ty);
+      val = check(tm.erased ? localErased(local) : local, tm.val, ty);
     } else {
-      [val, vty] = synth(local, tm.val);
+      [val, vty] = synth(tm.erased ? localErased(local) : local, tm.val);
       vtype = quote(ty, local.index);
     }
     const v = evaluate(val, local.vs);
-    const body = check(localExtend(local, tm.name, vty, C.Expl, false, false, false, v), tm.body, ty);
-    return Let(tm.name, vtype, val, body);
+    const body = check(localExtend(local, tm.name, vty, C.Expl, tm.erased, false, false, v), tm.body, ty);
+    return Let(tm.erased, tm.name, vtype, val, body);
   }
   const [term, ty2] = synth(local, tm);
   const [ty2inst, ms] = inst(local, ty2);
@@ -181,7 +181,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   if (tm.tag === 'Pair') {
     const [fst, fstty] = synth(local, tm.fst);
     const [snd, sndty] = synth(local, tm.snd);
-    const ty = Sigma('_', quote(fstty, local.index), quote(sndty, local.index + 1));
+    const ty = Sigma(false, '_', quote(fstty, local.index), quote(sndty, local.index + 1));
     return [Pair(fst, snd, ty), evaluate(ty, local.vs)];
   }
   if (tm.tag === 'Proj') {
@@ -191,6 +191,8 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     const proj = tm.proj;
     if (proj.tag === 'PCore') {
       const tag = proj.proj;
+      if (tag === 'fst' && fty.erased && !local.erased)
+        return terr(`cannot project from erased sigma in non-erased context in ${show(tm)}: ${showVal(local, ty)}`);
       const e = Proj(tag, term);
       return tag === 'fst' ? [e, fty.type] : [e, vinst(fty, vproj('fst', evaluate(term, local.vs)))];
     } else if (proj.tag === 'PIndex') {
@@ -204,6 +206,8 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
         v = vproj('snd', v);
       }
       if (t.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, t)}`);
+      if (t.erased && !local.erased)
+        return terr(`cannot project from erased sigma in non-erased context in ${show(tm)}: ${showVal(local, ty)}`);
       return [Proj('fst', c), t.type];
     } else if (proj.tag === 'PName') {
       let c = term;
@@ -217,20 +221,22 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
         v = vproj('snd', v);
       }
       if (t.tag !== 'VSigma') return terr(`not a sigma type in ${show(tm)}: ${showVal(local, t)}`);
+      if (t.erased && !local.erased)
+        return terr(`cannot project from erased sigma in non-erased context in ${show(tm)}: ${showVal(local, ty)}`);
       return [Proj('fst', c), t.type];
     }
   }
   if (tm.tag === 'Pi') {
     const type = check(localErased(local), tm.type, VType);
     const ty = evaluate(type, local.vs);
-    const body = check(localExtend(local, tm.name, ty, tm.mode, tm.erased), tm.body, VType);
+    const body = check(localErased(localExtend(local, tm.name, ty, tm.mode, tm.erased)), tm.body, VType);
     return [Pi(tm.mode, tm.erased, tm.name, type, body), VType];
   }
   if (tm.tag === 'Sigma') {
     const type = check(localErased(local), tm.type, VType);
     const ty = evaluate(type, local.vs);
-    const body = check(localExtend(local, tm.name, ty, C.Expl, false), tm.body, VType);
-    return [Sigma(tm.name, type, body), VType];
+    const body = check(localErased(localExtend(local, tm.name, ty, C.Expl, tm.erased)), tm.body, VType);
+    return [Sigma(tm.erased, tm.name, type, body), VType];
   }
   if (tm.tag === 'Let') {
     let type: Term;
@@ -239,14 +245,14 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     if (tm.type) {
       type = check(localErased(local), tm.type, VType);
       ty = evaluate(type, local.vs);
-      val = check(local, tm.val, ty);
+      val = check(tm.erased ? localErased(local) : local, tm.val, ty);
     } else {
-      [val, ty] = synth(local, tm.val);
+      [val, ty] = synth(tm.erased ? localErased(local) : local, tm.val);
       type = quote(ty, local.index);
     }
     const v = evaluate(val, local.vs);
-    const [body, rty] = synth(localExtend(local, tm.name, ty, C.Expl, false, false, false, v), tm.body);
-    return [Let(tm.name, type, val, body), rty];
+    const [body, rty] = synth(localExtend(local, tm.name, ty, C.Expl, tm.erased, false, false, v), tm.body);
+    return [Let(tm.erased, tm.name, type, val, body), rty];
   }
   if (tm.tag === 'Hole') {
     const t = newMeta(local, VType);

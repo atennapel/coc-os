@@ -22,7 +22,7 @@ def CurriedEl
       D
 
 def curryEl
-  : {I : *} -> (D : IDesc I) -> (X : I -> *) -> UncurriedEl D X -> CurriedEl D X
+  : {-I : *} -> (D : IDesc I) -> (-X : I -> *) -> UncurriedEl D X -> CurriedEl D X
   = \{I} D X. indIDesc {I} {\D. UncurriedEl D X -> CurriedEl D X}
       (\i u. u Refl)
       (\A f r u. \(a : A). r a (\xs. u (a, xs)))
@@ -31,12 +31,12 @@ def curryEl
       (\A fi d r u. \(g : (a : A) -> X (fi a)). r (\xs. u (g, xs)))
       D
 
-def inj : {I : *} -> (D : IDesc I) -> CurriedEl D (IData D) = \D. curryEl D (IData D) ICon
+def inj : {-I : *} -> (D : IDesc I) -> CurriedEl D (IData D) = \D. curryEl D (IData D) ICon
 
 -- generic eliminators
 def UncurriedHyps
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (cn : UncurriedEl D X) -> *
-  = \{I} D X P cn. (i : I) -> (xs : interpI D X i) -> (ihs : AllIDesc I D X P i xs) -> P i (cn xs)
+  = \{I} D X P cn. {-i : I} -> (xs : interpI D X i) -> (ihs : AllIDesc I D X P i xs) -> P i (cn xs)
 
 def CurriedHyps
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (cn : UncurriedEl D X) -> *
@@ -49,38 +49,38 @@ def CurriedHyps
       D
 
 def uncurryHyps
-  : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *)
+  : {-I : *} -> (D : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *)
       -> (cn : UncurriedEl D X) -> CurriedHyps D X P cn -> UncurriedHyps D X P cn
   = \{I} D X P. indIDesc {I} {\D. (cn : UncurriedEl D X) -> CurriedHyps D X P cn -> UncurriedHyps D X P cn}
-      (\i cn pf j refl tt. elimEq {I} {i} {\k q. P k (cn {k} q)} pf {j} refl)
-      (\A f r cn pf i p ihs.
+      (\i cn pf {j} refl tt. elimEq {I} {i} {\k q. P k (cn {k} q)} pf {j} refl)
+      (\A f r cn pf {i} p ihs.
         let a = p.fst in
         let xs = p.snd in
-        r a (\ys. cn (a, ys)) (pf a) i xs ihs)
-      (\A d r cn pf i p ihs.
+        r a (\ys. cn (a, ys)) (pf a) {i} xs ihs)
+      (\A d r cn pf {i} p ihs.
         let a = p.fst in
         let xs = p.snd in
-        r (\ys. cn (a, ys)) (pf a) i xs ihs)
-      (\j d r cn pf i p h.
+        r (\ys. cn (a, ys)) (pf a) {i} xs ihs)
+      (\j d r cn pf {i} p h.
         let x = p.fst in
         let xs = p.snd in
         let ih = h.fst in
         let ihs = h.snd in
-        r (\ys. cn (x, ys)) (pf x ih) i xs ihs)
-      (\A fi d r cn pf i p h.
+        r (\ys. cn (x, ys)) (pf x ih) {i} xs ihs)
+      (\A fi d r cn pf {i} p h.
         let xg = p.fst in
         let xs = p.snd in
         let ihg = h.fst in
         let ihs = h.snd in
-        r (\ys. cn (xg, ys)) (pf xg ihg) i xs ihs)
+        r (\ys. cn (xg, ys)) (pf xg ihg) {i} xs ihs)
       D
 
 def indCurried
-  : {I : *}
+  : {-I : *}
     -> (D : IDesc I)
-    -> (P : (i : I) -> IData D i -> *)
+    -> (-P : (i : I) -> IData D i -> *)
     -> CurriedHyps D (IData D) P ICon
-    -> (i : I)
+    -> (-i : I)
     -> (x : IData D i)
     -> P i x
   = \{I} D P f i x. indI {I} {D} {P} (uncurryHyps {I} D (IData D) P ICon f) {i} x
@@ -96,14 +96,14 @@ def SumCurriedHypsBool
     CurriedHyps (C a) (IData D) P (\xs. ICon {I} {D} (a, xs))
 
 def elimIBool
-  : {I : *}
+  : {-I : *}
     -> (C : Bool -> IDesc I)
     -> (
       let D = IArg {I} {Bool} C in
-      {P : (i : I) -> IData D i -> *}
+      {-P : (i : I) -> IData D i -> *}
       -> SumCurriedHypsBool C P True
       -> SumCurriedHypsBool C P False
-      -> {i : I}
+      -> {-i : I}
       -> (x : IData D i)
       -> P i x
     )
@@ -115,7 +115,7 @@ def elimBool
   : (C : Bool -> Desc)
     -> (
       let D = Arg {Bool} C in
-      {P : Data D -> *}
+      {-P : Data D -> *}
       -> SumCurriedHypsBool C (\_. P) True
       -> SumCurriedHypsBool C (\_. P) False
       -> (x : Data D)
