@@ -1820,6 +1820,7 @@ const values_1 = require("./values");
 const V = require("./values");
 const context_1 = require("./context");
 const lazy_1 = require("./utils/lazy");
+const typecheck_1 = require("./typecheck");
 const unifyElim = (k, a, b, x, y) => {
     if (a === b)
         return;
@@ -1934,6 +1935,9 @@ const solve = (k, m, spine, val) => {
         config_1.log(() => `meta type: ${values_1.showVal(type, 0)}`);
         const solution = constructSolution(0, type, body);
         config_1.log(() => `solution ?${m} := ${core_1.show(solution)}`);
+        const res = utils_1.tryTE(() => typecheck_1.typecheck(solution));
+        if (res instanceof TypeError)
+            return utils_1.terr(`solution was invalid: ${res}`);
         const vsolution = values_1.evaluate(solution, list_1.Nil);
         context_1.solveMeta(m, vsolution);
         // try to solve blocked problems for the meta
@@ -2010,7 +2014,7 @@ const checkSolution = (k, m, is, t) => {
     return utils_1.impossible(`checkSolution ?${m}: non-normal term: ${core_1.show(t)}`);
 };
 
-},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./utils/lazy":15,"./utils/list":16,"./utils/utils":17,"./values":18}],15:[function(require,module,exports){
+},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./typecheck":13,"./utils/lazy":15,"./utils/list":16,"./utils/utils":17,"./values":18}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapLazy = exports.forceLazy = exports.lazyOf = exports.Lazy = void 0;

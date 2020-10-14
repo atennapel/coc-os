@@ -8,6 +8,7 @@ import { Elim, force, Spine, Val, vapp, vproj, vinst, VVar, VMeta, quote, evalua
 import * as V from './values';
 import { discardContext, getMeta, isMetaSolved, markContext, postpone, problemsBlockedBy, solveMeta, undoContext, Unsolved } from './context';
 import { forceLazy } from './utils/lazy';
+import { typecheck } from './typecheck';
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
@@ -117,6 +118,9 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
     log(() => `meta type: ${showVal(type, 0)}`);
     const solution = constructSolution(0, type, body);
     log(() => `solution ?${m} := ${show(solution)}`);
+    const res = tryTE(() => typecheck(solution));
+    if (res instanceof TypeError)
+      return terr(`solution was invalid: ${res}`);
     const vsolution = evaluate(solution, Nil);
     solveMeta(m, vsolution);
 

@@ -38,10 +38,9 @@ Future work:
 
 ```
 TODO:
-- check that inference will not use erased values
 - check that evaluation does not use erased values
-- Allow description datatypes arguments to be erased
 - correctly erase primitives
+- Allow description datatypes arguments to be erased
 - add normalization for erased terms
 - update lib to use erasure
 - generic eliminators for Fin tagged non-indexed datatypes
@@ -58,6 +57,9 @@ TODO:
 - specialize meta when checking pair
 - support some impredicative instantiation
 - write more prelude functions
+- run command in file
+- remove dependency of elaboration on typechecking
+- add a way to not mention type in argument of pi/sigma etc.
 
 QUESTIONS:
 - how to levitate in my core theory?
