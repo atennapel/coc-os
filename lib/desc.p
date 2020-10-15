@@ -3,19 +3,19 @@ import lib/unit.p
 
 def Desc = IDesc U
 def End : Desc = IEnd {U} ()
-def Arg : {A : *} -> (A -> Desc) -> Desc = \{A} f. IArg {U} {A} f
-def FArg : * -> Desc -> Desc = \A d. IFArg {U} A d
+def Arg : {-A : *} -> (A -> Desc) -> Desc = \{A} f. IArg {U} {A} f
+def FArg : (-A : *) -> Desc -> Desc = \A d. IFArg {U} A d
 def Rec : Desc -> Desc = \d. IRec {U} () d
-def HRec : * -> Desc -> Desc = \A d. IHRec {U} {A} (\_. ()) d
+def HRec : (-A : *) -> Desc -> Desc = \A d. IHRec {U} {A} (\_. ()) d
 def SumD : Desc -> Desc -> Desc = \a b. Arg {Bool} \c. if c a b
 
 def indDesc
   : {-P : Desc -> *}
     -> P End
-    -> ((A : *) -> (f : A -> Desc) -> ((a : A) -> P (f a)) -> P (Arg {A} f))
-    -> ((A : *) -> (d : Desc) -> P d -> P (FArg A d))
+    -> ((-A : *) -> (f : A -> Desc) -> ((a : A) -> P (f a)) -> P (Arg {A} f))
+    -> ((-A : *) -> (d : Desc) -> P d -> P (FArg A d))
     -> ((d : Desc) -> P d -> P (Rec d))
-    -> ((A : *) -> (d : Desc) -> P d -> P (HRec A d))
+    -> ((-A : *) -> (d : Desc) -> P d -> P (HRec A d))
     -> (d : Desc)
     -> P d
   = \{P} end arg farg rec hrec d. indIDesc {U} {P} (\_. end) arg farg (\_. rec) (\A _. hrec A) d

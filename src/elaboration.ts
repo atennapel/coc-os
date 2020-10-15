@@ -78,7 +78,9 @@ const newMeta = (local: Local, erased: boolean, ty: Val): Term => {
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);
   log(() => `new meta type val: ${S.showVal(vmty)}`);
-  return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty, erased)) as Term, spine);
+  const newmeta = foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty, erased)) as Term, spine);
+  log(() => `new meta term: ${S.showCore(newmeta, local.ns)}`);
+  return newmeta;
 };
 
 const inst = (local: Local, ty_: Val): [Val, List<Term>] => {
@@ -157,6 +159,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     if (i < 0) {
       const entry = getGlobal(tm.name);
       if (!entry) return terr(`global ${tm.name} not found`);
+      if (entry.erased && !local.erased) return terr(`erased global used: ${show(tm)}`);
       return [Global(tm.name), entry.type];
     } else {
       const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
@@ -311,9 +314,9 @@ const tryToSolveBlockedProblems = (): void => {
   }
 };
 
-export const elaborate = (t: S.Term): [Term, Term] => {
+export const elaborate = (t: S.Term, erased: boolean = false): [Term, Term] => {
   resetContext();
-  const [tm, ty] = synth(localEmpty, t);
+  const [tm, ty] = synth(erased ? localErased(localEmpty) : localEmpty, t);
 
   log(() => `try solve unsolved problems`);
   tryToSolveBlockedProblems();
@@ -343,13 +346,13 @@ export const elaborateDefs = (ds: S.Def[], allowRedefinition: boolean = false): 
     log(() => `elaborateDef ${S.showDef(d)}`);
     if (d.tag === 'DDef') {
       try {
-        const [tm, ty] = elaborate(d.value);
+        const [tm, ty] = elaborate(d.value, d.erased);
         log(() => `set ${d.name} : ${S.showCore(ty)} = ${S.showCore(tm)}`);
 
-        const [, er] = typecheck(tm);
+        const [, er] = typecheck(tm, d.erased);
         log(() => `erased term: ${E.show(er)}`);
 
-        setGlobal(d.name, tm, evaluate(tm, Nil), evaluate(ty, Nil), er, EV.evaluate(er, Nil));
+        setGlobal(d.name, d.erased, tm, evaluate(tm, Nil), evaluate(ty, Nil), er, EV.evaluate(er, Nil));
 
         const i = xs.indexOf(d.name);
         if (i >= 0) xs.splice(i, 1);

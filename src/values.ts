@@ -315,11 +315,11 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     if (t.name === 'elimIDesc') {
       return VAbsEE('I', VType, I =>
         VAbsEE('P', VPiE('_', videsc(I), _ => VType), P =>
-        VAbsE('end', VPiE('i', I, i => vappE(P, vappE(VIEnd, i))), end =>
-        VAbsE('arg', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), arg =>
-        VAbsE('farg', VPiE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), farg =>
-        VAbsE('rec', VPiE('i', I, i => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIRec, i, d]))))), rec =>
-        VAbsE('hrec', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => I), f => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIHRec, A, f, d])))))), hrec =>
+        VAbsE('end', VPiEE('i', I, i => vappE(P, vappE(VIEnd, i))), end =>
+        VAbsE('arg', VPiEE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), arg =>
+        VAbsE('farg', VPiEE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), farg =>
+        VAbsE('rec', VPiEE('i', I, i => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIRec, i, d]))))), rec =>
+        VAbsE('hrec', VPiEE('A', VType, A => VPiE('f', VPiEE('_', A, _ => I), f => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIHRec, A, f, d])))))), hrec =>
         VAbsE('d', videsc(I), d =>
         velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
     }

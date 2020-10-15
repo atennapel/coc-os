@@ -87,8 +87,8 @@ def CurriedBranches : (n : Nat) -> (P : Fin n -> *) -> * -> *
   = \n. indNat {\n. (P : Fin n -> *) -> * -> *} (\P X. X) (\m r P X. P FZ -> r (\f. P (FS f)) X) n
 
 def curryBranchesE
-  : (n : Nat) -> (P : Fin n -> *) -> (X : *) -> UncurriedBranches n P X -> CurriedBranches n P X
-  = \n. indNat {\n. (P : Fin n -> *) -> (X : *) -> UncurriedBranches n P X -> CurriedBranches n P X}
+  : (n : Nat) -> (-P : Fin n -> *) -> (-X : *) -> UncurriedBranches n P X -> CurriedBranches n P X
+  = \n. indNat {\n. (-P : Fin n -> *) -> (-X : *) -> UncurriedBranches n P X -> CurriedBranches n P X}
       (\P X b. b ())
       (\m r P X b c. r (\f. P (FS f)) X (\cs. b (c, cs)))
       n
@@ -101,7 +101,7 @@ def uncurryBranchesE
       n
 
 def curryBranches
-  : {n : Nat} -> {P : Fin n -> *} -> {X : *} -> UncurriedBranches n P X -> CurriedBranches n P X
+  : {n : Nat} -> {-P : Fin n -> *} -> {-X : *} -> UncurriedBranches n P X -> CurriedBranches n P X
   = \{n} {P} {X}. curryBranchesE n P X
 
 def uncurryBranches

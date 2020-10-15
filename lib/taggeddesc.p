@@ -2,7 +2,7 @@ import lib/idesc.p
 import lib/generic.p
 import lib/fin.p
 
-def SumCurriedHyps
+def -SumCurriedHyps
   : {I : *}
     -> {n : Nat}
     -> (C : Fin n -> IDesc I)
@@ -30,12 +30,12 @@ def elimUncurried
       indCurried D P (\f. dcase {n} {SumCurriedHyps {I} {n} C P} f b) i x
 
 def elim
-  : {I : *}
+  : {-I : *}
   -> {n : Nat}
   -> (C : Fin n -> IDesc I)
   -> (
     let D = IArg {I} {Fin n} C in
-    {P : (i : I) -> IData D i -> *}
+    {-P : (i : I) -> IData D i -> *}
     -> CurriedBranches n (SumCurriedHyps {I} {n} C P) ({-i : I} -> (x : IData D i) -> P i x)
   )
   = \{I} {n} C {P}.
@@ -63,11 +63,11 @@ def TaggedIData : {I : *} -> TaggedIDesc I -> I -> * = \{I} C. IData {I} (untag 
 def injTagged : {-I : *} -> (D : TaggedIDesc I) -> CurriedEl (untag D) (TaggedIData D) = \{I} D. inj {I} (untag D)
 
 def elimTagged
-  : {I : *}
+  : {-I : *}
   -> (C : TaggedIDesc I)
   -> (
     let D = untag C in
-    {P : (i : I) -> IData D i -> *}
+    {-P : (i : I) -> IData D i -> *}
     -> CurriedBranches C.fst (SumCurriedHyps {I} {C.fst} (untagC C) P) ({-i : I} -> (x : IData D i) -> P i x)
   )
   = \{I} C {P}. elim {I} {C.fst} (untagC C) {P}

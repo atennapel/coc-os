@@ -5,6 +5,7 @@ import * as E from './erased';
 import * as EV from './erasedvalues';
 
 export type EnvGEntry = {
+  erased: boolean,
   term: Term,
   val: Val,
   type: Val,
@@ -21,9 +22,9 @@ export const resetGlobals = () => {
 export const getGlobals = (): EnvG => env;
 export const getGlobal = (name: Name): EnvGEntry | null => env.get(name) || null;
 export const hasGlobal = (name: Name): boolean => env.has(name);
-export const setGlobal = (name: Name, term: Term, val: Val, type: Val, termerased: E.Term, valerased: EV.Val): void => {
+export const setGlobal = (name: Name, erased: boolean, term: Term, val: Val, type: Val, termerased: E.Term, valerased: EV.Val): void => {
   if (env.has(name)) env.delete(name);
-  env.set(name, { term, val, type, termerased, valerased });
+  env.set(name, { erased, term, val, type, termerased, valerased });
 };
 export const deleteGlobal = (name: Name): void => {
   env.delete(name);

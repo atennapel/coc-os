@@ -441,7 +441,9 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
       const sym = c[fst];
       if (sym.tag !== 'Name') return serr(`def: after name should be : or =`);
       if (sym.name === '=') {
-        return [DDef(name, exprs(c.slice(fst + 1), '('))];
+        const erased = name[0] === '-';
+        const name2 = erased ? name.slice(1) : name;
+        return [DDef(erased, name2, exprs(c.slice(fst + 1), '('))];
       } else if (sym.name === ':') {
         const tyts: Token[] = [];
         let j = fst + 1;
@@ -453,7 +455,9 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
         }
         const ety = exprs(tyts, '(');
         const body = exprs(c.slice(j + 1), '(');
-        return [DDef(name, Let(false, name, ety, body, Var(name)))];
+        const erased = name[0] === '-';
+        const name2 = erased ? name.slice(1) : name;
+        return [DDef(erased, name2, Let(false, name, ety, body, Var(name)))];
       } else return serr(`def: : or = expected but got ${sym.name}`);
     } else return serr(`def should start with a name`);
   } else return serr(`def should start with def or import`);

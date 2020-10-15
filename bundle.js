@@ -382,7 +382,9 @@ const newMeta = (local, erased, ty) => {
     config_1.log(() => `new meta type: ${C.show(mty)}`);
     const vmty = values_1.evaluate(mty, list_1.Nil);
     config_1.log(() => `new meta type val: ${S.showVal(vmty)}`);
-    return list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty, erased)), spine);
+    const newmeta = list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty, erased)), spine);
+    config_1.log(() => `new meta term: ${S.showCore(newmeta, local.ns)}`);
+    return newmeta;
 };
 const inst = (local, ty_) => {
     const ty = values_1.force(ty_);
@@ -462,6 +464,8 @@ const synth = (local, tm) => {
             const entry = globals_1.getGlobal(tm.name);
             if (!entry)
                 return utils_1.terr(`global ${tm.name} not found`);
+            if (entry.erased && !local.erased)
+                return utils_1.terr(`erased global used: ${surface_1.show(tm)}`);
             return [core_1.Global(tm.name), entry.type];
         }
         else {
@@ -627,9 +631,9 @@ const tryToSolveBlockedProblems = () => {
         }
     }
 };
-exports.elaborate = (t) => {
+exports.elaborate = (t, erased = false) => {
     context_1.resetContext();
-    const [tm, ty] = synth(localEmpty, t);
+    const [tm, ty] = synth(erased ? localErased(localEmpty) : localEmpty, t);
     config_1.log(() => `try solve unsolved problems`);
     tryToSolveBlockedProblems();
     const ztm = values_1.zonk(tm);
@@ -654,11 +658,11 @@ exports.elaborateDefs = (ds, allowRedefinition = false) => {
         config_1.log(() => `elaborateDef ${S.showDef(d)}`);
         if (d.tag === 'DDef') {
             try {
-                const [tm, ty] = exports.elaborate(d.value);
+                const [tm, ty] = exports.elaborate(d.value, d.erased);
                 config_1.log(() => `set ${d.name} : ${S.showCore(ty)} = ${S.showCore(tm)}`);
-                const [, er] = typecheck_1.typecheck(tm);
+                const [, er] = typecheck_1.typecheck(tm, d.erased);
                 config_1.log(() => `erased term: ${E.show(er)}`);
-                globals_1.setGlobal(d.name, tm, values_1.evaluate(tm, list_1.Nil), values_1.evaluate(ty, list_1.Nil), er, EV.evaluate(er, list_1.Nil));
+                globals_1.setGlobal(d.name, d.erased, tm, values_1.evaluate(tm, list_1.Nil), values_1.evaluate(ty, list_1.Nil), er, EV.evaluate(er, list_1.Nil));
                 const i = xs.indexOf(d.name);
                 if (i >= 0)
                     xs.splice(i, 1);
@@ -752,23 +756,23 @@ const snd = (x) => erasedvalues_1.vproj('snd', x);
 const inM = l(x => l(alg => ap([alg, l(r => ap([r, alg])), x])));
 // fold = \alg r. r alg
 const foldM = l(alg => l(r => ap([r, alg])));
-// elimIDesc = \ce ca cf cr ch d. foldM (\r x. x ce (\t f. ca t f (\a. r (f a))) (\t d. cf t d (r d)) (\i d. cr i d (r d)) (\t i d. ch t i d (r d))) d 
+// elimIDesc = \ce ca cf cr ch d. foldM (\r x. x ce (\f. ca f (\a. r (f a))) (\d. cf d (r d)) (\d. cr d (r d)) (\d. ch d (r d))) d 
 const elimIDesc = l(ce => l(ca => l(cf => l(cr => l(ch => l(d => ap([foldM, l(r => l(x => ap([
         x,
         ce,
-        l(t => l(f => ap([ca, t, f, l(a => ap([r, ap([f, a])]))]))),
-        l(t => l(d => ap([cf, t, d, ap([r, d])]))),
-        l(i => l(d => ap([cr, i, d, ap([r, d])]))),
-        l(t => l(i => l(d => ap([ch, t, i, d, ap([r, d])])))),
+        l(f => ap([ca, f, l(a => ap([r, ap([f, a])]))])),
+        l(d => ap([cf, d, ap([r, d])])),
+        l(d => ap([cr, d, ap([r, d])])),
+        l(d => ap([ch, d, ap([r, d])])),
     ]))), d])))))));
-// allI = \d. elimIDesc (\i p xs. id) (\t f r p xs. r xs.fst p xs.snd) (\t d r. r p xs.snd) (\i d r. (p xs.fst, r p xs.snd)) (\t i d r. (\h. p (xs.fst h), r p xs.snd)) d
+// allI = \d. elimIDesc (\p xs. id) (\f r p xs. r xs.fst p xs.snd) (\d r. r p xs.snd) (\d r. (p xs.fst, r p xs.snd)) (\d r. (\h. p (xs.fst h), r p xs.snd)) d
 const allI = l(d => ap([
     elimIDesc,
-    l(_ => l(_ => l(_ => id))),
-    l(_ => l(_ => l(r => l(p => l(xs => ap([r, fst(xs), p, snd(xs)])))))),
-    l(_ => l(_ => l(r => l(p => l(xs => ap([r, p, snd(xs)])))))),
-    l(_ => l(_ => l(r => l(p => l(xs => erasedvalues_1.VPair(ap([p, fst(xs)]), ap([r, p, snd(xs)]))))))),
-    l(_ => l(_ => l(_ => l(r => l(p => l(xs => erasedvalues_1.VPair(l(h => ap([p, ap([fst(xs), h])])), ap([r, p, snd(xs)])))))))),
+    l(_ => l(_ => id)),
+    l(_ => l(r => l(p => l(xs => ap([r, fst(xs), p, snd(xs)]))))),
+    l(_ => l(r => l(p => l(xs => ap([r, p, snd(xs)]))))),
+    l(_ => l(r => l(p => l(xs => erasedvalues_1.VPair(ap([p, fst(xs)]), ap([r, p, snd(xs)])))))),
+    l(_ => l(r => l(p => l(xs => erasedvalues_1.VPair(l(h => ap([p, ap([fst(xs), h])])), ap([r, p, snd(xs)])))))),
     d,
 ]));
 const primErasedMap = {
@@ -781,16 +785,16 @@ const primErasedMap = {
     'ReflHEq': id,
     'elimHEq': id,
     'IDesc': id,
-    // \i. inM (\ce ca cf cr ch. ce i)
-    'IEnd': l(i => ap([inM, l(c => l(_ => l(_ => l(_ => l(_ => ap([c, i]))))))])),
-    // \t f. inM (\ce ca cf cr ch. ca t f)
-    'IArg': l(t => l(f => ap([inM, l(_ => l(c => l(_ => l(_ => l(_ => ap([c, t, f]))))))]))),
-    // \t d. inM (\ce ca cf cr ch. cf t d)
-    'IFArg': l(t => l(d => ap([inM, l(_ => l(_ => l(c => l(_ => l(_ => ap([c, t, d]))))))]))),
-    // \i d. inM (\ce ca cf cr ch. cr i d)
-    'IRec': l(i => l(d => ap([inM, l(_ => l(_ => l(_ => l(c => l(_ => ap([c, i, d]))))))]))),
-    // \t i d. inM (\ce ca cf cr ch. ch t i d)
-    'IHRec': l(t => l(i => l(d => ap([inM, l(_ => l(_ => l(_ => l(_ => l(c => ap([c, t, i, d]))))))])))),
+    // inM (\ce ca cf cr ch. ce)
+    'IEnd': ap([inM, l(c => l(_ => l(_ => l(_ => l(_ => c)))))]),
+    // \f. inM (\ce ca cf cr ch. ca f)
+    'IArg': l(f => ap([inM, l(_ => l(c => l(_ => l(_ => l(_ => ap([c, f]))))))])),
+    // \d. inM (\ce ca cf cr ch. cf d)
+    'IFArg': l(d => ap([inM, l(_ => l(_ => l(c => l(_ => l(_ => ap([c, d]))))))])),
+    // \d. inM (\ce ca cf cr ch. cr d)
+    'IRec': l(d => ap([inM, l(_ => l(_ => l(_ => l(c => l(_ => ap([c, d]))))))])),
+    // \d. inM (\ce ca cf cr ch. ch d)
+    'IHRec': l(d => ap([inM, l(_ => l(_ => l(_ => l(_ => l(c => ap([c, d]))))))])),
     'elimIDesc': elimIDesc,
     'interpI': id,
     'AllI': id,
@@ -900,10 +904,10 @@ exports.resetGlobals = () => {
 exports.getGlobals = () => env;
 exports.getGlobal = (name) => env.get(name) || null;
 exports.hasGlobal = (name) => env.has(name);
-exports.setGlobal = (name, term, val, type, termerased, valerased) => {
+exports.setGlobal = (name, erased, term, val, type, termerased, valerased) => {
     if (env.has(name))
         env.delete(name);
-    env.set(name, { term, val, type, termerased, valerased });
+    env.set(name, { erased, term, val, type, termerased, valerased });
 };
 exports.deleteGlobal = (name) => {
     env.delete(name);
@@ -1436,7 +1440,9 @@ exports.parseDef = async (c, importMap) => {
             if (sym.tag !== 'Name')
                 return utils_1.serr(`def: after name should be : or =`);
             if (sym.name === '=') {
-                return [surface_1.DDef(name, exprs(c.slice(fst + 1), '('))];
+                const erased = name[0] === '-';
+                const name2 = erased ? name.slice(1) : name;
+                return [surface_1.DDef(erased, name2, exprs(c.slice(fst + 1), '('))];
             }
             else if (sym.name === ':') {
                 const tyts = [];
@@ -1450,7 +1456,9 @@ exports.parseDef = async (c, importMap) => {
                 }
                 const ety = exprs(tyts, '(');
                 const body = exprs(c.slice(j + 1), '(');
-                return [surface_1.DDef(name, surface_1.Let(false, name, ety, body, surface_1.Var(name)))];
+                const erased = name[0] === '-';
+                const name2 = erased ? name.slice(1) : name;
+                return [surface_1.DDef(erased, name2, surface_1.Let(false, name, ety, body, surface_1.Var(name)))];
             }
             else
                 return utils_1.serr(`def: : or = expected but got ${sym.name}`);
@@ -1492,23 +1500,23 @@ const primTypes = {
     // (-A : *) -> (-a : A) -> (-P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (-b : A) -> (-p : HEq A A a b) -> P b p
     'elimHEq': values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('a', A, a => values_1.VPiEE('P', values_1.VPiE('b', A, b => values_1.VPiE('_', values_1.vheq(A, A, a, b), _ => values_1.VType)), P => values_1.VPiE('_', values_1.vappE(values_1.vappE(P, a), values_1.vreflheq(A, a)), _ => values_1.VPiEE('b', A, b => values_1.VPiEE('p', values_1.vheq(A, A, a, b), p => values_1.vappE(values_1.vappE(P, b), p))))))),
     'IDesc': values_1.VPiE('_', values_1.VType, _ => values_1.VType),
-    'IEnd': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.videsc(I))),
-    'IArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
-    'IFArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('_', values_1.VType, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
-    'IRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('_', I, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
-    'IHRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => I), _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I))))),
+    'IEnd': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', I, _ => values_1.videsc(I))),
+    'IArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
+    'IFArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', values_1.VType, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', I, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IHRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('_', values_1.VPiE('_', A, _ => I), _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I))))),
     /*
       (-I : *)
       -> (-P : IDesc I -> *)
-      -> ((i : I) -> P (IEnd i))
-      -> ((A : *) -> (f : A -> IDesc I) -> ((a : A) -> P (f a)) -> P (IArg A f))
-      -> ((A : *) -> (d : IDesc I) -> P d -> P (IFOArg A d))
-      -> ((i : I) -> (d : IDesc I) -> P d -> P (IRec i d))
-      -> ((A : *) -> (f : A -> I) -> (d : IDesc I) -> P d -> P (IHRec A f d))
+      -> ((-i : I) -> P (IEnd i))
+      -> ((-A : *) -> (f : A -> IDesc I) -> ((a : A) -> P (f a)) -> P (IArg A f))
+      -> ((-A : *) -> (d : IDesc I) -> P d -> P (IFOArg A d))
+      -> ((-i : I) -> (d : IDesc I) -> P d -> P (IRec i d))
+      -> ((-A : *) -> (-f : A -> I) -> (d : IDesc I) -> P d -> P (IHRec A f d))
       -> (d : IDesc I)
       -> P d
     */
-    'elimIDesc': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('P', values_1.VPiE('_', values_1.videsc(I), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.vappE(P, values_1.vappE(values_1.VIEnd, i))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIFArg, A, d]))))), _ => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIRec, i, d]))))), _ => values_1.VPiE('_', values_1.VPiE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => I), f => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIHRec, A, f, d])))))), _ => values_1.VPiE('d', values_1.videsc(I), d => values_1.vappE(P, d))))))))),
+    'elimIDesc': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('P', values_1.VPiE('_', values_1.videsc(I), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.vappE(P, values_1.vappE(values_1.VIEnd, i))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIFArg, A, d]))))), _ => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIRec, i, d]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('f', values_1.VPiE('_', A, _ => I), f => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIHRec, A, f, d])))))), _ => values_1.VPiE('d', values_1.videsc(I), d => values_1.vappE(P, d))))))))),
     // (I : *) -> IDesc I -> (I -> *) -> I -> *
     'interpI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', values_1.VPiE('_', I, _ => values_1.VType), _ => values_1.VPiE('_', I, _ => values_1.VType)))),
     // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *
@@ -1843,10 +1851,10 @@ exports.showCore = (t, ns = list_1.Nil) => exports.show(exports.toSurface(t, ns)
 exports.showVal = (v, k = 0, ns = list_1.Nil, full = false) => exports.show(exports.toSurface(values_1.quote(v, k, full), ns));
 exports.showCoreZ = (t, vs = list_1.Nil, k = 0, ns = list_1.Nil) => exports.show(exports.toSurface(values_1.zonk(t, vs, k), ns));
 exports.showValZ = (v, vs = list_1.Nil, k = 0, ns = list_1.Nil, full = false) => exports.show(exports.toSurface(values_1.zonk(values_1.quote(v, k, full), vs, k), ns));
-exports.DDef = (name, value) => ({ tag: 'DDef', name, value });
+exports.DDef = (erased, name, value) => ({ tag: 'DDef', erased, name, value });
 exports.showDef = (d) => {
     if (d.tag === 'DDef')
-        return `def ${d.name} = ${exports.show(d.value)}`;
+        return `def ${d.erased ? '-' : ''}${d.name} = ${exports.show(d.value)}`;
     return d.tag;
 };
 exports.showDefs = (ds) => ds.map(exports.showDef).join('\n');
@@ -2696,7 +2704,7 @@ exports.evaluate = (t, vs) => {
             return exports.VAbsEE('A', exports.VType, A => exports.VAbsEE('a', A, a => exports.VAbsEE('P', exports.VPiE('b', A, b => exports.VPiE('_', exports.vheq(A, A, a, b), _ => exports.VType)), P => exports.VAbsE('h', exports.vappE(exports.vappE(P, a), exports.vreflheq(A, a)), h => exports.VAbsEE('b', A, b => exports.VAbsEE('p', exports.vheq(A, A, a, b), p => exports.velimprim('elimHEq', p, [A, a, P, h, b])))))));
         }
         if (t.name === 'elimIDesc') {
-            return exports.VAbsEE('I', exports.VType, I => exports.VAbsEE('P', exports.VPiE('_', exports.videsc(I), _ => exports.VType), P => exports.VAbsE('end', exports.VPiE('i', I, i => exports.vappE(P, exports.vappE(exports.VIEnd, i))), end => exports.VAbsE('arg', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => exports.videsc(I)), f => exports.VPiE('_', exports.VPiE('a', A, a => exports.vappE(P, exports.vappE(f, a))), _ => exports.vappE(P, exports.vappEs([exports.VIArg, A, f]))))), arg => exports.VAbsE('farg', exports.VPiE('A', exports.VType, A => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIFArg, A, d]))))), farg => exports.VAbsE('rec', exports.VPiE('i', I, i => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIRec, i, d]))))), rec => exports.VAbsE('hrec', exports.VPiE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => I), f => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIHRec, A, f, d])))))), hrec => exports.VAbsE('d', exports.videsc(I), d => exports.velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
+            return exports.VAbsEE('I', exports.VType, I => exports.VAbsEE('P', exports.VPiE('_', exports.videsc(I), _ => exports.VType), P => exports.VAbsE('end', exports.VPiEE('i', I, i => exports.vappE(P, exports.vappE(exports.VIEnd, i))), end => exports.VAbsE('arg', exports.VPiEE('A', exports.VType, A => exports.VPiE('f', exports.VPiE('_', A, _ => exports.videsc(I)), f => exports.VPiE('_', exports.VPiE('a', A, a => exports.vappE(P, exports.vappE(f, a))), _ => exports.vappE(P, exports.vappEs([exports.VIArg, A, f]))))), arg => exports.VAbsE('farg', exports.VPiEE('A', exports.VType, A => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIFArg, A, d]))))), farg => exports.VAbsE('rec', exports.VPiEE('i', I, i => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIRec, i, d]))))), rec => exports.VAbsE('hrec', exports.VPiEE('A', exports.VType, A => exports.VPiE('f', exports.VPiEE('_', A, _ => I), f => exports.VPiE('d', exports.videsc(I), d => exports.VPiE('_', exports.vappE(P, d), _ => exports.vappE(P, exports.vappEs([exports.VIHRec, A, f, d])))))), hrec => exports.VAbsE('d', exports.videsc(I), d => exports.velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
         }
         if (t.name === 'interpI')
             return exports.VAbsE('I', exports.VType, I => exports.VAbsE('d', exports.videsc(I), d => exports.VAbsE('r', exports.VPiE('_', I, _ => exports.VType), r => exports.VAbsE('i', I, i => exports.velimprim('interpI', d, [I, r, i])))));

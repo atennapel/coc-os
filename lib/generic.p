@@ -9,9 +9,9 @@ import lib/bool.p
 -- generic constructors
 def UncurriedEl
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> *
-  = \{I} D X. {i : I} -> interpI D X i -> X i
+  = \{I} D X. {-i : I} -> interpI D X i -> X i
 
-def CurriedEl
+def -CurriedEl
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> *
   = \{I} D X. indIDesc {I} {\_. *}
       (\i. X i)
@@ -38,7 +38,7 @@ def UncurriedHyps
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (cn : UncurriedEl D X) -> *
   = \{I} D X P cn. {-i : I} -> (xs : interpI D X i) -> (ihs : AllIDesc I D X P i xs) -> P i (cn xs)
 
-def CurriedHyps
+def -CurriedHyps
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (cn : UncurriedEl D X) -> *
   = \{I} D X P. indIDesc {I} {\D. UncurriedEl D X -> *}
       (\i cn. P i (cn Refl))
@@ -85,7 +85,7 @@ def indCurried
     -> P i x
   = \{I} D P f i x. indI {I} {D} {P} (uncurryHyps {I} D (IData D) P ICon f) {i} x
 
-def SumCurriedHypsBool
+def -SumCurriedHypsBool
   : {I : *}
     -> (C : Bool -> IDesc I)
     -> (P : (i : I) -> IData (IArg {I} {Bool} C) i -> *)

@@ -159,11 +159,11 @@ export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil
 
 export type Def = DDef;
 
-export type DDef = { tag: 'DDef', name: Name, value: Term };
-export const DDef = (name: Name, value: Term): DDef => ({ tag: 'DDef', name, value });
+export type DDef = { tag: 'DDef', erased: boolean, name: Name, value: Term };
+export const DDef = (erased: boolean, name: Name, value: Term): DDef => ({ tag: 'DDef', erased, name, value });
 
 export const showDef = (d: Def): string => {
-  if (d.tag === 'DDef') return `def ${d.name} = ${show(d.value)}`;
+  if (d.tag === 'DDef') return `def ${d.erased ? '-' : ''}${d.name} = ${show(d.value)}`;
   return d.tag;
 };
 export const showDefs = (ds: Def[]): string => ds.map(showDef).join('\n');

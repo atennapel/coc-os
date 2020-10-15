@@ -38,13 +38,14 @@ Future work:
 
 ```
 TODO:
-- more erasure in descriptions (types and indeces)
+- can we erase Unit index in Desc?
 - shift more intelligently in constructMetaType
 - check that evaluation does not use erased values
 - allow description datatypes arguments to be erased
 - generic eliminators for Fin tagged non-indexed datatypes
 - allow second component of pair to be erased
 - find alternate definitions of symm, trans, eqRefl and uip, to allow for erasure of the proofs
+- make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
 - fix infinite loop in postponements
 - fix _ being used in elaboration
 - allow meta as head of glued value

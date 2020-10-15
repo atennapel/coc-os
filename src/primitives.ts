@@ -32,30 +32,30 @@ const primTypes: { [K in PrimName]: Val } = {
     vappE(vappE(P, b), p))))))),
 
   'IDesc': VPiE('_', VType, _ => VType),
-  'IEnd': VPiEE('I', VType, I => VPiE('_', I, _ => videsc(I))),
-  'IArg': VPiEE('I', VType, I => VPiE('A', VType, A => VPiE('_', VPiE('_', A, _ => videsc(I)), _ => videsc(I)))),
-  'IFArg': VPiEE('I', VType, I => VPiE('_', VType, _ => VPiE('_', videsc(I), _ => videsc(I)))),
-  'IRec': VPiEE('I', VType, I => VPiE('_', I, _ => VPiE('_', videsc(I), _ => videsc(I)))),
-  'IHRec': VPiEE('I', VType, I => VPiE('A', VType, A => VPiE('_', VPiE('_', A, _ => I), _ => VPiE('_', videsc(I), _ => videsc(I))))),
+  'IEnd': VPiEE('I', VType, I => VPiEE('_', I, _ => videsc(I))),
+  'IArg': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiE('_', VPiE('_', A, _ => videsc(I)), _ => videsc(I)))),
+  'IFArg': VPiEE('I', VType, I => VPiEE('_', VType, _ => VPiE('_', videsc(I), _ => videsc(I)))),
+  'IRec': VPiEE('I', VType, I => VPiEE('_', I, _ => VPiE('_', videsc(I), _ => videsc(I)))),
+  'IHRec': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiEE('_', VPiE('_', A, _ => I), _ => VPiE('_', videsc(I), _ => videsc(I))))),
   /*
     (-I : *)
     -> (-P : IDesc I -> *)
-    -> ((i : I) -> P (IEnd i))
-    -> ((A : *) -> (f : A -> IDesc I) -> ((a : A) -> P (f a)) -> P (IArg A f))
-    -> ((A : *) -> (d : IDesc I) -> P d -> P (IFOArg A d))
-    -> ((i : I) -> (d : IDesc I) -> P d -> P (IRec i d))
-    -> ((A : *) -> (f : A -> I) -> (d : IDesc I) -> P d -> P (IHRec A f d))
+    -> ((-i : I) -> P (IEnd i))
+    -> ((-A : *) -> (f : A -> IDesc I) -> ((a : A) -> P (f a)) -> P (IArg A f))
+    -> ((-A : *) -> (d : IDesc I) -> P d -> P (IFOArg A d))
+    -> ((-i : I) -> (d : IDesc I) -> P d -> P (IRec i d))
+    -> ((-A : *) -> (-f : A -> I) -> (d : IDesc I) -> P d -> P (IHRec A f d))
     -> (d : IDesc I)
     -> P d
   */
   'elimIDesc':
     VPiEE('I', VType, I =>
     VPiEE('P', VPiE('_', videsc(I), _ => VType), P =>
-    VPiE('_', VPiE('i', I, i => vappE(P, vappE(VIEnd, i))), _ =>
-    VPiE('_', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), _ =>
-    VPiE('_', VPiE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), _ =>
-    VPiE('_', VPiE('i', I, i => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIRec, i, d]))))), _ =>
-    VPiE('_', VPiE('A', VType, A => VPiE('f', VPiE('_', A, _ => I), f => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIHRec, A, f, d])))))), _ =>
+    VPiE('_', VPiEE('i', I, i => vappE(P, vappE(VIEnd, i))), _ =>
+    VPiE('_', VPiEE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), _ =>
+    VPiE('_', VPiEE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), _ =>
+    VPiE('_', VPiEE('i', I, i => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIRec, i, d]))))), _ =>
+    VPiE('_', VPiEE('A', VType, A => VPiEE('f', VPiE('_', A, _ => I), f => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIHRec, A, f, d])))))), _ =>
     VPiE('d', videsc(I), d =>
     vappE(P, d))))))))),
   // (I : *) -> IDesc I -> (I -> *) -> I -> *
