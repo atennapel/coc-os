@@ -359,19 +359,20 @@ const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, list_1.Nil, fals
 const localExtend = (local, name, ty, mode, erased, bound = true, inserted = false, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), inserted ? local.nsSurface : list_1.Cons(name, local.nsSurface), list_1.Cons(EntryT(ty, bound, mode, erased, inserted), local.ts), list_1.Cons(val, local.vs), local.erased);
 const localErased = (local) => Local(local.index, local.ns, local.nsSurface, local.ts, local.vs, true);
 const showVal = (local, val) => S.showValZ(val, local.vs, local.index, local.ns);
-const constructMetaType = (l, b, k = 0, skipped = 0) => {
+const constructMetaType = (l, b, k = 0, skipped = 0, since = 0) => {
+    // TODO: shift more intelligently in constructMetaType
     if (l.tag === 'Cons') {
         const [, x, e] = l.head;
         if (!e.bound)
-            return constructMetaType(l.tail, b, k + 1, skipped + 1);
+            return constructMetaType(l.tail, b, k + 1, skipped + 1, 0);
         const q = values_1.quote(e.type, k);
-        const sq = C.shift(-skipped, k - skipped, q);
-        return core_1.Pi(e.mode, e.erased, x, sq, constructMetaType(l.tail, b, k + 1, skipped));
+        const sq = C.shift(-skipped, since, q);
+        return core_1.Pi(e.mode, e.erased, x, sq, constructMetaType(l.tail, b, k + 1, skipped, since + 1));
     }
-    return C.shift(-skipped, k - skipped, values_1.quote(b, k));
+    return C.shift(-skipped, since, values_1.quote(b, k));
 };
-const newMeta = (local, ty) => {
-    config_1.log(() => `new meta return type: ${showVal(local, ty)}`);
+const newMeta = (local, erased, ty) => {
+    config_1.log(() => `new ${erased ? 'erased ' : ''}meta return type: ${showVal(local, ty)}`);
     const zipped = list_1.zipWithIndex((x, y, i) => [i, x, y], local.ns, local.ts);
     const boundOnly = list_1.filter(zipped, ([_, __, ty]) => ty.bound);
     config_1.log(() => `new meta spine (${local.index}, ${list_1.length(boundOnly)}): ${list_1.listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
@@ -381,12 +382,12 @@ const newMeta = (local, ty) => {
     config_1.log(() => `new meta type: ${C.show(mty)}`);
     const vmty = values_1.evaluate(mty, list_1.Nil);
     config_1.log(() => `new meta type val: ${S.showVal(vmty)}`);
-    return list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty, local.erased)), spine);
+    return list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty, erased)), spine);
 };
 const inst = (local, ty_) => {
     const ty = values_1.force(ty_);
     if (ty.tag === 'VPi' && ty.mode === C.ImplUnif) {
-        const m = newMeta(local, ty.type);
+        const m = newMeta(local, local.erased || ty.erased, ty.type);
         const vm = values_1.evaluate(m, local.vs);
         const [res, args] = inst(local, values_1.vinst(ty, vm));
         return [res, list_1.Cons(m, args)];
@@ -396,7 +397,7 @@ const inst = (local, ty_) => {
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
     if (tm.tag === 'Hole') {
-        const x = newMeta(local, ty);
+        const x = newMeta(local, local.erased, ty);
         if (tm.name)
             context_1.registerHole(tm.name, [values_1.evaluate(x, local.vs), ty, local]);
         return x;
@@ -431,7 +432,7 @@ const check = (local, tm, ty) => {
         }
         else {
             [val, vty] = synth(tm.erased ? localErased(local) : local, tm.val);
-            vtype = values_1.quote(ty, local.index);
+            vtype = values_1.quote(vty, local.index);
         }
         const v = values_1.evaluate(val, local.vs);
         const body = check(localExtend(local, tm.name, vty, C.Expl, tm.erased, false, false, v), tm.body, ty);
@@ -446,9 +447,9 @@ const check = (local, tm, ty) => {
     }, e => utils_1.terr(`check failed (${surface_1.show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
 };
 const freshPi = (local, mode, erased, x) => {
-    const a = newMeta(local, values_1.VType);
+    const a = newMeta(local, true, values_1.VType);
     const va = values_1.evaluate(a, local.vs);
-    const b = newMeta(localExtend(local, '_', va, mode, erased), values_1.VType);
+    const b = newMeta(localExtend(local, '_', va, mode, erased), true, values_1.VType);
     return values_1.evaluate(core_1.Pi(mode, erased, x, a, b), local.vs);
 };
 const synth = (local, tm) => {
@@ -575,8 +576,8 @@ const synth = (local, tm) => {
         return [core_1.Let(tm.erased, tm.name, type, val, body), rty];
     }
     if (tm.tag === 'Hole') {
-        const t = newMeta(local, values_1.VType);
-        const vt = values_1.evaluate(newMeta(local, values_1.evaluate(t, local.vs)), local.vs);
+        const t = newMeta(local, local.erased, values_1.VType);
+        const vt = values_1.evaluate(newMeta(local, local.erased, values_1.evaluate(t, local.vs)), local.vs);
         if (tm.name)
             context_1.registerHole(tm.name, [values_1.evaluate(t, local.vs), vt, local]);
         return [t, vt];
@@ -592,7 +593,7 @@ const synthapp = (local, ty, mode, tm, full) => {
         return [term, values_1.vinst(fty, v), list_1.Nil];
     }
     if (fty.tag === 'VPi' && fty.mode === C.ImplUnif && mode === C.Expl) {
-        const m = newMeta(local, fty.type);
+        const m = newMeta(local, local.erased || fty.erased, fty.type);
         const vm = values_1.evaluate(m, local.vs);
         const [rest, rt, l] = synthapp(local, values_1.vinst(fty, vm), mode, tm, full);
         return [rest, rt, list_1.Cons(m, l)];
@@ -728,7 +729,7 @@ exports.show = (t) => {
     if (t.tag === 'Abs')
         return `\\${exports.show(t.body)}`;
     if (t.tag === 'Pair')
-        return `(${exports.flattenPair(t).join(', ')})`;
+        return `(${exports.flattenPair(t).map(exports.show).join(', ')})`;
     if (t.tag === 'Proj')
         return `${t.proj} ${exports.show(t.term)}`;
     if (t.tag === 'Let')
@@ -1865,10 +1866,12 @@ const values_1 = require("./values");
 const E = require("./erased");
 const EV = require("./erasedvalues");
 const erasedprimitives_1 = require("./erasedprimitives");
-const Local = (index, ts, vs, erased) => ({ index, ts, vs, erased });
-const localEmpty = Local(0, list_1.Nil, list_1.Nil, false);
-const localExtend = (local, ty, erased, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons([ty, erased], local.ts), list_1.Cons(val, local.vs), local.erased);
-const localErased = (local) => Local(local.index, local.ts, local.vs, true);
+const context_1 = require("./context");
+const S = require("./surface");
+const Local = (index, ns, ts, vs, erased) => ({ index, ns, ts, vs, erased });
+const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, false);
+const localExtend = (local, name, ty, erased, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), list_1.Cons([ty, erased], local.ts), list_1.Cons(val, local.vs), local.erased);
+const localErased = (local) => Local(local.index, local.ns, local.ts, local.vs, true);
 const indexT = (ts, ix) => {
     let l = ts;
     let i = 0;
@@ -1884,22 +1887,23 @@ const indexT = (ts, ix) => {
     }
     return null;
 };
-const showVal = (local, val) => values_1.showValZ(val, local.vs, local.index);
+const showTerm = (local, tm) => S.showCore(tm, local.ns);
+const showVal = (local, val) => S.showValZ(val, local.vs, local.index, local.ns);
 const check = (local, tm, ty) => {
-    config_1.log(() => `check ${core_1.show(tm)} : ${showVal(local, ty)}`);
+    config_1.log(() => `check ${showTerm(local, tm)} : ${showVal(local, ty)}`);
     const [ty2, er] = synth(local, tm);
-    utils_1.tryT(() => conversion_1.conv(local.index, ty2, ty), e => utils_1.terr(`check failed (${core_1.show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
+    utils_1.tryT(() => conversion_1.conv(local.index, ty2, ty), e => utils_1.terr(`check failed (${showTerm(local, tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
     return er;
 };
 const synth = (local, tm) => {
-    config_1.log(() => `synth ${core_1.show(tm)}`);
+    config_1.log(() => `synth ${showTerm(local, tm)}`);
     if (tm.tag === 'Prim')
         return [primitives_1.primType(tm.name), EV.quote(erasedprimitives_1.primErased(tm.name), 0, false)];
     if (tm.tag === 'Var') {
         const i = tm.index;
         const [entry, , erasedNo] = indexT(local.ts, i) || utils_1.terr(`undefined index ${tm.index}`);
         if (entry[1] && !local.erased)
-            return utils_1.terr(`erased var used: ${core_1.show(tm)}`);
+            return utils_1.terr(`erased var used: ${showTerm(local, tm)}`);
         return [entry[0], E.Var(i - erasedNo)];
     }
     if (tm.tag === 'Global') {
@@ -1916,7 +1920,7 @@ const synth = (local, tm) => {
     if (tm.tag === 'Abs') {
         check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const [rty, body] = synth(localExtend(local, ty, tm.erased), tm.body);
+        const [rty, body] = synth(localExtend(local, tm.name, ty, tm.erased), tm.body);
         return [values_1.evaluate(core_1.Pi(tm.mode, tm.erased, tm.name, tm.type, values_1.quote(rty, local.index + 1)), local.vs), tm.erased ? body : E.Abs(body)];
     }
     if (tm.tag === 'Pair') {
@@ -1924,7 +1928,7 @@ const synth = (local, tm) => {
         const ty = values_1.evaluate(tm.type, local.vs);
         const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
-            return utils_1.terr(`not a sigma type in pair: ${core_1.show(tm)}`);
+            return utils_1.terr(`not a sigma type in pair: ${showTerm(local, tm)}`);
         const fst = check(local, tm.fst, fty.type);
         const snd = check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(tm.fst, local.vs)));
         return [ty, E.Pair(fst, snd)];
@@ -1933,21 +1937,21 @@ const synth = (local, tm) => {
         const [ty, er] = synth(local, tm.term);
         const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
-            return utils_1.terr(`not a sigma type in ${core_1.show(tm)}: ${showVal(local, ty)}`);
+            return utils_1.terr(`not a sigma type in ${showTerm(local, tm)}: ${showVal(local, ty)}`);
         if (tm.proj === 'fst' && fty.erased && !local.erased)
-            return utils_1.terr(`cannot project from erased sigma in non-erased context in ${core_1.show(tm)}: ${showVal(local, ty)}`);
+            return utils_1.terr(`cannot project from erased sigma in non-erased context in ${showTerm(local, tm)}: ${showVal(local, ty)}`);
         return [tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(tm.term, local.vs))), fty.erased ? er : E.Proj(tm.proj, er)];
     }
     if (tm.tag === 'Pi') {
         check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(localErased(localExtend(local, ty, tm.erased)), tm.body, values_1.VType);
+        check(localErased(localExtend(local, tm.name, ty, tm.erased)), tm.body, values_1.VType);
         return [values_1.VType, E.termId];
     }
     if (tm.tag === 'Sigma') {
         check(localErased(local), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(localErased(localExtend(local, ty, tm.erased)), tm.body, values_1.VType);
+        check(localErased(localExtend(local, tm.name, ty, tm.erased)), tm.body, values_1.VType);
         return [values_1.VType, E.termId];
     }
     if (tm.tag === 'Let') {
@@ -1955,27 +1959,31 @@ const synth = (local, tm) => {
         const ty = values_1.evaluate(tm.type, local.vs);
         const valEr = check(tm.erased ? localErased(local) : local, tm.val, ty);
         const val = values_1.evaluate(tm.val, local.vs);
-        const [ret, body] = synth(localExtend(local, ty, tm.erased, val), tm.body);
+        const [ret, body] = synth(localExtend(local, tm.name, ty, tm.erased, val), tm.body);
         return [ret, tm.erased ? body : E.Let(valEr, body)];
+    }
+    if (tm.tag === 'Meta') {
+        const m = context_1.getMeta(tm.index);
+        return [m.type, E.termId]; // TODO
     }
     return utils_1.terr(`synth failed: ${core_1.show(tm)}`);
 };
 const synthapp = (local, ty, mode, tm) => {
-    config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${core_1.show(tm)}`);
+    config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${showTerm(local, tm)}`);
     const fty = values_1.force(ty);
     if (fty.tag === 'VPi' && fty.mode === mode) {
         const er = check(fty.erased ? localErased(local) : local, tm, fty.type);
         const v = values_1.evaluate(tm, local.vs);
         return [values_1.vinst(fty, v), fty.erased ? null : er];
     }
-    return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${core_1.show(tm)}`);
+    return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${showTerm(local, tm)}`);
 };
 exports.typecheck = (t, erased = false) => {
     const [ty, er] = synth(erased ? localErased(localEmpty) : localEmpty, t);
     return [values_1.quote(ty, 0), er];
 };
 
-},{"./config":1,"./conversion":3,"./core":4,"./erased":6,"./erasedprimitives":7,"./erasedvalues":8,"./globals":9,"./primitives":12,"./utils/list":18,"./utils/utils":19,"./values":20}],16:[function(require,module,exports){
+},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./erased":6,"./erasedprimitives":7,"./erasedvalues":8,"./globals":9,"./primitives":12,"./surface":14,"./utils/list":18,"./utils/utils":19,"./values":20}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.unify = void 0;

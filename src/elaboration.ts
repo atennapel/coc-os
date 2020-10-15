@@ -56,18 +56,19 @@ export type HoleInfo = [Val, Val, Local];
 
 const showVal = (local: Local, val: Val): string => S.showValZ(val, local.vs, local.index, local.ns);
 
-const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix = 0, skipped: Ix = 0): Term => {
+const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix = 0, skipped: Ix = 0, since: Ix = 0): Term => {
+  // TODO: shift more intelligently in constructMetaType
   if (l.tag === 'Cons') {
     const [, x, e] = l.head;
-    if (!e.bound) return constructMetaType(l.tail, b, k + 1, skipped + 1);
+    if (!e.bound) return constructMetaType(l.tail, b, k + 1, skipped + 1, 0);
     const q = quote(e.type, k);
-    const sq = C.shift(-skipped, k - skipped, q);
-    return Pi(e.mode, e.erased, x, sq, constructMetaType(l.tail, b, k + 1, skipped));
+    const sq = C.shift(-skipped, since, q);
+    return Pi(e.mode, e.erased, x, sq, constructMetaType(l.tail, b, k + 1, skipped, since + 1));
   }
-  return C.shift(-skipped, k - skipped, quote(b, k));
+  return C.shift(-skipped, since, quote(b, k));
 };
-const newMeta = (local: Local, ty: Val): Term => {
-  log(() => `new meta return type: ${showVal(local, ty)}`);
+const newMeta = (local: Local, erased: boolean, ty: Val): Term => {
+  log(() => `new ${erased ? 'erased ' : ''}meta return type: ${showVal(local, ty)}`);
   const zipped = zipWithIndex((x, y, i) => [i, x, y] as [Ix, Name, EntryT], local.ns, local.ts);
   const boundOnly = filter(zipped, ([_, __, ty]) => ty.bound);
   log(() => `new meta spine (${local.index}, ${length(boundOnly)}): ${listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
@@ -77,13 +78,13 @@ const newMeta = (local: Local, ty: Val): Term => {
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);
   log(() => `new meta type val: ${S.showVal(vmty)}`);
-  return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty, local.erased)) as Term, spine);
+  return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty, erased)) as Term, spine);
 };
 
 const inst = (local: Local, ty_: Val): [Val, List<Term>] => {
   const ty = force(ty_);
   if (ty.tag === 'VPi' && ty.mode === C.ImplUnif) {
-    const m = newMeta(local, ty.type);
+    const m = newMeta(local, local.erased || ty.erased, ty.type);
     const vm = evaluate(m, local.vs);
     const [res, args] = inst(local, vinst(ty, vm));
     return [res, Cons(m, args)];
@@ -94,7 +95,7 @@ const inst = (local: Local, ty_: Val): [Val, List<Term>] => {
 const check = (local: Local, tm: S.Term, ty: Val): Term => {
   log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   if (tm.tag === 'Hole') {
-    const x = newMeta(local, ty);
+    const x = newMeta(local, local.erased, ty);
     if (tm.name) registerHole(tm.name, [evaluate(x, local.vs), ty, local]);
     return x;
   }
@@ -126,7 +127,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
       val = check(tm.erased ? localErased(local) : local, tm.val, ty);
     } else {
       [val, vty] = synth(tm.erased ? localErased(local) : local, tm.val);
-      vtype = quote(ty, local.index);
+      vtype = quote(vty, local.index);
     }
     const v = evaluate(val, local.vs);
     const body = check(localExtend(local, tm.name, vty, C.Expl, tm.erased, false, false, v), tm.body, ty);
@@ -142,9 +143,9 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
 };
 
 const freshPi = (local: Local, mode: Mode, erased: boolean, x: Name): Val => {
-  const a = newMeta(local, VType);
+  const a = newMeta(local, true, VType);
   const va = evaluate(a, local.vs);
-  const b = newMeta(localExtend(local, '_', va, mode, erased), VType);
+  const b = newMeta(localExtend(local, '_', va, mode, erased), true, VType);
   return evaluate(Pi(mode, erased, x, a, b), local.vs);
 };
 
@@ -258,8 +259,8 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     return [Let(tm.erased, tm.name, type, val, body), rty];
   }
   if (tm.tag === 'Hole') {
-    const t = newMeta(local, VType);
-    const vt = evaluate(newMeta(local, evaluate(t, local.vs)), local.vs);
+    const t = newMeta(local, local.erased, VType);
+    const vt = evaluate(newMeta(local, local.erased, evaluate(t, local.vs)), local.vs);
     if (tm.name) registerHole(tm.name, [evaluate(t, local.vs), vt, local]);
     return [t, vt];
   }
@@ -275,7 +276,7 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): 
     return [term, vinst(fty, v), Nil];
   }
   if (fty.tag === 'VPi' && fty.mode === C.ImplUnif && mode === C.Expl) {
-    const m = newMeta(local, fty.type);
+    const m = newMeta(local, local.erased || fty.erased, fty.type);
     const vm = evaluate(m, local.vs);
     const [rest, rt, l] = synthapp(local, vinst(fty, vm), mode, tm, full);
     return [rest, rt, Cons(m, l)];

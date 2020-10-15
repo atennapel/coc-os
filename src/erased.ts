@@ -46,7 +46,7 @@ export const show = (t: Term): string => {
     return `${showP(f.tag === 'Abs' || f.tag === 'Let', f)} ${as.map(t => showP(t.tag === 'Abs' || t.tag === 'App' || t.tag === 'Let' || t.tag === 'Proj', t)).join(' ')}`;
   }
   if (t.tag === 'Abs') return `\\${show(t.body)}`;
-  if (t.tag === 'Pair') return `(${flattenPair(t).join(', ')})`;
+  if (t.tag === 'Pair') return `(${flattenPair(t).map(show).join(', ')})`;
   if (t.tag === 'Proj') return `${t.proj} ${show(t.term)}`;
   if (t.tag === 'Let') return `let ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
   return t;

@@ -27,7 +27,7 @@ def caseList
   = \{t r} l n c. paraList {t} {r} l n (\hd tl _. c hd tl)
 
 def mapList
-  : {-a b : *} -> (a -> b) -> List a -> List b
+  : {a b : *} -> (a -> b) -> List a -> List b
   = \{a} {b} f l. cataList l (Nil {b}) (\hd tl. Cons (f hd) tl)
 
 def appendList

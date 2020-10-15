@@ -16,5 +16,5 @@ def instanceShowNatUnary : Show Nat = \n. cataNat n (Nil {Nat}) (Cons 49)
 def instanceShowUnit : Show U = \_. "()"
 def instanceShowBool : Show Bool = \b. if b "True" "False"
 def instanceShowList
-  : {-t : *} -> Show t -> Show (List t)
+  : {t : *} -> Show t -> Show (List t)
   = \{t} instanceShow l. cataList l "()" (\h r. appendList (instanceShow h) (appendList " :: " r))

@@ -38,9 +38,9 @@ Future work:
 
 ```
 TODO:
-- fix libraries
-- check that evaluation does not use erased values
 - more erasure in descriptions (types and indeces)
+- shift more intelligently in constructMetaType
+- check that evaluation does not use erased values
 - allow description datatypes arguments to be erased
 - generic eliminators for Fin tagged non-indexed datatypes
 - allow second component of pair to be erased
