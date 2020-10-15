@@ -38,25 +38,20 @@ Future work:
 
 ```
 TODO:
-- can we erase Unit index in Desc?
-- shift more intelligently in constructMetaType
+- allow erased arguments in datatype arguments
 - check that evaluation does not use erased values
-- allow description datatypes arguments to be erased
-- generic eliminators for Fin tagged non-indexed datatypes
-- allow second component of pair to be erased
-- find alternate definitions of symm, trans, eqRefl and uip, to allow for erasure of the proofs
+- shift more intelligently in constructMetaType
 - make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
+- allow second component of pair to be erased
 - fix infinite loop in postponements
 - fix _ being used in elaboration
 - allow meta as head of glued value
 - glued lets
 - optimize importing
-- add erasure
 - implement pruning
 - implement instance search
 - specialize meta when checking pair
 - support some impredicative instantiation
-- write more prelude functions
 - run command in file
 - remove dependency of elaboration on typechecking
 - add a way to not mention type in argument of pi/sigma etc.
@@ -64,10 +59,12 @@ TODO:
 QUESTIONS:
 - how to levitate in my core theory?
 - is a first-order Arg description useful? (IFArg)
+- can we erase Unit index in Desc?
 
 LIBRARIES:
-- List parameters should be erased where possible
+- generic eliminators for Fin tagged non-indexed datatypes
+- find alternate definitions of symm, trans, eqRefl and uip, to allow for erasure of the proofs
 - Fin indeces should be erased
-- taggeddesc does not erase enough parameters in elim
 - Vec indeces should be erased
+- write more prelude functions
 ```
