@@ -5,10 +5,10 @@ import { HoleInfo } from './elaboration';
 
 export type Solution = Unsolved | Solved;
 
-export type Unsolved = { tag: 'Unsolved', type: Val };
-export const Unsolved = (type: Val): Unsolved => ({ tag: 'Unsolved', type });
-export type Solved = { tag: 'Solved', val: Val, type: Val };
-export const Solved = (val: Val, type: Val): Solved => ({ tag: 'Solved', val, type });
+export type Unsolved = { tag: 'Unsolved', type: Val, erased: boolean };
+export const Unsolved = (type: Val, erased: boolean): Unsolved => ({ tag: 'Unsolved', type, erased });
+export type Solved = { tag: 'Solved', val: Val, type: Val, erased: boolean };
+export const Solved = (val: Val, type: Val, erased: boolean): Solved => ({ tag: 'Solved', val, type, erased });
 
 // postponing
 type Blocked = { k: Ix, a: Val, b: Val, blockedBy: Ix[] };
@@ -45,9 +45,9 @@ export const undoContext = (): void => {
 };
 
 // metas
-export const freshMeta = (type: Val): Ix => {
+export const freshMeta = (type: Val, erased: boolean): Ix => {
   const id = context.metas.length;
-  context.metas[id] = Unsolved(type);
+  context.metas[id] = Unsolved(type, erased);
   return id;
 };
 
@@ -62,7 +62,7 @@ export const isMetaSolved = (id: Ix): boolean => getMeta(id).tag === 'Solved';
 export const solveMeta = (id: Ix, val: Val): void => {
   const s = getMeta(id);
   if (s.tag === 'Solved') return impossible(`meta already solved: ?${id}`);
-  context.metas[id] = Solved(val, s.type);
+  context.metas[id] = Solved(val, s.type, s.erased);
 };
 
 export const contextSolved = (): boolean =>

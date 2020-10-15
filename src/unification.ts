@@ -118,7 +118,7 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
     log(() => `meta type: ${showVal(type, 0)}`);
     const solution = constructSolution(0, type, body);
     log(() => `solution ?${m} := ${show(solution)}`);
-    const res = tryTE(() => typecheck(solution));
+    const res = tryTE(() => typecheck(solution, meta.erased));
     if (res instanceof TypeError)
       return terr(`solution was invalid: ${res}`);
     const vsolution = evaluate(solution, Nil);

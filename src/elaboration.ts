@@ -77,7 +77,7 @@ const newMeta = (local: Local, ty: Val): Term => {
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);
   log(() => `new meta type val: ${S.showVal(vmty)}`);
-  return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty)) as Term, spine);
+  return foldr(([m, x], y) => App(y, m, x), Meta(freshMeta(vmty, local.erased)) as Term, spine);
 };
 
 const inst = (local: Local, ty_: Val): [Val, List<Term>] => {
@@ -281,9 +281,10 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): 
     return [rest, rt, Cons(m, l)];
   }
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-    const mty = getMeta(ty.head.index).type;
-    const a = freshMeta(mty);
-    const b = freshMeta(mty);
+    const m = getMeta(ty.head.index)
+    const mty = m.type;
+    const a = freshMeta(mty, m.erased);
+    const b = freshMeta(mty, m.erased);
     const pi = evaluate(Pi(mode, false, '_', quote(VNe(HMeta(a), ty.spine), local.index), quote(VNe(HMeta(b), ty.spine), local.index + 1)), local.vs);
     unify(local.index, ty, pi);
     return synthapp(local, pi, mode, tm, full);

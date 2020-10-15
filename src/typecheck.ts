@@ -126,7 +126,7 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: Term): [Val, E.Term | n
   return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === ImplUnif ? 'impl' : ''} ${show(tm)}`);
 };
 
-export const typecheck = (t: Term): [Term, E.Term] => {
-  const [ty, er] = synth(localEmpty, t);
+export const typecheck = (t: Term, erased: boolean = false): [Term, E.Term] => {
+  const [ty, er] = synth(erased ? localErased(localEmpty) : localEmpty, t);
   return [quote(ty, 0), er];
 };

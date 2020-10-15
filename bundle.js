@@ -22,8 +22,8 @@ exports.log = (msg) => {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getHoleEntries = exports.getHoles = exports.registerHole = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.contextSolved = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.undoContext = exports.discardContext = exports.markContext = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
 const utils_1 = require("./utils/utils");
-exports.Unsolved = (type) => ({ tag: 'Unsolved', type });
-exports.Solved = (val, type) => ({ tag: 'Solved', val, type });
+exports.Unsolved = (type, erased) => ({ tag: 'Unsolved', type, erased });
+exports.Solved = (val, type, erased) => ({ tag: 'Solved', val, type, erased });
 const Blocked = (k, a, b, blockedBy) => ({ k, a, b, blockedBy });
 const Context = (metas = [], blocked = [], holes = {}) => ({ metas, blocked, holes });
 let context = Context();
@@ -46,9 +46,9 @@ exports.undoContext = () => {
     context = ctx;
 };
 // metas
-exports.freshMeta = (type) => {
+exports.freshMeta = (type, erased) => {
     const id = context.metas.length;
-    context.metas[id] = exports.Unsolved(type);
+    context.metas[id] = exports.Unsolved(type, erased);
     return id;
 };
 exports.getMeta = (id) => {
@@ -62,7 +62,7 @@ exports.solveMeta = (id, val) => {
     const s = exports.getMeta(id);
     if (s.tag === 'Solved')
         return utils_1.impossible(`meta already solved: ?${id}`);
-    context.metas[id] = exports.Solved(val, s.type);
+    context.metas[id] = exports.Solved(val, s.type, s.erased);
 };
 exports.contextSolved = () => context.metas.every(s => s.tag === 'Solved') && context.blocked.length === 0;
 // postponements
@@ -381,7 +381,7 @@ const newMeta = (local, ty) => {
     config_1.log(() => `new meta type: ${C.show(mty)}`);
     const vmty = values_1.evaluate(mty, list_1.Nil);
     config_1.log(() => `new meta type val: ${S.showVal(vmty)}`);
-    return list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty)), spine);
+    return list_1.foldr(([m, x], y) => core_1.App(y, m, x), core_1.Meta(context_1.freshMeta(vmty, local.erased)), spine);
 };
 const inst = (local, ty_) => {
     const ty = values_1.force(ty_);
@@ -598,9 +598,10 @@ const synthapp = (local, ty, mode, tm, full) => {
         return [rest, rt, list_1.Cons(m, l)];
     }
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
-        const mty = context_1.getMeta(ty.head.index).type;
-        const a = context_1.freshMeta(mty);
-        const b = context_1.freshMeta(mty);
+        const m = context_1.getMeta(ty.head.index);
+        const mty = m.type;
+        const a = context_1.freshMeta(mty, m.erased);
+        const b = context_1.freshMeta(mty, m.erased);
         const pi = values_1.evaluate(core_1.Pi(mode, false, '_', values_1.quote(values_1.VNe(values_1.HMeta(a), ty.spine), local.index), values_1.quote(values_1.VNe(values_1.HMeta(b), ty.spine), local.index + 1)), local.vs);
         unification_1.unify(local.index, ty, pi);
         return synthapp(local, pi, mode, tm, full);
@@ -1969,8 +1970,8 @@ const synthapp = (local, ty, mode, tm) => {
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${core_1.show(tm)}`);
 };
-exports.typecheck = (t) => {
-    const [ty, er] = synth(localEmpty, t);
+exports.typecheck = (t, erased = false) => {
+    const [ty, er] = synth(erased ? localErased(localEmpty) : localEmpty, t);
     return [values_1.quote(ty, 0), er];
 };
 
@@ -2102,7 +2103,7 @@ const solve = (k, m, spine, val) => {
         config_1.log(() => `meta type: ${values_1.showVal(type, 0)}`);
         const solution = constructSolution(0, type, body);
         config_1.log(() => `solution ?${m} := ${core_1.show(solution)}`);
-        const res = utils_1.tryTE(() => typecheck_1.typecheck(solution));
+        const res = utils_1.tryTE(() => typecheck_1.typecheck(solution, meta.erased));
         if (res instanceof TypeError)
             return utils_1.terr(`solution was invalid: ${res}`);
         const vsolution = values_1.evaluate(solution, list_1.Nil);
