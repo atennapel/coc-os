@@ -38,13 +38,13 @@ Future work:
 
 ```
 TODO:
-- allow erased arguments in datatype arguments
 - check that evaluation does not use erased values
 - shift more intelligently in constructMetaType
 - make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
 - allow second component of pair to be erased
 - fix infinite loop in postponements
 - fix _ being used in elaboration
+- allow erased FArg, Rec and HRec
 - allow meta as head of glued value
 - glued lets
 - optimize importing
@@ -64,7 +64,7 @@ QUESTIONS:
 LIBRARIES:
 - generic eliminators for Fin tagged non-indexed datatypes
 - find alternate definitions of symm, trans, eqRefl and uip, to allow for erasure of the proofs
-- Fin indeces should be erased
-- Vec indeces should be erased
+- rewrite list to use taggeddesc
 - write more prelude functions
+- write Desc using Desc
 ```

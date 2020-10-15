@@ -4,6 +4,7 @@ import lib/unit.p
 def Desc = IDesc U
 def End : Desc = IEnd {U} ()
 def Arg : {-A : *} -> (A -> Desc) -> Desc = \{A} f. IArg {U} {A} f
+def ArgE : {-A : *} -> ((-a : A) -> Desc) -> Desc = \{A} f. IArgE {U} {A} f
 def FArg : (-A : *) -> Desc -> Desc = \A d. IFArg {U} A d
 def Rec : Desc -> Desc = \d. IRec {U} () d
 def HRec : (-A : *) -> Desc -> Desc = \A d. IHRec {U} {A} (\_. ()) d
@@ -13,12 +14,13 @@ def indDesc
   : {-P : Desc -> *}
     -> P End
     -> ((-A : *) -> (f : A -> Desc) -> ((a : A) -> P (f a)) -> P (Arg {A} f))
+    -> ((-A : *) -> (f : (-a : A) -> Desc) -> ((-a : A) -> P (f a)) -> P (ArgE {A} f))
     -> ((-A : *) -> (d : Desc) -> P d -> P (FArg A d))
     -> ((d : Desc) -> P d -> P (Rec d))
     -> ((-A : *) -> (d : Desc) -> P d -> P (HRec A d))
     -> (d : Desc)
     -> P d
-  = \{P} end arg farg rec hrec d. indIDesc {U} {P} (\_. end) arg farg (\_. rec) (\A _. hrec A) d
+  = \{P} end arg arge farg rec hrec d. indIDesc {U} {P} (\_. end) arg arge farg (\_. rec) (\A _. hrec A) d
 
 def interp : Desc -> * -> * = \d x. interpI {U} d (\_. x) ()
 def AllDesc : (d : Desc) -> (X : *) -> (X -> *) -> interp d X -> * = \d X P c. AllIDesc U d (\_. X) (\_. P) () c

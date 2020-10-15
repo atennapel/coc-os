@@ -70,6 +70,7 @@ export const VIDesc = VPrim('IDesc');
 export const videsc = (i : Val) => vappE(VIDesc, i);
 export const VIEnd = VPrim('IEnd');
 export const VIArg = VPrim('IArg');
+export const VIArgE = VPrim('IArgE');
 export const VIFArg = VPrim('IFArg');
 export const VIRec = VPrim('IRec');
 export const VIHRec = VPrim('IHRec');
@@ -131,7 +132,7 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     if (isVPrim('ReflHEq', v)) return args[3];
   }
   if (name === 'elimIDesc') {
-    const [,, end, arg, farg, rec, hrec] = args;
+    const [,, end, arg, arge, farg, rec, hrec] = args;
     if (isVPrim('IEnd', v)) {
       // elimIDesc I P end arg farg rec hrec (IEnd I i) = end i
       const [, i] = vprimArgs(v);
@@ -141,6 +142,11 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
       // elimIDesc I P end arg farg rec hrec (IArg I A f) = arg A f (\(a : A). elimIDesc ... (f a))
       const [, A, f] = vprimArgs(v);
       return vappEs([arg, A, f, VAbsE('a', A, a => velimprim('elimIDesc', vappE(f, a), args))]);
+    }
+    if (isVPrim('IArgE', v)) {
+      // elimIDesc I P end arg arge farg rec hrec (IArgE I A f) = arge A f (\(-a : A). elimIDesc ... (f a))
+      const [, A, f] = vprimArgs(v);
+      return vappEs([arge, A, f, VAbsEE('a', A, a => velimprim('elimIDesc', vappE(f, a), args))]);
     }
     if (isVPrim('IFArg', v)) {
       // elimIDesc I P end arg farg rec hrec (IFArg I A d) = farg A d (elimIDesc ... d)
@@ -163,6 +169,7 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     interp : (I : *) -> IDesc I -> (I -> *) -> I -> *
     interp I (IEnd I i) X j = i = j
     interp I (IArg I A f) X j = (x : A) ** interp I (f x) X j
+    interp I (IArgE I A f) X j = (-x : A) ** interp I (f x) X j
     interp I (IFArg I A d) X j = A ** interp I d X j
     interp I (IRec I i d) X j = X i ** interp I d X j
     interp I (IHRec I A f d) X j = ((a : A) -> X (f a)) ** interp I d X j
@@ -175,6 +182,10 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     if (isVPrim('IArg', v)) {
       const [, A, f] = vprimArgs(v);
       return VSigma(false, 'x', A, x => velimprim('interpI', vappE(f, x), args));
+    }
+    if (isVPrim('IArgE', v)) {
+      const [, A, f] = vprimArgs(v);
+      return VSigma(true, 'x', A, x => velimprim('interpI', vappE(f, x), args));
     }
     if (isVPrim('IFArg', v)) {
       const [, A, d] = vprimArgs(v);
@@ -201,6 +212,7 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     AllI : (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *
     AllI I (IEnd I i) X P j () = U
     AllI I (IArg I A f) X P j (x, y) = AllI I (f x) X P j y
+    AllI I (IArgE I A f) X P j (x, y) = AllI I (f x) X P j y
     AllI I (IFArg I A d) X P j (_, y) = AllI I d X P j y
     AllI I (IRec I i d) X P j (x, y) = P i x ** AllI I d X P j y
     AllI I (IHRec I A fi d) X P j (f, y) = ((a : A) -> P (fi a) (f a)) ** AllI I d X P j y
@@ -208,6 +220,10 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     const [I, X, P, i, xs] = args;
     if (isVPrim('IEnd', v)) return VU;
     if (isVPrim('IArg', v)) {
+      const [, , f] = vprimArgs(v);
+      return velimprim('AllI', vappE(f, vproj('fst', xs)), [I, X, P, i, vproj('snd', xs)]);
+    }
+    if (isVPrim('IArgE', v)) {
       const [, , f] = vprimArgs(v);
       return velimprim('AllI', vappE(f, vproj('fst', xs)), [I, X, P, i, vproj('snd', xs)]);
     }
@@ -229,6 +245,7 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     allI : (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> ((i : I) -> (x : X i) -> P i x) -> (i : I) -> (xs : interpI I d X i) -> All I d X P i xs
     allI I (IEnd I i) X P p j () = ()
     allI I (IArg I A f) X P p j (x, y) = all (f x) X P p y
+    allI I (IArgE I A f) X P p j (x, y) = all (f x) X P p y
     allI I (IFArg I A d) X P p j (_, y) = all d X P p y
     allI I (IRec A i d) X P p j (x, y) = (p i x, all d X P p y)
     allI I (IHRec A fi d) X P p j (f, y) = (\(h : A). p (fi h) (f h), all d X P p y)
@@ -236,6 +253,10 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     const [I, X, P, p, i, xs] = args;
     if (isVPrim('IEnd', v)) return VUnit;
     if (isVPrim('IArg', v)) {
+      const [, , f] = vprimArgs(v);
+      return velimprim('allI', vappE(f, vproj('fst', xs)), [I, X, P, p, i, vproj('snd', xs)]);
+    }
+    if (isVPrim('IArgE', v)) {
       const [, , f] = vprimArgs(v);
       return velimprim('allI', vappE(f, vproj('fst', xs)), [I, X, P, p, i, vproj('snd', xs)]);
     }
@@ -316,12 +337,13 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
       return VAbsEE('I', VType, I =>
         VAbsEE('P', VPiE('_', videsc(I), _ => VType), P =>
         VAbsE('end', VPiEE('i', I, i => vappE(P, vappE(VIEnd, i))), end =>
-        VAbsE('arg', VPiEE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), arg =>
+        VAbsE('arg', VPiEE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ => vappE(P, vappEs([VIArg, A, f]))))), arg =>
+        VAbsE('arge', VPiEE('A', VType, A => VPiE('f', VPiEE('a', A, _ => videsc(I)), f => VPiE('_', VPiEE('a', A, a => vappE(P, vappE(f, a))), _ => vappE(P, vappEs([VIArgE, A, f]))))), arge =>
         VAbsE('farg', VPiEE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), farg =>
         VAbsE('rec', VPiEE('i', I, i => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIRec, i, d]))))), rec =>
         VAbsE('hrec', VPiEE('A', VType, A => VPiE('f', VPiEE('_', A, _ => I), f => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIHRec, A, f, d])))))), hrec =>
         VAbsE('d', videsc(I), d =>
-        velimprim('elimIDesc', d, [I, P, end, arg, farg, rec, hrec])))))))));
+        velimprim('elimIDesc', d, [I, P, end, arg, arge, farg, rec, hrec]))))))))));
     }
     if (t.name === 'interpI')
       return VAbsE('I', VType, I =>

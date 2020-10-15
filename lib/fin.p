@@ -3,55 +3,55 @@ import lib/bool.p
 import lib/nat.p
 import lib/generic.p
 
-def FinD : IDesc Nat = ISumD (IArg \n. IEnd (S n)) (IArg \n. IRec n (IEnd (S n)))
+def FinD : IDesc Nat = ISumD (IArgE \n. IEnd (S n)) (IArgE \n. IRec n (IEnd (S n)))
 def Fin : Nat -> * = IData FinD
-def FZ : {n : Nat} -> Fin (S n) = \{n}. inj FinD True n
-def FS : {n : Nat} -> Fin n -> Fin (S n) = \{n}. inj FinD False n
+def FZ : {-n : Nat} -> Fin (S n) = \{n}. inj FinD True n
+def FS : {-n : Nat} -> Fin n -> Fin (S n) = \{n}. inj FinD False n
 
 def indFin
   : {-P : (n : Nat) -> Fin n -> *}
-    -> ((n : Nat) -> P (S n) (FZ {n}))
-    -> ((n : Nat) -> (f : Fin n) -> P n f -> P (S n) (FS {n} f))
+    -> ({-n : Nat} -> P (S n) (FZ {n}))
+    -> ({-n : Nat} -> (f : Fin n) -> P n f -> P (S n) (FS {n} f))
     -> {-n : Nat}
     -> (x : Fin n)
     -> P n x
-  = \{P} z s {n} x. elimIBool {Nat} (\b. if b (IArg \n. IEnd (S n)) (IArg \n. IRec n (IEnd (S n)))) {P} z s {n} x
+  = \{P} z s {n} x. elimIBool {Nat} (\b. if b (IArgE \n. IEnd (S n)) (IArgE \n. IRec n (IEnd (S n)))) {P} (\n. z {n}) (\n. s {n}) {n} x
 
 def dcaseFin
   : {-P : (n : Nat) -> Fin n -> *}
-    -> ((n : Nat) -> P (S n) (FZ {n}))
-    -> ((n : Nat) -> (f : Fin n) -> P (S n) (FS {n} f))
+    -> ({-n : Nat} -> P (S n) (FZ {n}))
+    -> ({-n : Nat} -> (f : Fin n) -> P (S n) (FS {n} f))
     -> {-n : Nat}
     -> (x : Fin n)
     -> P n x
-  = \{P} z s {n} x. indFin {P} z (\m f _. s m f) {n} x
+  = \{P} z s {n} x. indFin {P} z (\f _. s f) {n} x
 
 def paraFin
   : {-t : *}
     -> {-n : Nat}
     -> Fin n
-    -> (Nat -> t)
-    -> ((m : Nat) -> Fin m -> t -> t)
+    -> ({-m : Nat} -> t)
+    -> ({-m : Nat} -> Fin m -> t -> t)
     -> t
-  = \{t} {n} x z s. indFin {\_ _. t} z s {n} x
+  = \{t} {n} x z s. indFin {\_ _. t} (\{m}. z {m}) s {n} x
 
 def cataFin
   : {-t : *}
     -> {-n : Nat}
     -> Fin n
-    -> (Nat -> t)
-    -> (Nat -> t -> t)
+    -> ({-m : Nat} -> t)
+    -> ({-m : Nat} -> t -> t)
     -> t
-  = \{t} {n} x z s. paraFin {t} {n} x z (\n _ r. s n r)
+  = \{t} {n} x z s. paraFin {t} {n} x (\{m}. z {m}) (\{n} _ r. s {n} r)
 
 def caseFin
   : {-t : *}
     -> {-n : Nat}
     -> Fin n
-    -> (Nat -> t)
-    -> ((m : Nat) -> Fin m -> t)
+    -> ({-m : Nat} -> t)
+    -> ({-m : Nat} -> Fin m -> t)
     -> t
-  = \{t} {n} x z s. paraFin {t} {n} x z (\n f _. s n f)
+  = \{t} {n} x z s. paraFin {t} {n} x (\{m}. z {m}) (\{n} f _. s {n} f)
 
 def CaseF
   : (n : Nat) -> Fin n -> *
@@ -62,7 +62,7 @@ def CaseF
 
 def caseF
   : (n : Nat) -> (x : Fin n) -> CaseF n x
-  = \n x. dcaseFin {CaseF} (\m P HZ HS. HZ) (\m y P HZ HS. HS y) x
+  = \n x. dcaseFin {CaseF} (\P HZ HS. HZ) (\y P HZ HS. HS y) x
 
 def Branches
   : (n : Nat) -> (Fin n -> *) -> *
@@ -70,7 +70,7 @@ def Branches
 
 def caseP
   : {-n : Nat} -> (x : Fin n) -> (-P : Fin n -> *) -> Branches n P -> P x
-  = \{n} x. indFin {\n f. (-P : Fin n -> *) -> Branches n P -> P f} (\m P b. b.fst) (\m f r P b. r (\f. P (FS f)) b.snd) x
+  = \{n} x. indFin {\n f. (-P : Fin n -> *) -> Branches n P -> P f} (\P b. b.fst) (\f r P b. r (\f. P (FS f)) b.snd) x
 
 def dcase
   : {-n : Nat} -> {-P : Fin n -> *} -> (x : Fin n) -> Branches n P -> P x

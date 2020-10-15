@@ -16,6 +16,7 @@ def -CurriedEl
   = \{I} D X. indIDesc {I} {\_. *}
       (\i. X i)
       (\A f rec. (a : A) -> rec a)
+      (\A f rec. (-a : A) -> rec a)
       (\A d r. A -> r)
       (\i d r. (x : X i) -> r)
       (\A fi d r. ((a : A) -> X (fi a)) -> r)
@@ -26,6 +27,7 @@ def curryEl
   = \{I} D X. indIDesc {I} {\D. UncurriedEl D X -> CurriedEl D X}
       (\i u. u Refl)
       (\A f r u. \(a : A). r a (\xs. u (a, xs)))
+      (\A f r u. \(-a : A). r a (\xs. u (a, xs)))
       (\A d r u. \(a : A). r (\xs. u (a, xs)))
       (\i d r u. \(x : X i). r (\xs. u (x, xs)))
       (\A fi d r u. \(g : (a : A) -> X (fi a)). r (\xs. u (g, xs)))
@@ -43,6 +45,7 @@ def -CurriedHyps
   = \{I} D X P. indIDesc {I} {\D. UncurriedEl D X -> *}
       (\i cn. P i (cn Refl))
       (\A f r cn. (a : A) -> r a (\xs. cn (a, xs)))
+      (\A f r cn. (-a : A) -> r a (\xs. cn (a, xs)))
       (\A d r cn. (a : A) -> r (\xs. cn (a, xs)))
       (\i d r cn. (x : X i) -> P i x -> r (\xs. cn (x, xs)))
       (\A fi d r cn. (g : (a : A) -> X (fi a)) -> ((a : A) -> P (fi a) (g a)) -> r (\xs. cn (g, xs)))
@@ -55,6 +58,10 @@ def uncurryHyps
       (\i cn pf {j} refl tt. elimEq {I} {i} {\k q. P k (cn {k} q)} pf {j} refl)
       (\A f r cn pf {i} p ihs.
         let a = p.fst in
+        let xs = p.snd in
+        r a (\ys. cn (a, ys)) (pf a) {i} xs ihs)
+      (\A f r cn pf {i} p ihs.
+        let -a = p.fst in
         let xs = p.snd in
         r a (\ys. cn (a, ys)) (pf a) {i} xs ihs)
       (\A d r cn pf {i} p ihs.

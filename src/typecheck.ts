@@ -84,9 +84,9 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
     const ty = evaluate(tm.type, local.vs);
     const fty = force(ty);
     if (fty.tag !== 'VSigma') return terr(`not a sigma type in pair: ${showTerm(local, tm)}`);
-    const fst = check(local, tm.fst, fty.type);
+    const fst = check(fty.erased ? localErased(local) : local, tm.fst, fty.type);
     const snd = check(local, tm.snd, vinst(fty, evaluate(tm.fst, local.vs)));
-    return [ty, E.Pair(fst, snd)];
+    return [ty, fty.erased ? snd : E.Pair(fst, snd)];
   }
   if (tm.tag === 'Proj') {
     const [ty, er] = synth(local, tm.term);

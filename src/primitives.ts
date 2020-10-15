@@ -1,6 +1,6 @@
 import { PrimName } from './core';
 import { impossible } from './utils/utils';
-import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, vidata, vappEs, videsc, VIEnd, VIArg, VIFArg, VIRec, VIHRec, vinterpI, vAllI, VIData, vicon, VPiEE } from './values';
+import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, vidata, vappEs, videsc, VIEnd, VIArg, VIArgE, VIFArg, VIRec, VIHRec, vinterpI, vAllI, VIData, vicon, VPiEE } from './values';
 
 const primTypes: { [K in PrimName]: Val } = {
 
@@ -34,6 +34,7 @@ const primTypes: { [K in PrimName]: Val } = {
   'IDesc': VPiE('_', VType, _ => VType),
   'IEnd': VPiEE('I', VType, I => VPiEE('_', I, _ => videsc(I))),
   'IArg': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiE('_', VPiE('_', A, _ => videsc(I)), _ => videsc(I)))),
+  'IArgE': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiE('_', VPiEE('a', A, _ => videsc(I)), _ => videsc(I)))),
   'IFArg': VPiEE('I', VType, I => VPiEE('_', VType, _ => VPiE('_', videsc(I), _ => videsc(I)))),
   'IRec': VPiEE('I', VType, I => VPiEE('_', I, _ => VPiE('_', videsc(I), _ => videsc(I)))),
   'IHRec': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiEE('_', VPiE('_', A, _ => I), _ => VPiE('_', videsc(I), _ => videsc(I))))),
@@ -42,6 +43,7 @@ const primTypes: { [K in PrimName]: Val } = {
     -> (-P : IDesc I -> *)
     -> ((-i : I) -> P (IEnd i))
     -> ((-A : *) -> (f : A -> IDesc I) -> ((a : A) -> P (f a)) -> P (IArg A f))
+    -> ((-A : *) -> (f : (-a : A) -> IDesc I) -> ((-a : A) -> P (f a)) -> P (IArgE A f))
     -> ((-A : *) -> (d : IDesc I) -> P d -> P (IFOArg A d))
     -> ((-i : I) -> (d : IDesc I) -> P d -> P (IRec i d))
     -> ((-A : *) -> (-f : A -> I) -> (d : IDesc I) -> P d -> P (IHRec A f d))
@@ -52,12 +54,13 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiEE('I', VType, I =>
     VPiEE('P', VPiE('_', videsc(I), _ => VType), P =>
     VPiE('_', VPiEE('i', I, i => vappE(P, vappE(VIEnd, i))), _ =>
-    VPiE('_', VPiEE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ =>vappE(P, vappEs([VIArg, A, f]))))), _ =>
+    VPiE('_', VPiEE('A', VType, A => VPiE('f', VPiE('_', A, _ => videsc(I)), f => VPiE('_', VPiE('a', A, a => vappE(P, vappE(f, a))), _ => vappE(P, vappEs([VIArg, A, f]))))), _ =>
+    VPiE('_', VPiEE('A', VType, A => VPiE('f', VPiEE('a', A, _ => videsc(I)), f => VPiE('_', VPiEE('a', A, a => vappE(P, vappE(f, a))), _ => vappE(P, vappEs([VIArgE, A, f]))))), _ =>
     VPiE('_', VPiEE('A', VType, A => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIFArg, A, d]))))), _ =>
     VPiE('_', VPiEE('i', I, i => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIRec, i, d]))))), _ =>
     VPiE('_', VPiEE('A', VType, A => VPiEE('f', VPiE('_', A, _ => I), f => VPiE('d', videsc(I), d => VPiE('_', vappE(P, d), _ => vappE(P, vappEs([VIHRec, A, f, d])))))), _ =>
     VPiE('d', videsc(I), d =>
-    vappE(P, d))))))))),
+    vappE(P, d)))))))))),
   // (I : *) -> IDesc I -> (I -> *) -> I -> *
   'interpI': VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', VPiE('_', I, _ => VType), _ => VPiE('_', I, _ => VType)))),
   // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *

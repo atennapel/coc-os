@@ -115,7 +115,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     return Abs(fty.mode, fty.erased, fty.name, quote(fty.type, local.index), term);
   }
   if (tm.tag === 'Pair' && fty.tag === 'VSigma') {
-    const fst = check(local, tm.fst, fty.type);
+    const fst = check(fty.erased ? localErased(local) : local, tm.fst, fty.type);
     const snd = check(local, tm.snd, vinst(fty, evaluate(fst, local.vs)));
     return Pair(fst, snd, quote(ty, local.index));
   }
