@@ -256,7 +256,7 @@ export const velimprim = (name: PrimNameElim, v: Val, args: Val[]): Val => {
     if (isVPrim('ICon', v)) {
       const [I, d, P, h, i] = args;
       const [, , , c] = vprimArgs(v);
-      // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind d P i x) i c)
+      // ind I d P h i (ICon I d i c) ~> h i c (allI I d (IData I d) P (\(x : Data d). ind I d P h i x) i c)
       return vappEs([h, i, c, velimprim('allI', d, [I, vappEs([VIData, I, d]), P, VAbsEE('i', I, i => VAbsE('x', vidata(I, d, i), x => velimprim('indI', x, [I, d, P, h, i]))), i, c])]);
     }
   }

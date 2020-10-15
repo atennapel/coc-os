@@ -4,6 +4,7 @@ import { ImportMap, parse, parseDefs } from './parser';
 import { show, showCore, showVal } from './surface';
 import * as C from './core';
 import * as E from './erased';
+import * as EV from './erasedvalues';
 import { typecheck } from './typecheck';
 import { normalize } from './values';
 import { deleteGlobal, getGlobal, getGlobals } from './globals';
@@ -21,6 +22,8 @@ COMMANDS
 [:gelab name] view the elaborated term of a name
 [:gterm name] view the term of a name
 [:gnorm name] view the fully normalized term of a name
+[:geras name] view the fully erased term of a name
+[:gnera name] view the fully normalized erased term of a name
 [:view files] view a file
 [:def definitions] define names
 [:import files] import a file
@@ -102,16 +105,28 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       return cb(showCore(res.term));
     }
     if (s.startsWith(':gterm')) {
-      const name = s.slice(7).trim();
+      const name = s.slice(6).trim();
       const res = getGlobal(name);
       if (!res) return cb(`undefined global: ${name}`, true);
       return cb(showVal(res.val));
     }
     if (s.startsWith(':gnorm')) {
-      const name = s.slice(7).trim();
+      const name = s.slice(6).trim();
       const res = getGlobal(name);
       if (!res) return cb(`undefined global: ${name}`, true);
       return cb(showVal(res.val, 0, Nil, true));
+    }
+    if (s.startsWith(':geras')) {
+      const name = s.slice(6).trim();
+      const res = getGlobal(name);
+      if (!res) return cb(`undefined global: ${name}`, true);
+      return cb(E.show(res.termerased));
+    }
+    if (s.startsWith(':gnera')) {
+      const name = s.slice(6).trim();
+      const res = getGlobal(name);
+      if (!res) return cb(`undefined global: ${name}`, true);
+      return cb(E.show(EV.quote(res.valerased, 0, true)));
     }
 
     const term = parse(s);
@@ -133,7 +148,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => showCore(ttype));
     log(() => E.show(er));
 
-    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}\neras: ${E.show(er)}`);
+    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}\neras: ${E.show(er)}\nnera: ${E.show(EV.normalize(er, true))}`);
   } catch (err) {
     return cb(`${err}`, true);
   }

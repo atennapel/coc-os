@@ -8,6 +8,8 @@ import { Cons, List, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, quote, showValZ, Val, vinst, vproj, VType, VVar } from './values';
 import * as E from './erased';
+import * as EV from './erasedvalues';
+import { primErased } from './erasedprimitives';
 
 type EntryT = [Val, boolean];
 type EnvT = List<EntryT>;
@@ -51,7 +53,7 @@ const check = (local: Local, tm: Term, ty: Val): E.Term => {
 
 const synth = (local: Local, tm: Term): [Val, E.Term] => {
   log(() => `synth ${show(tm)}`);
-  if (tm.tag === 'Prim') return [primType(tm.name), E.termId]; // TODO
+  if (tm.tag === 'Prim') return [primType(tm.name), EV.quote(primErased(tm.name), 0, false)];
   if (tm.tag === 'Var') {
     const i = tm.index;
     const [entry, , erasedNo] = indexT(local.ts, i) || terr(`undefined index ${tm.index}`);
@@ -72,7 +74,7 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
     check(localErased(local), tm.type, VType);
     const ty = evaluate(tm.type, local.vs);
     const [rty, body] = synth(localExtend(local, ty, tm.erased), tm.body);
-    return [evaluate(Pi(tm.mode, tm.erased, tm.name, tm.type, quote(rty, local.index + 1)), local.vs), tm.erased ? body : E.Abs(tm.name, body)];
+    return [evaluate(Pi(tm.mode, tm.erased, tm.name, tm.type, quote(rty, local.index + 1)), local.vs), tm.erased ? body : E.Abs(body)];
   }
   if (tm.tag === 'Pair') {
     check(localErased(local), tm.type, VType);
@@ -108,7 +110,7 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
     const valEr = check(tm.erased ? localErased(local) : local, tm.val, ty);
     const val = evaluate(tm.val, local.vs);
     const [ret, body] = synth(localExtend(local, ty, tm.erased, val), tm.body);
-    return [ret, tm.erased ? body : E.Let(tm.name, valEr, body)];
+    return [ret, tm.erased ? body : E.Let(valEr, body)];
   }
   return terr(`synth failed: ${show(tm)}`);
 };

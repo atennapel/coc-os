@@ -11,6 +11,9 @@ import { allProblems, amountOfProblems, contextSolved, freshMeta, getHoleEntries
 import { unify } from './unification';
 import { primType } from './primitives';
 import { getGlobal, hasGlobal, setGlobal } from './globals';
+import { typecheck } from './typecheck';
+import * as E from './erased';
+import * as EV from './erasedvalues';
 
 type EntryT = { type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean };
 const EntryT = (type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean): EntryT =>
@@ -340,7 +343,11 @@ export const elaborateDefs = (ds: S.Def[], allowRedefinition: boolean = false): 
       try {
         const [tm, ty] = elaborate(d.value);
         log(() => `set ${d.name} : ${S.showCore(ty)} = ${S.showCore(tm)}`);
-        setGlobal(d.name, tm, evaluate(tm, Nil), evaluate(ty, Nil));
+
+        const [, er] = typecheck(tm);
+        log(() => `erased term: ${E.show(er)}`);
+
+        setGlobal(d.name, tm, evaluate(tm, Nil), evaluate(ty, Nil), er, EV.evaluate(er, Nil));
 
         const i = xs.indexOf(d.name);
         if (i >= 0) xs.splice(i, 1);

@@ -38,11 +38,10 @@ Future work:
 
 ```
 TODO:
+- fix libraries
 - check that evaluation does not use erased values
-- correctly erase primitives
-- Allow description datatypes arguments to be erased
-- add normalization for erased terms
-- update lib to use erasure
+- more erasure in descriptions (types and indeces)
+- allow description datatypes arguments to be erased
 - generic eliminators for Fin tagged non-indexed datatypes
 - allow second component of pair to be erased
 - find alternate definitions of symm, trans, eqRefl and uip, to allow for erasure of the proofs
