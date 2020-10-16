@@ -360,16 +360,16 @@ const localExtend = (local, name, ty, mode, erased, bound = true, inserted = fal
 const localErased = (local) => Local(local.index, local.ns, local.nsSurface, local.ts, local.vs, true);
 const showVal = (local, val) => S.showValZ(val, local.vs, local.index, local.ns);
 const constructMetaType = (l, b, k = 0, skipped = 0, since = 0) => {
-    // TODO: shift more intelligently in constructMetaType
     if (l.tag === 'Cons') {
         const [, x, e] = l.head;
-        if (!e.bound)
-            return constructMetaType(l.tail, b, k + 1, skipped + 1, 0);
+        if (!e.bound) {
+            const rest = constructMetaType(l.tail, b, k + 1, skipped + 1, 0);
+            return C.shift(-1, 1, rest);
+        }
         const q = values_1.quote(e.type, k);
-        const sq = C.shift(-skipped, since, q);
-        return core_1.Pi(e.mode, e.erased, x, sq, constructMetaType(l.tail, b, k + 1, skipped, since + 1));
+        return core_1.Pi(e.mode, e.erased, x, q, constructMetaType(l.tail, b, k + 1, skipped, since + 1));
     }
-    return C.shift(-skipped, since, values_1.quote(b, k));
+    return values_1.quote(b, k);
 };
 const newMeta = (local, erased, ty) => {
     config_1.log(() => `new ${erased ? 'erased ' : ''}meta return type: ${showVal(local, ty)}`);

@@ -57,15 +57,16 @@ export type HoleInfo = [Val, Val, Local];
 const showVal = (local: Local, val: Val): string => S.showValZ(val, local.vs, local.index, local.ns);
 
 const constructMetaType = (l: List<[number, string, EntryT]>, b: Val, k: Ix = 0, skipped: Ix = 0, since: Ix = 0): Term => {
-  // TODO: shift more intelligently in constructMetaType
   if (l.tag === 'Cons') {
     const [, x, e] = l.head;
-    if (!e.bound) return constructMetaType(l.tail, b, k + 1, skipped + 1, 0);
+    if (!e.bound) {
+      const rest = constructMetaType(l.tail, b, k + 1, skipped + 1, 0);
+      return C.shift(-1, 1, rest);
+    }
     const q = quote(e.type, k);
-    const sq = C.shift(-skipped, since, q);
-    return Pi(e.mode, e.erased, x, sq, constructMetaType(l.tail, b, k + 1, skipped, since + 1));
+    return Pi(e.mode, e.erased, x, q, constructMetaType(l.tail, b, k + 1, skipped, since + 1));
   }
-  return C.shift(-skipped, since, quote(b, k));
+  return quote(b, k);
 };
 const newMeta = (local: Local, erased: boolean, ty: Val): Term => {
   log(() => `new ${erased ? 'erased ' : ''}meta return type: ${showVal(local, ty)}`);

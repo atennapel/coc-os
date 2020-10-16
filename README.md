@@ -38,8 +38,7 @@ Future work:
 
 ```
 TODO:
-- check that evaluation does not use erased values
-- shift more intelligently in constructMetaType
+- rename interp to Interp
 - make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
 - allow second component of pair to be erased
 - fix infinite loop in postponements
