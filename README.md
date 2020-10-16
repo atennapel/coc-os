@@ -59,9 +59,7 @@ QUESTIONS:
 - can we erase Unit index in Desc?
 
 LIBRARIES:
-- generic eliminators for Fin tagged non-indexed datatypes
 - find alternate definitions of symm, trans, eqRefl and uip, to allow for erasure of the proofs
-- rewrite list to use taggeddesc
 - write more prelude functions
 - write Desc using Desc
 ```

@@ -14,7 +14,7 @@ def -SumCurriedHyps
     let D = IArg {I} {Fin n} C in
     CurriedHyps (C a) (IData D) P (\xs. ICon {I} {D} (a, xs))
 
-def elimUncurried
+def elimUncurriedI
   : {-I : *}
     -> {n : Nat}
     -> (C : Fin n -> IDesc I)
@@ -30,7 +30,7 @@ def elimUncurried
       let D = IArg {I} {Fin n} C in
       indCurried D P (\f. dcase {n} {SumCurriedHyps {I} {n} C P} f b) i x
 
-def elim
+def elimI
   : {-I : *}
   -> {n : Nat}
   -> (C : Fin n -> IDesc I)
@@ -41,7 +41,33 @@ def elim
   )
   = \{I} {n} C {P}.
     let D = IArg {I} {Fin n} C in
-    curryBranches {n} {SumCurriedHyps {I} {n} C P} {{-i : I} -> (x : IData D i) -> P i x} (elimUncurried {I} {n} C {P})
+    curryBranches {n} {SumCurriedHyps {I} {n} C P} {{-i : I} -> (x : IData D i) -> P i x} (elimUncurriedI {I} {n} C {P})
+
+def elimUncurried
+  : {n : Nat}
+    -> (C : Fin n -> Desc)
+    -> (
+      let D = Arg {Fin n} C in
+      {-P : Data D -> *}
+      -> Branches n (SumCurriedHyps {U} {n} C (\_. P))
+      -> (x : Data D)
+      -> P x
+    )
+  = \{n} C {P} b x.
+      let D = Arg {Fin n} C in
+      indCurried D (\_. P) (\f. dcase {n} {SumCurriedHyps {U} {n} C (\_. P)} f b) () x
+
+def elim
+  : {n : Nat}
+  -> (C : Fin n -> Desc)
+  -> (
+    let D = Arg {Fin n} C in
+    {-P : Data D -> *}
+    -> CurriedBranches n (SumCurriedHyps {U} {n} C (\_. P)) ((x : Data D) -> P x)
+  )
+  = \{n} C {P}.
+    let D = Arg {Fin n} C in
+    curryBranches {n} {SumCurriedHyps {U} {n} C (\_. P)} {(x : Data D) -> P x} (elimUncurried {n} C {P})
 
 def TaggedIDesc 
   : * -> *
@@ -74,7 +100,7 @@ def elimTaggedI
     {-P : (i : I) -> IData D i -> *}
     -> CurriedBranches C.fst (SumCurriedHyps {I} {C.fst} (untagIC C) P) ({-i : I} -> (x : IData D i) -> P i x)
   )
-  = \{I} C {P}. elim {I} {C.fst} (untagIC C) {P}
+  = \{I} C {P}. elimI {I} {C.fst} (untagIC C) {P}
 
 def TaggedDesc = (n : Nat) ** Branches n (\_. Desc)
 def tagged
@@ -96,6 +122,6 @@ def elimTagged
   : (C : TaggedDesc) -> (
     let D = untag C in
     {-P : Data D -> *}
-    -> CurriedBranches C.fst (SumCurriedHyps {U} {C.fst} (untagC C) (\_. P)) ({-i : U} -> (x : Data D) -> P x)
+    -> CurriedBranches C.fst (SumCurriedHyps {U} {C.fst} (untagC C) (\_. P)) ((x : Data D) -> P x)
   )
-  = \C {P}. elim {U} {C.fst} (untagC C) {\_. P}
+  = \C {P}. elim {C.fst} (untagC C) {P}

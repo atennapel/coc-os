@@ -17,7 +17,7 @@ def indList
     -> ((hd : t) -> (tl : List t) -> P tl -> P (Cons hd tl))
     -> (l : List t)
     -> P l
-  = \{t} {P} n c l. elimTagged (ListD t) {P} n c {()} l
+  = \{t} {P} n c l. elimTagged (ListD t) {P} n c l
 
 def paraList
   : {-t -r : *} -> List t -> r -> (t -> List t -> r -> r) -> r
