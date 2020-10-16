@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif, isPrimName } from './core';
 import { log } from './config';
@@ -418,8 +418,8 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
     const imps: string[] = await Promise.all(files.map(loadFile));
     const defs: Def[][] = await Promise.all(imps.map(s => parseDefs(s, importMap)));
     const fdefs = defs.reduce((x, y) => x.concat(y), []);
-    fdefs.forEach(t => importMap[t.name] = true);
-    log(() => `imported ${fdefs.map(x => x.name).join(' ')}`);
+    fdefs.forEach(t => { if (t.tag === 'DDef') { importMap[t.name] = true } });
+    log(() => `imported ${fdefs.filter(t => t.tag === 'DDef').map(x => (x as DDef).name).join(' ')}`);
     return fdefs;
   } else if (c[0].tag === 'Name' && c[0].name === 'def') {
     const x = c[1];
@@ -460,15 +460,22 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
         return [DDef(erased, name2, Let(false, name, ety, body, Var(name)))];
       } else return serr(`def: : or = expected but got ${sym.name}`);
     } else return serr(`def should start with a name`);
-  } else return serr(`def should start with def or import`);
+  } else if (c[0].tag === 'Name' && ['execute', '-execute', 'typecheck', '-typecheck'].includes(c[0].name)) {
+    const command = c[0].name;
+    const rest = c.slice(1);
+    const term = exprs(rest, '(');
+    return [DExecute(term, command[0] === '-', command.endsWith('typecheck'))];
+  } else return serr(`def should start with ${defCommands.join(' or ')}`);
 };
+
+const defCommands = ['def', 'import', 'execute', 'typecheck', '-execute', '-typecheck'];
 
 export const parseDefs = async (s: string, importMap: ImportMap): Promise<Def[]> => {
   const ts = tokenize(s);
   if (ts.length === 0) return [];
-  if (ts[0].tag !== 'Name' || (ts[0].name !== 'def' && ts[0].name !== 'import'))
-    return serr(`def should start with "def" or "import"`);
-  const spl = splitTokens(ts, t => t.tag === 'Name' && (t.name === 'def' || t.name === 'import'), true);
+  if (ts[0].tag !== 'Name' || !defCommands.includes(ts[0].name))
+    return serr(`def should start with ${defCommands.map(x => `"${x}"`).join(' or ')}`);
+  const spl = splitTokens(ts, t => t.tag === 'Name' && defCommands.includes(t.name), true);
   const ds: Def[][] = await Promise.all(spl.map(s => parseDef(s, importMap)));
   return ds.reduce((x, y) => x.concat(y), []);
 };

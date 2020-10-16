@@ -38,7 +38,6 @@ Future work:
 
 ```
 TODO:
-- run command in file
 - make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
 - optimize importing
 - implement instance search

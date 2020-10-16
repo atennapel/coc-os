@@ -336,6 +336,7 @@ const globals_1 = require("./globals");
 const typecheck_1 = require("./typecheck");
 const E = require("./erased");
 const EV = require("./erasedvalues");
+const V = require("./values");
 const EntryT = (type, bound, mode, erased, inserted) => ({ type, bound, mode, erased, inserted });
 const indexT = (ts, ix) => {
     let l = ts;
@@ -644,7 +645,7 @@ exports.elaborate = (t, erased = false) => {
     return [ztm, zty];
 };
 exports.elaborateDefs = (ds, allowRedefinition = false) => {
-    config_1.log(() => `elaborateDefs ${ds.map(x => x.name).join(' ')}`);
+    config_1.log(() => `elaborateDefs ${S.showDefs(ds)}`);
     const xs = [];
     if (!allowRedefinition) {
         for (let i = 0; i < ds.length; i++) {
@@ -669,7 +670,29 @@ exports.elaborateDefs = (ds, allowRedefinition = false) => {
                 xs.push(d.name);
             }
             catch (err) {
-                err.message = `type error in def ${d.name}: ${err.message}`;
+                err.message = `error in def ${d.name}: ${err.message}`;
+                throw err;
+            }
+        }
+        else if (d.tag === 'DExecute') {
+            try {
+                console.log(S.showDef(d));
+                console.log(`term: ${S.show(d.term)}`);
+                const [eterm, etype] = exports.elaborate(d.term, d.erased);
+                console.log(`type: ${S.showCore(etype)}`);
+                console.log(`etrm: ${S.showCore(eterm)}`);
+                if (!d.typeOnly) {
+                    const unfolded = V.normalize(eterm, false);
+                    console.log(`etru: ${S.showCore(unfolded)}`);
+                    const [ttype, er] = typecheck_1.typecheck(eterm, d.erased);
+                    console.log(`ctyp: ${S.showCore(ttype)}`);
+                    console.log(`eras: ${E.show(er)}`);
+                    console.log(`nera: ${E.show(EV.normalize(er, true))}`);
+                }
+                console.log();
+            }
+            catch (err) {
+                err.message = `error in ${S.showDef(d)}: ${err.message}`;
                 throw err;
             }
         }
@@ -1413,8 +1436,10 @@ exports.parseDef = async (c, importMap) => {
         const imps = await Promise.all(files.map(utils_1.loadFile));
         const defs = await Promise.all(imps.map(s => exports.parseDefs(s, importMap)));
         const fdefs = defs.reduce((x, y) => x.concat(y), []);
-        fdefs.forEach(t => importMap[t.name] = true);
-        config_1.log(() => `imported ${fdefs.map(x => x.name).join(' ')}`);
+        fdefs.forEach(t => { if (t.tag === 'DDef') {
+            importMap[t.name] = true;
+        } });
+        config_1.log(() => `imported ${fdefs.filter(t => t.tag === 'DDef').map(x => x.name).join(' ')}`);
         return fdefs;
     }
     else if (c[0].tag === 'Name' && c[0].name === 'def') {
@@ -1470,16 +1495,23 @@ exports.parseDef = async (c, importMap) => {
         else
             return utils_1.serr(`def should start with a name`);
     }
+    else if (c[0].tag === 'Name' && ['execute', '-execute', 'typecheck', '-typecheck'].includes(c[0].name)) {
+        const command = c[0].name;
+        const rest = c.slice(1);
+        const term = exprs(rest, '(');
+        return [surface_1.DExecute(term, command[0] === '-', command.endsWith('typecheck'))];
+    }
     else
-        return utils_1.serr(`def should start with def or import`);
+        return utils_1.serr(`def should start with ${defCommands.join(' or ')}`);
 };
+const defCommands = ['def', 'import', 'execute', 'typecheck', '-execute', '-typecheck'];
 exports.parseDefs = async (s, importMap) => {
     const ts = tokenize(s);
     if (ts.length === 0)
         return [];
-    if (ts[0].tag !== 'Name' || (ts[0].name !== 'def' && ts[0].name !== 'import'))
-        return utils_1.serr(`def should start with "def" or "import"`);
-    const spl = splitTokens(ts, t => t.tag === 'Name' && (t.name === 'def' || t.name === 'import'), true);
+    if (ts[0].tag !== 'Name' || !defCommands.includes(ts[0].name))
+        return utils_1.serr(`def should start with ${defCommands.map(x => `"${x}"`).join(' or ')}`);
+    const spl = splitTokens(ts, t => t.tag === 'Name' && defCommands.includes(t.name), true);
     const ds = await Promise.all(spl.map(s => exports.parseDef(s, importMap)));
     return ds.reduce((x, y) => x.concat(y), []);
 };
@@ -1713,7 +1745,7 @@ exports.runREPL = (s_, cb) => {
 },{"./config":1,"./core":4,"./elaboration":5,"./erased":6,"./erasedvalues":8,"./globals":9,"./parser":11,"./surface":14,"./typecheck":15,"./utils/list":18,"./utils/utils":19,"./values":20}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
+exports.showDefs = exports.showDef = exports.DExecute = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
 const names_1 = require("./names");
 const C = require("./core");
 const values_1 = require("./values");
@@ -1858,10 +1890,13 @@ exports.showVal = (v, k = 0, ns = list_1.Nil, full = false) => exports.show(expo
 exports.showCoreZ = (t, vs = list_1.Nil, k = 0, ns = list_1.Nil) => exports.show(exports.toSurface(values_1.zonk(t, vs, k), ns));
 exports.showValZ = (v, vs = list_1.Nil, k = 0, ns = list_1.Nil, full = false) => exports.show(exports.toSurface(values_1.zonk(values_1.quote(v, k, full), vs, k), ns));
 exports.DDef = (erased, name, value) => ({ tag: 'DDef', erased, name, value });
+exports.DExecute = (term, erased, typeOnly) => ({ tag: 'DExecute', term, erased, typeOnly });
 exports.showDef = (d) => {
     if (d.tag === 'DDef')
         return `def ${d.erased ? '-' : ''}${d.name} = ${exports.show(d.value)}`;
-    return d.tag;
+    if (d.tag === 'DExecute')
+        return `${d.erased ? '-' : ''}${d.typeOnly ? 'typecheck' : 'execute'} ${exports.show(d.term)}`;
+    return d;
 };
 exports.showDefs = (ds) => ds.map(exports.showDef).join('\n');
 

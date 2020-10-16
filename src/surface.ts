@@ -157,13 +157,16 @@ export const showVal = (v: Val, k: Ix = 0, ns: List<Name> = Nil, full: boolean =
 export const showCoreZ = (t: C.Term, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil): string => show(toSurface(zonk(t, vs, k), ns));
 export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil, full: boolean = false): string => show(toSurface(zonk(quote(v, k, full), vs, k), ns));
 
-export type Def = DDef;
+export type Def = DDef | DExecute;
 
 export type DDef = { tag: 'DDef', erased: boolean, name: Name, value: Term };
 export const DDef = (erased: boolean, name: Name, value: Term): DDef => ({ tag: 'DDef', erased, name, value });
+export type DExecute = { tag: 'DExecute', term: Term, erased: boolean, typeOnly: boolean };
+export const DExecute = (term: Term, erased: boolean, typeOnly: boolean): DExecute => ({ tag: 'DExecute', term, erased, typeOnly });
 
 export const showDef = (d: Def): string => {
   if (d.tag === 'DDef') return `def ${d.erased ? '-' : ''}${d.name} = ${show(d.value)}`;
-  return d.tag;
+  if (d.tag === 'DExecute') return `${d.erased ? '-' : ''}${d.typeOnly ? 'typecheck' : 'execute'} ${show(d.term)}`;
+  return d;
 };
 export const showDefs = (ds: Def[]): string => ds.map(showDef).join('\n');

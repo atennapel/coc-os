@@ -14,6 +14,7 @@ import { getGlobal, hasGlobal, setGlobal } from './globals';
 import { typecheck } from './typecheck';
 import * as E from './erased';
 import * as EV from './erasedvalues';
+import * as V from './values';
 
 type EntryT = { type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean };
 const EntryT = (type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean): EntryT =>
@@ -333,7 +334,7 @@ export const elaborate = (t: S.Term, erased: boolean = false): [Term, Term] => {
 };
 
 export const elaborateDefs = (ds: S.Def[], allowRedefinition: boolean = false): Name[] => {
-  log(() => `elaborateDefs ${ds.map(x => x.name).join(' ')}`);
+  log(() => `elaborateDefs ${S.showDefs(ds)}`);
   const xs: Name[] = [];
   if (!allowRedefinition) {
     for (let i = 0; i < ds.length; i++) {
@@ -359,7 +360,31 @@ export const elaborateDefs = (ds: S.Def[], allowRedefinition: boolean = false): 
         if (i >= 0) xs.splice(i, 1);
         xs.push(d.name);
       } catch (err) {
-        err.message = `type error in def ${d.name}: ${err.message}`;
+        err.message = `error in def ${d.name}: ${err.message}`;
+        throw err;
+      }
+    } else if (d.tag === 'DExecute') {
+      try {
+        console.log(S.showDef(d));
+        console.log(`term: ${S.show(d.term)}`);
+
+        const [eterm, etype] = elaborate(d.term, d.erased);
+        console.log(`type: ${S.showCore(etype)}`);
+        console.log(`etrm: ${S.showCore(eterm)}`);
+
+        if (!d.typeOnly) {
+          const unfolded = V.normalize(eterm, false);
+          console.log(`etru: ${S.showCore(unfolded)}`);
+
+          const [ttype, er] = typecheck(eterm, d.erased);
+          console.log(`ctyp: ${S.showCore(ttype)}`);
+          console.log(`eras: ${E.show(er)}`);
+          console.log(`nera: ${E.show(EV.normalize(er, true))}`);
+        }
+
+        console.log();
+      } catch (err) {
+        err.message = `error in ${S.showDef(d)}: ${err.message}`;
         throw err;
       }
     }
