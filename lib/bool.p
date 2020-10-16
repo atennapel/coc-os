@@ -1,7 +1,3 @@
-import lib/eq.p
-import lib/unit.p
-import lib/void.p
-
 def Bool : * = %B
 def True : Bool = %1
 def False : Bool = %0
@@ -24,9 +20,3 @@ def or : Bool -> Bool -> Bool = \a b. if a True b
 def eqBool : Bool -> Bool -> Bool = \a b. if a b (not b)
 def neqBool : Bool -> Bool -> Bool = \a b. not (eqBool a b)
 def xor = neqBool
-
-def liftBool : Bool -> * = \b. if b U Void
-
-def trueNeqFalse
-  : Neq {Bool} True False
-  = \eq. rewrite {Bool} {liftBool} eq (() : liftBool True)

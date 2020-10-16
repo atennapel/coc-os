@@ -1,4 +1,5 @@
 import lib/idesc.p
+import lib/bool.p
 import lib/unit.p
 
 def Desc = IDesc U

@@ -1,4 +1,5 @@
 import lib/idesc.p
+import lib/desc.p
 import lib/generic.p
 import lib/fin.p
 
@@ -46,28 +47,55 @@ def TaggedIDesc
   : * -> *
   = \I. (n : Nat) ** Branches n (\_. IDesc I) 
 
-def tagged
+def taggedI
   : {n : Nat} -> {-I : *} -> Branches n (\_. IDesc I) -> TaggedIDesc I
   = \{n} {I} b. (n, b)
 
-def untag
-  : {-I : *} -> TaggedIDesc I -> IDesc I
-  = \{I} t. IArg {I} {Fin t.fst} (\f. case {t.fst} f t.snd)
-
-def untagC
+def untagIC
   : {-I : *} -> (t : TaggedIDesc I) -> Fin t.fst -> IDesc I
   = \{I} t f. case {t.fst} f t.snd
 
-def TaggedIData : {I : *} -> TaggedIDesc I -> I -> * = \{I} C. IData {I} (untag C)
+def untagI
+  : {-I : *} -> TaggedIDesc I -> IDesc I
+  = \{I} t. IArg {I} {Fin t.fst} (untagIC {I} t)
 
-def injTagged : {-I : *} -> (D : TaggedIDesc I) -> CurriedEl (untag D) (TaggedIData D) = \{I} D. inj {I} (untag D)
+def TaggedIData : {I : *} -> TaggedIDesc I -> I -> *
+  = \{I} C. IData {I} (untagI C)
 
-def elimTagged
+def injTaggedI
+  : {-I : *} -> (D : TaggedIDesc I) -> CurriedEl (untagI D) (TaggedIData D)
+  = \{I} D. inj {I} (untagI D)
+
+def elimTaggedI
   : {-I : *}
   -> (C : TaggedIDesc I)
   -> (
-    let D = untag C in
+    let D = untagI C in
     {-P : (i : I) -> IData D i -> *}
-    -> CurriedBranches C.fst (SumCurriedHyps {I} {C.fst} (untagC C) P) ({-i : I} -> (x : IData D i) -> P i x)
+    -> CurriedBranches C.fst (SumCurriedHyps {I} {C.fst} (untagIC C) P) ({-i : I} -> (x : IData D i) -> P i x)
   )
-  = \{I} C {P}. elim {I} {C.fst} (untagC C) {P}
+  = \{I} C {P}. elim {I} {C.fst} (untagIC C) {P}
+
+def TaggedDesc = (n : Nat) ** Branches n (\_. Desc)
+def tagged
+  : {n : Nat} -> Branches n (\_. Desc) -> TaggedDesc
+  = \{n} b. (n, b)
+def untagC
+  : (t : TaggedDesc) -> Fin t.fst -> Desc
+  = \t f. case {t.fst} f t.snd
+def untag
+  : TaggedDesc -> Desc
+  = \t. Arg {Fin t.fst} (untagC t)
+def TaggedData
+  : TaggedDesc -> *
+  = \C. Data (untag C)
+def injTagged
+  : (D : TaggedDesc) -> CurriedEl (untag D) (\_. TaggedData D)
+  = \D. inj {U} (untag D)
+def elimTagged
+  : (C : TaggedDesc) -> (
+    let D = untag C in
+    {-P : Data D -> *}
+    -> CurriedBranches C.fst (SumCurriedHyps {U} {C.fst} (untagC C) (\_. P)) ({-i : U} -> (x : Data D) -> P x)
+  )
+  = \C {P}. elim {U} {C.fst} (untagC C) {\_. P}

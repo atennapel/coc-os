@@ -1,11 +1,14 @@
+import lib/unit.p
 import lib/desc.p
-import lib/bool.p
-import lib/generic.p
+import lib/taggeddesc.p
 
-def ListD : (-t : *) -> Desc = \t. SumD End (FArg t (Rec End))
-def List : * -> * = \t. Data (ListD t)
-def Nil : {-t : *} -> List t = \{t}. inj (ListD t) True
-def Cons : {-t : *} -> t -> List t -> List t = \{t}. inj (ListD t) False
+def ListD : (-t : *) -> TaggedDesc = \t. tagged {2} (
+  End,
+  FArg t (Rec End),
+())
+def List : * -> * = \t. TaggedData (ListD t)
+def Nil : {-t : *} -> List t = \{t}. injTagged (ListD t) 0f
+def Cons : {-t : *} -> t -> List t -> List t = \{t}. injTagged (ListD t) 1f
 
 def indList
   : {-t : *}
@@ -14,7 +17,7 @@ def indList
     -> ((hd : t) -> (tl : List t) -> P tl -> P (Cons hd tl))
     -> (l : List t)
     -> P l
-  = \{t} {P} n c l. elimBool (\b. if b End (FArg t (Rec End))) {P} n c l
+  = \{t} {P} n c l. elimTagged (ListD t) {P} n c {()} l
 
 def paraList
   : {-t -r : *} -> List t -> r -> (t -> List t -> r -> r) -> r

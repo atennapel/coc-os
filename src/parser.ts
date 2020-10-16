@@ -418,7 +418,7 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
     if (files.length === 0) return [];
     log(() => `import ${files.join(' ')}`);
     const imps: [string, string][] = await Promise.all(files.map(f => {
-      importMap[f] = true;
+      // importMap[f] = true; TODO
       return loadFile(f).then(m => ([f, m] as [string, string]));
     }));
     const defs: Def[][] = await Promise.all(imps.map(([, m]) => parseDefs(m, importMap)));

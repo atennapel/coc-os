@@ -1,3 +1,4 @@
+import lib/bool.p
 import lib/type.p
 import lib/pi.p
 import lib/sigma.p
@@ -5,7 +6,7 @@ import lib/void.p
 import lib/eq.p
 
 import lib/unit.p
-import lib/bool.p
+import lib/bool.extra.p
 
 import lib/idesc.p
 import lib/desc.p

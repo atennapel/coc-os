@@ -1437,7 +1437,7 @@ exports.parseDef = async (c, importMap) => {
             return [];
         config_1.log(() => `import ${files.join(' ')}`);
         const imps = await Promise.all(files.map(f => {
-            importMap[f] = true;
+            // importMap[f] = true; TODO
             return utils_1.loadFile(f).then(m => [f, m]);
         }));
         const defs = await Promise.all(imps.map(([, m]) => exports.parseDefs(m, importMap)));
