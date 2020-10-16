@@ -22,19 +22,19 @@ def indDesc
     -> P d
   = \{P} end arg arge farg rec hrec d. indIDesc {U} {P} (\_. end) arg arge farg (\_. rec) (\A _. hrec A) d
 
-def interp : Desc -> * -> * = \d x. interpI {U} d (\_. x) ()
-def AllDesc : (d : Desc) -> (X : *) -> (X -> *) -> interp d X -> * = \d X P c. AllIDesc U d (\_. X) (\_. P) () c
+def Interp : Desc -> * -> * = \d x. InterpI {U} d (\_. x) ()
+def AllDesc : (d : Desc) -> (X : *) -> (X -> *) -> Interp d X -> * = \d X P c. AllIDesc U d (\_. X) (\_. P) () c
 def allDesc
-  : (d : Desc) -> (-X : *) -> (-P : X -> *) -> ((x : X) -> P x) -> (xs : interp d X) -> AllDesc d X P xs
+  : (d : Desc) -> (-X : *) -> (-P : X -> *) -> ((x : X) -> P x) -> (xs : Interp d X) -> AllDesc d X P xs
   = \d X P p xs. allIDesc {U} d (\_. X) (\_. P) (\_. p) () xs
 
 def Data : Desc -> * = \d. IData {U} d ()
-def Con : {-d : Desc} -> interp d (Data d) -> Data d = \{d} x. ICon {U} {d} {()} x
+def Con : {-d : Desc} -> Interp d (Data d) -> Data d = \{d} x. ICon {U} {d} {()} x
 def ind
   : {d : Desc}
     -> {-P : Data d -> *}
     -> (
-      (y : interp d (Data d))
+      (y : Interp d (Data d))
       -> AllDesc d (Data d) P y
       -> P (Con {d} y)
     )

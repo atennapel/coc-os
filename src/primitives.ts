@@ -1,6 +1,6 @@
 import { PrimName } from './core';
 import { impossible } from './utils/utils';
-import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, vidata, vappEs, videsc, VIEnd, VIArg, VIArgE, VIFArg, VIRec, VIHRec, vinterpI, vAllI, VIData, vicon, VPiEE } from './values';
+import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, vidata, vappEs, videsc, VIEnd, VIArg, VIArgE, VIFArg, VIRec, VIHRec, vInterpI, vAllI, VIData, vicon, VPiEE } from './values';
 
 const primTypes: { [K in PrimName]: Val } = {
 
@@ -62,10 +62,10 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiE('d', videsc(I), d =>
     vappE(P, d)))))))))),
   // (I : *) -> IDesc I -> (I -> *) -> I -> *
-  'interpI': VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', VPiE('_', I, _ => VType), _ => VPiE('_', I, _ => VType)))),
-  // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : interpI I d X i) -> *
-  'AllI': VPiE('I', VType, I => VPiE('d', videsc(I), d => VPiE('X', VPiE('_', I, _ => VType), X => VPiE('_', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), _ => VPiE('i', I, i => VPiE('_', vinterpI(I, d, X, i), _ => VType)))))),
-  // (-I : *) -> (d : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *) -> ((-i : I) -> (x : X i) -> P i x) -> (-i : I) -> (xs : interpI I d X i) -> All I d X P i xs
+  'InterpI': VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', VPiE('_', I, _ => VType), _ => VPiE('_', I, _ => VType)))),
+  // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : InterpI I d X i) -> *
+  'AllI': VPiE('I', VType, I => VPiE('d', videsc(I), d => VPiE('X', VPiE('_', I, _ => VType), X => VPiE('_', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), _ => VPiE('i', I, i => VPiE('_', vInterpI(I, d, X, i), _ => VType)))))),
+  // (-I : *) -> (d : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *) -> ((-i : I) -> (x : X i) -> P i x) -> (-i : I) -> (xs : InterpI I d X i) -> All I d X P i xs
   'allI':
     VPiEE('I', VType, I =>
     VPiE('d', videsc(I), d =>
@@ -73,20 +73,20 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiEE('P', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), P =>
     VPiE('_', VPiEE('i', I, i => VPiE('x', vappE(X, i), x => vappEs([P, i, x]))), _ =>
     VPiEE('i', I, i =>
-    VPiE('xs', vinterpI(I, d, X, i), xs =>
+    VPiE('xs', vInterpI(I, d, X, i), xs =>
     vAllI(I, d, X, P, i, xs)))))))),
 
   // (I : *) -> IDesc I -> I -> *
   'IData': VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', I, _ => VType))),
-  // (-I : *) -> (-d : IDesc I) -> (-i : I) -> interpI I d (IData I d) i -> IData I d i
-  'ICon': VPiEE('I', VType, I => VPiEE('d', videsc(I), d => VPiEE('i', I, i => VPiE('_', vinterpI(I, d, vappEs([VIData, I, d]), i), _ => vidata(I, d, i))))),
+  // (-I : *) -> (-d : IDesc I) -> (-i : I) -> InterpI I d (IData I d) i -> IData I d i
+  'ICon': VPiEE('I', VType, I => VPiEE('d', videsc(I), d => VPiEE('i', I, i => VPiE('_', vInterpI(I, d, vappEs([VIData, I, d]), i), _ => vidata(I, d, i))))),
   /*
     (-I : *)
     -> (d : IDesc I)
     -> (-P : (i : I) -> IData I d i -> *)
     -> (
       (-i : I)
-      -> (y : interpI I d (IData I d) i)
+      -> (y : InterpI I d (IData I d) i)
       -> AllI I d (IData I d) P i y
       -> P i (ICon I d i y)
     )
@@ -98,7 +98,7 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiEE('I', VType, I =>
     VPiE('d', videsc(I), d =>
     VPiEE('P', VPiE('i', I, i => VPiE('_', vidata(I, d, i), _ => VType)), P =>
-    VPiE('_', VPiEE('i', I, i => VPiE('y', vinterpI(I, d, vappEs([VIData, I, d]), i), y => VPiE('_', vAllI(I, d, vappEs([VIData, I, d]), P, i, y), _ => vappEs([P, i, vicon(I, d, i, y)])))), _ =>
+    VPiE('_', VPiEE('i', I, i => VPiE('y', vInterpI(I, d, vappEs([VIData, I, d]), i), y => VPiE('_', vAllI(I, d, vappEs([VIData, I, d]), P, i, y), _ => vappEs([P, i, vicon(I, d, i, y)])))), _ =>
     VPiEE('i', I, i =>
     VPiE('x', vidata(I, d, i), x =>
     vappEs([P, i, x]))))))),

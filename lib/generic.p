@@ -9,7 +9,7 @@ import lib/bool.p
 -- generic constructors
 def UncurriedEl
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> *
-  = \{I} D X. {-i : I} -> interpI D X i -> X i
+  = \{I} D X. {-i : I} -> InterpI D X i -> X i
 
 def -CurriedEl
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> *
@@ -38,7 +38,7 @@ def inj : {-I : *} -> (D : IDesc I) -> CurriedEl D (IData D) = \D. curryEl D (ID
 -- generic eliminators
 def UncurriedHyps
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (cn : UncurriedEl D X) -> *
-  = \{I} D X P cn. {-i : I} -> (xs : interpI D X i) -> (ihs : AllIDesc I D X P i xs) -> P i (cn xs)
+  = \{I} D X P cn. {-i : I} -> (xs : InterpI D X i) -> (ihs : AllIDesc I D X P i xs) -> P i (cn xs)
 
 def -CurriedHyps
   : {I : *} -> (D : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (cn : UncurriedEl D X) -> *

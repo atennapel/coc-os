@@ -22,21 +22,21 @@ def indIDesc
     -> P d
   = \{I} {P}. %elimIDesc I P
 
-def interpI : {I : *} -> IDesc I -> (I -> *) -> I -> * = \{I}. %interpI I
-def AllIDesc : (I : *) -> (d : IDesc I) -> (X : I -> *) -> ((i : I) -> X i -> *) -> (i : I) -> (xs : interpI {I} d X i) -> * = %AllI
+def InterpI : {I : *} -> IDesc I -> (I -> *) -> I -> * = \{I}. %InterpI I
+def AllIDesc : (I : *) -> (d : IDesc I) -> (X : I -> *) -> ((i : I) -> X i -> *) -> (i : I) -> (xs : InterpI {I} d X i) -> * = %AllI
 def allIDesc
-  : {-I : *} -> (d : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *) -> ((-i : I) -> (x : X i) -> P i x) -> (-i : I) -> (xs : interpI {I} d X i) -> AllIDesc I d X P i xs
+  : {-I : *} -> (d : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *) -> ((-i : I) -> (x : X i) -> P i x) -> (-i : I) -> (xs : InterpI {I} d X i) -> AllIDesc I d X P i xs
   = \{I}. %allI I
 
 def IData : {I : *} -> IDesc I -> I -> * = \{I}. %IData I
-def ICon : {-I : *} -> {-d : IDesc I} -> {-i : I} -> interpI {I} d (IData {I} d) i -> IData {I} d i = \{I} {d} {i} x. %ICon I d i x
+def ICon : {-I : *} -> {-d : IDesc I} -> {-i : I} -> InterpI {I} d (IData {I} d) i -> IData {I} d i = \{I} {d} {i} x. %ICon I d i x
 def indI
   : {-I : *}
     -> {d : IDesc I}
     -> {-P : (i : I) -> IData {I} d i -> *}
     -> (
       {-i : I}
-      -> (y : interpI {I} d (IData {I} d) i)
+      -> (y : InterpI {I} d (IData {I} d) i)
       -> AllIDesc I d (IData {I} d) P i y
       -> P i (ICon {I} {d} {i} y)
     )

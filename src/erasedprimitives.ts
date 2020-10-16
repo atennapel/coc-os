@@ -62,7 +62,7 @@ const primErasedMap: { [K in PrimName]: Val } = {
   'IHRec': l(d => ap([inM, l(_ => l(_ => l(_ => l(_ => l(_ => l(c => ap([c, d])))))))])),
   'elimIDesc': elimIDesc,
 
-  'interpI': id,
+  'InterpI': id,
   'AllI': id,
   'allI': allI,
 

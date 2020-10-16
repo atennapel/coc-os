@@ -35,7 +35,7 @@ let importMap: ImportMap = {};
 
 export const initREPL = () => {
   importMap = {};
-  config.unfold.push('typeof', 'indIDesc', 'indDesc', 'interpI', 'interp', 'AllIDesc', 'allIDesc', 'AllDesc', 'allDesc');
+  config.unfold.push('typeof');
 };
 
 export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) => {

@@ -38,20 +38,19 @@ Future work:
 
 ```
 TODO:
-- rename interp to Interp
+- run command in file
 - make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
+- optimize importing
+- implement instance search
+- implement pruning
+- specialize meta when checking pair
 - allow second component of pair to be erased
 - fix infinite loop in postponements
 - fix _ being used in elaboration
 - allow erased FArg, Rec and HRec
 - allow meta as head of glued value
 - glued lets
-- optimize importing
-- implement pruning
-- implement instance search
-- specialize meta when checking pair
 - support some impredicative instantiation
-- run command in file
 - remove dependency of elaboration on typechecking
 - add a way to not mention type in argument of pi/sigma etc.
 
