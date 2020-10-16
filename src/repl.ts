@@ -16,6 +16,7 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:defs] show all defs
+[:imports] show all imports
 [:del name] delete a name
 [:gtype name] view the type of a name
 [:gtyno name] view the fully normalized type of a name
@@ -66,16 +67,20 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
         r.push(`def ${k} : ${showVal(e.type)} = ${showCore(e.term)}`);
       return cb(r.length === 0 ? 'no definitions' : r.join('\n'));
     }
+    if (s === ':imports') {
+      return cb(Object.keys(importMap).map(x => JSON.stringify(x)).join(' '));
+    }
     if (s.startsWith(':del')) {
       const names = s.slice(4).trim().split(/\s+/g);
       names.forEach(x => deleteGlobal(x));
       return cb(`deleted ${names.join(' ')}`);
     }
-    if (s.startsWith(':def') || s.startsWith(':import')) {
+    if ([':def', ':import', ':execute', ':typecheck', ':-execute', '-typecheck'].some(x => s.startsWith(x))) {
       const rest = s.slice(1);
+      importMap = {};
       parseDefs(rest, importMap).then(ds => {
         const xs = elaborateDefs(ds, true);
-        return cb(`defined ${xs.join(' ')}`);
+        return cb(xs.length === 0 ? `done` : `done, defined ${xs.join(' ')}`);
       }).catch(err => cb(''+err, true));
       return;
     }

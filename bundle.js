@@ -1424,21 +1424,24 @@ exports.parseDef = async (c, importMap) => {
         return [];
     if (c[0].tag === 'Name' && c[0].name === 'import') {
         const files = c.slice(1).map(t => {
-            if (t.tag !== 'Name')
+            if (t.tag !== 'Name' && t.tag !== 'Num' && t.tag !== 'Str')
                 return utils_1.serr(`trying to import a non-path`);
-            if (importMap[t.name]) {
-                config_1.log(() => `skipping import ${t.name}`);
+            const name = t.tag === 'Name' ? t.name : t.tag === 'Num' ? t.num : t.str;
+            if (importMap[name]) {
+                config_1.log(() => `skipping import ${name}`);
                 return null;
             }
-            return t.name;
+            return name;
         }).filter(x => x);
+        if (files.length === 0)
+            return [];
         config_1.log(() => `import ${files.join(' ')}`);
-        const imps = await Promise.all(files.map(utils_1.loadFile));
-        const defs = await Promise.all(imps.map(s => exports.parseDefs(s, importMap)));
+        const imps = await Promise.all(files.map(f => {
+            importMap[f] = true;
+            return utils_1.loadFile(f).then(m => [f, m]);
+        }));
+        const defs = await Promise.all(imps.map(([, m]) => exports.parseDefs(m, importMap)));
         const fdefs = defs.reduce((x, y) => x.concat(y), []);
-        fdefs.forEach(t => { if (t.tag === 'DDef') {
-            importMap[t.name] = true;
-        } });
         config_1.log(() => `imported ${fdefs.filter(t => t.tag === 'DDef').map(x => x.name).join(' ')}`);
         return fdefs;
     }
@@ -1604,6 +1607,7 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:defs] show all defs
+[:imports] show all imports
 [:del name] delete a name
 [:gtype name] view the type of a name
 [:gtyno name] view the fully normalized type of a name
@@ -1651,16 +1655,20 @@ exports.runREPL = (s_, cb) => {
                 r.push(`def ${k} : ${surface_1.showVal(e.type)} = ${surface_1.showCore(e.term)}`);
             return cb(r.length === 0 ? 'no definitions' : r.join('\n'));
         }
+        if (s === ':imports') {
+            return cb(Object.keys(importMap).map(x => JSON.stringify(x)).join(' '));
+        }
         if (s.startsWith(':del')) {
             const names = s.slice(4).trim().split(/\s+/g);
             names.forEach(x => globals_1.deleteGlobal(x));
             return cb(`deleted ${names.join(' ')}`);
         }
-        if (s.startsWith(':def') || s.startsWith(':import')) {
+        if ([':def', ':import', ':execute', ':typecheck', ':-execute', '-typecheck'].some(x => s.startsWith(x))) {
             const rest = s.slice(1);
+            importMap = {};
             parser_1.parseDefs(rest, importMap).then(ds => {
                 const xs = elaboration_1.elaborateDefs(ds, true);
-                return cb(`defined ${xs.join(' ')}`);
+                return cb(xs.length === 0 ? `done` : `done, defined ${xs.join(' ')}`);
             }).catch(err => cb('' + err, true));
             return;
         }

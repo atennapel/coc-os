@@ -407,18 +407,22 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
   if (c.length === 0) return [];
   if (c[0].tag === 'Name' && c[0].name === 'import') {
     const files = c.slice(1).map(t => {
-      if (t.tag !== 'Name') return serr(`trying to import a non-path`);
-      if (importMap[t.name]) {
-        log(() => `skipping import ${t.name}`);
+      if (t.tag !== 'Name' && t.tag !== 'Num' && t.tag !== 'Str') return serr(`trying to import a non-path`);
+      const name = t.tag === 'Name' ? t.name : t.tag === 'Num' ? t.num : t.str;
+      if (importMap[name]) {
+        log(() => `skipping import ${name}`);
         return null;
       }
-      return t.name;
+      return name;
     }).filter(x => x) as string[];
+    if (files.length === 0) return [];
     log(() => `import ${files.join(' ')}`);
-    const imps: string[] = await Promise.all(files.map(loadFile));
-    const defs: Def[][] = await Promise.all(imps.map(s => parseDefs(s, importMap)));
+    const imps: [string, string][] = await Promise.all(files.map(f => {
+      importMap[f] = true;
+      return loadFile(f).then(m => ([f, m] as [string, string]));
+    }));
+    const defs: Def[][] = await Promise.all(imps.map(([, m]) => parseDefs(m, importMap)));
     const fdefs = defs.reduce((x, y) => x.concat(y), []);
-    fdefs.forEach(t => { if (t.tag === 'DDef') { importMap[t.name] = true } });
     log(() => `imported ${fdefs.filter(t => t.tag === 'DDef').map(x => (x as DDef).name).join(' ')}`);
     return fdefs;
   } else if (c[0].tag === 'Name' && c[0].name === 'def') {
