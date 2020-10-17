@@ -20,15 +20,15 @@ exports.log = (msg) => {
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getHoleEntries = exports.getHoles = exports.registerHole = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.contextSolved = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.undoContext = exports.discardContext = exports.markContext = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
+exports.freshInstanceId = exports.getHoleEntries = exports.getHoles = exports.registerHole = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.contextSolved = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.undoContext = exports.discardContext = exports.markContext = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
 const utils_1 = require("./utils/utils");
 exports.Unsolved = (type, erased) => ({ tag: 'Unsolved', type, erased });
 exports.Solved = (val, type, erased) => ({ tag: 'Solved', val, type, erased });
 const Blocked = (k, a, b, blockedBy) => ({ k, a, b, blockedBy });
-const Context = (metas = [], blocked = [], holes = {}) => ({ metas, blocked, holes });
+const Context = (metas = [], blocked = [], holes = {}, instanceId = 0) => ({ metas, blocked, holes, instanceId });
 let context = Context();
 let contextStack = [];
-const cloneContext = (ctx) => Context(ctx.metas.slice(), ctx.blocked.slice(), Object.assign({}, ctx.holes));
+const cloneContext = (ctx) => Context(ctx.metas.slice(), ctx.blocked.slice(), Object.assign({}, ctx.holes), ctx.instanceId);
 exports.resetContext = () => {
     context = Context();
 };
@@ -97,6 +97,7 @@ exports.registerHole = (name, info) => {
 };
 exports.getHoles = () => context.holes;
 exports.getHoleEntries = () => Object.entries(exports.getHoles());
+exports.freshInstanceId = () => context.instanceId++;
 
 },{"./utils/utils":19}],3:[function(require,module,exports){
 "use strict";
@@ -401,8 +402,10 @@ const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
     if (tm.tag === 'Hole') {
         const x = newMeta(local, local.erased, ty);
-        if (tm.name)
-            context_1.registerHole(tm.name, [values_1.evaluate(x, local.vs), ty, local]);
+        if (tm.name) {
+            const z = tm.name === '_' ? `_${context_1.freshInstanceId()}` : tm.name;
+            context_1.registerHole(z, [values_1.evaluate(x, local.vs), ty, local, z[0] === '_']);
+        }
         return x;
     }
     const fty = values_1.force(ty);
@@ -583,8 +586,10 @@ const synth = (local, tm) => {
     if (tm.tag === 'Hole') {
         const t = newMeta(local, local.erased, values_1.VType);
         const vt = values_1.evaluate(newMeta(local, local.erased, values_1.evaluate(t, local.vs)), local.vs);
-        if (tm.name)
-            context_1.registerHole(tm.name, [values_1.evaluate(t, local.vs), vt, local]);
+        if (tm.name) {
+            const x = tm.name === '_' ? `_${context_1.freshInstanceId()}` : tm.name;
+            context_1.registerHole(x, [values_1.evaluate(t, local.vs), vt, local, x[0] === '_']);
+        }
         return [t, vt];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
@@ -614,8 +619,23 @@ const synthapp = (local, ty, mode, tm, full) => {
     }
     return utils_1.terr(`not a correct pi type in synthapp in ${surface_1.show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
 };
-const MAX_SOLVING_COUNT = 1000;
+const solveInstances = () => {
+    config_1.log(() => `solve instances`);
+    const instances = context_1.getHoleEntries().filter(p => p[1][3]);
+    for (let [name, [tm_, ty_, local]] of instances) {
+        const ty = values_1.force(ty_);
+        const tm = values_1.force(tm_);
+        config_1.log(() => `searchInstance _${name} = ${showVal(local, tm)} : ${showVal(local, ty)}`);
+        if (ty.tag === 'VNe' && ty.head.tag === 'HMeta')
+            return utils_1.terr(`cannot solve instance _${name}, expected type is a meta: ${showVal(local, ty)}`);
+        if (tm.tag === 'VNe' && tm.head.tag !== 'HMeta')
+            return utils_1.terr(`cannot solve instance _${name}, expected term is not a meta: ${showVal(local, tm)}`);
+        return utils_1.terr(`failed to find instance for _${name} = ${showVal(local, tm_)} : ${showVal(local, ty_)}`);
+    }
+};
+const MAX_SOLVING_COUNT = 100;
 const tryToSolveBlockedProblems = () => {
+    config_1.log(() => `try solve unsolved problems`);
     if (context_1.amountOfProblems() > 0) {
         let changed = true;
         let count = 0;
@@ -635,7 +655,8 @@ const tryToSolveBlockedProblems = () => {
 exports.elaborate = (t, erased = false) => {
     context_1.resetContext();
     const [tm, ty] = synth(erased ? localErased(localEmpty) : localEmpty, t);
-    config_1.log(() => `try solve unsolved problems`);
+    tryToSolveBlockedProblems();
+    solveInstances();
     tryToSolveBlockedProblems();
     const ztm = values_1.zonk(tm);
     const zty = values_1.zonk(values_1.quote(ty, 0));
@@ -701,7 +722,7 @@ exports.elaborateDefs = (ds, allowRedefinition = false) => {
 };
 const showValSZ = (local, v) => S.showCore(values_1.zonk(values_1.quote(v, local.index, false), local.vs, local.index, false), local.ns);
 const showHoles = (tm, ty) => {
-    const holeprops = context_1.getHoleEntries();
+    const holeprops = context_1.getHoleEntries().filter(p => !p[1][3]);
     if (holeprops.length === 0)
         return;
     const strtype = S.showCore(ty);

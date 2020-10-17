@@ -7,7 +7,7 @@ import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, vproj, VType, VVar, zonk } from './values';
 import * as S from './surface';
 import { show } from './surface';
-import { allProblems, amountOfProblems, contextSolved, freshMeta, getHoleEntries, getMeta, registerHole, resetContext } from './context';
+import { allProblems, amountOfProblems, contextSolved, freshInstanceId, freshMeta, getHoleEntries, getMeta, registerHole, resetContext } from './context';
 import { unify } from './unification';
 import { primType } from './primitives';
 import { getGlobal, hasGlobal, setGlobal } from './globals';
@@ -53,7 +53,7 @@ const localExtend = (local: Local, name: Name, ty: Val, mode: Mode, erased: bool
   Local(local.index + 1, Cons(name, local.ns), inserted ? local.nsSurface: Cons(name, local.nsSurface), Cons(EntryT(ty, bound, mode, erased, inserted), local.ts), Cons(val, local.vs), local.erased);
 const localErased = (local: Local): Local => Local(local.index, local.ns, local.nsSurface, local.ts, local.vs, true);
 
-export type HoleInfo = [Val, Val, Local];
+export type HoleInfo = [Val, Val, Local, boolean];
 
 const showVal = (local: Local, val: Val): string => S.showValZ(val, local.vs, local.index, local.ns);
 
@@ -100,7 +100,10 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
   log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
   if (tm.tag === 'Hole') {
     const x = newMeta(local, local.erased, ty);
-    if (tm.name) registerHole(tm.name, [evaluate(x, local.vs), ty, local]);
+    if (tm.name) {
+      const z = tm.name === '_' ? `_${freshInstanceId()}` : tm.name;
+      registerHole(z, [evaluate(x, local.vs), ty, local, z[0] === '_']);
+    }
     return x;
   }
   const fty = force(ty);
@@ -266,7 +269,10 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   if (tm.tag === 'Hole') {
     const t = newMeta(local, local.erased, VType);
     const vt = evaluate(newMeta(local, local.erased, evaluate(t, local.vs)), local.vs);
-    if (tm.name) registerHole(tm.name, [evaluate(t, local.vs), vt, local]);
+    if (tm.name) {
+      const x = tm.name === '_' ? `_${freshInstanceId()}` : tm.name;
+      registerHole(x, [evaluate(t, local.vs), vt, local, x[0] === '_']);
+    }
     return [t, vt];
   }
   return terr(`unable to synth ${show(tm)}`);
@@ -298,8 +304,22 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): 
   return terr(`not a correct pi type in synthapp in ${show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
 };
 
-const MAX_SOLVING_COUNT = 1000;
+const solveInstances = (): void => {
+  log(() => `solve instances`);
+  const instances = getHoleEntries().filter(p => p[1][3]);
+  for (let [name, [tm_, ty_, local]] of instances) {
+    const ty = force(ty_);
+    const tm = force(tm_);
+    log(() => `searchInstance _${name} = ${showVal(local, tm)} : ${showVal(local, ty)}`);
+    if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') return terr(`cannot solve instance _${name}, expected type is a meta: ${showVal(local, ty)}`);
+    if (tm.tag === 'VNe' && tm.head.tag !== 'HMeta') return terr(`cannot solve instance _${name}, expected term is not a meta: ${showVal(local, tm)}`);
+    return terr(`failed to find instance for _${name} = ${showVal(local, tm_)} : ${showVal(local, ty_)}`);
+  }
+};
+
+const MAX_SOLVING_COUNT = 100;
 const tryToSolveBlockedProblems = (): void => {
+  log(() => `try solve unsolved problems`);
   if (amountOfProblems() > 0) {
     let changed = true;
     let count = 0;
@@ -320,7 +340,8 @@ export const elaborate = (t: S.Term, erased: boolean = false): [Term, Term] => {
   resetContext();
   const [tm, ty] = synth(erased ? localErased(localEmpty) : localEmpty, t);
 
-  log(() => `try solve unsolved problems`);
+  tryToSolveBlockedProblems();
+  solveInstances();
   tryToSolveBlockedProblems();
 
   const ztm = zonk(tm);
@@ -396,7 +417,7 @@ const showValSZ = (local: Local, v: Val) =>
   S.showCore(zonk(quote(v, local.index, false), local.vs, local.index, false), local.ns);
 
 const showHoles = (tm: Term, ty: Term) => {
-  const holeprops = getHoleEntries();
+  const holeprops = getHoleEntries().filter(p => !p[1][3]);
   if (holeprops.length === 0) return;
   const strtype = S.showCore(ty);
   const strterm = S.showCore(tm);

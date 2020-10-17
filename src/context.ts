@@ -18,14 +18,14 @@ const Blocked = (k: Ix, a: Val, b: Val, blockedBy: Ix[]) => ({ k, a, b, blockedB
 type Holes = { [key: string]: HoleInfo };
 
 // context is mutable
-type Context = { metas: Solution[], blocked: Blocked[], holes: Holes };
-const Context = (metas: Solution[] = [], blocked: Blocked[] = [], holes: Holes = {}) => ({ metas, blocked, holes });
+type Context = { metas: Solution[], blocked: Blocked[], holes: Holes, instanceId: Ix };
+const Context = (metas: Solution[] = [], blocked: Blocked[] = [], holes: Holes = {}, instanceId: Ix = 0) => ({ metas, blocked, holes, instanceId });
 
 let context: Context = Context();
 let contextStack: Context[] = [];
 
 const cloneContext = (ctx: Context): Context =>
-  Context(ctx.metas.slice(), ctx.blocked.slice(), Object.assign({}, ctx.holes));
+  Context(ctx.metas.slice(), ctx.blocked.slice(), Object.assign({}, ctx.holes), ctx.instanceId);
 
 export const resetContext = () => {
   context = Context();
@@ -103,3 +103,5 @@ export const registerHole = (name: Name, info: HoleInfo): void => {
 export const getHoles = (): Holes => context.holes;
 
 export const getHoleEntries = (): [Name, HoleInfo][] => Object.entries(getHoles());
+
+export const freshInstanceId = (): Ix => context.instanceId++;
