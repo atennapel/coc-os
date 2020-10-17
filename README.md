@@ -38,7 +38,6 @@ Future work:
 
 ```
 TODO:
-- fix import ordering
 - make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
 - implement instance search
 - implement pruning

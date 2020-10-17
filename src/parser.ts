@@ -402,29 +402,33 @@ export const parse = (s: string): Term => {
   return ex;
 };
 
-export type ImportMap = { [key: string]: boolean };
-export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]> => {
-  if (c.length === 0) return [];
+type FileMap = { [key: string]: [string[], Def[]] };
+const addDef = (m: FileMap, x: string, d: Def): void => { m[x][1].push(d) };
+export const parseDef = async (c: Token[], file: string, fileorder: string[], filemap: FileMap): Promise<void> => {
+  if (!filemap[file]) filemap[file] = [[], []];
+  if (c.length === 0) return;
   if (c[0].tag === 'Name' && c[0].name === 'import') {
     const files = c.slice(1).map(t => {
       if (t.tag !== 'Name' && t.tag !== 'Num' && t.tag !== 'Str') return serr(`trying to import a non-path`);
       const name = t.tag === 'Name' ? t.name : t.tag === 'Num' ? t.num : t.str;
-      if (importMap[name]) {
+      filemap[file][0].push(name);
+      if (fileorder.includes(name)) {
         log(() => `skipping import ${name}`);
         return null;
       }
+      fileorder.push(name);
       return name;
     }).filter(x => x) as string[];
-    if (files.length === 0) return [];
-    log(() => `import ${files.join(' ')}`);
-    const imps: [string, string][] = await Promise.all(files.map(f => {
-      // importMap[f] = true; TODO
-      return loadFile(f).then(m => ([f, m] as [string, string]));
+    if (files.length === 0) return;
+    log(() => `import all ${files.join(' ')}`);
+    await Promise.all(files.map(async f => {
+      log(() => `import ${f}`);
+      const m = await loadFile(f);
+      await parseDefsR(m, f, fileorder, filemap);
+      log(() => `parsed ${f}`);
     }));
-    const defs: Def[][] = await Promise.all(imps.map(([, m]) => parseDefs(m, importMap)));
-    const fdefs = defs.reduce((x, y) => x.concat(y), []);
-    log(() => `imported ${fdefs.filter(t => t.tag === 'DDef').map(x => (x as DDef).name).join(' ')}`);
-    return fdefs;
+    log(() => `imported ${files.join(' ')}`);
+    return;
   } else if (c[0].tag === 'Name' && c[0].name === 'def') {
     const x = c[1];
     let impl = false;
@@ -447,7 +451,7 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
       if (sym.name === '=') {
         const erased = name[0] === '-';
         const name2 = erased ? name.slice(1) : name;
-        return [DDef(erased, name2, exprs(c.slice(fst + 1), '('))];
+        return addDef(filemap, file, DDef(erased, name2, exprs(c.slice(fst + 1), '(')));
       } else if (sym.name === ':') {
         const tyts: Token[] = [];
         let j = fst + 1;
@@ -461,25 +465,44 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
         const body = exprs(c.slice(j + 1), '(');
         const erased = name[0] === '-';
         const name2 = erased ? name.slice(1) : name;
-        return [DDef(erased, name2, Let(false, name, ety, body, Var(name)))];
+        return addDef(filemap, file, DDef(erased, name2, Let(false, name, ety, body, Var(name))));
       } else return serr(`def: : or = expected but got ${sym.name}`);
     } else return serr(`def should start with a name`);
   } else if (c[0].tag === 'Name' && ['execute', '-execute', 'typecheck', '-typecheck'].includes(c[0].name)) {
     const command = c[0].name;
     const rest = c.slice(1);
     const term = exprs(rest, '(');
-    return [DExecute(term, command[0] === '-', command.endsWith('typecheck'))];
+    return addDef(filemap, file, DExecute(term, command[0] === '-', command.endsWith('typecheck')));
   } else return serr(`def should start with ${defCommands.join(' or ')}`);
 };
 
 const defCommands = ['def', 'import', 'execute', 'typecheck', '-execute', '-typecheck'];
 
-export const parseDefs = async (s: string, importMap: ImportMap): Promise<Def[]> => {
+const parseDefsR = async (s: string, file: string, fileorder: string[], filemap: FileMap): Promise<void> => {
+  log(() => `parseDefsR ${file}`);
   const ts = tokenize(s);
-  if (ts.length === 0) return [];
+  if (ts.length === 0) return;
   if (ts[0].tag !== 'Name' || !defCommands.includes(ts[0].name))
     return serr(`def should start with ${defCommands.map(x => `"${x}"`).join(' or ')}`);
   const spl = splitTokens(ts, t => t.tag === 'Name' && defCommands.includes(t.name), true);
-  const ds: Def[][] = await Promise.all(spl.map(s => parseDef(s, importMap)));
-  return ds.reduce((x, y) => x.concat(y), []);
+  await Promise.all(spl.map(s => parseDef(s, file, fileorder, filemap)));
+};
+
+export const parseDefs = async (s: string, file: string = '_TOPLEVEL_', fileorder: string[] = [file], filemap: FileMap = { [file]: [[], []] }): Promise<Def[]> => {
+  await parseDefsR(s, file, fileorder, filemap);
+  log(() => fileorder.join(' '));
+  log(() => Object.keys(filemap).map(f => `${f} <- ${filemap[f][0].join(' ')}`).join('\n'));
+  const all = fileorder.slice();
+  const curfiles: string[] = [];
+  const defs: Def[] = [];
+  while (all.length > 0) {
+    const i = all.findIndex(f => filemap[f][0].every(y => curfiles.includes(y)));
+    if (i === -1) return serr(`could not find import order: ${curfiles.join(' ')}`);
+    const f = all[i];
+    log(() => `order import ${f}`);
+    all.splice(i, 1);
+    curfiles.push(f);
+    filemap[f][1].forEach(d => defs.push(d));
+  }
+  return defs;
 };

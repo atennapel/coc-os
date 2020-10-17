@@ -1,6 +1,6 @@
 import { config, log, setConfig } from './config';
 import { elaborate, elaborateDefs } from './elaboration';
-import { ImportMap, parse, parseDefs } from './parser';
+import { parse, parseDefs } from './parser';
 import { show, showCore, showVal } from './surface';
 import * as C from './core';
 import * as E from './erased';
@@ -16,7 +16,6 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:defs] show all defs
-[:imports] show all imports
 [:del name] delete a name
 [:gtype name] view the type of a name
 [:gtyno name] view the fully normalized type of a name
@@ -32,10 +31,7 @@ COMMANDS
 [:postponeInvalidSolution] postpone more invalid meta solutions
 `.trim();
 
-let importMap: ImportMap = {};
-
 export const initREPL = () => {
-  importMap = {};
   config.unfold.push('typeof');
 };
 
@@ -67,9 +63,6 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
         r.push(`def ${k} : ${showVal(e.type)} = ${showCore(e.term)}`);
       return cb(r.length === 0 ? 'no definitions' : r.join('\n'));
     }
-    if (s === ':imports') {
-      return cb(Object.keys(importMap).map(x => JSON.stringify(x)).join(' '));
-    }
     if (s.startsWith(':del')) {
       const names = s.slice(4).trim().split(/\s+/g);
       names.forEach(x => deleteGlobal(x));
@@ -77,8 +70,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     }
     if ([':def', ':import', ':execute', ':typecheck', ':-execute', '-typecheck'].some(x => s.startsWith(x))) {
       const rest = s.slice(1);
-      importMap = {};
-      parseDefs(rest, importMap).then(ds => {
+      parseDefs(rest).then(ds => {
         const xs = elaborateDefs(ds, true);
         return cb(xs.length === 0 ? `done` : `done, defined ${xs.join(' ')}`);
       }).catch(err => cb(''+err, true));

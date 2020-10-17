@@ -1419,31 +1419,36 @@ exports.parse = (s) => {
     const ex = exprs(ts, '(');
     return ex;
 };
-exports.parseDef = async (c, importMap) => {
+const addDef = (m, x, d) => { m[x][1].push(d); };
+exports.parseDef = async (c, file, fileorder, filemap) => {
+    if (!filemap[file])
+        filemap[file] = [[], []];
     if (c.length === 0)
-        return [];
+        return;
     if (c[0].tag === 'Name' && c[0].name === 'import') {
         const files = c.slice(1).map(t => {
             if (t.tag !== 'Name' && t.tag !== 'Num' && t.tag !== 'Str')
                 return utils_1.serr(`trying to import a non-path`);
             const name = t.tag === 'Name' ? t.name : t.tag === 'Num' ? t.num : t.str;
-            if (importMap[name]) {
+            filemap[file][0].push(name);
+            if (fileorder.includes(name)) {
                 config_1.log(() => `skipping import ${name}`);
                 return null;
             }
+            fileorder.push(name);
             return name;
         }).filter(x => x);
         if (files.length === 0)
-            return [];
-        config_1.log(() => `import ${files.join(' ')}`);
-        const imps = await Promise.all(files.map(f => {
-            // importMap[f] = true; TODO
-            return utils_1.loadFile(f).then(m => [f, m]);
+            return;
+        config_1.log(() => `import all ${files.join(' ')}`);
+        await Promise.all(files.map(async (f) => {
+            config_1.log(() => `import ${f}`);
+            const m = await utils_1.loadFile(f);
+            await parseDefsR(m, f, fileorder, filemap);
+            config_1.log(() => `parsed ${f}`);
         }));
-        const defs = await Promise.all(imps.map(([, m]) => exports.parseDefs(m, importMap)));
-        const fdefs = defs.reduce((x, y) => x.concat(y), []);
-        config_1.log(() => `imported ${fdefs.filter(t => t.tag === 'DDef').map(x => x.name).join(' ')}`);
-        return fdefs;
+        config_1.log(() => `imported ${files.join(' ')}`);
+        return;
     }
     else if (c[0].tag === 'Name' && c[0].name === 'def') {
         const x = c[1];
@@ -1474,7 +1479,7 @@ exports.parseDef = async (c, importMap) => {
             if (sym.name === '=') {
                 const erased = name[0] === '-';
                 const name2 = erased ? name.slice(1) : name;
-                return [surface_1.DDef(erased, name2, exprs(c.slice(fst + 1), '('))];
+                return addDef(filemap, file, surface_1.DDef(erased, name2, exprs(c.slice(fst + 1), '(')));
             }
             else if (sym.name === ':') {
                 const tyts = [];
@@ -1490,7 +1495,7 @@ exports.parseDef = async (c, importMap) => {
                 const body = exprs(c.slice(j + 1), '(');
                 const erased = name[0] === '-';
                 const name2 = erased ? name.slice(1) : name;
-                return [surface_1.DDef(erased, name2, surface_1.Let(false, name, ety, body, surface_1.Var(name)))];
+                return addDef(filemap, file, surface_1.DDef(erased, name2, surface_1.Let(false, name, ety, body, surface_1.Var(name))));
             }
             else
                 return utils_1.serr(`def: : or = expected but got ${sym.name}`);
@@ -1502,21 +1507,40 @@ exports.parseDef = async (c, importMap) => {
         const command = c[0].name;
         const rest = c.slice(1);
         const term = exprs(rest, '(');
-        return [surface_1.DExecute(term, command[0] === '-', command.endsWith('typecheck'))];
+        return addDef(filemap, file, surface_1.DExecute(term, command[0] === '-', command.endsWith('typecheck')));
     }
     else
         return utils_1.serr(`def should start with ${defCommands.join(' or ')}`);
 };
 const defCommands = ['def', 'import', 'execute', 'typecheck', '-execute', '-typecheck'];
-exports.parseDefs = async (s, importMap) => {
+const parseDefsR = async (s, file, fileorder, filemap) => {
+    config_1.log(() => `parseDefsR ${file}`);
     const ts = tokenize(s);
     if (ts.length === 0)
-        return [];
+        return;
     if (ts[0].tag !== 'Name' || !defCommands.includes(ts[0].name))
         return utils_1.serr(`def should start with ${defCommands.map(x => `"${x}"`).join(' or ')}`);
     const spl = splitTokens(ts, t => t.tag === 'Name' && defCommands.includes(t.name), true);
-    const ds = await Promise.all(spl.map(s => exports.parseDef(s, importMap)));
-    return ds.reduce((x, y) => x.concat(y), []);
+    await Promise.all(spl.map(s => exports.parseDef(s, file, fileorder, filemap)));
+};
+exports.parseDefs = async (s, file = '_TOPLEVEL_', fileorder = [file], filemap = { [file]: [[], []] }) => {
+    await parseDefsR(s, file, fileorder, filemap);
+    config_1.log(() => fileorder.join(' '));
+    config_1.log(() => Object.keys(filemap).map(f => `${f} <- ${filemap[f][0].join(' ')}`).join('\n'));
+    const all = fileorder.slice();
+    const curfiles = [];
+    const defs = [];
+    while (all.length > 0) {
+        const i = all.findIndex(f => filemap[f][0].every(y => curfiles.includes(y)));
+        if (i === -1)
+            return utils_1.serr(`could not find import order: ${curfiles.join(' ')}`);
+        const f = all[i];
+        config_1.log(() => `order import ${f}`);
+        all.splice(i, 1);
+        curfiles.push(f);
+        filemap[f][1].forEach(d => defs.push(d));
+    }
+    return defs;
 };
 
 },{"./config":1,"./core":4,"./surface":14,"./utils/utils":19}],12:[function(require,module,exports){
@@ -1607,7 +1631,6 @@ COMMANDS
 [:help or :h] this help message
 [:debug or :d] toggle debug log messages
 [:defs] show all defs
-[:imports] show all imports
 [:del name] delete a name
 [:gtype name] view the type of a name
 [:gtyno name] view the fully normalized type of a name
@@ -1622,9 +1645,7 @@ COMMANDS
 [:addunfold x y z] always unfold globals
 [:postponeInvalidSolution] postpone more invalid meta solutions
 `.trim();
-let importMap = {};
 exports.initREPL = () => {
-    importMap = {};
     config_1.config.unfold.push('typeof');
 };
 exports.runREPL = (s_, cb) => {
@@ -1655,9 +1676,6 @@ exports.runREPL = (s_, cb) => {
                 r.push(`def ${k} : ${surface_1.showVal(e.type)} = ${surface_1.showCore(e.term)}`);
             return cb(r.length === 0 ? 'no definitions' : r.join('\n'));
         }
-        if (s === ':imports') {
-            return cb(Object.keys(importMap).map(x => JSON.stringify(x)).join(' '));
-        }
         if (s.startsWith(':del')) {
             const names = s.slice(4).trim().split(/\s+/g);
             names.forEach(x => globals_1.deleteGlobal(x));
@@ -1665,8 +1683,7 @@ exports.runREPL = (s_, cb) => {
         }
         if ([':def', ':import', ':execute', ':typecheck', ':-execute', '-typecheck'].some(x => s.startsWith(x))) {
             const rest = s.slice(1);
-            importMap = {};
-            parser_1.parseDefs(rest, importMap).then(ds => {
+            parser_1.parseDefs(rest).then(ds => {
                 const xs = elaboration_1.elaborateDefs(ds, true);
                 return cb(xs.length === 0 ? `done` : `done, defined ${xs.join(' ')}`);
             }).catch(err => cb('' + err, true));

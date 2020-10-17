@@ -12,7 +12,7 @@ if (process.argv[2]) {
   if (option.includes('e')) setConfig({ showEnvs: true });
   try {
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
-    parseDefs(sc, {}).then(ds => {
+    parseDefs(sc, process.argv[2]).then(ds => {
       const ns = elaborateDefs(ds, false);
       const main = getGlobal('main');
       if (!main) console.log(`defined ${ns.join(' ')}`);
