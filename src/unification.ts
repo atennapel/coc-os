@@ -6,7 +6,7 @@ import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil,
 import { hasDuplicates, impossible, terr, tryT, tryTE } from './utils/utils';
 import { Elim, force, Spine, Val, vapp, vproj, vinst, VVar, VMeta, quote, evaluate, showVal, isVPrim } from './values';
 import * as V from './values';
-import { discardContext, getMeta, isMetaSolved, markContext, postpone, problemsBlockedBy, solveMeta, undoContext, Unsolved } from './context';
+import { discardContext, getMeta, isMetaSolved, markContext, postpone, problemsBlockedBy, Solution, solveMeta, undoContext } from './context';
 import { forceLazy } from './utils/lazy';
 import { typecheck } from './typecheck';
 
@@ -113,7 +113,7 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
       } else throw body;
     }
     log(() => `spine ${listToString(spinex, s => `${s}`)}`);
-    const meta = getMeta(m) as Unsolved;
+    const meta = getMeta(m) as Solution & { tag: 'Solved' };
     const type = meta.type;
     log(() => `meta type: ${showVal(type, 0)}`);
     const solution = constructSolution(0, type, body);

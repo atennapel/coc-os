@@ -191,10 +191,10 @@ exports.conv = (k, a_, b_) => {
 
 },{"./config":1,"./utils/lazy":17,"./utils/list":18,"./utils/utils":19,"./values":20}],4:[function(require,module,exports){
 "use strict";
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shift = exports.eq = exports.show = exports.flattenPi = exports.flattenApp = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
-exports.Expl = 'Expl';
-exports.ImplUnif = 'ImplUnif';
+_a = { Expl: { tag: 'Expl' }, ImplUnif: { tag: 'ImplUnif' } }, exports.Expl = _a.Expl, exports.ImplUnif = _a.ImplUnif;
 exports.Var = (index) => ({ tag: 'Var', index });
 exports.Prim = (name) => ({ tag: 'Prim', name });
 exports.Global = (name) => ({ tag: 'Global', name });
@@ -221,7 +221,7 @@ exports.AbsE = (name, type, body) => exports.Abs(exports.Expl, false, name, type
 exports.AbsU = (name, type, body) => exports.Abs(exports.ImplUnif, false, name, type, body);
 exports.PiE = (name, type, body) => exports.Pi(exports.Expl, false, name, type, body);
 exports.PiU = (name, type, body) => exports.Pi(exports.ImplUnif, false, name, type, body);
-exports.showMode = (m) => m === 'ImplUnif' ? 'impl' : '';
+exports.showMode = (m) => m === exports.ImplUnif ? 'impl' : '';
 exports.flattenApp = (t) => {
     const r = [];
     while (t.tag === 'App') {

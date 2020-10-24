@@ -3,50 +3,53 @@ import { getMeta } from './context';
 import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global } from './core';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
+import { FromCases } from './utils/adt';
 import { forceLazy, Lazy, lazyOf, mapLazy } from './utils/lazy';
 import { Cons, foldr, index, List, Nil, toArray } from './utils/list';
 import { impossible } from './utils/utils';
 
-export type Head = HVar | HPrim | HMeta;
+export type Head = FromCases<{
+  HVar: { index: Ix },
+  HPrim: { name: PrimName },
+  HMeta: { index: Ix },
+}>;
+export const HVar = (index: Ix): Head => ({ tag: 'HVar', index });
+export const HPrim = (name: PrimName): Head => ({ tag: 'HPrim', name });
+export const HMeta = (index: Ix): Head => ({ tag: 'HMeta', index });
 
-export type HVar = { tag: 'HVar', index: Ix };
-export const HVar = (index: Ix): HVar => ({ tag: 'HVar', index });
-export type HPrim = { tag: 'HPrim', name: PrimName };
-export const HPrim = (name: PrimName): HPrim => ({ tag: 'HPrim', name });
-export type HMeta = { tag: 'HMeta', index: Ix };
-export const HMeta = (index: Ix): HMeta => ({ tag: 'HMeta', index });
-
-export type Elim = EApp | EProj | EPrim;
-
-export type EApp = { tag: 'EApp', mode: Mode, right: Val };
-export const EApp = (mode: Mode, right: Val): EApp => ({ tag: 'EApp', mode, right });
-export type EProj = { tag: 'EProj', proj: 'fst' | 'snd' };
-export const EProj = (proj: 'fst' | 'snd'): EProj => ({ tag: 'EProj', proj });
-export type EPrim = { tag: 'EPrim', name: PrimNameElim, args: Val[] };
-export const EPrim = (name: PrimNameElim, args: Val[]): EPrim => ({ tag: 'EPrim', name, args });
+export type Elim = FromCases<{
+  EApp: { mode: Mode, right: Val },
+  EProj: { proj: 'fst' | 'snd' },
+  EPrim: { name: PrimNameElim, args: Val[] },
+}>;
+export const EApp = (mode: Mode, right: Val): Elim => ({ tag: 'EApp', mode, right });
+export const EProj = (proj: 'fst' | 'snd'): Elim => ({ tag: 'EProj', proj });
+export const EPrim = (name: PrimNameElim, args: Val[]): Elim => ({ tag: 'EPrim', name, args });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VNe | VGlobal | VAbs | VPair | VPi | VSigma;
+export type Val = FromCases<{
+  VNe: { tag: 'VNe', head: Head, spine: Spine },
+  VGlobal: { tag: 'VGlobal', head: Name, args: List<Elim>, val: Lazy<Val> },
+  VAbs: { tag: 'VAbs', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos },
+  VPair: { tag: 'VPair', fst: Val, snd: Val, type: Val },
+  VPi: { tag: 'VPi', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos },
+  VSigma: { tag: 'VSigma', erased: boolean, name: Name, type: Val, clos: Clos },
+}>;
+export const VNe = (head: Head, spine: Spine): Val => ({ tag: 'VNe', head, spine });
+export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): Val => ({ tag: 'VGlobal', head, args, val });
+export const VAbs = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): Val => ({ tag: 'VAbs', mode, erased, name, type, clos });
+export const VPair = (fst: Val, snd: Val, type: Val): Val => ({ tag: 'VPair', fst, snd, type });
+export const VPi = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): Val => ({ tag: 'VPi', mode, erased, name, type, clos });
+export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): Val => ({ tag: 'VSigma', erased, name, type, clos });
 
-export type VNe = { tag: 'VNe', head: Head, spine: Spine };
-export const VNe = (head: Head, spine: Spine): VNe => ({ tag: 'VNe', head, spine });
-export type VGlobal = { tag: 'VGlobal', head: Name, args: List<Elim>, val: Lazy<Val> };
-export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): VGlobal => ({ tag: 'VGlobal', head, args, val });
-export type VAbs = { tag: 'VAbs', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos };
-export const VAbs = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', mode, erased, name, type, clos });
-export type VPair = { tag: 'VPair', fst: Val, snd: Val, type: Val };
-export const VPair = (fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', fst, snd, type });
-export type VPi = { tag: 'VPi', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos };
-export const VPi = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', mode, erased, name, type, clos });
-export type VSigma = { tag: 'VSigma', erased: boolean, name: Name, type: Val, clos: Clos };
-export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', erased, name, type, clos });
+export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' | 'VSigma' };
 
-export const VVar = (index: Ix, spine: Spine = Nil): VNe => VNe(HVar(index), spine);
-export const VPrim = (name: PrimName, spine: Spine = Nil): VNe => VNe(HPrim(name), spine);
-export const VMeta = (index: Ix, spine: Spine = Nil): VNe => VNe(HMeta(index), spine);
+export const VVar = (index: Ix, spine: Spine = Nil): Val => VNe(HVar(index), spine);
+export const VPrim = (name: PrimName, spine: Spine = Nil): Val => VNe(HPrim(name), spine);
+export const VMeta = (index: Ix, spine: Spine = Nil): Val => VNe(HMeta(index), spine);
 
 export const isVPrim = (name: PrimName, v: Val): boolean =>
   v.tag === 'VNe' && v.head.tag === 'HPrim' && v.head.name === name;
@@ -83,14 +86,14 @@ export const vInterpI = (I: Val, d: Val, r: Val, i: Val) => velimprim('InterpI',
 export const VAllI = VPrim('AllI');
 export const vAllI = (I: Val, d: Val, X: Val, P: Val, i: Val, xs: Val) => velimprim('AllI', d, [I, X, P, i, xs]);
 
-export const VPiE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, false, name, type, clos);
-export const VPiEE = (name: Name, type: Val, clos: Clos): VPi => VPi(Expl, true, name, type, clos);
-export const VPiU = (name: Name, type: Val, clos: Clos): VPi => VPi(ImplUnif, false, name, type, clos);
-export const VAbsE = (name: Name, type: Val, clos: Clos): VAbs => VAbs(Expl, false, name, type, clos);
-export const VAbsEE = (name: Name, type: Val, clos: Clos): VAbs => VAbs(Expl, true, name, type, clos);
-export const VAbsU = (name: Name, type: Val, clos: Clos): VAbs => VAbs(ImplUnif, false, name, type, clos);
+export const VPiE = (name: Name, type: Val, clos: Clos): Val => VPi(Expl, false, name, type, clos);
+export const VPiEE = (name: Name, type: Val, clos: Clos): Val => VPi(Expl, true, name, type, clos);
+export const VPiU = (name: Name, type: Val, clos: Clos): Val => VPi(ImplUnif, false, name, type, clos);
+export const VAbsE = (name: Name, type: Val, clos: Clos): Val => VAbs(Expl, false, name, type, clos);
+export const VAbsEE = (name: Name, type: Val, clos: Clos): Val => VAbs(Expl, true, name, type, clos);
+export const VAbsU = (name: Name, type: Val, clos: Clos): Val => VAbs(ImplUnif, false, name, type, clos);
 
-export const vinst = (val: VAbs | VPi | VSigma, arg: Val): Val => val.clos(arg);
+export const vinst = (val: ValWithClosure, arg: Val): Val => val.clos(arg);
 
 export const force = (v: Val, forceGlobal: boolean = true): Val => {
   if (v.tag === 'VGlobal' && forceGlobal) return force(forceLazy(v.val), forceGlobal);

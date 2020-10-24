@@ -1,21 +1,22 @@
 import { Ix, Name } from './names';
+import { FromCases } from './utils/adt';
 
-export type Term = Var | Global | App | Abs | Pair | Proj | Let;
-
-export type Var = { tag: 'Var', index: Ix };
-export const Var = (index: Ix): Var => ({ tag: 'Var', index });
-export type Global = { tag: 'Global', name: Name };
-export const Global = (name: Name): Global => ({ tag: 'Global', name });
-export type App = { tag: 'App', left: Term, right: Term };
-export const App = (left: Term, right: Term): App => ({ tag: 'App', left, right });
-export type Abs = { tag: 'Abs', body: Term };
-export const Abs = (body: Term): Abs => ({ tag: 'Abs', body });
-export type Pair = { tag: 'Pair', fst: Term, snd: Term };
-export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
-export type Proj = { tag: 'Proj', proj: 'fst' | 'snd', term: Term };
-export const Proj = (proj: 'fst' | 'snd', term: Term): Proj => ({ tag: 'Proj', proj, term });
-export type Let = { tag: 'Let', val: Term, body: Term };
-export const Let = (val: Term, body: Term): Let => ({ tag: 'Let', val, body });
+export type Term = FromCases<{
+  Var: { tag: 'Var', index: Ix };
+  Global: { name: Name },
+  Abs: { body: Term },
+  App: { left: Term, right: Term },
+  Pair: { fst: Term, snd: Term },
+  Proj: { proj: 'fst' | 'snd', term: Term },
+  Let: { val: Term, body: Term },
+}>;
+export const Var = (index: Ix): Term => ({ tag: 'Var', index });
+export const Global = (name: Name): Term => ({ tag: 'Global', name });
+export const App = (left: Term, right: Term): Term => ({ tag: 'App', left, right });
+export const Abs = (body: Term): Term => ({ tag: 'Abs', body });
+export const Pair = (fst: Term, snd: Term): Term => ({ tag: 'Pair', fst, snd });
+export const Proj = (proj: 'fst' | 'snd', term: Term): Term => ({ tag: 'Proj', proj, term });
+export const Let = (val: Term, body: Term): Term => ({ tag: 'Let', val, body });
 
 export const termId = Abs(Var(0));
 

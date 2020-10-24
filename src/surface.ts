@@ -4,39 +4,44 @@ import { Mode, PrimName } from './core';
 import { EnvV, quote, Val, zonk } from './values';
 import { Cons, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
+import { FromCases } from './utils/adt';
 
-export type ProjType = PName | PIndex | PCore;
-export type PName = { tag: 'PName', name: Name };
-export const PName = (name: Name): PName => ({ tag: 'PName', name });
-export type PIndex = { tag: 'PIndex', index: Ix };
-export const PIndex = (index: Ix): PIndex => ({ tag: 'PIndex', index });
-export type PCore = { tag: 'PCore', proj: 'fst' | 'snd' };
-export const PCore = (proj: 'fst' | 'snd'): PCore => ({ tag: 'PCore', proj });
+export type ProjType = FromCases<{
+  PName: { name: Name },
+  PIndex: { index: Ix },
+  PCore: { proj: 'fst' | 'snd' },
+}>;
+export const PName = (name: Name): ProjType => ({ tag: 'PName', name });
+export const PIndex = (index: Ix): ProjType => ({ tag: 'PIndex', index });
+export const PCore = (proj: 'fst' | 'snd'): ProjType => ({ tag: 'PCore', proj });
 
-export type Term = Var | Prim | App | Abs | Pair | Proj | Let | Pi | Sigma | Meta | Hole;
+export type Term = FromCases<{
+  Var: { name: Name },
+  Prim: { name: PrimName },
+  Meta: { index: Ix },
 
-export type Var = { tag: 'Var', name: Name };
-export const Var = (name: Name): Var => ({ tag: 'Var', name });
-export type Prim = { tag: 'Prim', name: PrimName };
-export const Prim = (name: PrimName): Prim => ({ tag: 'Prim', name });
-export type App = { tag: 'App', left: Term, mode: Mode, right: Term };
-export const App = (left: Term, mode: Mode, right: Term): App => ({ tag: 'App', left, mode, right });
-export type Abs = { tag: 'Abs', mode: Mode, erased: boolean, name: Name, type: Term | null, body: Term };
-export const Abs = (mode: Mode, erased: boolean, name: Name, type: Term | null, body: Term): Abs => ({ tag: 'Abs', mode, erased, name, type, body });
-export type Pair = { tag: 'Pair', fst: Term, snd: Term };
-export const Pair = (fst: Term, snd: Term): Pair => ({ tag: 'Pair', fst, snd });
-export type Proj = { tag: 'Proj', proj: ProjType, term: Term };
-export const Proj = (proj: ProjType, term: Term): Proj => ({ tag: 'Proj', proj, term });
-export type Let = { tag: 'Let', erased: boolean, name: Name, type: Term | null, val: Term, body: Term };
-export const Let = (erased: boolean, name: Name, type: Term | null, val: Term, body: Term): Let => ({ tag: 'Let', erased, name, type, val, body });
-export type Pi = { tag: 'Pi', mode: Mode, erased: boolean, name: Name, type: Term, body: Term };
-export const Pi = (mode: Mode, erased: boolean, name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', mode, erased, name, type, body });
-export type Sigma = { tag: 'Sigma', erased: boolean, name: Name, type: Term, body: Term };
-export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', erased, name, type, body });
-export type Meta = { tag: 'Meta', index: Ix };
-export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
-export type Hole = { tag: 'Hole', name: Name | null };
-export const Hole = (name: Name | null): Hole => ({ tag: 'Hole', name });
+  Pi: { mode: Mode, erased: boolean, name: Name, type: Term, body: Term },
+  Abs: { mode: Mode, erased: boolean, name: Name, type: Term | null, body: Term },
+  App: { left: Term, mode: Mode, right: Term },
+
+  Sigma: { erased: boolean, name: Name, type: Term, body: Term },
+  Pair: { fst: Term, snd: Term },
+  Proj: { proj: ProjType, term: Term },
+
+  Let: { erased: boolean, name: Name, type: Term | null, val: Term, body: Term },
+  Hole: { name: Name | null },
+}>;
+export const Var = (name: Name): Term => ({ tag: 'Var', name });
+export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
+export const App = (left: Term, mode: Mode, right: Term): Term => ({ tag: 'App', left, mode, right });
+export const Abs = (mode: Mode, erased: boolean, name: Name, type: Term | null, body: Term): Term => ({ tag: 'Abs', mode, erased, name, type, body });
+export const Pair = (fst: Term, snd: Term): Term => ({ tag: 'Pair', fst, snd });
+export const Proj = (proj: ProjType, term: Term): Term => ({ tag: 'Proj', proj, term });
+export const Let = (erased: boolean, name: Name, type: Term | null, val: Term, body: Term): Term => ({ tag: 'Let', erased, name, type, val, body });
+export const Pi = (mode: Mode, erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Pi', mode, erased, name, type, body });
+export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Sigma', erased, name, type, body });
+export const Meta = (index: Ix): Term => ({ tag: 'Meta', index });
+export const Hole = (name: Name | null): Term => ({ tag: 'Hole', name });
 
 export const Type = Prim('Type');
 
@@ -157,12 +162,12 @@ export const showVal = (v: Val, k: Ix = 0, ns: List<Name> = Nil, full: boolean =
 export const showCoreZ = (t: C.Term, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil): string => show(toSurface(zonk(t, vs, k), ns));
 export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil, full: boolean = false): string => show(toSurface(zonk(quote(v, k, full), vs, k), ns));
 
-export type Def = DDef | DExecute;
-
-export type DDef = { tag: 'DDef', erased: boolean, name: Name, value: Term };
-export const DDef = (erased: boolean, name: Name, value: Term): DDef => ({ tag: 'DDef', erased, name, value });
-export type DExecute = { tag: 'DExecute', term: Term, erased: boolean, typeOnly: boolean };
-export const DExecute = (term: Term, erased: boolean, typeOnly: boolean): DExecute => ({ tag: 'DExecute', term, erased, typeOnly });
+export type Def = FromCases<{
+  DDef: { erased: boolean, name: Name, value: Term },
+  DExecute: { term: Term, erased: boolean, typeOnly: boolean },
+}>;
+export const DDef = (erased: boolean, name: Name, value: Term): Def => ({ tag: 'DDef', erased, name, value });
+export const DExecute = (term: Term, erased: boolean, typeOnly: boolean): Def => ({ tag: 'DExecute', term, erased, typeOnly });
 
 export const showDef = (d: Def): string => {
   if (d.tag === 'DDef') return `def ${d.erased ? '-' : ''}${d.name} = ${show(d.value)}`;

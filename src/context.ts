@@ -2,13 +2,14 @@ import { Ix, Name } from './names';
 import { impossible, terr } from './utils/utils';
 import { Val } from './values';
 import { HoleInfo } from './elaboration';
+import { FromCases } from './utils/adt';
 
-export type Solution = Unsolved | Solved;
-
-export type Unsolved = { tag: 'Unsolved', type: Val, erased: boolean };
-export const Unsolved = (type: Val, erased: boolean): Unsolved => ({ tag: 'Unsolved', type, erased });
-export type Solved = { tag: 'Solved', val: Val, type: Val, erased: boolean };
-export const Solved = (val: Val, type: Val, erased: boolean): Solved => ({ tag: 'Solved', val, type, erased });
+export type Solution = FromCases<{
+  Unsolved: { type: Val, erased: boolean },
+  Solved: { val: Val , type: Val, erased: boolean },
+}>;
+export const Unsolved = (type: Val, erased: boolean): Solution => ({ tag: 'Unsolved', type, erased });
+export const Solved = (val: Val, type: Val, erased: boolean): Solution => ({ tag: 'Solved', val, type, erased });
 
 // postponing
 type Blocked = { k: Ix, a: Val, b: Val, blockedBy: Ix[] };

@@ -2,35 +2,38 @@ import { config } from './config';
 import { Abs, App, Global, Pair, Proj, show, Term, Var } from './erased';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
+import { FromCases } from './utils/adt';
 import { forceLazy, Lazy, lazyOf, mapLazy } from './utils/lazy';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
 
-export type Elim = EApp | EProj;
-
-export type EApp = { tag: 'EApp', right: Val };
-export const EApp = (right: Val): EApp => ({ tag: 'EApp', right });
-export type EProj = { tag: 'EProj', proj: 'fst' | 'snd' };
-export const EProj = (proj: 'fst' | 'snd'): EProj => ({ tag: 'EProj', proj });
+export type Elim = FromCases<{
+  EApp: { right: Val },
+  EProj: { proj: 'fst' | 'snd' },
+}>;
+export const EApp = (right: Val): Elim => ({ tag: 'EApp', right });
+export const EProj = (proj: 'fst' | 'snd'): Elim => ({ tag: 'EProj', proj });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VNe | VGlobal | VAbs | VPair;
+export type Val = FromCases<{
+  VNe: { head: Ix, spine: Spine },
+  VGlobal: { head: Name, args: List<Elim>, val: Lazy<Val> },
+  VAbs: { clos: Clos },
+  VPair: { fst: Val, snd: Val },
+}>;
+export const VNe = (head: Ix, spine: Spine): Val => ({ tag: 'VNe', head, spine });
+export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): Val => ({ tag: 'VGlobal', head, args, val });
+export const VAbs = (clos: Clos): Val => ({ tag: 'VAbs', clos });
+export const VPair = (fst: Val, snd: Val): Val => ({ tag: 'VPair', fst, snd });
 
-export type VNe = { tag: 'VNe', head: Ix, spine: Spine };
-export const VNe = (head: Ix, spine: Spine): VNe => ({ tag: 'VNe', head, spine });
-export type VGlobal = { tag: 'VGlobal', head: Name, args: List<Elim>, val: Lazy<Val> };
-export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): VGlobal => ({ tag: 'VGlobal', head, args, val });
-export type VAbs = { tag: 'VAbs', clos: Clos };
-export const VAbs = (clos: Clos): VAbs => ({ tag: 'VAbs', clos });
-export type VPair = { tag: 'VPair', fst: Val, snd: Val };
-export const VPair = (fst: Val, snd: Val): VPair => ({ tag: 'VPair', fst, snd });
+export type ValWithClosure = Val & { tag: 'VAbs' };
 
-export const VVar = (index: Ix, spine: Spine = Nil): VNe => VNe(index, spine);
+export const VVar = (index: Ix, spine: Spine = Nil): Val => VNe(index, spine);
 
-export const vinst = (val: VAbs, arg: Val): Val => val.clos(arg);
+export const vinst = (val: ValWithClosure, arg: Val): Val => val.clos(arg);
 
 export const forceGlobal = (v: Val): Val => {
   if (v.tag === 'VGlobal') return forceGlobal(forceLazy(v.val));

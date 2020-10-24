@@ -1,35 +1,36 @@
 import { Ix, Name } from './names';
+import { FromCases } from './utils/adt';
 
-export type Mode = Expl | ImplUnif;
-export type Expl = 'Expl';
-export const Expl: Expl = 'Expl';
-export type ImplUnif = 'ImplUnif';
-export const ImplUnif: ImplUnif = 'ImplUnif';
+export type Mode = FromCases<{ Expl: {}, ImplUnif: {} }>;
+export const { Expl, ImplUnif } = { Expl: { tag: 'Expl' } as Mode, ImplUnif: { tag: 'ImplUnif' } as Mode };
 
-export type Term = Var | Prim | Global | App | Abs | Pair | Proj | Let | Pi | Sigma | Meta;
+export type Term = FromCases<{
+  Var: { index: Ix },
+  Prim: { name: PrimName },
+  Global: { name: Name },
+  Meta: { index: Ix },
 
-export type Var = { tag: 'Var', index: Ix };
-export const Var = (index: Ix): Var => ({ tag: 'Var', index });
-export type Prim = { tag: 'Prim', name: PrimName };
-export const Prim = (name: PrimName): Prim => ({ tag: 'Prim', name });
-export type Global = { tag: 'Global', name: Name };
-export const Global = (name: Name): Global => ({ tag: 'Global', name });
-export type App = { tag: 'App', left: Term, mode: Mode, right: Term };
-export const App = (left: Term, mode: Mode, right: Term): App => ({ tag: 'App', left, mode, right });
-export type Abs = { tag: 'Abs', mode: Mode, erased: boolean, name: Name, type: Term, body: Term };
-export const Abs = (mode: Mode, erased: boolean, name: Name, type: Term, body: Term): Abs => ({ tag: 'Abs', name, erased, mode, type, body });
-export type Pair = { tag: 'Pair', fst: Term, snd: Term, type: Term };
-export const Pair = (fst: Term, snd: Term, type: Term): Pair => ({ tag: 'Pair', fst, snd, type });
-export type Proj = { tag: 'Proj', proj: 'fst' | 'snd', term: Term };
-export const Proj = (proj: 'fst' | 'snd', term: Term): Proj => ({ tag: 'Proj', proj, term });
-export type Let = { tag: 'Let', erased: boolean, name: Name, type: Term, val: Term, body: Term };
-export const Let = (erased: boolean, name: Name, type: Term, val: Term, body: Term): Let => ({ tag: 'Let', erased, name, type, val, body });
-export type Pi = { tag: 'Pi', mode: Mode, erased: boolean, name: Name, type: Term, body: Term };
-export const Pi = (mode: Mode, erased: boolean,  name: Name, type: Term, body: Term): Pi => ({ tag: 'Pi', mode, erased, name, type, body });
-export type Sigma = { tag: 'Sigma', erased: boolean, name: Name, type: Term, body: Term };
-export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Sigma => ({ tag: 'Sigma', erased, name, type, body });
-export type Meta = { tag: 'Meta', index: Ix };
-export const Meta = (index: Ix): Meta => ({ tag: 'Meta', index });
+  Pi: { mode: Mode, erased: boolean, name: Name, type: Term, body: Term },
+  Abs: { mode: Mode, erased: boolean, name: Name, type: Term, body: Term },
+  App: { left: Term, mode: Mode, right: Term },
+
+  Sigma: { erased: boolean, name: Name, type: Term, body: Term },
+  Pair: { fst: Term, snd: Term, type: Term },
+  Proj: { proj: 'fst' | 'snd', term: Term },
+
+  Let: { erased: boolean, name: Name, type: Term, val: Term, body: Term },
+}>;
+export const Var = (index: Ix): Term => ({ tag: 'Var', index });
+export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
+export const Global = (name: Name): Term => ({ tag: 'Global', name });
+export const App = (left: Term, mode: Mode, right: Term): Term => ({ tag: 'App', left, mode, right });
+export const Abs = (mode: Mode, erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Abs', name, erased, mode, type, body });
+export const Pair = (fst: Term, snd: Term, type: Term): Term => ({ tag: 'Pair', fst, snd, type });
+export const Proj = (proj: 'fst' | 'snd', term: Term): Term => ({ tag: 'Proj', proj, term });
+export const Let = (erased: boolean, name: Name, type: Term, val: Term, body: Term): Term => ({ tag: 'Let', erased, name, type, val, body });
+export const Pi = (mode: Mode, erased: boolean,  name: Name, type: Term, body: Term): Term => ({ tag: 'Pi', mode, erased, name, type, body });
+export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Sigma', erased, name, type, body });
+export const Meta = (index: Ix): Term => ({ tag: 'Meta', index });
 
 export type PrimName = (typeof primNames)[number];
 export const isPrimName = (name: string): name is PrimName => (primNames as any).includes(name);
@@ -44,14 +45,14 @@ export type PrimNameElim = 'elimB' | 'elimHEq' | 'elimIDesc' | 'InterpI' | 'AllI
 
 export const Type = Prim('Type');
 
-export const AppE = (left: Term, right: Term): App => App(left, Expl, right);
-export const AppU = (left: Term, right: Term): App => App(left, ImplUnif, right);
-export const AbsE = (name: Name, type: Term, body: Term): Abs => Abs(Expl, false, name, type, body);
-export const AbsU = (name: Name, type: Term, body: Term): Abs => Abs(ImplUnif, false, name, type, body);
-export const PiE = (name: Name, type: Term, body: Term): Pi => Pi(Expl, false, name, type, body);
-export const PiU = (name: Name, type: Term, body: Term): Pi => Pi(ImplUnif, false, name, type, body);
+export const AppE = (left: Term, right: Term): Term => App(left, Expl, right);
+export const AppU = (left: Term, right: Term): Term => App(left, ImplUnif, right);
+export const AbsE = (name: Name, type: Term, body: Term): Term => Abs(Expl, false, name, type, body);
+export const AbsU = (name: Name, type: Term, body: Term): Term => Abs(ImplUnif, false, name, type, body);
+export const PiE = (name: Name, type: Term, body: Term): Term => Pi(Expl, false, name, type, body);
+export const PiU = (name: Name, type: Term, body: Term): Term => Pi(ImplUnif, false, name, type, body);
 
-export const showMode = (m: Mode): string => m === 'ImplUnif' ? 'impl' : '';
+export const showMode = (m: Mode): string => m === ImplUnif ? 'impl' : '';
 
 export const flattenApp = (t: Term): [Term, [Mode, Term][]] => {
   const r: [Mode, Term][] = [];
