@@ -3,12 +3,12 @@ import { getMeta } from './context';
 import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global } from './core';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
-import { FromCases } from './utils/adt';
+import { Data } from './utils/adt';
 import { forceLazy, Lazy, lazyOf, mapLazy } from './utils/lazy';
 import { Cons, foldr, index, List, Nil, toArray } from './utils/list';
 import { impossible } from './utils/utils';
 
-export type Head = FromCases<{
+export type Head = Data<{
   HVar: { index: Ix },
   HPrim: { name: PrimName },
   HMeta: { index: Ix },
@@ -17,7 +17,7 @@ export const HVar = (index: Ix): Head => ({ tag: 'HVar', index });
 export const HPrim = (name: PrimName): Head => ({ tag: 'HPrim', name });
 export const HMeta = (index: Ix): Head => ({ tag: 'HMeta', index });
 
-export type Elim = FromCases<{
+export type Elim = Data<{
   EApp: { mode: Mode, right: Val },
   EProj: { proj: 'fst' | 'snd' },
   EPrim: { name: PrimNameElim, args: Val[] },
@@ -30,7 +30,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = FromCases<{
+export type Val = Data<{
   VNe: { tag: 'VNe', head: Head, spine: Spine },
   VGlobal: { tag: 'VGlobal', head: Name, args: List<Elim>, val: Lazy<Val> },
   VAbs: { tag: 'VAbs', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos },

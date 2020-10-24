@@ -1,7 +1,7 @@
 import { Ix, Name } from './names';
-import { FromCases } from './utils/adt';
+import { Data } from './utils/adt';
 
-export type Term = FromCases<{
+export type Term = Data<{
   Var: { tag: 'Var', index: Ix };
   Global: { name: Name },
   Abs: { body: Term },

@@ -2,12 +2,12 @@ import { config } from './config';
 import { Abs, App, Global, Pair, Proj, show, Term, Var } from './erased';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
-import { FromCases } from './utils/adt';
+import { Data } from './utils/adt';
 import { forceLazy, Lazy, lazyOf, mapLazy } from './utils/lazy';
 import { Cons, foldr, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
 
-export type Elim = FromCases<{
+export type Elim = Data<{
   EApp: { right: Val },
   EProj: { proj: 'fst' | 'snd' },
 }>;
@@ -18,7 +18,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = FromCases<{
+export type Val = Data<{
   VNe: { head: Ix, spine: Spine },
   VGlobal: { head: Name, args: List<Elim>, val: Lazy<Val> },
   VAbs: { clos: Clos },

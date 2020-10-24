@@ -2,9 +2,9 @@ import { Ix, Name } from './names';
 import { impossible, terr } from './utils/utils';
 import { Val } from './values';
 import { HoleInfo } from './elaboration';
-import { FromCases } from './utils/adt';
+import { Data } from './utils/adt';
 
-export type Solution = FromCases<{
+export type Solution = Data<{
   Unsolved: { type: Val, erased: boolean },
   Solved: { val: Val , type: Val, erased: boolean },
 }>;

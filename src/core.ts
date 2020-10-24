@@ -1,10 +1,10 @@
 import { Ix, Name } from './names';
-import { FromCases } from './utils/adt';
+import { Data } from './utils/adt';
 
-export type Mode = FromCases<{ Expl: {}, ImplUnif: {} }>;
+export type Mode = Data<{ Expl: {}, ImplUnif: {} }>;
 export const { Expl, ImplUnif } = { Expl: { tag: 'Expl' } as Mode, ImplUnif: { tag: 'ImplUnif' } as Mode };
 
-export type Term = FromCases<{
+export type Term = Data<{
   Var: { index: Ix },
   Prim: { name: PrimName },
   Global: { name: Name },

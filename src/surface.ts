@@ -4,9 +4,9 @@ import { Mode, PrimName } from './core';
 import { EnvV, quote, Val, zonk } from './values';
 import { Cons, index, List, Nil } from './utils/list';
 import { impossible } from './utils/utils';
-import { FromCases } from './utils/adt';
+import { Data } from './utils/adt';
 
-export type ProjType = FromCases<{
+export type ProjType = Data<{
   PName: { name: Name },
   PIndex: { index: Ix },
   PCore: { proj: 'fst' | 'snd' },
@@ -15,7 +15,7 @@ export const PName = (name: Name): ProjType => ({ tag: 'PName', name });
 export const PIndex = (index: Ix): ProjType => ({ tag: 'PIndex', index });
 export const PCore = (proj: 'fst' | 'snd'): ProjType => ({ tag: 'PCore', proj });
 
-export type Term = FromCases<{
+export type Term = Data<{
   Var: { name: Name },
   Prim: { name: PrimName },
   Meta: { index: Ix },
@@ -162,7 +162,7 @@ export const showVal = (v: Val, k: Ix = 0, ns: List<Name> = Nil, full: boolean =
 export const showCoreZ = (t: C.Term, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil): string => show(toSurface(zonk(t, vs, k), ns));
 export const showValZ = (v: Val, vs: EnvV = Nil, k: Ix = 0, ns: List<Name> = Nil, full: boolean = false): string => show(toSurface(zonk(quote(v, k, full), vs, k), ns));
 
-export type Def = FromCases<{
+export type Def = Data<{
   DDef: { erased: boolean, name: Name, value: Term },
   DExecute: { term: Term, erased: boolean, typeOnly: boolean },
 }>;
