@@ -1,21 +1,37 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFromBase = void 0;
+exports.addToBase = exports.getFromBase = void 0;
 const serialization_1 = require("./serialization");
 const typecheck_1 = require("./typecheck");
-const getFromBase = (x) => {
-    const ser = require('fs').readFileSync(`./base/${x}`);
+const cache = {};
+const getFromBase = (x, erased = false) => {
+    if (cache[x])
+        return cache[x];
+    const fs = require('fs');
+    const y = /[A-Z]/.test(x[0]) ? `_${x}` : x;
+    const ser = fs.readFileSync(`./base/${y}`);
     let ns = null;
-    try {
-        ns = JSON.parse(require('fs').readFileSync(`./names/${x}`));
-    }
-    catch (err) { }
+    if (fs.existsSync(`./names/${y}`))
+        ns = JSON.parse(fs.readFileSync(`./names/${y}`));
     const term = serialization_1.deserializeCore(ser, ns);
-    const [type, erased] = typecheck_1.typecheck(term);
-    return [type, erased];
+    const [type, eras] = typecheck_1.typecheck(term, erased);
+    cache[x] = [term, type, eras];
+    return [term, type, eras];
 };
 exports.getFromBase = getFromBase;
+const addToBase = (x, t, erased = false, alreadyTypechecked = false) => {
+    if (!alreadyTypechecked) {
+        const [type, eras] = typecheck_1.typecheck(t, erased);
+        cache[x] = [t, type, eras];
+    }
+    const y = /[A-Z]/.test(x[0]) ? `_${x}` : x;
+    const [ser, ns] = serialization_1.serializeCore(t);
+    const fs = require('fs');
+    fs.writeFileSync(`./base/${y}`, ser);
+    fs.writeFileSync(`./names/${y}`, JSON.stringify(ns));
+};
+exports.addToBase = addToBase;
 
 },{"./serialization":15,"./typecheck":17,"fs":24}],2:[function(require,module,exports){
 "use strict";
@@ -27,6 +43,7 @@ exports.config = {
     unfold: [],
     postponeInvalidSolution: false,
     useBase: false,
+    writeToBase: false,
 };
 const setConfig = (c) => {
     for (let k in c)
@@ -164,7 +181,7 @@ exports.eqHead = eqHead;
 const convElim = (k, a, b, x, y) => {
     if (a === b)
         return;
-    if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode)
+    if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode.tag === b.mode.tag)
         return exports.conv(k, a.right, b.right);
     if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj)
         return;
@@ -181,7 +198,7 @@ const conv = (k, a_, b_) => {
     config_1.log(() => `conv(${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
     if (a === b)
         return;
-    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode && a.erased === b.erased) {
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode.tag === b.mode.tag && a.erased === b.erased) {
         exports.conv(k, a.type, b.type);
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -191,7 +208,7 @@ const conv = (k, a_, b_) => {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
-    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode && a.erased === b.erased) {
+    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode.tag === b.mode.tag && a.erased === b.erased) {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
@@ -316,7 +333,7 @@ const show = (t) => {
         return `(${exports.show(f)} ${as.map(([m, a]) => `${m === exports.ImplUnif ? '{' : ''}${exports.show(a)}${m === exports.ImplUnif ? '}' : ''}`).join(' ')})`;
     }
     if (t.tag === 'Abs')
-        return `(\\${t.mode === exports.ImplUnif ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)}${t.mode === exports.ImplUnif ? '}' : ')'}. ${exports.show(t.body)})`;
+        return `(\\${t.mode.tag === 'ImplUnif' ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)}${t.mode.tag === 'ImplUnif' ? '}' : ')'}. ${exports.show(t.body)})`;
     if (t.tag === 'Pair')
         return `(${exports.show(t.fst)}, ${exports.show(t.snd)} : ${exports.show(t.type)})`;
     if (t.tag === 'Proj')
@@ -344,7 +361,7 @@ const eq = (t, o) => {
     if (t.tag === 'App')
         return o.tag === 'App' && exports.eq(t.left, o.left) && exports.eq(t.right, o.right);
     if (t.tag === 'Abs')
-        return o.tag === 'Abs' && t.mode === o.mode && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
+        return o.tag === 'Abs' && t.mode.tag === o.mode.tag && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Pair')
         return o.tag === 'Pair' && exports.eq(t.fst, o.snd) && exports.eq(t.fst, o.snd);
     if (t.tag === 'Proj')
@@ -352,7 +369,7 @@ const eq = (t, o) => {
     if (t.tag === 'Let')
         return o.tag === 'Let' && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.val, o.val) && exports.eq(t.body, o.body);
     if (t.tag === 'Pi')
-        return o.tag === 'Pi' && t.mode === o.mode && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
+        return o.tag === 'Pi' && t.mode.tag === o.mode.tag && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Sigma')
         return o.tag === 'Sigma' && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     return t;
@@ -477,7 +494,7 @@ const check = (local, tm, ty) => {
         return x;
     }
     const fty = values_1.force(ty);
-    if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
+    if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode.tag === fty.mode.tag) {
         if (tm.erased && !fty.erased)
             return utils_1.terr(`erasability mismatch in check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
         const v = values_1.VVar(local.index);
@@ -535,7 +552,7 @@ const synth = (local, tm) => {
         if (i < 0) {
             let ty;
             if (config_1.config.useBase) {
-                const [type] = base_1.getFromBase(tm.name);
+                const [, type] = base_1.getFromBase(tm.name, local.erased);
                 ty = values_1.evaluate(type, list_1.Nil);
             }
             else {
@@ -673,7 +690,7 @@ const synth = (local, tm) => {
 const synthapp = (local, ty, mode, tm, full) => {
     config_1.log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${surface_1.show(tm)}`);
     const fty = values_1.force(ty);
-    if (fty.tag === 'VPi' && fty.mode === mode) {
+    if (fty.tag === 'VPi' && fty.mode.tag === mode.tag) {
         const term = check(fty.erased ? localErased(local) : local, tm, fty.type);
         const v = values_1.evaluate(term, local.vs);
         return [term, values_1.vinst(fty, v), list_1.Nil];
@@ -762,6 +779,8 @@ const elaborateDefs = (ds, allowRedefinition = false) => {
                 const [, er] = typecheck_1.typecheck(tm, d.erased);
                 config_1.log(() => `erased term: ${E.show(er)}`);
                 globals_1.setGlobal(d.name, d.erased, tm, values_1.evaluate(tm, list_1.Nil), values_1.evaluate(ty, list_1.Nil), er, EV.evaluate(er, list_1.Nil));
+                if (config_1.config.writeToBase)
+                    base_1.addToBase(d.name, tm, d.erased, true);
                 const i = xs.indexOf(d.name);
                 if (i >= 0)
                     xs.splice(i, 1);
@@ -1009,7 +1028,7 @@ const evaluate = (t, vs) => {
     if (t.tag === 'Global') {
         let val;
         if (config_1.config.useBase) {
-            const [, erased] = base_1.getFromBase(t.name);
+            const [, , erased] = base_1.getFromBase(t.name);
             val = exports.evaluate(erased, list_1.Nil);
         }
         else {
@@ -1570,6 +1589,8 @@ const parseDef = async (c, file, fileorder, filemap) => {
     if (c.length === 0)
         return;
     if (c[0].tag === 'Name' && c[0].name === 'import') {
+        if (config_1.config.useBase)
+            return;
         const files = c.slice(1).map(t => {
             if (t.tag !== 'Name' && t.tag !== 'Num' && t.tag !== 'Str')
                 return utils_1.serr(`trying to import a non-path`);
@@ -1798,6 +1819,7 @@ COMMANDS
 [:addunfold x y z] always unfold globals
 [:postponeInvalidSolution] postpone more invalid meta solutions
 [:useBase] use the base library
+[:writeToBase] write definitions to base
 `.trim();
 const initREPL = () => {
     config_1.config.unfold.push('typeof');
@@ -1828,6 +1850,11 @@ const runREPL = (s_, cb) => {
             const d = !config_1.config.useBase;
             config_1.setConfig({ useBase: d });
             return cb(`useBase: ${d}`);
+        }
+        if (s === ':writeToBase') {
+            const d = !config_1.config.writeToBase;
+            config_1.setConfig({ writeToBase: d });
+            return cb(`writeToBase: ${d}`);
         }
         if (s === ':defs') {
             const gs = globals_1.getGlobals();
@@ -1971,29 +1998,20 @@ const fromCoreR = (t, ns) => {
     if (t.tag === 'Pair')
         return exports.Pair(fromCoreR(t.fst, ns), fromCoreR(t.snd, ns), fromCoreR(t.type, ns));
     if (t.tag === 'Pi') {
-        const type = fromCoreR(t.type, ns);
         ns.push(t.name);
-        const body = fromCoreR(t.body, ns);
-        return exports.Pi(t.mode, t.erased, type, body);
+        return exports.Pi(t.mode, t.erased, fromCoreR(t.type, ns), fromCoreR(t.body, ns));
     }
     if (t.tag === 'Abs') {
-        const type = fromCoreR(t.type, ns);
         ns.push(t.name);
-        const body = fromCoreR(t.body, ns);
-        return exports.Abs(t.mode, t.erased, type, body);
+        return exports.Abs(t.mode, t.erased, fromCoreR(t.type, ns), fromCoreR(t.body, ns));
     }
     if (t.tag === 'Sigma') {
-        const type = fromCoreR(t.type, ns);
         ns.push(t.name);
-        const body = fromCoreR(t.body, ns);
-        return exports.Sigma(t.erased, type, body);
+        return exports.Sigma(t.erased, fromCoreR(t.type, ns), fromCoreR(t.body, ns));
     }
     if (t.tag === 'Let') {
-        const type = fromCoreR(t.type, ns);
-        const val = fromCoreR(t.val, ns);
         ns.push(t.name);
-        const body = fromCoreR(t.body, ns);
-        return exports.Let(t.erased, type, val, body);
+        return exports.Let(t.erased, fromCoreR(t.type, ns), fromCoreR(t.val, ns), fromCoreR(t.body, ns));
     }
     return utils_1.impossible(`fromCore: ${t.tag}`);
 };
@@ -2292,7 +2310,7 @@ const synth = (local, tm) => {
     if (tm.tag === 'Global') {
         let ty;
         if (config_1.config.useBase) {
-            const [type] = base_1.getFromBase(tm.name);
+            const [, type] = base_1.getFromBase(tm.name, local.erased);
             ty = values_1.evaluate(type, list_1.Nil);
         }
         else {
@@ -2360,14 +2378,14 @@ const synth = (local, tm) => {
     return utils_1.terr(`synth failed: ${core_1.show(tm)}`);
 };
 const synthapp = (local, ty, mode, tm) => {
-    config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${showTerm(local, tm)}`);
+    config_1.log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${showTerm(local, tm)}`);
     const fty = values_1.force(ty);
-    if (fty.tag === 'VPi' && fty.mode === mode) {
+    if (fty.tag === 'VPi' && fty.mode.tag === mode.tag) {
         const er = check(fty.erased ? localErased(local) : local, tm, fty.type);
         const v = values_1.evaluate(tm, local.vs);
         return [values_1.vinst(fty, v), fty.erased ? null : er];
     }
-    return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === core_1.ImplUnif ? 'impl' : ''} ${showTerm(local, tm)}`);
+    return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${showTerm(local, tm)}`);
 };
 const typecheck = (t, erased = false) => {
     const [ty, er] = synth(erased ? localErased(localEmpty) : localEmpty, t);
@@ -2392,7 +2410,7 @@ const typecheck_1 = require("./typecheck");
 const unifyElim = (k, a, b, x, y) => {
     if (a === b)
         return;
-    if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode)
+    if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode.tag === b.mode.tag)
         return exports.unify(k, a.right, b.right);
     if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj)
         return;
@@ -2409,7 +2427,7 @@ const unify = (k, a_, b_) => {
     config_1.log(() => `unify(${k}): ${values_1.showVal(a, k)} ~ ${values_1.showVal(b, k)}`);
     if (a === b)
         return;
-    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode && a.erased === b.erased) {
+    if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode.tag === b.mode.tag && a.erased === b.erased) {
         exports.unify(k, a.type, b.type);
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -2419,7 +2437,7 @@ const unify = (k, a_, b_) => {
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
-    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode && a.erased === b.erased) {
+    if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode.tag === b.mode.tag && a.erased === b.erased) {
         const v = values_1.VVar(k);
         return exports.unify(k + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }

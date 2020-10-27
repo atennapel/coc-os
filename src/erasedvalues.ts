@@ -68,7 +68,7 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Global') {
     let val: Val;
     if (config.useBase) {
-      const [, erased] = getFromBase(t.name);
+      const [, , erased] = getFromBase(t.name);
       val = evaluate(erased, Nil);
     } else {
       const entry = getGlobal(t.name) || impossible(`evaluate: global ${t.name} has no value`);

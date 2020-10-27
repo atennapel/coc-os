@@ -31,6 +31,7 @@ COMMANDS
 [:addunfold x y z] always unfold globals
 [:postponeInvalidSolution] postpone more invalid meta solutions
 [:useBase] use the base library
+[:writeToBase] write definitions to base
 `.trim();
 
 export const initREPL = () => {
@@ -62,6 +63,11 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const d = !config.useBase;
       setConfig({ useBase: d });
       return cb(`useBase: ${d}`);
+    }
+    if (s === ':writeToBase') {
+      const d = !config.writeToBase;
+      setConfig({ writeToBase: d });
+      return cb(`writeToBase: ${d}`);
     }
     if (s === ':defs') {
       const gs = getGlobals();

@@ -1,6 +1,6 @@
 import { config, log } from './config';
 import { conv } from './conversion';
-import { Pi, show, Term, Mode, ImplUnif } from './core';
+import { Pi, show, Term, Mode } from './core';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
 import { primType } from './primitives';
@@ -67,7 +67,7 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
   if (tm.tag === 'Global') {
     let ty: Val;
     if (config.useBase) {
-      const [type] = getFromBase(tm.name);
+      const [, type] = getFromBase(tm.name, local.erased);
       ty = evaluate(type, Nil);
     } else {
       const entry = getGlobal(tm.name);
@@ -131,14 +131,14 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
 };
 
 const synthapp = (local: Local, ty: Val, mode: Mode, tm: Term): [Val, E.Term | null] => {
-  log(() => `synthapp ${showVal(local, ty)} @${mode === ImplUnif ? 'impl' : ''} ${showTerm(local, tm)}`);
+  log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${showTerm(local, tm)}`);
   const fty = force(ty);
-  if (fty.tag === 'VPi' && fty.mode === mode) {
+  if (fty.tag === 'VPi' && fty.mode.tag === mode.tag) {
     const er = check(fty.erased ? localErased(local) : local, tm, fty.type);
     const v = evaluate(tm, local.vs);
     return [vinst(fty, v), fty.erased ? null : er];
   }
-  return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode === ImplUnif ? 'impl' : ''} ${showTerm(local, tm)}`);
+  return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${showTerm(local, tm)}`);
 };
 
 export const typecheck = (t: Term, erased: boolean = false): [Term, E.Term] => {

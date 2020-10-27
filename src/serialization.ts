@@ -38,29 +38,20 @@ const fromCoreR = (t: C.Term, ns: Name[]): Term => {
   if (t.tag === 'Proj') return Proj(t.proj, fromCoreR(t.term, ns));
   if (t.tag === 'Pair') return Pair(fromCoreR(t.fst, ns), fromCoreR(t.snd, ns), fromCoreR(t.type, ns));
   if (t.tag === 'Pi') {
-    const type = fromCoreR(t.type, ns);
     ns.push(t.name);
-    const body = fromCoreR(t.body, ns);
-    return Pi(t.mode, t.erased, type, body);
+    return Pi(t.mode, t.erased, fromCoreR(t.type, ns), fromCoreR(t.body, ns));
   }
   if (t.tag === 'Abs') {
-    const type = fromCoreR(t.type, ns);
     ns.push(t.name);
-    const body = fromCoreR(t.body, ns);
-    return Abs(t.mode, t.erased, type, body);
+    return Abs(t.mode, t.erased, fromCoreR(t.type, ns), fromCoreR(t.body, ns));
   }
   if (t.tag === 'Sigma') {
-    const type = fromCoreR(t.type, ns);
     ns.push(t.name);
-    const body = fromCoreR(t.body, ns);
-    return Sigma(t.erased, type, body);
+    return Sigma(t.erased, fromCoreR(t.type, ns), fromCoreR(t.body, ns));
   }
   if (t.tag === 'Let') {
-    const type = fromCoreR(t.type, ns);
-    const val = fromCoreR(t.val, ns);
     ns.push(t.name);
-    const body = fromCoreR(t.body, ns);
-    return Let(t.erased, type, val, body);
+    return Let(t.erased,fromCoreR(t.type, ns), fromCoreR(t.val, ns), fromCoreR(t.body, ns));
   }
   return impossible(`fromCore: ${t.tag}`);
 };

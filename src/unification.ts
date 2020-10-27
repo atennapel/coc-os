@@ -12,7 +12,7 @@ import { typecheck } from './typecheck';
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
-  if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode === b.mode) return unify(k, a.right, b.right);
+  if (a.tag === 'EApp' && b.tag === 'EApp' && a.mode.tag === b.mode.tag) return unify(k, a.right, b.right);
   if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj) return;
   if (a.tag === 'EPrim' && b.tag === 'EPrim' && a.name === b.name && a.args.length === b.args.length) {
     for (let i = 0, l = a.args.length; i < l; i++)
@@ -26,7 +26,7 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
   const b = force(b_, false);
   log(() => `unify(${k}): ${showVal(a, k)} ~ ${showVal(b, k)}`);
   if (a === b) return;
-  if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode === b.mode && a.erased === b.erased) {
+  if (a.tag === 'VPi' && b.tag === 'VPi' && a.mode.tag === b.mode.tag && a.erased === b.erased) {
     unify(k, a.type, b.type);
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
@@ -36,7 +36,7 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }
-  if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode === b.mode && a.erased === b.erased) {
+  if (a.tag === 'VAbs' && b.tag === 'VAbs' && a.mode.tag === b.mode.tag && a.erased === b.erased) {
     const v = VVar(k);
     return unify(k + 1, vinst(a, v), vinst(b, v));
   }

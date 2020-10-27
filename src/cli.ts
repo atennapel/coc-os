@@ -10,6 +10,8 @@ if (process.argv[2]) {
   const option = process.argv[3] || '';
   if (option.includes('d')) setConfig({ debug: true });
   if (option.includes('e')) setConfig({ showEnvs: true });
+  if (option.includes('b')) setConfig({ useBase: true });
+  if (option.includes('w')) setConfig({ writeToBase: true });
   try {
     const sc = require('fs').readFileSync(process.argv[2], 'utf8');
     parseDefs(sc, process.argv[2]).then(ds => {

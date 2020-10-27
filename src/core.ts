@@ -80,7 +80,7 @@ export const show = (t: Term): string => {
     const [f, as] = flattenApp(t);
     return `(${show(f)} ${as.map(([m, a]) => `${m === ImplUnif ? '{' : ''}${show(a)}${m === ImplUnif ? '}' : ''}`).join(' ')})`;
   }
-  if (t.tag === 'Abs') return `(\\${t.mode === ImplUnif ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${show(t.type)}${t.mode === ImplUnif ? '}' : ')'}. ${show(t.body)})`;
+  if (t.tag === 'Abs') return `(\\${t.mode.tag === 'ImplUnif' ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${show(t.type)}${t.mode.tag === 'ImplUnif' ? '}' : ')'}. ${show(t.body)})`;
   if (t.tag === 'Pair') return `(${show(t.fst)}, ${show(t.snd)} : ${show(t.type)})`;
   if (t.tag === 'Proj') return `(${t.proj} ${show(t.term)})`;
   if (t.tag === 'Let') return `(let ${t.erased ? '-' : ''}${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
@@ -98,11 +98,11 @@ export const eq = (t: Term, o: Term): boolean => {
   if (t.tag === 'Global') return o.tag === 'Global' && t.name === o.name;
   if (t.tag === 'Meta') return o.tag === 'Meta' && t.index === o.index;
   if (t.tag === 'App') return o.tag === 'App' && eq(t.left, o.left) && eq(t.right, o.right);
-  if (t.tag === 'Abs') return o.tag === 'Abs' && t.mode === o.mode && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
+  if (t.tag === 'Abs') return o.tag === 'Abs' && t.mode.tag === o.mode.tag && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
   if (t.tag === 'Pair') return o.tag === 'Pair' && eq(t.fst, o.snd) && eq(t.fst, o.snd);
   if (t.tag === 'Proj') return o.tag === 'Proj' && t.proj === o.proj && eq(t.term, o.term);
   if (t.tag === 'Let') return o.tag === 'Let' && t.erased === o.erased && eq(t.type, o.type) && eq(t.val, o.val) && eq(t.body, o.body);
-  if (t.tag === 'Pi') return o.tag === 'Pi' && t.mode === o.mode && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
+  if (t.tag === 'Pi') return o.tag === 'Pi' && t.mode.tag === o.mode.tag && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
   if (t.tag === 'Sigma') return o.tag === 'Sigma' && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
   return t;
 };

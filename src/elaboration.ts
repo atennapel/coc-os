@@ -15,7 +15,7 @@ import { typecheck } from './typecheck';
 import * as E from './erased';
 import * as EV from './erasedvalues';
 import * as V from './values';
-import { getFromBase } from './base';
+import { addToBase, getFromBase } from './base';
 
 type EntryT = { type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean };
 const EntryT = (type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean): EntryT =>
@@ -108,7 +108,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     return x;
   }
   const fty = force(ty);
-  if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode === fty.mode) {
+  if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.mode.tag === fty.mode.tag) {
     if (tm.erased && !fty.erased) return terr(`erasability mismatch in check ${show(tm)} : ${showVal(local, ty)}`);
     const v = VVar(local.index);
     const x = tm.name;
@@ -165,7 +165,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     if (i < 0) {
       let ty: Val;
       if (config.useBase) {
-        const [type] = getFromBase(tm.name);
+        const [, type] = getFromBase(tm.name, local.erased);
         ty = evaluate(type, Nil);
       } else {
         const entry = getGlobal(tm.name);
@@ -289,7 +289,7 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
 const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): [Term, Val, List<Term>] => {
   log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${show(tm)}`);
   const fty = force(ty);
-  if (fty.tag === 'VPi' && fty.mode === mode) {
+  if (fty.tag === 'VPi' && fty.mode.tag === mode.tag) {
     const term = check(fty.erased ? localErased(local) : local, tm, fty.type);
     const v = evaluate(term, local.vs);
     return [term, vinst(fty, v), Nil];
@@ -384,6 +384,7 @@ export const elaborateDefs = (ds: S.Def[], allowRedefinition: boolean = false): 
         log(() => `erased term: ${E.show(er)}`);
 
         setGlobal(d.name, d.erased, tm, evaluate(tm, Nil), evaluate(ty, Nil), er, EV.evaluate(er, Nil));
+        if (config.writeToBase) addToBase(d.name, tm, d.erased, true);
 
         const i = xs.indexOf(d.name);
         if (i >= 0) xs.splice(i, 1);

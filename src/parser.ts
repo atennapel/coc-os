@@ -2,7 +2,7 @@ import { loadFile, serr } from './utils/utils';
 import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif, isPrimName } from './core';
-import { log } from './config';
+import { config, log } from './config';
 
 type BracketO = '(' | '{'
 type Bracket = BracketO | ')' | '}';
@@ -408,6 +408,7 @@ export const parseDef = async (c: Token[], file: string, fileorder: string[], fi
   if (!filemap[file]) filemap[file] = [[], []];
   if (c.length === 0) return;
   if (c[0].tag === 'Name' && c[0].name === 'import') {
+    if (config.useBase) return;
     const files = c.slice(1).map(t => {
       if (t.tag !== 'Name' && t.tag !== 'Num' && t.tag !== 'Str') return serr(`trying to import a non-path`);
       const name = t.tag === 'Name' ? t.name : t.tag === 'Num' ? t.num : t.str;
