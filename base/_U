@@ -1,0 +1,1 @@
+{"tag":"Let","erased":false,"type":{"tag":"Prim","name":"Type"},"val":{"tag":"App","left":{"tag":"App","left":{"tag":"App","left":{"tag":"Global","name":"Eq"},"mode":{"tag":"ImplUnif"},"right":{"tag":"Prim","name":"Type"}},"mode":{"tag":"Expl"},"right":{"tag":"Global","name":"Void"}},"mode":{"tag":"Expl"},"right":{"tag":"Global","name":"Void"}},"body":{"tag":"Var","index":0}}

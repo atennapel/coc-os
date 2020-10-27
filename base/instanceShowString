@@ -1,0 +1,1 @@
+{"tag":"Let","erased":false,"type":{"tag":"App","left":{"tag":"Global","name":"Show"},"mode":{"tag":"Expl"},"right":{"tag":"Global","name":"String"}},"val":{"tag":"Abs","erased":false,"mode":{"tag":"Expl"},"type":{"tag":"Global","name":"String"},"body":{"tag":"Var","index":0}},"body":{"tag":"Var","index":0}}

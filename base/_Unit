@@ -1,0 +1,1 @@
+{"tag":"Let","erased":false,"type":{"tag":"Global","name":"U"},"val":{"tag":"App","left":{"tag":"App","left":{"tag":"Global","name":"Refl"},"mode":{"tag":"ImplUnif"},"right":{"tag":"Prim","name":"Type"}},"mode":{"tag":"ImplUnif"},"right":{"tag":"Global","name":"Void"}},"body":{"tag":"Var","index":0}}
