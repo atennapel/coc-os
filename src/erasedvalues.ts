@@ -1,3 +1,4 @@
+import { getFromBase } from './base';
 import { config } from './config';
 import { Abs, App, Global, Pair, Proj, show, Term, Var } from './erased';
 import { getGlobal } from './globals';
@@ -65,8 +66,15 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Var') 
     return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'Global') {
-    const entry = getGlobal(t.name) || impossible(`evaluate: global ${t.name} has no value`);
-    return VGlobal(t.name, Nil, lazyOf(entry.valerased));
+    let val: Val;
+    if (config.useBase) {
+      const [, erased] = getFromBase(t.name);
+      val = evaluate(erased, Nil);
+    } else {
+      const entry = getGlobal(t.name) || impossible(`evaluate: global ${t.name} has no value`);
+      val = entry.valerased;
+    }
+    return VGlobal(t.name, Nil, lazyOf(val));
   }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), evaluate(t.right, vs));

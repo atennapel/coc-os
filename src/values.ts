@@ -1,3 +1,4 @@
+import { getFromBase } from './base';
 import { config } from './config';
 import { getMeta } from './context';
 import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global } from './core';
@@ -310,8 +311,15 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
   if (t.tag === 'Var') 
     return index(vs, t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'Global') {
-    const entry = getGlobal(t.name) || impossible(`evaluate: global ${t.name} has no value`);
-    return VGlobal(t.name, Nil, lazyOf(entry.val));
+    let val: Val;
+    if (config.useBase) {
+      const [term] = getFromBase(t.name);
+      val = evaluate(term, Nil);
+    } else {
+      const entry = getGlobal(t.name) || impossible(`evaluate: global ${t.name} has no value`);
+      val = entry.val;
+    }
+    return VGlobal(t.name, Nil, lazyOf(val));
   }
   if (t.tag === 'App')
     return vapp(evaluate(t.left, vs), t.mode, evaluate(t.right, vs));

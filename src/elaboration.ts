@@ -1,4 +1,4 @@
-import { log } from './config';
+import { config, log } from './config';
 import { Abs, App, Let, Meta, Pi, Term, Var, Prim, Sigma, Pair, Proj, Global, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
@@ -15,6 +15,7 @@ import { typecheck } from './typecheck';
 import * as E from './erased';
 import * as EV from './erasedvalues';
 import * as V from './values';
+import { getFromBase } from './base';
 
 type EntryT = { type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean };
 const EntryT = (type: Val, bound: boolean, mode: Mode, erased: boolean, inserted: boolean): EntryT =>
@@ -75,7 +76,7 @@ const newMeta = (local: Local, erased: boolean, ty: Val): Term => {
   const boundOnly = filter(zipped, ([_, __, ty]) => ty.bound);
   log(() => `new meta spine (${local.index}, ${length(boundOnly)}): ${listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
   const spine: List<[Mode, Term]> = map(boundOnly, x => [x[2].mode, Var(x[0])] as [Mode, Term]);
-  log(() => `new meta spine: ${listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
+  log(() => `new meta spine: ${listToString(spine, ([m, t]) => m.tag === 'ImplUnif' ? `{${C.show(t)}}` : C.show(t))}`);
   const mty = constructMetaType(reverse(zipped), ty);
   log(() => `new meta type: ${C.show(mty)}`);
   const vmty = evaluate(mty, Nil);
@@ -87,7 +88,7 @@ const newMeta = (local: Local, erased: boolean, ty: Val): Term => {
 
 const inst = (local: Local, ty_: Val): [Val, List<Term>] => {
   const ty = force(ty_);
-  if (ty.tag === 'VPi' && ty.mode === C.ImplUnif) {
+  if (ty.tag === 'VPi' && ty.mode.tag === 'ImplUnif') {
     const m = newMeta(local, local.erased || ty.erased, ty.type);
     const vm = evaluate(m, local.vs);
     const [res, args] = inst(local, vinst(ty, vm));
@@ -114,7 +115,7 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     const body = check(localExtend(local, x, fty.type, tm.mode, fty.erased, true, false, v), tm.body, vinst(fty, v));
     return Abs(tm.mode, fty.erased, x, quote(fty.type, local.index), body);
   }
-  if (fty.tag === 'VPi' && fty.mode === C.ImplUnif) {
+  if (fty.tag === 'VPi' && fty.mode.tag === 'ImplUnif') {
     const v = VVar(local.index);
     const term = check(localExtend(local, fty.name, fty.type, fty.mode, fty.erased, true, true, v), tm, vinst(fty, v));
     return Abs(fty.mode, fty.erased, fty.name, quote(fty.type, local.index), term);
@@ -162,10 +163,17 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   if (tm.tag === 'Var') {
     const i = indexOf(local.nsSurface, tm.name);
     if (i < 0) {
-      const entry = getGlobal(tm.name);
-      if (!entry) return terr(`global ${tm.name} not found`);
-      if (entry.erased && !local.erased) return terr(`erased global used: ${show(tm)}`);
-      return [Global(tm.name), entry.type];
+      let ty: Val;
+      if (config.useBase) {
+        const [type] = getFromBase(tm.name);
+        ty = evaluate(type, Nil);
+      } else {
+        const entry = getGlobal(tm.name);
+        if (!entry) return terr(`global ${tm.name} not found`);
+        if (entry.erased && !local.erased) return terr(`erased global used: ${show(tm)}`);
+        ty = entry.type;
+      }
+      return [Global(tm.name), ty];
     } else {
       const [entry, j] = indexT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
       if (entry.erased && !local.erased) return terr(`erased var used: ${show(tm)}`);
@@ -279,14 +287,14 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
 };
 
 const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): [Term, Val, List<Term>] => {
-  log(() => `synthapp ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
+  log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${show(tm)}`);
   const fty = force(ty);
   if (fty.tag === 'VPi' && fty.mode === mode) {
     const term = check(fty.erased ? localErased(local) : local, tm, fty.type);
     const v = evaluate(term, local.vs);
     return [term, vinst(fty, v), Nil];
   }
-  if (fty.tag === 'VPi' && fty.mode === C.ImplUnif && mode === C.Expl) {
+  if (fty.tag === 'VPi' && fty.mode.tag === 'ImplUnif' && mode.tag === 'Expl') {
     const m = newMeta(local, local.erased || fty.erased, fty.type);
     const vm = evaluate(m, local.vs);
     const [rest, rt, l] = synthapp(local, vinst(fty, vm), mode, tm, full);
@@ -301,7 +309,7 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): 
     unify(local.index, ty, pi);
     return synthapp(local, pi, mode, tm, full);
   }
-  return terr(`not a correct pi type in synthapp in ${show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${show(tm)}`);
+  return terr(`not a correct pi type in synthapp in ${show(full)}: ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${show(tm)}`);
 };
 
 const solveInstances = (): void => {

@@ -3,12 +3,14 @@ export interface Config {
   showEnvs: boolean;
   unfold: string[];
   postponeInvalidSolution: boolean;
+  useBase: boolean;
 }
 export const config: Config = {
   debug: false,
   showEnvs: false,
   unfold: [],
   postponeInvalidSolution: false,
+  useBase: false,
 };
 export const setConfig = (c: Partial<Config>) => {
   for (let k in c) (config as any)[k] = (c as any)[k];

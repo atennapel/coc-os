@@ -2,15 +2,15 @@ import { PrimName } from './core';
 import { impossible } from './utils/utils';
 import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, vidata, vappEs, videsc, VIEnd, VIArg, VIArgE, VIFArg, VIRec, VIHRec, vInterpI, vAllI, VIData, vicon, VPiEE } from './values';
 
-const primTypes: { [K in PrimName]: Val } = {
+const primTypes: { [K in PrimName]: () => Val } = {
 
-  'Type': VType,
+  'Type': () => VType,
 
-  'B': VType,
-  '0': VB,
-  '1': VB,
+  'B': () => VType,
+  '0': () => VB,
+  '1': () => VB,
   // (-P : %B -> *) -> P %0 -> P %1 -> (b : %B) -> P b
-  'elimB':
+  'elimB': () =>
     VPiEE('P', VPiE('_', VB, _ => VType), P =>
     VPiE('_', vappE(P, V0), _ =>
     VPiE('_', vappE(P, V1), _ =>
@@ -18,11 +18,11 @@ const primTypes: { [K in PrimName]: Val } = {
     vappE(P, b))))),
 
   // (A : *) -> (B : *) -> A -> B -> *
-  'HEq': VPiE('A', VType, A => VPiE('B', VType, B => VPiE('_', A, _ => VPiE('_', B, _ => VType)))),
+  'HEq': () => VPiE('A', VType, A => VPiE('B', VType, B => VPiE('_', A, _ => VPiE('_', B, _ => VType)))),
   // (-A : *) -> (-a : A) -> HEq A A a a
-  'ReflHEq': VPiEE('A', VType, A => VPiEE('a', A, a => vheq(A, A, a, a))),
+  'ReflHEq': () => VPiEE('A', VType, A => VPiEE('a', A, a => vheq(A, A, a, a))),
   // (-A : *) -> (-a : A) -> (-P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (-b : A) -> (-p : HEq A A a b) -> P b p
-  'elimHEq':
+  'elimHEq': () =>
     VPiEE('A', VType, A =>
     VPiEE('a', A, a =>
     VPiEE('P', VPiE('b', A, b => VPiE('_', vheq(A, A, a, b), _ => VType)), P =>
@@ -31,13 +31,13 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiEE('p', vheq(A, A, a, b), p =>
     vappE(vappE(P, b), p))))))),
 
-  'IDesc': VPiE('_', VType, _ => VType),
-  'IEnd': VPiEE('I', VType, I => VPiEE('_', I, _ => videsc(I))),
-  'IArg': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiE('_', VPiE('_', A, _ => videsc(I)), _ => videsc(I)))),
-  'IArgE': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiE('_', VPiEE('a', A, _ => videsc(I)), _ => videsc(I)))),
-  'IFArg': VPiEE('I', VType, I => VPiEE('_', VType, _ => VPiE('_', videsc(I), _ => videsc(I)))),
-  'IRec': VPiEE('I', VType, I => VPiEE('_', I, _ => VPiE('_', videsc(I), _ => videsc(I)))),
-  'IHRec': VPiEE('I', VType, I => VPiEE('A', VType, A => VPiEE('_', VPiE('_', A, _ => I), _ => VPiE('_', videsc(I), _ => videsc(I))))),
+  'IDesc': () => VPiE('_', VType, _ => VType),
+  'IEnd': () => VPiEE('I', VType, I => VPiEE('_', I, _ => videsc(I))),
+  'IArg': () => VPiEE('I', VType, I => VPiEE('A', VType, A => VPiE('_', VPiE('_', A, _ => videsc(I)), _ => videsc(I)))),
+  'IArgE': () => VPiEE('I', VType, I => VPiEE('A', VType, A => VPiE('_', VPiEE('a', A, _ => videsc(I)), _ => videsc(I)))),
+  'IFArg': () => VPiEE('I', VType, I => VPiEE('_', VType, _ => VPiE('_', videsc(I), _ => videsc(I)))),
+  'IRec': () => VPiEE('I', VType, I => VPiEE('_', I, _ => VPiE('_', videsc(I), _ => videsc(I)))),
+  'IHRec': () => VPiEE('I', VType, I => VPiEE('A', VType, A => VPiEE('_', VPiE('_', A, _ => I), _ => VPiE('_', videsc(I), _ => videsc(I))))),
   /*
     (-I : *)
     -> (-P : IDesc I -> *)
@@ -50,7 +50,7 @@ const primTypes: { [K in PrimName]: Val } = {
     -> (d : IDesc I)
     -> P d
   */
-  'elimIDesc':
+  'elimIDesc': () =>
     VPiEE('I', VType, I =>
     VPiEE('P', VPiE('_', videsc(I), _ => VType), P =>
     VPiE('_', VPiEE('i', I, i => vappE(P, vappE(VIEnd, i))), _ =>
@@ -62,11 +62,11 @@ const primTypes: { [K in PrimName]: Val } = {
     VPiE('d', videsc(I), d =>
     vappE(P, d)))))))))),
   // (I : *) -> IDesc I -> (I -> *) -> I -> *
-  'InterpI': VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', VPiE('_', I, _ => VType), _ => VPiE('_', I, _ => VType)))),
+  'InterpI': () => VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', VPiE('_', I, _ => VType), _ => VPiE('_', I, _ => VType)))),
   // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : InterpI I d X i) -> *
-  'AllI': VPiE('I', VType, I => VPiE('d', videsc(I), d => VPiE('X', VPiE('_', I, _ => VType), X => VPiE('_', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), _ => VPiE('i', I, i => VPiE('_', vInterpI(I, d, X, i), _ => VType)))))),
+  'AllI': () => VPiE('I', VType, I => VPiE('d', videsc(I), d => VPiE('X', VPiE('_', I, _ => VType), X => VPiE('_', VPiE('i', I, i => VPiE('_', vappE(X, i), _ => VType)), _ => VPiE('i', I, i => VPiE('_', vInterpI(I, d, X, i), _ => VType)))))),
   // (-I : *) -> (d : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *) -> ((-i : I) -> (x : X i) -> P i x) -> (-i : I) -> (xs : InterpI I d X i) -> All I d X P i xs
-  'allI':
+  'allI': () =>
     VPiEE('I', VType, I =>
     VPiE('d', videsc(I), d =>
     VPiEE('X', VPiE('_', I, _ => VType), X =>
@@ -77,9 +77,9 @@ const primTypes: { [K in PrimName]: Val } = {
     vAllI(I, d, X, P, i, xs)))))))),
 
   // (I : *) -> IDesc I -> I -> *
-  'IData': VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', I, _ => VType))),
+  'IData': () => VPiE('I', VType, I => VPiE('_', videsc(I), _ => VPiE('_', I, _ => VType))),
   // (-I : *) -> (-d : IDesc I) -> (-i : I) -> InterpI I d (IData I d) i -> IData I d i
-  'ICon': VPiEE('I', VType, I => VPiEE('d', videsc(I), d => VPiEE('i', I, i => VPiE('_', vInterpI(I, d, vappEs([VIData, I, d]), i), _ => vidata(I, d, i))))),
+  'ICon': () => VPiEE('I', VType, I => VPiEE('d', videsc(I), d => VPiEE('i', I, i => VPiE('_', vInterpI(I, d, vappEs([VIData, I, d]), i), _ => vidata(I, d, i))))),
   /*
     (-I : *)
     -> (d : IDesc I)
@@ -94,7 +94,7 @@ const primTypes: { [K in PrimName]: Val } = {
     -> (x : IData I d i)
     -> P i x
   */
-  'indI':
+  'indI': () =>
     VPiEE('I', VType, I =>
     VPiE('d', videsc(I), d =>
     VPiEE('P', VPiE('i', I, i => VPiE('_', vidata(I, d, i), _ => VType)), P =>
@@ -105,4 +105,8 @@ const primTypes: { [K in PrimName]: Val } = {
 
 };
 
-export const primType = (name: PrimName): Val => primTypes[name] || impossible(`primType: ${name}`);
+export const primType = (name: PrimName): Val => {
+  const v = primTypes[name];
+  if (!v) return impossible(`primType: ${name}`);
+  return v();
+};

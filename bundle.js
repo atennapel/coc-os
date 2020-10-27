@@ -1,12 +1,32 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getFromBase = void 0;
+const serialization_1 = require("./serialization");
+const typecheck_1 = require("./typecheck");
+const getFromBase = (x) => {
+    const ser = require('fs').readFileSync(`./base/${x}`);
+    let ns = null;
+    try {
+        ns = JSON.parse(require('fs').readFileSync(`./names/${x}`));
+    }
+    catch (err) { }
+    const term = serialization_1.deserializeCore(ser, ns);
+    const [type, erased] = typecheck_1.typecheck(term);
+    return [type, erased];
+};
+exports.getFromBase = getFromBase;
+
+},{"./serialization":15,"./typecheck":17,"fs":24}],2:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.log = exports.setConfig = exports.config = void 0;
 exports.config = {
     debug: false,
     showEnvs: false,
     unfold: [],
     postponeInvalidSolution: false,
+    useBase: false,
 };
 const setConfig = (c) => {
     for (let k in c)
@@ -19,7 +39,7 @@ const log = (msg) => {
 };
 exports.log = log;
 
-},{}],2:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.freshInstanceId = exports.getHoleEntries = exports.getHoles = exports.registerHole = exports.amountOfProblems = exports.allProblems = exports.problemsBlockedBy = exports.postpone = exports.contextSolved = exports.solveMeta = exports.isMetaSolved = exports.getMeta = exports.freshMeta = exports.undoContext = exports.discardContext = exports.markContext = exports.resetContext = exports.Solved = exports.Unsolved = void 0;
@@ -120,7 +140,7 @@ exports.getHoleEntries = getHoleEntries;
 const freshInstanceId = () => context.instanceId++;
 exports.freshInstanceId = freshInstanceId;
 
-},{"./utils/utils":19}],3:[function(require,module,exports){
+},{"./utils/utils":21}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.conv = exports.eqHead = void 0;
@@ -212,7 +232,7 @@ const conv = (k, a_, b_) => {
 };
 exports.conv = conv;
 
-},{"./config":1,"./utils/lazy":17,"./utils/list":18,"./utils/utils":19,"./values":20}],4:[function(require,module,exports){
+},{"./config":2,"./utils/lazy":19,"./utils/list":20,"./utils/utils":21,"./values":22}],5:[function(require,module,exports){
 "use strict";
 var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -365,7 +385,7 @@ const shift = (d, c, t) => {
 };
 exports.shift = shift;
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.elaborateDefs = exports.elaborate = void 0;
@@ -385,6 +405,7 @@ const typecheck_1 = require("./typecheck");
 const E = require("./erased");
 const EV = require("./erasedvalues");
 const V = require("./values");
+const base_1 = require("./base");
 const EntryT = (type, bound, mode, erased, inserted) => ({ type, bound, mode, erased, inserted });
 const indexT = (ts, ix) => {
     let l = ts;
@@ -426,7 +447,7 @@ const newMeta = (local, erased, ty) => {
     const boundOnly = list_1.filter(zipped, ([_, __, ty]) => ty.bound);
     config_1.log(() => `new meta spine (${local.index}, ${list_1.length(boundOnly)}): ${list_1.listToString(boundOnly, ([i, x, entry]) => `${i} | ${x} | ${showVal(local, entry.type)}`)}`);
     const spine = list_1.map(boundOnly, x => [x[2].mode, core_1.Var(x[0])]);
-    config_1.log(() => `new meta spine: ${list_1.listToString(spine, ([m, t]) => m === C.ImplUnif ? `{${C.show(t)}}` : C.show(t))}`);
+    config_1.log(() => `new meta spine: ${list_1.listToString(spine, ([m, t]) => m.tag === 'ImplUnif' ? `{${C.show(t)}}` : C.show(t))}`);
     const mty = constructMetaType(list_1.reverse(zipped), ty);
     config_1.log(() => `new meta type: ${C.show(mty)}`);
     const vmty = values_1.evaluate(mty, list_1.Nil);
@@ -437,7 +458,7 @@ const newMeta = (local, erased, ty) => {
 };
 const inst = (local, ty_) => {
     const ty = values_1.force(ty_);
-    if (ty.tag === 'VPi' && ty.mode === C.ImplUnif) {
+    if (ty.tag === 'VPi' && ty.mode.tag === 'ImplUnif') {
         const m = newMeta(local, local.erased || ty.erased, ty.type);
         const vm = values_1.evaluate(m, local.vs);
         const [res, args] = inst(local, values_1.vinst(ty, vm));
@@ -464,7 +485,7 @@ const check = (local, tm, ty) => {
         const body = check(localExtend(local, x, fty.type, tm.mode, fty.erased, true, false, v), tm.body, values_1.vinst(fty, v));
         return core_1.Abs(tm.mode, fty.erased, x, values_1.quote(fty.type, local.index), body);
     }
-    if (fty.tag === 'VPi' && fty.mode === C.ImplUnif) {
+    if (fty.tag === 'VPi' && fty.mode.tag === 'ImplUnif') {
         const v = values_1.VVar(local.index);
         const term = check(localExtend(local, fty.name, fty.type, fty.mode, fty.erased, true, true, v), tm, values_1.vinst(fty, v));
         return core_1.Abs(fty.mode, fty.erased, fty.name, values_1.quote(fty.type, local.index), term);
@@ -512,12 +533,20 @@ const synth = (local, tm) => {
     if (tm.tag === 'Var') {
         const i = list_1.indexOf(local.nsSurface, tm.name);
         if (i < 0) {
-            const entry = globals_1.getGlobal(tm.name);
-            if (!entry)
-                return utils_1.terr(`global ${tm.name} not found`);
-            if (entry.erased && !local.erased)
-                return utils_1.terr(`erased global used: ${surface_1.show(tm)}`);
-            return [core_1.Global(tm.name), entry.type];
+            let ty;
+            if (config_1.config.useBase) {
+                const [type] = base_1.getFromBase(tm.name);
+                ty = values_1.evaluate(type, list_1.Nil);
+            }
+            else {
+                const entry = globals_1.getGlobal(tm.name);
+                if (!entry)
+                    return utils_1.terr(`global ${tm.name} not found`);
+                if (entry.erased && !local.erased)
+                    return utils_1.terr(`erased global used: ${surface_1.show(tm)}`);
+                ty = entry.type;
+            }
+            return [core_1.Global(tm.name), ty];
         }
         else {
             const [entry, j] = indexT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
@@ -642,14 +671,14 @@ const synth = (local, tm) => {
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
 const synthapp = (local, ty, mode, tm, full) => {
-    config_1.log(() => `synthapp ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
+    config_1.log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${surface_1.show(tm)}`);
     const fty = values_1.force(ty);
     if (fty.tag === 'VPi' && fty.mode === mode) {
         const term = check(fty.erased ? localErased(local) : local, tm, fty.type);
         const v = values_1.evaluate(term, local.vs);
         return [term, values_1.vinst(fty, v), list_1.Nil];
     }
-    if (fty.tag === 'VPi' && fty.mode === C.ImplUnif && mode === C.Expl) {
+    if (fty.tag === 'VPi' && fty.mode.tag === 'ImplUnif' && mode.tag === 'Expl') {
         const m = newMeta(local, local.erased || fty.erased, fty.type);
         const vm = values_1.evaluate(m, local.vs);
         const [rest, rt, l] = synthapp(local, values_1.vinst(fty, vm), mode, tm, full);
@@ -664,7 +693,7 @@ const synthapp = (local, ty, mode, tm, full) => {
         unification_1.unify(local.index, ty, pi);
         return synthapp(local, pi, mode, tm, full);
     }
-    return utils_1.terr(`not a correct pi type in synthapp in ${surface_1.show(full)}: ${showVal(local, ty)} @${mode === C.ImplUnif ? 'impl' : ''} ${surface_1.show(tm)}`);
+    return utils_1.terr(`not a correct pi type in synthapp in ${surface_1.show(full)}: ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${surface_1.show(tm)}`);
 };
 const solveInstances = () => {
     config_1.log(() => `solve instances`);
@@ -784,7 +813,7 @@ const showHoles = (tm, ty) => {
     return utils_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
 };
 
-},{"./config":1,"./context":2,"./core":4,"./erased":6,"./erasedvalues":8,"./globals":9,"./primitives":12,"./surface":14,"./typecheck":15,"./unification":16,"./utils/list":18,"./utils/utils":19,"./values":20}],6:[function(require,module,exports){
+},{"./base":1,"./config":2,"./context":3,"./core":5,"./erased":7,"./erasedvalues":9,"./globals":10,"./primitives":13,"./surface":16,"./typecheck":17,"./unification":18,"./utils/list":20,"./utils/utils":21,"./values":22}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.show = exports.flattenPair = exports.flattenApp = exports.termId = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Var = void 0;
@@ -844,7 +873,7 @@ const show = (t) => {
 };
 exports.show = show;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.primErased = void 0;
@@ -915,10 +944,11 @@ const primErasedMap = {
 const primErased = (name) => primErasedMap[name] || utils_1.impossible(`primErased: ${name}`);
 exports.primErased = primErased;
 
-},{"./erasedvalues":8,"./utils/utils":19}],8:[function(require,module,exports){
+},{"./erasedvalues":9,"./utils/utils":21}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showVal = exports.normalize = exports.quote = exports.evaluate = exports.vproj = exports.vapps = exports.vapp = exports.forceGlobal = exports.vinst = exports.VVar = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EProj = exports.EApp = void 0;
+const base_1 = require("./base");
 const config_1 = require("./config");
 const erased_1 = require("./erased");
 const globals_1 = require("./globals");
@@ -977,8 +1007,16 @@ const evaluate = (t, vs) => {
     if (t.tag === 'Var')
         return list_1.index(vs, t.index) || utils_1.impossible(`evaluate: var ${t.index} has no value`);
     if (t.tag === 'Global') {
-        const entry = globals_1.getGlobal(t.name) || utils_1.impossible(`evaluate: global ${t.name} has no value`);
-        return exports.VGlobal(t.name, list_1.Nil, lazy_1.lazyOf(entry.valerased));
+        let val;
+        if (config_1.config.useBase) {
+            const [, erased] = base_1.getFromBase(t.name);
+            val = exports.evaluate(erased, list_1.Nil);
+        }
+        else {
+            const entry = globals_1.getGlobal(t.name) || utils_1.impossible(`evaluate: global ${t.name} has no value`);
+            val = entry.valerased;
+        }
+        return exports.VGlobal(t.name, list_1.Nil, lazy_1.lazyOf(val));
     }
     if (t.tag === 'App')
         return exports.vapp(exports.evaluate(t.left, vs), exports.evaluate(t.right, vs));
@@ -1017,7 +1055,7 @@ exports.normalize = normalize;
 const showVal = (v, k = 0, full = false) => erased_1.show(exports.quote(v, k, full));
 exports.showVal = showVal;
 
-},{"./config":1,"./erased":6,"./globals":9,"./utils/lazy":17,"./utils/list":18,"./utils/utils":19}],9:[function(require,module,exports){
+},{"./base":1,"./config":2,"./erased":7,"./globals":10,"./utils/lazy":19,"./utils/list":20,"./utils/utils":21}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteGlobal = exports.setGlobal = exports.hasGlobal = exports.getGlobal = exports.getGlobals = exports.resetGlobals = void 0;
@@ -1043,7 +1081,7 @@ const deleteGlobal = (name) => {
 };
 exports.deleteGlobal = deleteGlobal;
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -1060,7 +1098,7 @@ exports.nextName = nextName;
 const chooseName = (x, ns) => x === '_' ? x : list_1.contains(ns, x) ? exports.chooseName(exports.nextName(x), ns) : x;
 exports.chooseName = chooseName;
 
-},{"./utils/list":18}],11:[function(require,module,exports){
+},{"./utils/list":20}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseDefs = exports.parseDef = exports.parse = void 0;
@@ -1651,32 +1689,32 @@ const parseDefs = async (s, file = '_TOPLEVEL_', fileorder = [file], filemap = {
 };
 exports.parseDefs = parseDefs;
 
-},{"./config":1,"./core":4,"./surface":14,"./utils/utils":19}],12:[function(require,module,exports){
+},{"./config":2,"./core":5,"./surface":16,"./utils/utils":21}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.primType = void 0;
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
 const primTypes = {
-    'Type': values_1.VType,
-    'B': values_1.VType,
-    '0': values_1.VB,
-    '1': values_1.VB,
+    'Type': () => values_1.VType,
+    'B': () => values_1.VType,
+    '0': () => values_1.VB,
+    '1': () => values_1.VB,
     // (-P : %B -> *) -> P %0 -> P %1 -> (b : %B) -> P b
-    'elimB': values_1.VPiEE('P', values_1.VPiE('_', values_1.VB, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.V0), _ => values_1.VPiE('_', values_1.vappE(P, values_1.V1), _ => values_1.VPiE('b', values_1.VB, b => values_1.vappE(P, b))))),
+    'elimB': () => values_1.VPiEE('P', values_1.VPiE('_', values_1.VB, _ => values_1.VType), P => values_1.VPiE('_', values_1.vappE(P, values_1.V0), _ => values_1.VPiE('_', values_1.vappE(P, values_1.V1), _ => values_1.VPiE('b', values_1.VB, b => values_1.vappE(P, b))))),
     // (A : *) -> (B : *) -> A -> B -> *
-    'HEq': values_1.VPiE('A', values_1.VType, A => values_1.VPiE('B', values_1.VType, B => values_1.VPiE('_', A, _ => values_1.VPiE('_', B, _ => values_1.VType)))),
+    'HEq': () => values_1.VPiE('A', values_1.VType, A => values_1.VPiE('B', values_1.VType, B => values_1.VPiE('_', A, _ => values_1.VPiE('_', B, _ => values_1.VType)))),
     // (-A : *) -> (-a : A) -> HEq A A a a
-    'ReflHEq': values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('a', A, a => values_1.vheq(A, A, a, a))),
+    'ReflHEq': () => values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('a', A, a => values_1.vheq(A, A, a, a))),
     // (-A : *) -> (-a : A) -> (-P : (b : A) -> HEq A A a b -> *) -> P a (ReflHEq A a) -> (-b : A) -> (-p : HEq A A a b) -> P b p
-    'elimHEq': values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('a', A, a => values_1.VPiEE('P', values_1.VPiE('b', A, b => values_1.VPiE('_', values_1.vheq(A, A, a, b), _ => values_1.VType)), P => values_1.VPiE('_', values_1.vappE(values_1.vappE(P, a), values_1.vreflheq(A, a)), _ => values_1.VPiEE('b', A, b => values_1.VPiEE('p', values_1.vheq(A, A, a, b), p => values_1.vappE(values_1.vappE(P, b), p))))))),
-    'IDesc': values_1.VPiE('_', values_1.VType, _ => values_1.VType),
-    'IEnd': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', I, _ => values_1.videsc(I))),
-    'IArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
-    'IArgE': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiEE('a', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
-    'IFArg': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', values_1.VType, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
-    'IRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', I, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
-    'IHRec': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('_', values_1.VPiE('_', A, _ => I), _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I))))),
+    'elimHEq': () => values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('a', A, a => values_1.VPiEE('P', values_1.VPiE('b', A, b => values_1.VPiE('_', values_1.vheq(A, A, a, b), _ => values_1.VType)), P => values_1.VPiE('_', values_1.vappE(values_1.vappE(P, a), values_1.vreflheq(A, a)), _ => values_1.VPiEE('b', A, b => values_1.VPiEE('p', values_1.vheq(A, A, a, b), p => values_1.vappE(values_1.vappE(P, b), p))))))),
+    'IDesc': () => values_1.VPiE('_', values_1.VType, _ => values_1.VType),
+    'IEnd': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', I, _ => values_1.videsc(I))),
+    'IArg': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiE('_', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
+    'IArgE': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('_', values_1.VPiEE('a', A, _ => values_1.videsc(I)), _ => values_1.videsc(I)))),
+    'IFArg': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', values_1.VType, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IRec': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('_', I, _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I)))),
+    'IHRec': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('_', values_1.VPiE('_', A, _ => I), _ => values_1.VPiE('_', values_1.videsc(I), _ => values_1.videsc(I))))),
     /*
       (-I : *)
       -> (-P : IDesc I -> *)
@@ -1689,17 +1727,17 @@ const primTypes = {
       -> (d : IDesc I)
       -> P d
     */
-    'elimIDesc': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('P', values_1.VPiE('_', values_1.videsc(I), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.vappE(P, values_1.vappE(values_1.VIEnd, i))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiEE('a', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiEE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArgE, A, f]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIFArg, A, d]))))), _ => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIRec, i, d]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('f', values_1.VPiE('_', A, _ => I), f => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIHRec, A, f, d])))))), _ => values_1.VPiE('d', values_1.videsc(I), d => values_1.vappE(P, d)))))))))),
+    'elimIDesc': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('P', values_1.VPiE('_', values_1.videsc(I), _ => values_1.VType), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.vappE(P, values_1.vappE(values_1.VIEnd, i))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiE('_', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArg, A, f]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('f', values_1.VPiEE('a', A, _ => values_1.videsc(I)), f => values_1.VPiE('_', values_1.VPiEE('a', A, a => values_1.vappE(P, values_1.vappE(f, a))), _ => values_1.vappE(P, values_1.vappEs([values_1.VIArgE, A, f]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIFArg, A, d]))))), _ => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIRec, i, d]))))), _ => values_1.VPiE('_', values_1.VPiEE('A', values_1.VType, A => values_1.VPiEE('f', values_1.VPiE('_', A, _ => I), f => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('_', values_1.vappE(P, d), _ => values_1.vappE(P, values_1.vappEs([values_1.VIHRec, A, f, d])))))), _ => values_1.VPiE('d', values_1.videsc(I), d => values_1.vappE(P, d)))))))))),
     // (I : *) -> IDesc I -> (I -> *) -> I -> *
-    'InterpI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', values_1.VPiE('_', I, _ => values_1.VType), _ => values_1.VPiE('_', I, _ => values_1.VType)))),
+    'InterpI': () => values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', values_1.VPiE('_', I, _ => values_1.VType), _ => values_1.VPiE('_', I, _ => values_1.VType)))),
     // (I : *) -> (d : IDesc I) -> (X : I -> *) -> (P : (i : I) -> X i -> *) -> (i : I) -> (xs : InterpI I d X i) -> *
-    'AllI': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), _ => values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vInterpI(I, d, X, i), _ => values_1.VType)))))),
+    'AllI': () => values_1.VPiE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiE('_', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), _ => values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vInterpI(I, d, X, i), _ => values_1.VType)))))),
     // (-I : *) -> (d : IDesc I) -> (-X : I -> *) -> (-P : (i : I) -> X i -> *) -> ((-i : I) -> (x : X i) -> P i x) -> (-i : I) -> (xs : InterpI I d X i) -> All I d X P i xs
-    'allI': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiEE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiEE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('x', values_1.vappE(X, i), x => values_1.vappEs([P, i, x]))), _ => values_1.VPiEE('i', I, i => values_1.VPiE('xs', values_1.vInterpI(I, d, X, i), xs => values_1.vAllI(I, d, X, P, i, xs)))))))),
+    'allI': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiEE('X', values_1.VPiE('_', I, _ => values_1.VType), X => values_1.VPiEE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vappE(X, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('x', values_1.vappE(X, i), x => values_1.vappEs([P, i, x]))), _ => values_1.VPiEE('i', I, i => values_1.VPiE('xs', values_1.vInterpI(I, d, X, i), xs => values_1.vAllI(I, d, X, P, i, xs)))))))),
     // (I : *) -> IDesc I -> I -> *
-    'IData': values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', I, _ => values_1.VType))),
+    'IData': () => values_1.VPiE('I', values_1.VType, I => values_1.VPiE('_', values_1.videsc(I), _ => values_1.VPiE('_', I, _ => values_1.VType))),
     // (-I : *) -> (-d : IDesc I) -> (-i : I) -> InterpI I d (IData I d) i -> IData I d i
-    'ICon': values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('d', values_1.videsc(I), d => values_1.VPiEE('i', I, i => values_1.VPiE('_', values_1.vInterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), _ => values_1.vidata(I, d, i))))),
+    'ICon': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiEE('d', values_1.videsc(I), d => values_1.VPiEE('i', I, i => values_1.VPiE('_', values_1.vInterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), _ => values_1.vidata(I, d, i))))),
     /*
       (-I : *)
       -> (d : IDesc I)
@@ -1714,12 +1752,17 @@ const primTypes = {
       -> (x : IData I d i)
       -> P i x
     */
-    'indI': values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiEE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vidata(I, d, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('y', values_1.vInterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), y => values_1.VPiE('_', values_1.vAllI(I, d, values_1.vappEs([values_1.VIData, I, d]), P, i, y), _ => values_1.vappEs([P, i, values_1.vicon(I, d, i, y)])))), _ => values_1.VPiEE('i', I, i => values_1.VPiE('x', values_1.vidata(I, d, i), x => values_1.vappEs([P, i, x]))))))),
+    'indI': () => values_1.VPiEE('I', values_1.VType, I => values_1.VPiE('d', values_1.videsc(I), d => values_1.VPiEE('P', values_1.VPiE('i', I, i => values_1.VPiE('_', values_1.vidata(I, d, i), _ => values_1.VType)), P => values_1.VPiE('_', values_1.VPiEE('i', I, i => values_1.VPiE('y', values_1.vInterpI(I, d, values_1.vappEs([values_1.VIData, I, d]), i), y => values_1.VPiE('_', values_1.vAllI(I, d, values_1.vappEs([values_1.VIData, I, d]), P, i, y), _ => values_1.vappEs([P, i, values_1.vicon(I, d, i, y)])))), _ => values_1.VPiEE('i', I, i => values_1.VPiE('x', values_1.vidata(I, d, i), x => values_1.vappEs([P, i, x]))))))),
 };
-const primType = (name) => primTypes[name] || utils_1.impossible(`primType: ${name}`);
+const primType = (name) => {
+    const v = primTypes[name];
+    if (!v)
+        return utils_1.impossible(`primType: ${name}`);
+    return v();
+};
 exports.primType = primType;
 
-},{"./utils/utils":19,"./values":20}],13:[function(require,module,exports){
+},{"./utils/utils":21,"./values":22}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runREPL = exports.initREPL = void 0;
@@ -1735,6 +1778,7 @@ const values_1 = require("./values");
 const globals_1 = require("./globals");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
+const serialization_1 = require("./serialization");
 const help = `
 COMMANDS
 [:help or :h] this help message
@@ -1753,6 +1797,7 @@ COMMANDS
 [:import files] import a file
 [:addunfold x y z] always unfold globals
 [:postponeInvalidSolution] postpone more invalid meta solutions
+[:useBase] use the base library
 `.trim();
 const initREPL = () => {
     config_1.config.unfold.push('typeof');
@@ -1778,6 +1823,11 @@ const runREPL = (s_, cb) => {
             const d = !config_1.config.postponeInvalidSolution;
             config_1.setConfig({ postponeInvalidSolution: d });
             return cb(`postponeInvalidSolution: ${d}`);
+        }
+        if (s === ':useBase') {
+            const d = !config_1.config.useBase;
+            config_1.setConfig({ useBase: d });
+            return cb(`useBase: ${d}`);
         }
         if (s === ':defs') {
             const gs = globals_1.getGlobals();
@@ -1863,6 +1913,9 @@ const runREPL = (s_, cb) => {
         config_1.log(() => surface_1.showCore(eterm));
         config_1.log(() => C.show(etype));
         config_1.log(() => surface_1.showCore(etype));
+        const [ser, ns] = serialization_1.serializeCore(eterm);
+        config_1.log(() => `serialized: ${ser}`);
+        config_1.log(() => `names: ${JSON.stringify(ns)}`);
         const unfolded = values_1.normalize(eterm, false);
         config_1.log(() => surface_1.showCore(unfolded));
         config_1.log(() => 'TYPECHECK');
@@ -1878,12 +1931,127 @@ const runREPL = (s_, cb) => {
 };
 exports.runREPL = runREPL;
 
-},{"./config":1,"./core":4,"./elaboration":5,"./erased":6,"./erasedvalues":8,"./globals":9,"./parser":11,"./surface":14,"./typecheck":15,"./utils/list":18,"./utils/utils":19,"./values":20}],14:[function(require,module,exports){
+},{"./config":2,"./core":5,"./elaboration":6,"./erased":7,"./erasedvalues":9,"./globals":10,"./parser":12,"./serialization":15,"./surface":16,"./typecheck":17,"./utils/list":20,"./utils/utils":21,"./values":22}],15:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.deserializeCore = exports.serializeCore = exports.toCore = exports.fromCore = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = void 0;
+const C = require("./core");
+const utils_1 = require("./utils/utils");
+const Var = (index) => ({ tag: 'Var', index });
+exports.Var = Var;
+const Prim = (name) => ({ tag: 'Prim', name });
+exports.Prim = Prim;
+const Global = (name) => ({ tag: 'Global', name });
+exports.Global = Global;
+const App = (left, mode, right) => ({ tag: 'App', left, mode, right });
+exports.App = App;
+const Abs = (mode, erased, type, body) => ({ tag: 'Abs', erased, mode, type, body });
+exports.Abs = Abs;
+const Pair = (fst, snd, type) => ({ tag: 'Pair', fst, snd, type });
+exports.Pair = Pair;
+const Proj = (proj, term) => ({ tag: 'Proj', proj, term });
+exports.Proj = Proj;
+const Let = (erased, type, val, body) => ({ tag: 'Let', erased, type, val, body });
+exports.Let = Let;
+const Pi = (mode, erased, type, body) => ({ tag: 'Pi', mode, erased, type, body });
+exports.Pi = Pi;
+const Sigma = (erased, type, body) => ({ tag: 'Sigma', erased, type, body });
+exports.Sigma = Sigma;
+const fromCoreR = (t, ns) => {
+    if (t.tag === 'Var')
+        return exports.Var(t.index);
+    if (t.tag === 'Prim')
+        return exports.Prim(t.name);
+    if (t.tag === 'Global')
+        return exports.Global(t.name);
+    if (t.tag === 'App')
+        return exports.App(fromCoreR(t.left, ns), t.mode, fromCoreR(t.right, ns));
+    if (t.tag === 'Proj')
+        return exports.Proj(t.proj, fromCoreR(t.term, ns));
+    if (t.tag === 'Pair')
+        return exports.Pair(fromCoreR(t.fst, ns), fromCoreR(t.snd, ns), fromCoreR(t.type, ns));
+    if (t.tag === 'Pi') {
+        const type = fromCoreR(t.type, ns);
+        ns.push(t.name);
+        const body = fromCoreR(t.body, ns);
+        return exports.Pi(t.mode, t.erased, type, body);
+    }
+    if (t.tag === 'Abs') {
+        const type = fromCoreR(t.type, ns);
+        ns.push(t.name);
+        const body = fromCoreR(t.body, ns);
+        return exports.Abs(t.mode, t.erased, type, body);
+    }
+    if (t.tag === 'Sigma') {
+        const type = fromCoreR(t.type, ns);
+        ns.push(t.name);
+        const body = fromCoreR(t.body, ns);
+        return exports.Sigma(t.erased, type, body);
+    }
+    if (t.tag === 'Let') {
+        const type = fromCoreR(t.type, ns);
+        const val = fromCoreR(t.val, ns);
+        ns.push(t.name);
+        const body = fromCoreR(t.body, ns);
+        return exports.Let(t.erased, type, val, body);
+    }
+    return utils_1.impossible(`fromCore: ${t.tag}`);
+};
+const fromCore = (t) => {
+    const ns = [];
+    const tm = fromCoreR(t, ns);
+    return [tm, ns];
+};
+exports.fromCore = fromCore;
+const toCoreR = (t, ns) => {
+    if (t.tag === 'Var')
+        return C.Var(t.index);
+    if (t.tag === 'Prim')
+        return C.Prim(t.name);
+    if (t.tag === 'Global')
+        return C.Global(t.name);
+    if (t.tag === 'Pair')
+        return C.Pair(toCoreR(t.fst, ns), toCoreR(t.snd, ns), toCoreR(t.type, ns));
+    if (t.tag === 'Proj')
+        return C.Proj(t.proj, toCoreR(t.term, ns));
+    if (t.tag === 'App')
+        return C.App(toCoreR(t.left, ns), t.mode, toCoreR(t.right, ns));
+    if (t.tag === 'Pi')
+        return C.Pi(t.mode, t.erased, ns ? ns.pop() || 'x' : 'x', toCoreR(t.type, ns), toCoreR(t.body, ns));
+    if (t.tag === 'Abs')
+        return C.Abs(t.mode, t.erased, ns ? ns.pop() || 'x' : 'x', toCoreR(t.type, ns), toCoreR(t.body, ns));
+    if (t.tag === 'Sigma')
+        return C.Sigma(t.erased, ns ? ns.pop() || 'x' : 'x', toCoreR(t.type, ns), toCoreR(t.body, ns));
+    if (t.tag === 'Let')
+        return C.Let(t.erased, ns ? ns.pop() || 'x' : 'x', toCoreR(t.type, ns), toCoreR(t.val, ns), toCoreR(t.body, ns));
+    return t;
+};
+const toCore = (t, ns = null) => {
+    const core = toCoreR(t, ns ? ns.slice().reverse() : ns);
+    return core;
+};
+exports.toCore = toCore;
+const serializeCore = (t) => {
+    const [tm, ns] = exports.fromCore(t);
+    const str = JSON.stringify(tm);
+    return [str, ns];
+};
+exports.serializeCore = serializeCore;
+const deserializeCore = (s, ns = null) => {
+    try {
+        return exports.toCore(JSON.parse(s), ns);
+    }
+    catch (err) {
+        return utils_1.impossible(`deserializeCore: ${err}`);
+    }
+};
+exports.deserializeCore = deserializeCore;
+
+},{"./core":5,"./utils/utils":21}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.showDefs = exports.showDef = exports.DExecute = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
 const names_1 = require("./names");
-const C = require("./core");
 const values_1 = require("./values");
 const list_1 = require("./utils/list");
 const utils_1 = require("./utils/utils");
@@ -1975,19 +2143,19 @@ const show = (t) => {
         return `_${t.name || ''}`;
     if (t.tag === 'App') {
         const [f, as] = exports.flattenApp(t);
-        return `${showP(!isSimple(f), f)} ${as.map(([m, t], i) => m === C.ImplUnif ? `{${exports.show(t)}}` : showP(!isSimple(t) && !(t.tag === 'Abs' && i >= as.length), t)).join(' ')}`;
+        return `${showP(!isSimple(f), f)} ${as.map(([m, t], i) => m.tag === 'ImplUnif' ? `{${exports.show(t)}}` : showP(!isSimple(t) && !(t.tag === 'Abs' && i >= as.length), t)).join(' ')}`;
     }
     if (t.tag === 'Abs') {
         const [as, b] = exports.flattenAbs(t);
         return `\\${as.map(([x, m, e, t]) => !t ?
-            (m === C.ImplUnif ? `{${e ? '-' : ''}${x}}` : `${e ? '-' : ''}${x}`) :
-            `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' ')}. ${exports.show(b)}`;
+            (m.tag === 'ImplUnif' ? `{${e ? '-' : ''}${x}}` : `${e ? '-' : ''}${x}`) :
+            `${m.tag === 'ImplUnif' ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m.tag === 'ImplUnif' ? '}' : ')'}`).join(' ')}. ${exports.show(b)}`;
     }
     if (t.tag === 'Pi') {
         const [as, b] = exports.flattenPi(t);
         return `${as.map(([x, m, e, t]) => x === '_' && !e ?
-            (m === C.ImplUnif ? `{${exports.show(t)}}` : showP(!isSimple(t) && t.tag !== 'App', t)) :
-            `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(b)}`;
+            (m.tag === 'ImplUnif' ? `{${exports.show(t)}}` : showP(!isSimple(t) && t.tag !== 'App', t)) :
+            `${m.tag === 'ImplUnif' ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m.tag === 'ImplUnif' ? '}' : ')'}`).join(' -> ')} -> ${exports.show(b)}`;
     }
     if (t.tag === 'Let')
         return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${exports.show(t.body)}`;
@@ -2065,7 +2233,7 @@ exports.showDef = showDef;
 const showDefs = (ds) => ds.map(exports.showDef).join('\n');
 exports.showDefs = showDefs;
 
-},{"./core":4,"./names":10,"./utils/list":18,"./utils/utils":19,"./values":20}],15:[function(require,module,exports){
+},{"./names":11,"./utils/list":20,"./utils/utils":21,"./values":22}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.typecheck = void 0;
@@ -2082,6 +2250,7 @@ const EV = require("./erasedvalues");
 const erasedprimitives_1 = require("./erasedprimitives");
 const context_1 = require("./context");
 const S = require("./surface");
+const base_1 = require("./base");
 const Local = (index, ns, ts, vs, erased) => ({ index, ns, ts, vs, erased });
 const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, false);
 const localExtend = (local, name, ty, erased, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), list_1.Cons([ty, erased], local.ts), list_1.Cons(val, local.vs), local.erased);
@@ -2121,10 +2290,18 @@ const synth = (local, tm) => {
         return [entry[0], E.Var(i - erasedNo)];
     }
     if (tm.tag === 'Global') {
-        const entry = globals_1.getGlobal(tm.name);
-        if (!entry)
-            return utils_1.terr(`global ${tm.name} not found`);
-        return [entry.type, E.Global(tm.name)];
+        let ty;
+        if (config_1.config.useBase) {
+            const [type] = base_1.getFromBase(tm.name);
+            ty = values_1.evaluate(type, list_1.Nil);
+        }
+        else {
+            const entry = globals_1.getGlobal(tm.name);
+            if (!entry)
+                return utils_1.terr(`global ${tm.name} not found`);
+            ty = entry.type;
+        }
+        return [ty, E.Global(tm.name)];
     }
     if (tm.tag === 'App') {
         const [ty, er] = synth(local, tm.left);
@@ -2198,7 +2375,7 @@ const typecheck = (t, erased = false) => {
 };
 exports.typecheck = typecheck;
 
-},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./erased":6,"./erasedprimitives":7,"./erasedvalues":8,"./globals":9,"./primitives":12,"./surface":14,"./utils/list":18,"./utils/utils":19,"./values":20}],16:[function(require,module,exports){
+},{"./base":1,"./config":2,"./context":3,"./conversion":4,"./core":5,"./erased":7,"./erasedprimitives":8,"./erasedvalues":9,"./globals":10,"./primitives":13,"./surface":16,"./utils/list":20,"./utils/utils":21,"./values":22}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.unify = void 0;
@@ -2406,7 +2583,7 @@ const checkSolution = (k, m, is, t) => {
     return utils_1.impossible(`checkSolution ?${m}: non-normal term: ${core_1.show(t)}`);
 };
 
-},{"./config":1,"./context":2,"./conversion":3,"./core":4,"./typecheck":15,"./utils/lazy":17,"./utils/list":18,"./utils/utils":19,"./values":20}],17:[function(require,module,exports){
+},{"./config":2,"./context":3,"./conversion":4,"./core":5,"./typecheck":17,"./utils/lazy":19,"./utils/list":20,"./utils/utils":21,"./values":22}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapLazy = exports.forceLazy = exports.lazyOf = exports.Lazy = void 0;
@@ -2426,7 +2603,7 @@ exports.forceLazy = forceLazy;
 const mapLazy = (lazy, fn) => exports.Lazy(() => fn(exports.forceLazy(lazy)));
 exports.mapLazy = mapLazy;
 
-},{}],18:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
@@ -2604,7 +2781,7 @@ const last = (l) => {
 };
 exports.last = last;
 
-},{}],19:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
@@ -2677,11 +2854,12 @@ const mapObj = (o, fn) => {
 };
 exports.mapObj = mapObj;
 
-},{"fs":22}],20:[function(require,module,exports){
+},{"fs":24}],22:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsEE = exports.VAbsE = exports.VPiU = exports.VPiEE = exports.VPiE = exports.vAllI = exports.VAllI = exports.vInterpI = exports.VInterpI = exports.vicon = exports.VICon = exports.vidata = exports.VIData = exports.VIHRec = exports.VIRec = exports.VIFArg = exports.VIArgE = exports.VIArg = exports.VIEnd = exports.videsc = exports.VIDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
 exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = void 0;
+const base_1 = require("./base");
 const config_1 = require("./config");
 const context_1 = require("./context");
 const core_1 = require("./core");
@@ -3005,8 +3183,16 @@ const evaluate = (t, vs) => {
     if (t.tag === 'Var')
         return list_1.index(vs, t.index) || utils_1.impossible(`evaluate: var ${t.index} has no value`);
     if (t.tag === 'Global') {
-        const entry = globals_1.getGlobal(t.name) || utils_1.impossible(`evaluate: global ${t.name} has no value`);
-        return exports.VGlobal(t.name, list_1.Nil, lazy_1.lazyOf(entry.val));
+        let val;
+        if (config_1.config.useBase) {
+            const [term] = base_1.getFromBase(t.name);
+            val = exports.evaluate(term, list_1.Nil);
+        }
+        else {
+            const entry = globals_1.getGlobal(t.name) || utils_1.impossible(`evaluate: global ${t.name} has no value`);
+            val = entry.val;
+        }
+        return exports.VGlobal(t.name, list_1.Nil, lazy_1.lazyOf(val));
     }
     if (t.tag === 'App')
         return exports.vapp(exports.evaluate(t.left, vs), t.mode, exports.evaluate(t.right, vs));
@@ -3130,7 +3316,7 @@ exports.showVal = showVal;
 const showValZ = (v, vs = list_1.Nil, k = 0, full = false) => core_1.show(exports.zonk(exports.quote(v, k, full), vs, k, full));
 exports.showValZ = showValZ;
 
-},{"./config":1,"./context":2,"./core":4,"./globals":9,"./utils/lazy":17,"./utils/list":18,"./utils/utils":19}],21:[function(require,module,exports){
+},{"./base":1,"./config":2,"./context":3,"./core":5,"./globals":10,"./utils/lazy":19,"./utils/list":20,"./utils/utils":21}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -3186,6 +3372,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":13}],22:[function(require,module,exports){
+},{"./repl":14}],24:[function(require,module,exports){
 
-},{}]},{},[21]);
+},{}]},{},[23]);

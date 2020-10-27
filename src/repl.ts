@@ -10,6 +10,7 @@ import { normalize } from './values';
 import { deleteGlobal, getGlobal, getGlobals } from './globals';
 import { Nil } from './utils/list';
 import { loadFile } from './utils/utils';
+import { serializeCore } from './serialization';
 
 const help = `
 COMMANDS
@@ -29,6 +30,7 @@ COMMANDS
 [:import files] import a file
 [:addunfold x y z] always unfold globals
 [:postponeInvalidSolution] postpone more invalid meta solutions
+[:useBase] use the base library
 `.trim();
 
 export const initREPL = () => {
@@ -55,6 +57,11 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const d = !config.postponeInvalidSolution;
       setConfig({ postponeInvalidSolution: d });
       return cb(`postponeInvalidSolution: ${d}`);
+    }
+    if (s === ':useBase') {
+      const d = !config.useBase;
+      setConfig({ useBase: d });
+      return cb(`useBase: ${d}`);
     }
     if (s === ':defs') {
       const gs = getGlobals();
@@ -135,6 +142,9 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => showCore(eterm));
     log(() => C.show(etype));
     log(() => showCore(etype));
+    const [ser, ns] = serializeCore(eterm);
+    log(() => `serialized: ${ser}`);
+    log(() => `names: ${JSON.stringify(ns)}`);
 
     const unfolded = normalize(eterm, false);
     log(() => showCore(unfolded));

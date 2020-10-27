@@ -1,4 +1,4 @@
-import { log } from './config';
+import { config, log } from './config';
 import { conv } from './conversion';
 import { Pi, show, Term, Mode, ImplUnif } from './core';
 import { getGlobal } from './globals';
@@ -12,6 +12,7 @@ import * as EV from './erasedvalues';
 import { primErased } from './erasedprimitives';
 import { getMeta } from './context';
 import * as S from './surface';
+import { getFromBase } from './base';
 
 type EntryT = [Val, boolean];
 type EnvT = List<EntryT>;
@@ -64,9 +65,16 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
     return [entry[0], E.Var(i - erasedNo)];
   }
   if (tm.tag === 'Global') {
-    const entry = getGlobal(tm.name);
-    if (!entry) return terr(`global ${tm.name} not found`);
-    return [entry.type, E.Global(tm.name)];
+    let ty: Val;
+    if (config.useBase) {
+      const [type] = getFromBase(tm.name);
+      ty = evaluate(type, Nil);
+    } else {
+      const entry = getGlobal(tm.name);
+      if (!entry) return terr(`global ${tm.name} not found`);
+      ty = entry.type;
+    }
+    return [ty, E.Global(tm.name)];
   }
   if (tm.tag === 'App') {
     const [ty, er] = synth(local, tm.left);

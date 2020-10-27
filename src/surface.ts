@@ -98,19 +98,19 @@ export const show = (t: Term): string => {
   if (t.tag === 'App') {
     const [f, as] = flattenApp(t);
     return `${showP(!isSimple(f), f)} ${as.map(([m, t], i) =>
-      m === C.ImplUnif ? `{${show(t)}}` : showP(!isSimple(t) && !(t.tag === 'Abs' && i >= as.length), t)).join(' ')}`;
+      m.tag === 'ImplUnif' ? `{${show(t)}}` : showP(!isSimple(t) && !(t.tag === 'Abs' && i >= as.length), t)).join(' ')}`;
   }
   if (t.tag === 'Abs') {
     const [as, b] = flattenAbs(t);
     return `\\${as.map(([x, m, e, t]) => !t ?
-      (m === C.ImplUnif ? `{${e ? '-' : ''}${x}}` : `${e ? '-' : ''}${x}`) :
-      `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' ')}. ${show(b)}`;
+      (m.tag === 'ImplUnif' ? `{${e ? '-' : ''}${x}}` : `${e ? '-' : ''}${x}`) :
+      `${m.tag === 'ImplUnif' ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m.tag === 'ImplUnif' ? '}' : ')'}`).join(' ')}. ${show(b)}`;
   }
   if (t.tag === 'Pi') {
     const [as, b] = flattenPi(t);
     return `${as.map(([x, m, e, t]) => x === '_' && !e?
-      (m === C.ImplUnif ? `{${show(t)}}` : showP(!isSimple(t) && t.tag !== 'App', t)) :
-      `${m === C.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m === C.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(b)}`;
+      (m.tag === 'ImplUnif' ? `{${show(t)}}` : showP(!isSimple(t) && t.tag !== 'App', t)) :
+      `${m.tag === 'ImplUnif' ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m.tag === 'ImplUnif' ? '}' : ')'}`).join(' -> ')} -> ${show(b)}`;
   }
   if (t.tag === 'Let')
     return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
