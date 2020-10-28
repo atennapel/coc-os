@@ -529,6 +529,20 @@ const check = (local, tm, ty) => {
         const body = check(localExtend(local, tm.name, vty, C.Expl, tm.erased, false, false, v), tm.body, ty);
         return core_1.Let(tm.erased, tm.name, vtype, val, body);
     }
+    if (tm.tag === 'App') {
+        const [fn, args] = S.flattenApp(tm);
+        const [left, fnty] = synth(local, fn);
+        const [term, rty, problems] = synthapps(local, fnty, left, list_1.listFrom(args), list_1.Nil);
+        if (!list_1.isEmpty(problems))
+            config_1.log(() => `unsolved constraints in application spine (${surface_1.show(tm)}): ${list_1.listToString(problems, c => showConstraint(local, c))}`);
+        const [rtyinst, ms] = inst(local, rty);
+        unification_1.unify(local.index, rtyinst, ty);
+        list_1.each(problems, ([er, tm, vty, vm]) => {
+            const etm = check(er ? localErased(local) : local, tm, vty);
+            unification_1.unify(local.index, vm, values_1.evaluate(etm, local.vs));
+        });
+        return list_1.foldl((a, m) => core_1.App(a, C.ImplUnif, m), term, ms);
+    }
     const [term, ty2] = synth(local, tm);
     const [ty2inst, ms] = inst(local, ty2);
     return utils_1.tryT(() => {
@@ -573,9 +587,16 @@ const synth = (local, tm) => {
         }
     }
     if (tm.tag === 'App') {
-        const [left, ty] = synth(local, tm.left);
-        const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right, tm);
-        return [core_1.App(list_1.foldl((f, a) => core_1.App(f, C.ImplUnif, a), left, ms), tm.mode, right), rty];
+        const [fn, args] = S.flattenApp(tm);
+        const [left, ty] = synth(local, fn);
+        const [term, rty, problems] = synthapps(local, ty, left, list_1.listFrom(args), list_1.Nil);
+        if (!list_1.isEmpty(problems))
+            config_1.log(() => `unsolved constraints in application spine (${surface_1.show(tm)}): ${list_1.listToString(problems, c => showConstraint(local, c))}`);
+        list_1.each(problems, ([er, tm, vty, vm]) => {
+            const etm = check(er ? localErased(local) : local, tm, vty);
+            unification_1.unify(local.index, vm, values_1.evaluate(etm, local.vs));
+        });
+        return [term, rty];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
@@ -687,19 +708,32 @@ const synth = (local, tm) => {
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
-const synthapp = (local, ty, mode, tm, full) => {
-    config_1.log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${surface_1.show(tm)}`);
+const showConstraint = (local, c) => `Constraint(${c[0] ? `impl ` : ''}${showVal(local, c[3])} ~> ${surface_1.show(c[1])} : ${showVal(local, c[2])})`;
+const synthapps = (local, ty, tm, spine, problems) => {
+    config_1.log(() => `synthapp ${showVal(local, ty)} ${list_1.listToString(spine, ([m, t]) => `@${m.tag === 'ImplUnif' ? 'impl' : ''} ${surface_1.show(t)}`)} | ${S.showCore(tm, local.ns)}`);
+    if (list_1.isEmpty(spine))
+        return [tm, ty, problems];
     const fty = values_1.force(ty);
+    const [mode, stm] = spine.head;
     if (fty.tag === 'VPi' && fty.mode.tag === mode.tag) {
-        const term = check(fty.erased ? localErased(local) : local, tm, fty.type);
-        const v = values_1.evaluate(term, local.vs);
-        return [term, values_1.vinst(fty, v), list_1.Nil];
+        const cty = fty.type;
+        /*
+        const fcty = force(cty);
+        if (false && fcty.tag === 'VNe' && fcty.head.tag === 'HMeta' && (stm.tag !== 'Hole' && stm.tag !== 'Prim' && stm.tag !== 'Meta' && stm.tag !== 'App')) {
+          const m = newMeta(local, local.erased || fty.erased, fty.type);
+          const vm = evaluate(m, local.vs);
+          return synthapps(local, vinst(fty, vm), App(tm, mode, m), tail(spine), Cons([fty.erased, stm, fcty, vm], problems));
+        } else
+        */ {
+            const term = check(fty.erased ? localErased(local) : local, stm, cty);
+            const v = values_1.evaluate(term, local.vs);
+            return synthapps(local, values_1.vinst(fty, v), core_1.App(tm, mode, term), list_1.tail(spine), problems);
+        }
     }
     if (fty.tag === 'VPi' && fty.mode.tag === 'ImplUnif' && mode.tag === 'Expl') {
         const m = newMeta(local, local.erased || fty.erased, fty.type);
         const vm = values_1.evaluate(m, local.vs);
-        const [rest, rt, l] = synthapp(local, values_1.vinst(fty, vm), mode, tm, full);
-        return [rest, rt, list_1.Cons(m, l)];
+        return synthapps(local, values_1.vinst(fty, vm), core_1.App(tm, C.ImplUnif, m), spine, problems);
     }
     if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
         const m = context_1.getMeta(ty.head.index);
@@ -708,9 +742,9 @@ const synthapp = (local, ty, mode, tm, full) => {
         const b = context_1.freshMeta(mty, m.erased);
         const pi = values_1.evaluate(core_1.Pi(mode, false, '_', values_1.quote(values_1.VNe(values_1.HMeta(a), ty.spine), local.index), values_1.quote(values_1.VNe(values_1.HMeta(b), ty.spine), local.index + 1)), local.vs);
         unification_1.unify(local.index, ty, pi);
-        return synthapp(local, pi, mode, tm, full);
+        return synthapps(local, pi, tm, spine, problems);
     }
-    return utils_1.terr(`not a correct pi type in synthapp in ${surface_1.show(full)}: ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${surface_1.show(tm)}`);
+    return utils_1.terr(`not a correct pi type in synthapp: ${showVal(local, ty)} ${list_1.listToString(spine, ([m, t]) => `@${m.tag === 'ImplUnif' ? 'impl' : ''} ${surface_1.show(t)}`)} | ${S.showCore(tm, local.ns)}`);
 };
 const solveInstances = () => {
     config_1.log(() => `solve instances`);
@@ -2406,7 +2440,6 @@ const values_1 = require("./values");
 const V = require("./values");
 const context_1 = require("./context");
 const lazy_1 = require("./utils/lazy");
-const typecheck_1 = require("./typecheck");
 const unifyElim = (k, a, b, x, y) => {
     if (a === b)
         return;
@@ -2503,10 +2536,16 @@ const solve = (k, m, spine, val) => {
             context_1.postpone(k, values_1.VMeta(m, spine), val, [m]);
             return;
         }
+        config_1.log(() => `spine ${list_1.listToString(spinex, s => `${s}`)}`);
         if (utils_1.hasDuplicates(list_1.toArray(spinex, x => x)))
             return utils_1.terr(`meta spine contains duplicates`);
         const rhs = values_1.quote(val, k);
-        const body = utils_1.tryTE(() => checkSolution(k, m, spinex, rhs));
+        const meta = context_1.getMeta(m);
+        const type = meta.type;
+        config_1.log(() => `meta type: ${values_1.showVal(type, 0)}`);
+        const zipped = zipSpine(0, list_1.reverse(spinex), type);
+        config_1.log(() => `zipped: ${list_1.listToString(zipped, ([i, er]) => `${i} ${er}`)}`);
+        const body = utils_1.tryTE(() => checkSolution(meta.erased, k, m, zipped, rhs));
         if (body instanceof TypeError) {
             if (config_1.config.postponeInvalidSolution) {
                 // postpone if solution is invalid
@@ -2516,15 +2555,13 @@ const solve = (k, m, spine, val) => {
             else
                 throw body;
         }
-        config_1.log(() => `spine ${list_1.listToString(spinex, s => `${s}`)}`);
-        const meta = context_1.getMeta(m);
-        const type = meta.type;
-        config_1.log(() => `meta type: ${values_1.showVal(type, 0)}`);
         const solution = constructSolution(0, type, body);
         config_1.log(() => `solution ?${m} := ${core_1.show(solution)}`);
-        const res = utils_1.tryTE(() => typecheck_1.typecheck(solution, meta.erased));
+        /*
+         const res = tryTE(() => typecheck(solution, meta.erased));
         if (res instanceof TypeError)
-            return utils_1.terr(`solution was invalid: ${res}`);
+          return terr(`solution was invalid: ${res}`);
+        */
         const vsolution = values_1.evaluate(solution, list_1.Nil);
         context_1.solveMeta(m, vsolution);
         // try to solve blocked problems for the meta
@@ -2552,15 +2589,28 @@ const checkSpine = (k, spine) => list_1.map(spine, elim => {
     }
     return utils_1.terr(`unexpected elim in meta spine: ${elim.tag}`);
 });
-const checkSolution = (k, m, is, t) => {
+const zipSpine = (k, is, ty_, acc = list_1.Nil) => {
+    const ty = values_1.force(ty_);
+    if (list_1.isEmpty(is))
+        return acc;
+    if (ty.tag === 'VPi')
+        return zipSpine(k + 1, list_1.tail(is), ty.clos(values_1.VVar(k)), list_1.Cons([list_1.head(is), ty.erased], acc));
+    return utils_1.terr(`not a pi ${ty.tag} in zipSpine`);
+};
+const checkSolution = (erased, k, m, is, t) => {
     if (t.tag === 'Prim')
         return t;
     if (t.tag === 'Global')
         return t;
     if (t.tag === 'Var') {
         const i = k - t.index - 1;
-        if (list_1.contains(is, i))
-            return core_1.Var(list_1.indexOf(is, i));
+        const j = list_1.indexOfFn(is, ([k]) => i === k);
+        if (j >= 0) {
+            const data = list_1.index(is, j);
+            if (!erased && data && data[1])
+                return utils_1.terr(`invalid solution, erased variable used: ${t.index} (${i}, ${j})`);
+            return core_1.Var(j);
+        }
         return utils_1.terr(`scope error ${t.index} (${i})`);
     }
     if (t.tag === 'Meta') {
@@ -2569,39 +2619,39 @@ const checkSolution = (k, m, is, t) => {
         return t;
     }
     if (t.tag === 'App') {
-        const l = checkSolution(k, m, is, t.left);
-        const r = checkSolution(k, m, is, t.right);
+        const l = checkSolution(erased, k, m, is, t.left);
+        const r = checkSolution(erased, k, m, is, t.right);
         return core_1.App(l, t.mode, r);
     }
     if (t.tag === 'Pair') {
-        const fst = checkSolution(k, m, is, t.fst);
-        const snd = checkSolution(k, m, is, t.snd);
-        const type = checkSolution(k, m, is, t.type);
+        const fst = checkSolution(erased, k, m, is, t.fst);
+        const snd = checkSolution(erased, k, m, is, t.snd);
+        const type = checkSolution(erased, k, m, is, t.type);
         return core_1.Pair(fst, snd, type);
     }
     if (t.tag === 'Proj') {
-        const x = checkSolution(k, m, is, t.term);
+        const x = checkSolution(erased, k, m, is, t.term);
         return core_1.Proj(t.proj, x);
     }
     if (t.tag === 'Abs') {
-        const ty = checkSolution(k, m, is, t.type);
-        const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
+        const ty = checkSolution(erased, k, m, is, t.type);
+        const body = checkSolution(erased, k + 1, m, list_1.Cons([k, t.erased], is), t.body);
         return core_1.Abs(t.mode, t.erased, t.name, ty, body);
     }
     if (t.tag === 'Pi') {
-        const ty = checkSolution(k, m, is, t.type);
-        const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
+        const ty = checkSolution(erased, k, m, is, t.type);
+        const body = checkSolution(erased, k + 1, m, list_1.Cons([k, t.erased], is), t.body);
         return core_1.Pi(t.mode, t.erased, t.name, ty, body);
     }
     if (t.tag === 'Sigma') {
-        const ty = checkSolution(k, m, is, t.type);
-        const body = checkSolution(k + 1, m, list_1.Cons(k, is), t.body);
+        const ty = checkSolution(erased, k, m, is, t.type);
+        const body = checkSolution(erased, k + 1, m, list_1.Cons([k, t.erased], is), t.body);
         return core_1.Sigma(t.erased, t.name, ty, body);
     }
     return utils_1.impossible(`checkSolution ?${m}: non-normal term: ${core_1.show(t)}`);
 };
 
-},{"./config":2,"./context":3,"./conversion":4,"./core":5,"./typecheck":17,"./utils/lazy":19,"./utils/list":20,"./utils/utils":21,"./values":22}],19:[function(require,module,exports){
+},{"./config":2,"./context":3,"./conversion":4,"./core":5,"./utils/lazy":19,"./utils/list":20,"./utils/utils":21,"./values":22}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapLazy = exports.forceLazy = exports.lazyOf = exports.Lazy = void 0;
@@ -2624,7 +2674,7 @@ exports.mapLazy = mapLazy;
 },{}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
+exports.last = exports.max = exports.contains = exports.range = exports.and = exports.zipWithR_ = exports.zipWith_ = exports.zipWithIndex = exports.zipWith = exports.foldlprim = exports.foldrprim = exports.foldl = exports.foldr = exports.lookup = exports.extend = exports.take = exports.indecesOf = exports.dropWhile = exports.takeWhile = exports.indexOfFn = exports.indexOf = exports.index = exports.mapIndex = exports.map = exports.consAll = exports.append = exports.toArrayFilter = exports.toArray = exports.reverse = exports.isEmpty = exports.length = exports.each = exports.first = exports.filter = exports.listToString = exports.tail = exports.head = exports.list = exports.listFrom = exports.Cons = exports.Nil = void 0;
 exports.Nil = { tag: 'Nil' };
 const Cons = (head, tail) => ({ tag: 'Cons', head, tail });
 exports.Cons = Cons;
@@ -2632,6 +2682,10 @@ const listFrom = (a) => a.reduceRight((x, y) => exports.Cons(y, x), exports.Nil)
 exports.listFrom = listFrom;
 const list = (...a) => exports.listFrom(a);
 exports.list = list;
+const head = (l) => l.head;
+exports.head = head;
+const tail = (l) => l.tail;
+exports.tail = tail;
 const listToString = (l, fn = x => `${x}`) => {
     const r = [];
     let c = l;
@@ -2724,6 +2778,17 @@ const indexOf = (l, x) => {
     return -1;
 };
 exports.indexOf = indexOf;
+const indexOfFn = (l, x) => {
+    let i = 0;
+    while (l.tag === 'Cons') {
+        if (x(l.head))
+            return i;
+        l = l.tail;
+        i++;
+    }
+    return -1;
+};
+exports.indexOfFn = indexOfFn;
 const takeWhile = (l, fn) => l.tag === 'Cons' && fn(l.head) ? exports.Cons(l.head, exports.takeWhile(l.tail, fn)) : exports.Nil;
 exports.takeWhile = takeWhile;
 const dropWhile = (l, fn) => l.tag === 'Cons' && fn(l.head) ? exports.dropWhile(l.tail, fn) : l;

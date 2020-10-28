@@ -2,13 +2,12 @@ import { config, log } from './config';
 import { eqHead } from './conversion';
 import { Abs, App, Pair, Pi, Proj, show, Sigma, Term, Var } from './core';
 import { Ix } from './names';
-import { Cons, contains, indexOf, isEmpty, length, List, listToString, map, Nil, toArray, zipWithR_ } from './utils/list';
+import { Cons, head, index, indexOfFn, isEmpty, length, List, listToString, map, Nil, reverse, tail, toArray, zipWithR_ } from './utils/list';
 import { hasDuplicates, impossible, terr, tryT, tryTE } from './utils/utils';
 import { Elim, force, Spine, Val, vapp, vproj, vinst, VVar, VMeta, quote, evaluate, showVal, isVPrim } from './values';
 import * as V from './values';
 import { discardContext, getMeta, isMetaSolved, markContext, postpone, problemsBlockedBy, Solution, solveMeta, undoContext } from './context';
 import { forceLazy } from './utils/lazy';
-import { typecheck } from './typecheck';
 
 const unifyElim = (k: Ix, a: Elim, b: Elim, x: Val, y: Val): void => {
   if (a === b) return;
@@ -102,9 +101,15 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
       postpone(k, VMeta(m, spine), val, [m]);
       return;
     }
+    log(() => `spine ${listToString(spinex, s => `${s}`)}`);
     if (hasDuplicates(toArray(spinex, x => x))) return terr(`meta spine contains duplicates`);
     const rhs = quote(val, k);
-    const body = tryTE(() => checkSolution(k, m, spinex, rhs));
+    const meta = getMeta(m) as Solution & { tag: 'Solved' };
+    const type = meta.type;
+    log(() => `meta type: ${showVal(type, 0)}`);
+    const zipped = zipSpine(0, reverse(spinex), type);
+    log(() => `zipped: ${listToString(zipped, ([i, er]) => `${i} ${er}`)}`);
+    const body = tryTE(() => checkSolution(meta.erased, k, m, zipped, rhs));
     if (body instanceof TypeError) {
       if (config.postponeInvalidSolution) {
         // postpone if solution is invalid
@@ -112,15 +117,13 @@ const solve = (k: Ix, m: Ix, spine: Spine, val: Val): void => {
         return;
       } else throw body;
     }
-    log(() => `spine ${listToString(spinex, s => `${s}`)}`);
-    const meta = getMeta(m) as Solution & { tag: 'Solved' };
-    const type = meta.type;
-    log(() => `meta type: ${showVal(type, 0)}`);
     const solution = constructSolution(0, type, body);
     log(() => `solution ?${m} := ${show(solution)}`);
-    const res = tryTE(() => typecheck(solution, meta.erased));
+    /*
+     const res = tryTE(() => typecheck(solution, meta.erased));
     if (res instanceof TypeError)
       return terr(`solution was invalid: ${res}`);
+    */
     const vsolution = evaluate(solution, Nil);
     solveMeta(m, vsolution);
 
@@ -154,13 +157,25 @@ const checkSpine = (k: Ix, spine: Spine): List<Ix> =>
     return terr(`unexpected elim in meta spine: ${elim.tag}`);
   });
 
-const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
+const zipSpine = (k: Ix, is: List<Ix>, ty_: Val, acc: List<[Ix, boolean]> = Nil): List<[Ix, boolean]> => {
+  const ty = force(ty_);
+  if (isEmpty(is)) return acc;  
+  if (ty.tag === 'VPi') return zipSpine(k + 1, tail(is), ty.clos(VVar(k)), Cons([head(is), ty.erased], acc));
+  return terr(`not a pi ${ty.tag} in zipSpine`);
+};
+
+const checkSolution = (erased: boolean, k: Ix, m: Ix, is: List<[Ix, boolean]>, t: Term): Term => {
   if (t.tag === 'Prim') return t;
   if (t.tag === 'Global') return t;
   if (t.tag === 'Var') {
     const i = k - t.index - 1;
-    if (contains(is, i))
-      return Var(indexOf(is, i));
+    const j = indexOfFn(is, ([k]) => i === k);
+    if (j >= 0) {
+      const data = index(is, j);
+      if (!erased && data && data[1])
+        return terr(`invalid solution, erased variable used: ${t.index} (${i}, ${j})`);
+      return Var(j);
+    }
     return terr(`scope error ${t.index} (${i})`);
   }
   if (t.tag === 'Meta') {
@@ -169,33 +184,33 @@ const checkSolution = (k: Ix, m: Ix, is: List<Ix>, t: Term): Term => {
     return t;
   }
   if (t.tag === 'App') {
-    const l = checkSolution(k, m, is, t.left);
-    const r = checkSolution(k, m, is, t.right);
+    const l = checkSolution(erased, k, m, is, t.left);
+    const r = checkSolution(erased, k, m, is, t.right);
     return App(l, t.mode, r);
   }
   if (t.tag === 'Pair') {
-    const fst = checkSolution(k, m, is, t.fst);
-    const snd = checkSolution(k, m, is, t.snd);
-    const type = checkSolution(k, m, is, t.type);
+    const fst = checkSolution(erased, k, m, is, t.fst);
+    const snd = checkSolution(erased, k, m, is, t.snd);
+    const type = checkSolution(erased, k, m, is, t.type);
     return Pair(fst, snd, type);
   }
   if (t.tag === 'Proj') {
-    const x = checkSolution(k, m, is, t.term);
+    const x = checkSolution(erased, k, m, is, t.term);
     return Proj(t.proj, x);
   }
   if (t.tag === 'Abs') {
-    const ty = checkSolution(k, m, is, t.type);
-    const body = checkSolution(k + 1, m, Cons(k, is), t.body);
+    const ty = checkSolution(erased, k, m, is, t.type);
+    const body = checkSolution(erased, k + 1, m, Cons([k, t.erased], is), t.body);
     return Abs(t.mode, t.erased, t.name, ty, body);
   }
   if (t.tag === 'Pi') {
-    const ty = checkSolution(k, m, is, t.type);
-    const body = checkSolution(k + 1, m, Cons(k, is), t.body);
+    const ty = checkSolution(erased, k, m, is, t.type);
+    const body = checkSolution(erased, k + 1, m, Cons([k, t.erased], is), t.body);
     return Pi(t.mode, t.erased, t.name, ty, body);
   }
   if (t.tag === 'Sigma') {
-    const ty = checkSolution(k, m, is, t.type);
-    const body = checkSolution(k + 1, m, Cons(k, is), t.body);
+    const ty = checkSolution(erased, k, m, is, t.type);
+    const body = checkSolution(erased, k + 1, m, Cons([k, t.erased], is), t.body);
     return Sigma(t.erased, t.name, ty, body);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${show(t)}`);

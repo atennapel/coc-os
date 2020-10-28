@@ -17,6 +17,9 @@ export const listFrom = <T>(a: T[]): List<T> =>
   a.reduceRight((x, y) => Cons(y, x), Nil as List<T>);
 export const list = <T>(...a: T[]): List<T> => listFrom(a);
 
+export const head = <T>(l: List<T>): T => (l as Cons<T>).head;
+export const tail = <T>(l: List<T>): List<T> => (l as Cons<T>).tail;
+
 export const listToString = <T>(l: List<T>, fn: (val: T) => string = x => `${x}`): string => {
   const r: string[] = [];
   let c = l;
@@ -100,6 +103,15 @@ export const indexOf = <T>(l: List<T>, x: T): number => {
   let i = 0;
   while (l.tag === 'Cons') {
     if (l.head === x) return i;
+    l = l.tail;
+    i++;
+  }
+  return -1;
+};
+export const indexOfFn = <T>(l: List<T>, x: (v: T) => boolean): number => {
+  let i = 0;
+  while (l.tag === 'Cons') {
+    if (x(l.head)) return i;
     l = l.tail;
     i++;
   }

@@ -2,7 +2,7 @@ import { config, log } from './config';
 import { Abs, App, Let, Meta, Pi, Term, Var, Prim, Sigma, Pair, Proj, Global, Mode } from './core';
 import * as C from './core';
 import { Ix, Name } from './names';
-import { Cons, filter, foldl, foldr, indexOf, length, List, listToString, map, Nil, reverse, toArray, zipWith, zipWithIndex } from './utils/list';
+import { Cons, filter, foldl, foldr, indexOf, isEmpty, length, List, listToString, map, Nil, reverse, tail, toArray, zipWith, zipWithIndex, listFrom, each } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, HMeta, quote, Val, vinst, VNe, vproj, VType, VVar, zonk } from './values';
 import * as S from './surface';
@@ -141,6 +141,20 @@ const check = (local: Local, tm: S.Term, ty: Val): Term => {
     const body = check(localExtend(local, tm.name, vty, C.Expl, tm.erased, false, false, v), tm.body, ty);
     return Let(tm.erased, tm.name, vtype, val, body);
   }
+  if (tm.tag === 'App') {
+    const [fn, args] = S.flattenApp(tm);
+    const [left, fnty] = synth(local, fn);
+    const [term, rty, problems] = synthapps(local, fnty, left, listFrom(args), Nil);
+    if (!isEmpty(problems))
+      log(() => `unsolved constraints in application spine (${show(tm)}): ${listToString(problems, c => showConstraint(local, c))}`);
+    const [rtyinst, ms] = inst(local, rty);
+    unify(local.index, rtyinst, ty);
+    each(problems, ([er, tm, vty, vm]) => {
+      const etm = check(er ? localErased(local) : local, tm, vty);
+      unify(local.index, vm, evaluate(etm, local.vs));
+    });
+    return foldl((a, m) => App(a, C.ImplUnif, m), term, ms);
+  }
   const [term, ty2] = synth(local, tm);
   const [ty2inst, ms] = inst(local, ty2);
   return tryT(() => {
@@ -181,9 +195,16 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     }
   }
   if (tm.tag === 'App') {
-    const [left, ty] = synth(local, tm.left);
-    const [right, rty, ms] = synthapp(local, ty, tm.mode, tm.right, tm);
-    return [App(foldl((f, a) => App(f, C.ImplUnif, a), left, ms), tm.mode, right), rty];
+    const [fn, args] = S.flattenApp(tm);
+    const [left, ty] = synth(local, fn);
+    const [term, rty, problems] = synthapps(local, ty, left, listFrom(args), Nil);
+    if (!isEmpty(problems))
+      log(() => `unsolved constraints in application spine (${show(tm)}): ${listToString(problems, c => showConstraint(local, c))}`);
+    each(problems, ([er, tm, vty, vm]) => {
+      const etm = check(er ? localErased(local) : local, tm, vty);
+      unify(local.index, vm, evaluate(etm, local.vs));
+    });
+    return [term, rty];
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
@@ -286,19 +307,33 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
   return terr(`unable to synth ${show(tm)}`);
 };
 
-const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): [Term, Val, List<Term>] => {
-  log(() => `synthapp ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${show(tm)}`);
+type Constraint = [boolean, S.Term, Val, Val];
+const showConstraint = (local: Local, c: Constraint): string =>
+  `Constraint(${c[0] ? `impl ` : ''}${showVal(local, c[3])} ~> ${show(c[1])} : ${showVal(local, c[2])})`;
+const synthapps = (local: Local, ty: Val, tm: Term, spine: List<[Mode, S.Term]>, problems: List<Constraint>): [Term, Val, List<Constraint>] => {
+  log(() => `synthapp ${showVal(local, ty)} ${listToString(spine, ([m, t]) => `@${m.tag === 'ImplUnif' ? 'impl' : ''} ${show(t)}`)} | ${S.showCore(tm, local.ns)}`);
+  if (isEmpty(spine)) return [tm, ty, problems];
   const fty = force(ty);
+  const [mode, stm] = spine.head;
   if (fty.tag === 'VPi' && fty.mode.tag === mode.tag) {
-    const term = check(fty.erased ? localErased(local) : local, tm, fty.type);
-    const v = evaluate(term, local.vs);
-    return [term, vinst(fty, v), Nil];
+    const cty = fty.type;
+    /*
+    const fcty = force(cty);
+    if (false && fcty.tag === 'VNe' && fcty.head.tag === 'HMeta' && (stm.tag !== 'Hole' && stm.tag !== 'Prim' && stm.tag !== 'Meta' && stm.tag !== 'App')) {
+      const m = newMeta(local, local.erased || fty.erased, fty.type);
+      const vm = evaluate(m, local.vs);
+      return synthapps(local, vinst(fty, vm), App(tm, mode, m), tail(spine), Cons([fty.erased, stm, fcty, vm], problems));
+    } else
+    */ {
+      const term = check(fty.erased ? localErased(local) : local, stm, cty);
+      const v = evaluate(term, local.vs);
+      return synthapps(local, vinst(fty, v), App(tm, mode, term), tail(spine), problems);
+    }
   }
   if (fty.tag === 'VPi' && fty.mode.tag === 'ImplUnif' && mode.tag === 'Expl') {
     const m = newMeta(local, local.erased || fty.erased, fty.type);
     const vm = evaluate(m, local.vs);
-    const [rest, rt, l] = synthapp(local, vinst(fty, vm), mode, tm, full);
-    return [rest, rt, Cons(m, l)];
+    return synthapps(local, vinst(fty, vm), App(tm, C.ImplUnif, m), spine, problems);
   }
   if (ty.tag === 'VNe' && ty.head.tag === 'HMeta') {
     const m = getMeta(ty.head.index)
@@ -307,9 +342,9 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: S.Term, full: S.Term): 
     const b = freshMeta(mty, m.erased);
     const pi = evaluate(Pi(mode, false, '_', quote(VNe(HMeta(a), ty.spine), local.index), quote(VNe(HMeta(b), ty.spine), local.index + 1)), local.vs);
     unify(local.index, ty, pi);
-    return synthapp(local, pi, mode, tm, full);
+    return synthapps(local, pi, tm, spine, problems);
   }
-  return terr(`not a correct pi type in synthapp in ${show(full)}: ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${show(tm)}`);
+  return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} ${listToString(spine, ([m, t]) => `@${m.tag === 'ImplUnif' ? 'impl' : ''} ${show(t)}`)} | ${S.showCore(tm, local.ns)}`);
 };
 
 const solveInstances = (): void => {

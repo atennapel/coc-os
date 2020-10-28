@@ -49,7 +49,6 @@ TODO:
 - allow meta as head of glued value
 - glued lets
 - support some impredicative instantiation
-- remove dependency of elaboration on typechecking
 - add a way to not mention type in argument of pi/sigma etc.
 
 QUESTIONS:
