@@ -19,7 +19,8 @@ if (process.argv[2]) {
       const main = getGlobal('main');
       if (!main) console.log(`defined ${ns.join(' ')}`);
       else {
-        console.log(`${showCore(main.term)} : ${showVal(main.type)}`);
+        console.log(`${showCore(main.term)}`);
+        console.log(`${showVal(main.type)}`);
         console.log(`${showCore(normalize(main.term, true))}`);
       }
       process.exit();
