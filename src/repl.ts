@@ -32,10 +32,14 @@ COMMANDS
 [:postponeInvalidSolution] postpone more invalid meta solutions
 [:useBase] use the base library
 [:writeToBase] write definitions to base
+[:showStackTrace] show stack trace of error
 `.trim();
+
+let showStackTrace = false;
 
 export const initREPL = () => {
   config.unfold.push('typeof');
+  showStackTrace = false;
 };
 
 export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) => {
@@ -58,6 +62,10 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const d = !config.postponeInvalidSolution;
       setConfig({ postponeInvalidSolution: d });
       return cb(`postponeInvalidSolution: ${d}`);
+    }
+    if (s === ':showStackTrace') {
+      showStackTrace = !showStackTrace;
+      return cb(`showStackTrace: ${showStackTrace}`);
     }
     if (s === ':useBase') {
       const d = !config.useBase;
@@ -163,6 +171,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
 
     return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}\neras: ${E.show(er)}\nnera: ${E.show(EV.normalize(er, true))}`);
   } catch (err) {
+    if (showStackTrace) console.error(err);
     return cb(`${err}`, true);
   }
 };

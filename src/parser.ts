@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute, ModuleEntry, Module, SignatureEntry, Signature } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif, isPrimName } from './core';
 import { config, log } from './config';
@@ -24,7 +24,7 @@ const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
-const SYM1: string[] = ['\\', ':', '=', ',', '*'];
+const SYM1: string[] = ['\\', ':', '=', ',', '*', ';'];
 const SYM2: string[] = ['->', '**'];
 
 const START = 0;
@@ -247,6 +247,104 @@ const exprs = (ts: Token[], br: BracketO): Term => {
   if (br === '{') return serr(`{} cannot be used here`);
   if (ts.length === 0) return unit;
   if (ts.length === 1) return expr(ts[0])[0];
+  if (isName(ts[0], 'signature')) {
+    if (ts.length !== 2) return serr(`invalid signature (1)`);
+    const b = ts[1];
+    if (b.tag !== 'List' || b.bracket !== '{') return serr(`invalid signature (2)`);
+    const bs = b.list;
+    const spl = splitTokens(bs, t => t.tag === 'Name' && t.name === 'def', true);
+    const entries: SignatureEntry[] = [];
+    for (let i = 0; i < spl.length; i++) {
+      const c = spl[i];
+      if (c.length === 0) continue;
+      if (c[0].tag !== 'Name') return serr(`invalid signature, def does not start with def`);
+      if (c[0].name !== 'def') return serr(`invalid signature, def does not start with def`);
+      const x = c[1];
+      let impl = false;
+      let name_ = '';
+      if (x.tag === 'Name') {
+        name_ = x.name;
+      } else if (x.tag === 'List' && x.bracket === '{') {
+        const a = x.list;
+        if (a.length !== 1) return serr(`invalid name for signature def`);
+        const h = a[0];
+        if (h.tag !== 'Name') return serr(`invalid name for signature def`);
+        name_ = h.name;
+        impl = true;
+      } else return serr(`invalid name for signature def`);
+      if (impl) return serr(`signature definition cannot be implicit`);
+      if (name_.length === 0 || name_ === '-') return serr(`signature definition with empty name`);
+      const erased = name_[0] === '-';
+      const name = erased ? name_.slice(1) : name_;
+      const fst = 2;
+      const sym = c[fst];
+      if (!sym) {
+        entries.push({ erased, name, type: null });
+        continue;      
+      }
+      if (sym.tag !== 'Name') return serr(`signature def: after name should be :`);
+      if (sym.name === ':') {
+        const type = exprs(c.slice(fst + 1), '(');
+        entries.push({ erased, name, type });
+        continue;
+      } else return serr(`def: : or = expected but got ${sym.name}`);
+    }
+    return Signature(entries);
+  }
+  if (isName(ts[0], 'module')) {
+    if (ts.length !== 2) return serr(`invalid module (1)`);
+    const b = ts[1];
+    if (b.tag !== 'List' || b.bracket !== '{') return serr(`invalid module (2)`);
+    const bs = b.list;
+    const spl = splitTokens(bs, t => t.tag === 'Name' && ['public', 'private'].includes(t.name), true);
+    const entries: ModuleEntry[] = [];
+    for (let i = 0; i < spl.length; i++) {
+      const c = spl[i];
+      if (c.length === 0) continue;
+      if (c[0].tag !== 'Name') return serr(`invalid module, def does not start with public or private`);
+      if (c[0].name !== 'public' && c[0].name !== 'private') return serr(`invalid module, def does not start with public or private`);
+      const private_ = c[0].name === 'private';
+      const x = c[1];
+      let impl = false;
+      let name_ = '';
+      if (x.tag === 'Name') {
+        name_ = x.name;
+      } else if (x.tag === 'List' && x.bracket === '{') {
+        const a = x.list;
+        if (a.length !== 1) return serr(`invalid name for module def`);
+        const h = a[0];
+        if (h.tag !== 'Name') return serr(`invalid name for module def`);
+        name_ = h.name;
+        impl = true;
+      } else return serr(`invalid name for module def`);
+      if (impl) return serr(`module definition cannot be implicit`);
+      if (name_.length === 0 || name_ === '-') return serr(`module definition with empty name`);
+      const erased = name_[0] === '-';
+      const name = erased ? name_.slice(1) : name_;
+      const fst = 2;
+      const sym = c[fst];
+      if (sym.tag !== 'Name') return serr(`module def: after name should be : or =`);
+      if (sym.name === '=') {
+        const val = exprs(c.slice(fst + 1), '(');
+        entries.push({ private: private_, erased, name, type: null, val });
+        continue;
+      } else if (sym.name === ':') {
+        const tyts: Token[] = [];
+        let j = fst + 1;
+        for (; j < c.length; j++) {
+          const v = c[j];
+          if (v.tag === 'Name' && v.name === '=')
+            break;
+          else tyts.push(v);
+        }
+        const type = exprs(tyts, '(');
+        const val = exprs(c.slice(j + 1), '(');
+        entries.push({ private: private_, erased, name, type , val });
+        continue;
+      } else return serr(`def: : or = expected but got ${sym.name}`);
+    }
+    return Module(entries);
+  }
   if (isName(ts[0], 'let')) {
     const x = ts[1];
     let name = 'ERROR';
@@ -278,13 +376,13 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     let i = j + 1;
     for (; i < ts.length; i++) {
       const c = ts[i];
-      if (c.tag === 'Name' && c.name === 'in') {
+      if (c.tag === 'Name' && c.name === ';') {
         found = true;
         break;
       }
       vals.push(c);
     }
-    if (!found) return serr(`no in after let`);
+    if (!found) return serr(`no ; after let`);
     if (vals.length === 0) return serr(`empty val in let`);
     const val = exprs(vals, '(');
     const body = exprs(ts.slice(i + 1), '(');
@@ -444,31 +542,36 @@ export const parseDef = async (c: Token[], file: string, fileorder: string[], fi
       name = h.name;
       impl = true;
     } else return serr(`invalid name for def`);
-    if (impl) return serr(`definition cannot be implicit`);
-    if (name) {
-      const fst = 2;
-      const sym = c[fst];
-      if (sym.tag !== 'Name') return serr(`def: after name should be : or =`);
-      if (sym.name === '=') {
-        const erased = name[0] === '-';
-        const name2 = erased ? name.slice(1) : name;
-        return addDef(filemap, file, DDef(erased, name2, exprs(c.slice(fst + 1), '(')));
-      } else if (sym.name === ':') {
-        const tyts: Token[] = [];
-        let j = fst + 1;
-        for (; j < c.length; j++) {
-          const v = c[j];
-          if (v.tag === 'Name' && v.name === '=')
-            break;
-          else tyts.push(v);
-        }
-        const ety = exprs(tyts, '(');
-        const body = exprs(c.slice(j + 1), '(');
-        const erased = name[0] === '-';
-        const name2 = erased ? name.slice(1) : name;
-        return addDef(filemap, file, DDef(erased, name2, Let(false, name, ety, body, Var(name))));
-      } else return serr(`def: : or = expected but got ${sym.name}`);
-    } else return serr(`def should start with a name`);
+    try {
+      if (impl) return serr(`definition cannot be implicit`);
+      if (name) {
+        const fst = 2;
+        const sym = c[fst];
+        if (sym.tag !== 'Name') return serr(`def: after name should be : or =`);
+        if (sym.name === '=') {
+          const erased = name[0] === '-';
+          const name2 = erased ? name.slice(1) : name;
+          return addDef(filemap, file, DDef(erased, name2, exprs(c.slice(fst + 1), '(')));
+        } else if (sym.name === ':') {
+          const tyts: Token[] = [];
+          let j = fst + 1;
+          for (; j < c.length; j++) {
+            const v = c[j];
+            if (v.tag === 'Name' && v.name === '=')
+              break;
+            else tyts.push(v);
+          }
+          const ety = exprs(tyts, '(');
+          const body = exprs(c.slice(j + 1), '(');
+          const erased = name[0] === '-';
+          const name2 = erased ? name.slice(1) : name;
+          return addDef(filemap, file, DDef(erased, name2, Let(false, name, ety, body, Var(name))));
+        } else return serr(`def: : or = expected but got ${sym.name}`);
+      } else return serr(`def should start with a name`);
+    } catch (err) {
+      if (!(err instanceof SyntaxError)) throw err;
+      return serr(`syntax error in def ${name}: ${err}`);
+    }
   } else if (c[0].tag === 'Name' && ['execute', '-execute', 'typecheck', '-typecheck'].includes(c[0].name)) {
     const command = c[0].name;
     const rest = c.slice(1);

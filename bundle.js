@@ -339,7 +339,7 @@ const show = (t) => {
     if (t.tag === 'Proj')
         return `(${t.proj} ${exports.show(t.term)})`;
     if (t.tag === 'Let')
-        return `(let ${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)} in ${exports.show(t.body)})`;
+        return `(let ${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)} = ${exports.show(t.val)}; ${exports.show(t.body)})`;
     if (t.tag === 'Pi') {
         const [as, r] = exports.flattenPi(t);
         return `(${as.map(([x, m, e, ty]) => `${m === exports.ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(ty)}${m === exports.ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${exports.show(r)})`;
@@ -706,6 +706,51 @@ const synth = (local, tm) => {
         }
         return [t, vt];
     }
+    if (tm.tag === 'Signature') {
+        let clocal = local;
+        const edefs = [];
+        for (let i = 0, l = tm.defs.length; i < l; i++) {
+            const e = tm.defs[i];
+            let type;
+            if (e.type) {
+                type = check(localErased(clocal), e.type, values_1.VType);
+            }
+            else {
+                type = newMeta(clocal, e.erased, values_1.VType);
+            }
+            edefs.push([e, type]);
+            const ty = values_1.evaluate(type, clocal.vs);
+            clocal = localExtend(clocal, e.name, ty, C.Expl, e.erased, true, false);
+        }
+        const stype = edefs.reduceRight((t, [e, type]) => core_1.Sigma(e.erased, e.name, type, t), values_1.quote(V.VU, local.index));
+        return [stype, values_1.VType];
+    }
+    if (tm.tag === 'Module') {
+        let clocal = local;
+        const edefs = [];
+        for (let i = 0, l = tm.defs.length; i < l; i++) {
+            const e = tm.defs[i];
+            let type;
+            let ty;
+            let val;
+            if (e.type) {
+                type = check(localErased(clocal), e.type, values_1.VType);
+                ty = values_1.evaluate(type, clocal.vs);
+                val = check(e.erased ? localErased(clocal) : clocal, e.val, ty);
+            }
+            else {
+                [val, ty] = synth(e.erased ? localErased(clocal) : clocal, e.val);
+                type = values_1.quote(ty, clocal.index);
+            }
+            edefs.push([e, val, type, ty]);
+            const v = values_1.evaluate(val, clocal.vs);
+            clocal = localExtend(clocal, e.name, ty, C.Expl, e.erased, false, false, v);
+        }
+        // module { public x : T = t } ~> let x : T = t; (x, () : (x : T) ** U)
+        const mtype = edefs.reduceRight((t, [e, , , ty], i) => e.private ? C.shift(-1, 1, t) : core_1.Sigma(e.erased, e.name, values_1.quote(ty, local.index + i), t), values_1.quote(V.VU, local.index));
+        config_1.log(() => C.show(mtype));
+        return utils_1.terr(`unimplemented module`);
+    }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
 const showConstraint = (local, c) => `Constraint(${c[0] ? `impl ` : ''}${showVal(local, c[3])} ~> ${surface_1.show(c[1])} : ${showVal(local, c[2])})`;
@@ -921,7 +966,7 @@ const show = (t) => {
     if (t.tag === 'Proj')
         return `${t.proj} ${exports.show(t.term)}`;
     if (t.tag === 'Let')
-        return `let ${showP(t.val.tag === 'Let', t.val)} in ${exports.show(t.body)}`;
+        return `let ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
     return t;
 };
 exports.show = show;
@@ -1174,7 +1219,7 @@ const TName = (name) => ({ tag: 'Name', name });
 const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list, bracket) => ({ tag: 'List', list, bracket });
 const TStr = (str) => ({ tag: 'Str', str });
-const SYM1 = ['\\', ':', '=', ',', '*'];
+const SYM1 = ['\\', ':', '=', ',', '*', ';'];
 const SYM2 = ['->', '**'];
 const START = 0;
 const NAME = 1;
@@ -1439,6 +1484,136 @@ const exprs = (ts, br) => {
         return unit;
     if (ts.length === 1)
         return expr(ts[0])[0];
+    if (isName(ts[0], 'signature')) {
+        if (ts.length !== 2)
+            return utils_1.serr(`invalid signature (1)`);
+        const b = ts[1];
+        if (b.tag !== 'List' || b.bracket !== '{')
+            return utils_1.serr(`invalid signature (2)`);
+        const bs = b.list;
+        const spl = splitTokens(bs, t => t.tag === 'Name' && t.name === 'def', true);
+        const entries = [];
+        for (let i = 0; i < spl.length; i++) {
+            const c = spl[i];
+            if (c.length === 0)
+                continue;
+            if (c[0].tag !== 'Name')
+                return utils_1.serr(`invalid signature, def does not start with def`);
+            if (c[0].name !== 'def')
+                return utils_1.serr(`invalid signature, def does not start with def`);
+            const x = c[1];
+            let impl = false;
+            let name_ = '';
+            if (x.tag === 'Name') {
+                name_ = x.name;
+            }
+            else if (x.tag === 'List' && x.bracket === '{') {
+                const a = x.list;
+                if (a.length !== 1)
+                    return utils_1.serr(`invalid name for signature def`);
+                const h = a[0];
+                if (h.tag !== 'Name')
+                    return utils_1.serr(`invalid name for signature def`);
+                name_ = h.name;
+                impl = true;
+            }
+            else
+                return utils_1.serr(`invalid name for signature def`);
+            if (impl)
+                return utils_1.serr(`signature definition cannot be implicit`);
+            if (name_.length === 0 || name_ === '-')
+                return utils_1.serr(`signature definition with empty name`);
+            const erased = name_[0] === '-';
+            const name = erased ? name_.slice(1) : name_;
+            const fst = 2;
+            const sym = c[fst];
+            if (!sym) {
+                entries.push({ erased, name, type: null });
+                continue;
+            }
+            if (sym.tag !== 'Name')
+                return utils_1.serr(`signature def: after name should be :`);
+            if (sym.name === ':') {
+                const type = exprs(c.slice(fst + 1), '(');
+                entries.push({ erased, name, type });
+                continue;
+            }
+            else
+                return utils_1.serr(`def: : or = expected but got ${sym.name}`);
+        }
+        return surface_1.Signature(entries);
+    }
+    if (isName(ts[0], 'module')) {
+        if (ts.length !== 2)
+            return utils_1.serr(`invalid module (1)`);
+        const b = ts[1];
+        if (b.tag !== 'List' || b.bracket !== '{')
+            return utils_1.serr(`invalid module (2)`);
+        const bs = b.list;
+        const spl = splitTokens(bs, t => t.tag === 'Name' && ['public', 'private'].includes(t.name), true);
+        const entries = [];
+        for (let i = 0; i < spl.length; i++) {
+            const c = spl[i];
+            if (c.length === 0)
+                continue;
+            if (c[0].tag !== 'Name')
+                return utils_1.serr(`invalid module, def does not start with public or private`);
+            if (c[0].name !== 'public' && c[0].name !== 'private')
+                return utils_1.serr(`invalid module, def does not start with public or private`);
+            const private_ = c[0].name === 'private';
+            const x = c[1];
+            let impl = false;
+            let name_ = '';
+            if (x.tag === 'Name') {
+                name_ = x.name;
+            }
+            else if (x.tag === 'List' && x.bracket === '{') {
+                const a = x.list;
+                if (a.length !== 1)
+                    return utils_1.serr(`invalid name for module def`);
+                const h = a[0];
+                if (h.tag !== 'Name')
+                    return utils_1.serr(`invalid name for module def`);
+                name_ = h.name;
+                impl = true;
+            }
+            else
+                return utils_1.serr(`invalid name for module def`);
+            if (impl)
+                return utils_1.serr(`module definition cannot be implicit`);
+            if (name_.length === 0 || name_ === '-')
+                return utils_1.serr(`module definition with empty name`);
+            const erased = name_[0] === '-';
+            const name = erased ? name_.slice(1) : name_;
+            const fst = 2;
+            const sym = c[fst];
+            if (sym.tag !== 'Name')
+                return utils_1.serr(`module def: after name should be : or =`);
+            if (sym.name === '=') {
+                const val = exprs(c.slice(fst + 1), '(');
+                entries.push({ private: private_, erased, name, type: null, val });
+                continue;
+            }
+            else if (sym.name === ':') {
+                const tyts = [];
+                let j = fst + 1;
+                for (; j < c.length; j++) {
+                    const v = c[j];
+                    if (v.tag === 'Name' && v.name === '=')
+                        break;
+                    else
+                        tyts.push(v);
+                }
+                const type = exprs(tyts, '(');
+                const val = exprs(c.slice(j + 1), '(');
+                entries.push({ private: private_, erased, name, type, val });
+                continue;
+            }
+            else
+                return utils_1.serr(`def: : or = expected but got ${sym.name}`);
+        }
+        return surface_1.Module(entries);
+    }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
         let name = 'ERROR';
@@ -1477,14 +1652,14 @@ const exprs = (ts, br) => {
         let i = j + 1;
         for (; i < ts.length; i++) {
             const c = ts[i];
-            if (c.tag === 'Name' && c.name === 'in') {
+            if (c.tag === 'Name' && c.name === ';') {
                 found = true;
                 break;
             }
             vals.push(c);
         }
         if (!found)
-            return utils_1.serr(`no in after let`);
+            return utils_1.serr(`no ; after let`);
         if (vals.length === 0)
             return utils_1.serr(`empty val in let`);
         const val = exprs(vals, '(');
@@ -1668,39 +1843,46 @@ const parseDef = async (c, file, fileorder, filemap) => {
         }
         else
             return utils_1.serr(`invalid name for def`);
-        if (impl)
-            return utils_1.serr(`definition cannot be implicit`);
-        if (name) {
-            const fst = 2;
-            const sym = c[fst];
-            if (sym.tag !== 'Name')
-                return utils_1.serr(`def: after name should be : or =`);
-            if (sym.name === '=') {
-                const erased = name[0] === '-';
-                const name2 = erased ? name.slice(1) : name;
-                return addDef(filemap, file, surface_1.DDef(erased, name2, exprs(c.slice(fst + 1), '(')));
-            }
-            else if (sym.name === ':') {
-                const tyts = [];
-                let j = fst + 1;
-                for (; j < c.length; j++) {
-                    const v = c[j];
-                    if (v.tag === 'Name' && v.name === '=')
-                        break;
-                    else
-                        tyts.push(v);
+        try {
+            if (impl)
+                return utils_1.serr(`definition cannot be implicit`);
+            if (name) {
+                const fst = 2;
+                const sym = c[fst];
+                if (sym.tag !== 'Name')
+                    return utils_1.serr(`def: after name should be : or =`);
+                if (sym.name === '=') {
+                    const erased = name[0] === '-';
+                    const name2 = erased ? name.slice(1) : name;
+                    return addDef(filemap, file, surface_1.DDef(erased, name2, exprs(c.slice(fst + 1), '(')));
                 }
-                const ety = exprs(tyts, '(');
-                const body = exprs(c.slice(j + 1), '(');
-                const erased = name[0] === '-';
-                const name2 = erased ? name.slice(1) : name;
-                return addDef(filemap, file, surface_1.DDef(erased, name2, surface_1.Let(false, name, ety, body, surface_1.Var(name))));
+                else if (sym.name === ':') {
+                    const tyts = [];
+                    let j = fst + 1;
+                    for (; j < c.length; j++) {
+                        const v = c[j];
+                        if (v.tag === 'Name' && v.name === '=')
+                            break;
+                        else
+                            tyts.push(v);
+                    }
+                    const ety = exprs(tyts, '(');
+                    const body = exprs(c.slice(j + 1), '(');
+                    const erased = name[0] === '-';
+                    const name2 = erased ? name.slice(1) : name;
+                    return addDef(filemap, file, surface_1.DDef(erased, name2, surface_1.Let(false, name, ety, body, surface_1.Var(name))));
+                }
+                else
+                    return utils_1.serr(`def: : or = expected but got ${sym.name}`);
             }
             else
-                return utils_1.serr(`def: : or = expected but got ${sym.name}`);
+                return utils_1.serr(`def should start with a name`);
         }
-        else
-            return utils_1.serr(`def should start with a name`);
+        catch (err) {
+            if (!(err instanceof SyntaxError))
+                throw err;
+            return utils_1.serr(`syntax error in def ${name}: ${err}`);
+        }
     }
     else if (c[0].tag === 'Name' && ['execute', '-execute', 'typecheck', '-typecheck'].includes(c[0].name)) {
         const command = c[0].name;
@@ -1854,9 +2036,12 @@ COMMANDS
 [:postponeInvalidSolution] postpone more invalid meta solutions
 [:useBase] use the base library
 [:writeToBase] write definitions to base
+[:showStackTrace] show stack trace of error
 `.trim();
+let showStackTrace = false;
 const initREPL = () => {
     config_1.config.unfold.push('typeof');
+    showStackTrace = false;
 };
 exports.initREPL = initREPL;
 const runREPL = (s_, cb) => {
@@ -1879,6 +2064,10 @@ const runREPL = (s_, cb) => {
             const d = !config_1.config.postponeInvalidSolution;
             config_1.setConfig({ postponeInvalidSolution: d });
             return cb(`postponeInvalidSolution: ${d}`);
+        }
+        if (s === ':showStackTrace') {
+            showStackTrace = !showStackTrace;
+            return cb(`showStackTrace: ${showStackTrace}`);
         }
         if (s === ':useBase') {
             const d = !config_1.config.useBase;
@@ -1987,6 +2176,8 @@ const runREPL = (s_, cb) => {
         return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\netru: ${surface_1.showCore(unfolded)}\neras: ${E.show(er)}\nnera: ${E.show(EV.normalize(er, true))}`);
     }
     catch (err) {
+        if (showStackTrace)
+            console.error(err);
         return cb(`${err}`, true);
     }
 };
@@ -2102,7 +2293,7 @@ exports.deserializeCore = deserializeCore;
 },{"./core":5,"./utils/utils":21}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DExecute = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
+exports.showDefs = exports.showDef = exports.DExecute = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Module = exports.Signature = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
 const names_1 = require("./names");
 const values_1 = require("./values");
 const list_1 = require("./utils/list");
@@ -2135,6 +2326,10 @@ const Meta = (index) => ({ tag: 'Meta', index });
 exports.Meta = Meta;
 const Hole = (name) => ({ tag: 'Hole', name });
 exports.Hole = Hole;
+const Signature = (defs) => ({ tag: 'Signature', defs });
+exports.Signature = Signature;
+const Module = (defs) => ({ tag: 'Module', defs });
+exports.Module = Module;
 exports.Type = exports.Prim('Type');
 const flattenApp = (t) => {
     const r = [];
@@ -2210,7 +2405,7 @@ const show = (t) => {
             `${m.tag === 'ImplUnif' ? '{' : '('}${e ? '-' : ''}${x} : ${exports.show(t)}${m.tag === 'ImplUnif' ? '}' : ')'}`).join(' -> ')} -> ${exports.show(b)}`;
     }
     if (t.tag === 'Let')
-        return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${exports.show(t.body)}`;
+        return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
     if (t.tag === 'Sigma') {
         const [as, b] = exports.flattenSigma(t);
         return `${as.map(([x, e, t]) => !e && x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `(${e ? '-' : ''}${x} : ${showP(t.tag === 'Let', t)})`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`;
@@ -2225,6 +2420,10 @@ const show = (t) => {
             return `${exports.show(t.term)}.${proj}`;
         return `.${proj} ${showP(true, t.term)}`;
     }
+    if (t.tag === 'Signature')
+        return `signature { ${t.defs.map(({ erased, name, type }) => `def ${erased ? '_' : ''}${name}${type ? ` : ${exports.show(type)}` : ''}`).join(' ')} }`;
+    if (t.tag === 'Module')
+        return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private' : 'public'} ${erased ? '-' : ''}${name}${type ? ` : ${exports.show(type)}` : ''} = ${exports.show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
     return t;
 };
 exports.show = show;

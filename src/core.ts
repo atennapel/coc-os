@@ -83,7 +83,7 @@ export const show = (t: Term): string => {
   if (t.tag === 'Abs') return `(\\${t.mode.tag === 'ImplUnif' ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${show(t.type)}${t.mode.tag === 'ImplUnif' ? '}' : ')'}. ${show(t.body)})`;
   if (t.tag === 'Pair') return `(${show(t.fst)}, ${show(t.snd)} : ${show(t.type)})`;
   if (t.tag === 'Proj') return `(${t.proj} ${show(t.term)})`;
-  if (t.tag === 'Let') return `(let ${t.erased ? '-' : ''}${t.name} : ${show(t.type)} = ${show(t.val)} in ${show(t.body)})`;
+  if (t.tag === 'Let') return `(let ${t.erased ? '-' : ''}${t.name} : ${show(t.type)} = ${show(t.val)}; ${show(t.body)})`;
   if (t.tag === 'Pi') {
     const [as, r] = flattenPi(t);
     return `(${as.map(([x, m, e, ty]) => `${m === ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(ty)}${m === ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(r)})`;

@@ -15,6 +15,8 @@ export const PName = (name: Name): ProjType => ({ tag: 'PName', name });
 export const PIndex = (index: Ix): ProjType => ({ tag: 'PIndex', index });
 export const PCore = (proj: 'fst' | 'snd'): ProjType => ({ tag: 'PCore', proj });
 
+export type SignatureEntry = { erased: boolean, name: Name, type: Term | null };
+export type ModuleEntry = { private: boolean, erased: boolean, name: Name, type: Term | null, val: Term };
 export type Term = Data<{
   Var: { name: Name },
   Prim: { name: PrimName },
@@ -30,6 +32,9 @@ export type Term = Data<{
 
   Let: { erased: boolean, name: Name, type: Term | null, val: Term, body: Term },
   Hole: { name: Name | null },
+
+  Signature: { defs: SignatureEntry[] },
+  Module: { defs: ModuleEntry[] },
 }>;
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
@@ -42,6 +47,8 @@ export const Pi = (mode: Mode, erased: boolean, name: Name, type: Term, body: Te
 export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Sigma', erased, name, type, body });
 export const Meta = (index: Ix): Term => ({ tag: 'Meta', index });
 export const Hole = (name: Name | null): Term => ({ tag: 'Hole', name });
+export const Signature = (defs: SignatureEntry[]): Term => ({ tag: 'Signature', defs });
+export const Module = (defs: ModuleEntry[]): Term => ({ tag: 'Module', defs });
 
 export const Type = Prim('Type');
 
@@ -113,7 +120,7 @@ export const show = (t: Term): string => {
       `${m.tag === 'ImplUnif' ? '{' : '('}${e ? '-' : ''}${x} : ${show(t)}${m.tag === 'ImplUnif' ? '}' : ')'}`).join(' -> ')} -> ${show(b)}`;
   }
   if (t.tag === 'Let')
-    return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)} in ${show(t.body)}`;
+    return `let ${t.erased ? '-' : ''}${t.name}${t.type ? ` : ${showP(t.type.tag === 'Let', t.type)}` : ''} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   if (t.tag === 'Sigma') {
     const [as, b] = flattenSigma(t);
     return `${as.map(([x, e, t]) => !e && x === '_' ? showP(t.tag === 'Abs' || t.tag === 'Let' || t.tag === 'Pi' || t.tag === 'Sigma', t) : `(${e ? '-' : ''}${x} : ${showP(t.tag === 'Let', t)})`).join(' ** ')} ** ${showP(b.tag === 'Let', b)}`
@@ -127,6 +134,10 @@ export const show = (t: Term): string => {
     if (isSimple(t.term)) return `${show(t.term)}.${proj}`;
     return `.${proj} ${showP(true, t.term)}`;
   }
+  if (t.tag === 'Signature')
+    return `signature { ${t.defs.map(({ erased, name, type}) => `def ${erased ? '_' : ''}${name}${type ? ` : ${show(type)}` : ''}`).join(' ')} }`;
+  if (t.tag === 'Module')
+    return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private' : 'public'} ${erased ? '-' : ''}${name}${type ? ` : ${show(type)}` : ''} = ${show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
   return t;
 };
 

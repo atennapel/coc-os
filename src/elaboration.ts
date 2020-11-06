@@ -304,6 +304,49 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     }
     return [t, vt];
   }
+  if (tm.tag === 'Signature') {
+    let clocal = local;
+    const edefs: [S.SignatureEntry, Term][] = [];
+    for (let i = 0, l = tm.defs.length; i < l; i++) {
+      const e = tm.defs[i];
+      let type: Term;
+      if (e.type) {
+        type = check(localErased(clocal), e.type, VType);
+      } else {
+        type = newMeta(clocal, e.erased, VType);
+      }
+      edefs.push([e, type]);
+      const ty = evaluate(type, clocal.vs);
+      clocal = localExtend(clocal, e.name, ty, C.Expl, e.erased, true, false);
+    }
+    const stype = edefs.reduceRight((t, [e, type]) => Sigma(e.erased, e.name, type, t), quote(V.VU, local.index));
+    return [stype, VType];
+  }
+  if (tm.tag === 'Module') {
+    let clocal = local;
+    const edefs: [S.ModuleEntry, Term, Term, Val][] = [];
+    for (let i = 0, l = tm.defs.length; i < l; i++) {
+      const e = tm.defs[i];
+      let type: Term;
+      let ty: Val;
+      let val: Term;
+      if (e.type) {
+        type = check(localErased(clocal), e.type, VType);
+        ty = evaluate(type, clocal.vs);
+        val = check(e.erased ? localErased(clocal) : clocal, e.val, ty);
+      } else {
+        [val, ty] = synth(e.erased ? localErased(clocal) : clocal, e.val);
+        type = quote(ty, clocal.index);
+      }
+      edefs.push([e, val, type, ty]);
+      const v = evaluate(val, clocal.vs);
+      clocal = localExtend(clocal, e.name, ty, C.Expl, e.erased, false, false, v);
+    }
+    // module { public x : T = t } ~> let x : T = t; (x, () : (x : T) ** U)
+    const mtype = edefs.reduceRight((t, [e,, , ty], i) => e.private ? C.shift(-1, 1, t) : Sigma(e.erased, e.name, quote(ty, local.index + i), t), quote(V.VU, local.index));
+    log(() => C.show(mtype));
+    return terr(`unimplemented module`);
+  }
   return terr(`unable to synth ${show(tm)}`);
 };
 
