@@ -137,7 +137,7 @@ export const show = (t: Term): string => {
   if (t.tag === 'Signature')
     return `signature { ${t.defs.map(({ erased, name, type}) => `def ${erased ? '_' : ''}${name}${type ? ` : ${show(type)}` : ''}`).join(' ')} }`;
   if (t.tag === 'Module')
-    return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private' : 'public'} ${erased ? '-' : ''}${name}${type ? ` : ${show(type)}` : ''} = ${show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
+    return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private def' : 'def'} ${erased ? '-' : ''}${name}${type ? ` : ${show(type)}` : ''} = ${show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
   return t;
 };
 

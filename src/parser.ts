@@ -296,14 +296,24 @@ const exprs = (ts: Token[], br: BracketO): Term => {
     const b = ts[1];
     if (b.tag !== 'List' || b.bracket !== '{') return serr(`invalid module (2)`);
     const bs = b.list;
-    const spl = splitTokens(bs, t => t.tag === 'Name' && ['public', 'private'].includes(t.name), true);
+    const spl = splitTokens(bs, t => t.tag === 'Name' && ['def', 'private'].includes(t.name), true);
     const entries: ModuleEntry[] = [];
+    let private_flag = false;
     for (let i = 0; i < spl.length; i++) {
       const c = spl[i];
       if (c.length === 0) continue;
-      if (c[0].tag !== 'Name') return serr(`invalid module, def does not start with public or private`);
-      if (c[0].name !== 'public' && c[0].name !== 'private') return serr(`invalid module, def does not start with public or private`);
-      const private_ = c[0].name === 'private';
+      if (c[0].tag !== 'Name') return serr(`invalid module, def does not start with def or private`);
+      if (c[0].name !== 'def' && c[0].name !== 'private') return serr(`invalid module, def does not start with def or private`);
+      if (c[0].name === 'private') {
+        if (c.length > 1) return serr(`something went wrong in parsing module private definition`);
+        private_flag = true;
+        continue;
+      }
+      let private_ = false;
+      if (c[0].name === 'def' && private_flag) {
+        private_flag = false;
+        private_ = true;
+      }
       const x = c[1];
       let impl = false;
       let name_ = '';

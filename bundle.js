@@ -726,32 +726,39 @@ const synth = (local, tm) => {
         return [stype, values_1.VType];
     }
     if (tm.tag === 'Module') {
-        let clocal = local;
-        const edefs = [];
-        for (let i = 0, l = tm.defs.length; i < l; i++) {
-            const e = tm.defs[i];
-            let type;
-            let ty;
-            let val;
-            if (e.type) {
-                type = check(localErased(clocal), e.type, values_1.VType);
-                ty = values_1.evaluate(type, clocal.vs);
-                val = check(e.erased ? localErased(clocal) : clocal, e.val, ty);
-            }
-            else {
-                [val, ty] = synth(e.erased ? localErased(clocal) : clocal, e.val);
-                type = values_1.quote(ty, clocal.index);
-            }
-            edefs.push([e, val, type, ty]);
-            const v = values_1.evaluate(val, clocal.vs);
-            clocal = localExtend(clocal, e.name, ty, C.Expl, e.erased, false, false, v);
-        }
-        // module { public x : T = t } ~> let x : T = t; (x, () : (x : T) ** U)
-        const mtype = edefs.reduceRight((t, [e, , , ty], i) => e.private ? C.shift(-1, 1, t) : core_1.Sigma(e.erased, e.name, values_1.quote(ty, local.index + i), t), values_1.quote(V.VU, local.index));
-        config_1.log(() => C.show(mtype));
-        return utils_1.terr(`unimplemented module`);
+        const defs = list_1.listFrom(tm.defs);
+        const [term, type] = createModuleTerm(local, defs);
+        return [term, values_1.evaluate(type, local.vs)];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
+};
+const createModuleTerm = (local, entries) => {
+    if (entries.tag === 'Nil')
+        return [values_1.quote(V.VUnit, 0), values_1.quote(V.VU, 0)];
+    const e = entries.head;
+    const rest = entries.tail;
+    let type;
+    let ty;
+    let val;
+    if (e.type) {
+        type = check(localErased(local), e.type, values_1.VType);
+        ty = values_1.evaluate(type, local.vs);
+        val = check(e.erased ? localErased(local) : local, e.val, ty);
+    }
+    else {
+        [val, ty] = synth(e.erased ? localErased(local) : local, e.val);
+        type = values_1.quote(ty, local.index);
+    }
+    const v = values_1.evaluate(val, local.vs);
+    const nextlocal = localExtend(local, e.name, ty, C.Expl, e.erased, false, false, v);
+    const [nextterm, nexttype] = createModuleTerm(nextlocal, rest);
+    if (e.private) {
+        return utils_1.terr(`private definitions in module unimplemented`);
+    }
+    else {
+        const sigma = core_1.Sigma(e.erased, e.name, type, nexttype);
+        return [core_1.Let(e.erased, e.name, type, val, core_1.Pair(core_1.Var(0), nextterm, C.shift(1, 0, sigma))), sigma];
+    }
 };
 const showConstraint = (local, c) => `Constraint(${c[0] ? `impl ` : ''}${showVal(local, c[3])} ~> ${surface_1.show(c[1])} : ${showVal(local, c[2])})`;
 const synthapps = (local, ty, tm, spine, problems) => {
@@ -1550,17 +1557,28 @@ const exprs = (ts, br) => {
         if (b.tag !== 'List' || b.bracket !== '{')
             return utils_1.serr(`invalid module (2)`);
         const bs = b.list;
-        const spl = splitTokens(bs, t => t.tag === 'Name' && ['public', 'private'].includes(t.name), true);
+        const spl = splitTokens(bs, t => t.tag === 'Name' && ['def', 'private'].includes(t.name), true);
         const entries = [];
+        let private_flag = false;
         for (let i = 0; i < spl.length; i++) {
             const c = spl[i];
             if (c.length === 0)
                 continue;
             if (c[0].tag !== 'Name')
-                return utils_1.serr(`invalid module, def does not start with public or private`);
-            if (c[0].name !== 'public' && c[0].name !== 'private')
-                return utils_1.serr(`invalid module, def does not start with public or private`);
-            const private_ = c[0].name === 'private';
+                return utils_1.serr(`invalid module, def does not start with def or private`);
+            if (c[0].name !== 'def' && c[0].name !== 'private')
+                return utils_1.serr(`invalid module, def does not start with def or private`);
+            if (c[0].name === 'private') {
+                if (c.length > 1)
+                    return utils_1.serr(`something went wrong in parsing module private definition`);
+                private_flag = true;
+                continue;
+            }
+            let private_ = false;
+            if (c[0].name === 'def' && private_flag) {
+                private_flag = false;
+                private_ = true;
+            }
             const x = c[1];
             let impl = false;
             let name_ = '';
@@ -2423,7 +2441,7 @@ const show = (t) => {
     if (t.tag === 'Signature')
         return `signature { ${t.defs.map(({ erased, name, type }) => `def ${erased ? '_' : ''}${name}${type ? ` : ${exports.show(type)}` : ''}`).join(' ')} }`;
     if (t.tag === 'Module')
-        return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private' : 'public'} ${erased ? '-' : ''}${name}${type ? ` : ${exports.show(type)}` : ''} = ${exports.show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
+        return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private def' : 'def'} ${erased ? '-' : ''}${name}${type ? ` : ${exports.show(type)}` : ''} = ${exports.show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
     return t;
 };
 exports.show = show;

@@ -323,31 +323,37 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     return [stype, VType];
   }
   if (tm.tag === 'Module') {
-    let clocal = local;
-    const edefs: [S.ModuleEntry, Term, Term, Val][] = [];
-    for (let i = 0, l = tm.defs.length; i < l; i++) {
-      const e = tm.defs[i];
-      let type: Term;
-      let ty: Val;
-      let val: Term;
-      if (e.type) {
-        type = check(localErased(clocal), e.type, VType);
-        ty = evaluate(type, clocal.vs);
-        val = check(e.erased ? localErased(clocal) : clocal, e.val, ty);
-      } else {
-        [val, ty] = synth(e.erased ? localErased(clocal) : clocal, e.val);
-        type = quote(ty, clocal.index);
-      }
-      edefs.push([e, val, type, ty]);
-      const v = evaluate(val, clocal.vs);
-      clocal = localExtend(clocal, e.name, ty, C.Expl, e.erased, false, false, v);
-    }
-    // module { public x : T = t } ~> let x : T = t; (x, () : (x : T) ** U)
-    const mtype = edefs.reduceRight((t, [e,, , ty], i) => e.private ? C.shift(-1, 1, t) : Sigma(e.erased, e.name, quote(ty, local.index + i), t), quote(V.VU, local.index));
-    log(() => C.show(mtype));
-    return terr(`unimplemented module`);
+    const defs = listFrom(tm.defs);
+    const [term, type] = createModuleTerm(local, defs);
+    return [term, evaluate(type, local.vs)];
   }
   return terr(`unable to synth ${show(tm)}`);
+};
+
+const createModuleTerm = (local: Local, entries: List<S.ModuleEntry>): [Term, Term] => {
+  if (entries.tag === 'Nil') return [quote(V.VUnit, 0), quote(V.VU, 0)];
+  const e = entries.head;
+  const rest = entries.tail;
+  let type: Term;
+  let ty: Val;
+  let val: Term;
+  if (e.type) {
+    type = check(localErased(local), e.type, VType);
+    ty = evaluate(type, local.vs);
+    val = check(e.erased ? localErased(local) : local, e.val, ty);
+  } else {
+    [val, ty] = synth(e.erased ? localErased(local) : local, e.val);
+    type = quote(ty, local.index);
+  }
+  const v = evaluate(val, local.vs);
+  const nextlocal = localExtend(local, e.name, ty, C.Expl, e.erased, false, false, v);
+  const [nextterm, nexttype] = createModuleTerm(nextlocal, rest);
+  if (e.private) {
+    return terr(`private definitions in module unimplemented`);
+  } else {
+    const sigma = Sigma(e.erased, e.name, type, nexttype);
+    return [Let(e.erased, e.name, type, val, Pair(Var(0), nextterm, C.shift(1, 0, sigma))), sigma];
+  }
 };
 
 type Constraint = [boolean, S.Term, Val, Val];

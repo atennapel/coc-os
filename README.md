@@ -38,6 +38,8 @@ Future work:
 
 ```
 TODO:
+- implement private module inference
+- add native unit type (for better printing, () : {})
 - make erased language bigger (ifs, fix, etc.) in order to reduce ugly lambda encodings
 - implement instance search
 - implement pruning
