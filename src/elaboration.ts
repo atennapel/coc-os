@@ -349,7 +349,7 @@ const createModuleTerm = (local: Local, entries: List<S.ModuleEntry>): [Term, Te
   const nextlocal = localExtend(local, e.name, ty, C.Expl, e.erased, false, false, v);
   const [nextterm, nexttype] = createModuleTerm(nextlocal, rest);
   if (e.private) {
-    return terr(`private definitions in module unimplemented`);
+    return [Let(e.erased, e.name, type, val, nextterm), C.substTop(nexttype, val)];
   } else {
     const sigma = Sigma(e.erased, e.name, type, nexttype);
     return [Let(e.erased, e.name, type, val, Pair(Var(0), nextterm, C.shift(1, 0, sigma))), sigma];

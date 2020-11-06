@@ -121,3 +121,20 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   return t;
 };
+
+export const subst = (j: Ix, s: Term, t: Term): Term => {
+  if (t.tag === 'Var') return t.index === j ? s : t;
+  if (t.tag === 'Prim') return t;
+  if (t.tag === 'Global') return t;
+  if (t.tag === 'Meta') return t;
+  if (t.tag === 'App') return App(subst(j, s, t.left), t.mode, subst(j, s, t.right));
+  if (t.tag === 'Abs') return Abs(t.mode, t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Pair') return Pair(subst(j, s, t.fst), subst(j, s, t.snd), subst(j, s, t.type));
+  if (t.tag === 'Proj') return Proj(t.proj, subst(j, s, t.term));
+  if (t.tag === 'Let') return Let(t.erased, t.name, subst(j, s, t.type), subst(j, s, t.val), subst(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Pi') return Pi(t.mode, t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
+  return t;
+};
+
+export const substTop = (t: Term, u: Term): Term => shift(-1, 0, subst(0, shift(1, 0, u), t));

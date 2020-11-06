@@ -253,7 +253,7 @@ exports.conv = conv;
 "use strict";
 var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.shift = exports.eq = exports.show = exports.flattenPi = exports.flattenApp = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
+exports.substTop = exports.subst = exports.shift = exports.eq = exports.show = exports.flattenPi = exports.flattenApp = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
 _a = { Expl: { tag: 'Expl' }, ImplUnif: { tag: 'ImplUnif' } }, exports.Expl = _a.Expl, exports.ImplUnif = _a.ImplUnif;
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
@@ -401,6 +401,34 @@ const shift = (d, c, t) => {
     return t;
 };
 exports.shift = shift;
+const subst = (j, s, t) => {
+    if (t.tag === 'Var')
+        return t.index === j ? s : t;
+    if (t.tag === 'Prim')
+        return t;
+    if (t.tag === 'Global')
+        return t;
+    if (t.tag === 'Meta')
+        return t;
+    if (t.tag === 'App')
+        return exports.App(exports.subst(j, s, t.left), t.mode, exports.subst(j, s, t.right));
+    if (t.tag === 'Abs')
+        return exports.Abs(t.mode, t.erased, t.name, exports.subst(j, s, t.type), exports.subst(j + 1, exports.shift(1, 0, s), t.body));
+    if (t.tag === 'Pair')
+        return exports.Pair(exports.subst(j, s, t.fst), exports.subst(j, s, t.snd), exports.subst(j, s, t.type));
+    if (t.tag === 'Proj')
+        return exports.Proj(t.proj, exports.subst(j, s, t.term));
+    if (t.tag === 'Let')
+        return exports.Let(t.erased, t.name, exports.subst(j, s, t.type), exports.subst(j, s, t.val), exports.subst(j + 1, exports.shift(1, 0, s), t.body));
+    if (t.tag === 'Pi')
+        return exports.Pi(t.mode, t.erased, t.name, exports.subst(j, s, t.type), exports.subst(j + 1, exports.shift(1, 0, s), t.body));
+    if (t.tag === 'Sigma')
+        return exports.Sigma(t.erased, t.name, exports.subst(j, s, t.type), exports.subst(j + 1, exports.shift(1, 0, s), t.body));
+    return t;
+};
+exports.subst = subst;
+const substTop = (t, u) => exports.shift(-1, 0, exports.subst(0, exports.shift(1, 0, u), t));
+exports.substTop = substTop;
 
 },{}],6:[function(require,module,exports){
 "use strict";
@@ -753,7 +781,7 @@ const createModuleTerm = (local, entries) => {
     const nextlocal = localExtend(local, e.name, ty, C.Expl, e.erased, false, false, v);
     const [nextterm, nexttype] = createModuleTerm(nextlocal, rest);
     if (e.private) {
-        return utils_1.terr(`private definitions in module unimplemented`);
+        return [core_1.Let(e.erased, e.name, type, val, nextterm), C.substTop(nexttype, val)];
     }
     else {
         const sigma = core_1.Sigma(e.erased, e.name, type, nexttype);
