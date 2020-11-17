@@ -1,7 +1,7 @@
 import { getFromBase } from './base';
 import { config } from './config';
 import { getMeta } from './context';
-import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global } from './core';
+import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global, DataDef } from './core';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
 import { Data } from './utils/adt';
@@ -32,12 +32,13 @@ export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
 export type Val = Data<{
-  VNe: { tag: 'VNe', head: Head, spine: Spine },
-  VGlobal: { tag: 'VGlobal', head: Name, args: List<Elim>, val: Lazy<Val> },
-  VAbs: { tag: 'VAbs', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos },
-  VPair: { tag: 'VPair', fst: Val, snd: Val, type: Val },
-  VPi: { tag: 'VPi', mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos },
-  VSigma: { tag: 'VSigma', erased: boolean, name: Name, type: Val, clos: Clos },
+  VNe: { head: Head, spine: Spine },
+  VGlobal: { head: Name, args: List<Elim>, val: Lazy<Val> },
+  VAbs: { mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos },
+  VPair: { fst: Val, snd: Val, type: Val },
+  VPi: { mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos },
+  VSigma: { erased: boolean, name: Name, type: Val, clos: Clos },
+  VData: { index: Val, cons: Val[] },
 }>;
 export const VNe = (head: Head, spine: Spine): Val => ({ tag: 'VNe', head, spine });
 export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): Val => ({ tag: 'VGlobal', head, args, val });
@@ -45,6 +46,7 @@ export const VAbs = (mode: Mode, erased: boolean, name: Name, type: Val, clos: C
 export const VPair = (fst: Val, snd: Val, type: Val): Val => ({ tag: 'VPair', fst, snd, type });
 export const VPi = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Clos): Val => ({ tag: 'VPi', mode, erased, name, type, clos });
 export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): Val => ({ tag: 'VSigma', erased, name, type, clos });
+export const VDataDef = (index: Val, cons: Val[]): Val => ({ tag: 'VData', index, cons });
 
 export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' | 'VSigma' };
 
@@ -63,6 +65,7 @@ export const vprimArgs = (v: Val): Val[] => {
 };
 
 export const VType = VPrim('Type');
+export const VDataSort = VPrim('Data');
 export const VB = VPrim('B');
 export const V0 = VPrim('0');
 export const V1 = VPrim('1');
@@ -304,6 +307,8 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return VPi(t.mode, t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
   if (t.tag === 'Sigma')
     return VSigma(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, Cons(v, vs)));
+  if (t.tag === 'Data')
+    return VDataDef(evaluate(t.index, vs), t.cons.map(x => evaluate(x, vs)));
   if (t.tag === 'Meta') {
     const s = getMeta(t.index);
     return s.tag === 'Solved' ? s.val : VMeta(t.index);
@@ -436,6 +441,8 @@ export const quote = (v_: Val, k: Ix, full: boolean = false): Term => {
     return Pi(v.mode, v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VSigma')
     return Sigma(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
+  if (v.tag === 'VData')
+    return DataDef(quote(v.index, k, full), v.cons.map(x => quote(x, k, full)));
   return v;
 };
 
@@ -465,6 +472,8 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
     return Pi(tm.mode, tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Sigma')
     return Sigma(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
+  if (tm.tag === 'Data')
+    return DataDef(zonk(tm.index, vs, k, full), tm.cons.map(x => zonk(x, vs, k, full)));
   if (tm.tag === 'Let')
     return Let(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Abs')

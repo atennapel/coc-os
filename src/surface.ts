@@ -35,6 +35,8 @@ export type Term = Data<{
 
   Signature: { defs: SignatureEntry[] },
   Module: { defs: ModuleEntry[] },
+
+  Data: { index: Term, cons: Term[] },
 }>;
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
@@ -49,8 +51,10 @@ export const Meta = (index: Ix): Term => ({ tag: 'Meta', index });
 export const Hole = (name: Name | null): Term => ({ tag: 'Hole', name });
 export const Signature = (defs: SignatureEntry[]): Term => ({ tag: 'Signature', defs });
 export const Module = (defs: ModuleEntry[]): Term => ({ tag: 'Module', defs });
+export const DataDef = (index: Term, cons: Term[]): Term => ({ tag: 'Data', index, cons });
 
 export const Type = Prim('Type');
+export const DataSort = Prim('Data');
 
 export const flattenApp = (t: Term): [Term, [Mode, Term][]] => {
   const r: [Mode, Term][] = [];
@@ -138,6 +142,8 @@ export const show = (t: Term): string => {
     return `signature { ${t.defs.map(({ erased, name, type}) => `def ${erased ? '_' : ''}${name}${type ? ` : ${show(type)}` : ''}`).join(' ')} }`;
   if (t.tag === 'Module')
     return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private def' : 'def'} ${erased ? '-' : ''}${name}${type ? ` : ${show(type)}` : ''} = ${show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
+  if (t.tag === 'Data')
+    return `data ${showP(!isSimple(t.index), t.index)}${t.cons.length > 0 ? ' ' : ''}${t.cons.map(x => showP(!isSimple(x), x)).join(' ')}`;
   return t;
 };
 
@@ -149,6 +155,7 @@ export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'App') return App(toSurface(t.left, ns), t.mode, toSurface(t.right, ns));
   if (t.tag === 'Pair') return Pair(toSurface(t.fst, ns), toSurface(t.snd, ns));
   if (t.tag === 'Proj') return Proj(PCore(t.proj), toSurface(t.term, ns));
+  if (t.tag === 'Data') return DataDef(toSurface(t.index, ns), t.cons.map(x => toSurface(x, ns)));
   if (t.tag === 'Abs') {
     const x = chooseName(t.name, ns);
     return Abs(t.mode, t.erased, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));

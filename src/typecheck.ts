@@ -13,6 +13,8 @@ import { primErased } from './erasedprimitives';
 import { getMeta } from './context';
 import * as S from './surface';
 import { getFromBase } from './base';
+import * as V from './values';
+import * as C from './core';
 
 type EntryT = [Val, boolean];
 type EnvT = List<EntryT>;
@@ -126,6 +128,19 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
   if (tm.tag === 'Meta') {
     const m = getMeta(tm.index);
     return [m.type, E.termId]; // TODO
+  }
+  if (tm.tag === 'Data') {
+    check(localErased(local), tm.index,
+      V.VPi(C.Expl, false, 'R', VType, R =>
+      V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ =>
+      V.VPi(C.Expl, false, '_', R, _ => R)))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> R -> R
+    const vindex = evaluate(tm.index, local.vs);
+    tm.cons.forEach(t => check(localErased(local), t,
+      V.VPi(C.Expl, false, 'R', VType, R =>
+      V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ =>
+      V.VPi(C.Expl, false, '_', V.vappEs([vindex, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), V.VPi(C.Expl, false, '_', R, _ => R)]), _ =>
+      V.VPi(C.Expl, false, '_', V.vappEs([vindex, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), R]), _ => R)))))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> (index * (\(T : *) (K : T -> *). (x : T) -> K x) (R -> R)) -> (index * (\T K. (x : T) -> K x) R) -> R
+    return [V.VDataSort, E.termId];
   }
   return terr(`synth failed: ${show(tm)}`);
 };

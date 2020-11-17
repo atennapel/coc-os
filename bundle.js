@@ -216,6 +216,12 @@ const conv = (k, a_, b_) => {
         exports.conv(k, a.fst, b.fst);
         return exports.conv(k, a.snd, b.snd);
     }
+    if (a.tag === 'VData' && b.tag === 'VData' && a.cons.length === b.cons.length) {
+        exports.conv(k, a.index, b.index);
+        for (let i = 0, l = a.cons.length; i < l; i++)
+            exports.conv(k, a.cons[i], b.cons[i]);
+        return;
+    }
     if (a.tag === 'VAbs') {
         const v = values_1.VVar(k);
         return exports.conv(k + 1, values_1.vinst(a, v), values_1.vapp(b, a.mode, v));
@@ -253,7 +259,8 @@ exports.conv = conv;
 "use strict";
 var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.substTop = exports.subst = exports.shift = exports.eq = exports.show = exports.flattenPi = exports.flattenApp = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.Type = exports.primNames = exports.isPrimName = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
+exports.substTop = exports.subst = exports.shift = exports.eq = exports.show = exports.flattenPi = exports.flattenApp = exports.showMode = exports.PiU = exports.PiE = exports.AbsU = exports.AbsE = exports.AppU = exports.AppE = exports.DataSort = exports.Type = exports.primNames = exports.isPrimName = exports.DataDef = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Global = exports.Prim = exports.Var = exports.ImplUnif = exports.Expl = void 0;
+const utils_1 = require("./utils/utils");
 _a = { Expl: { tag: 'Expl' }, ImplUnif: { tag: 'ImplUnif' } }, exports.Expl = _a.Expl, exports.ImplUnif = _a.ImplUnif;
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
@@ -277,16 +284,19 @@ const Sigma = (erased, name, type, body) => ({ tag: 'Sigma', erased, name, type,
 exports.Sigma = Sigma;
 const Meta = (index) => ({ tag: 'Meta', index });
 exports.Meta = Meta;
+const DataDef = (index, cons) => ({ tag: 'Data', index, cons });
+exports.DataDef = DataDef;
 const isPrimName = (name) => exports.primNames.includes(name);
 exports.isPrimName = isPrimName;
 exports.primNames = [
-    'Type',
+    'Type', 'Data',
     'B', '0', '1', 'elimB',
     'HEq', 'ReflHEq', 'elimHEq',
     'IDesc', 'IEnd', 'IArg', 'IArgE', 'IFArg', 'IRec', 'IHRec', 'elimIDesc', 'InterpI', 'AllI', 'allI',
     'IData', 'ICon', 'indI',
 ];
 exports.Type = exports.Prim('Type');
+exports.DataSort = exports.Prim('Data');
 const AppE = (left, right) => exports.App(left, exports.Expl, right);
 exports.AppE = AppE;
 const AppU = (left, right) => exports.App(left, exports.ImplUnif, right);
@@ -346,6 +356,8 @@ const show = (t) => {
     }
     if (t.tag === 'Sigma')
         return `((${t.erased ? '-' : ''}${t.name} : ${exports.show(t.type)}) ** ${exports.show(t.body)})`;
+    if (t.tag === 'Data')
+        return `(data ${exports.show(t.index)}${t.cons.length > 0 ? ' ' : ''}${t.cons.map(exports.show).join(' ')})`;
     return t;
 };
 exports.show = show;
@@ -372,6 +384,8 @@ const eq = (t, o) => {
         return o.tag === 'Pi' && t.mode.tag === o.mode.tag && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
     if (t.tag === 'Sigma')
         return o.tag === 'Sigma' && t.erased === o.erased && exports.eq(t.type, o.type) && exports.eq(t.body, o.body);
+    if (t.tag === 'Data')
+        return o.tag === 'Data' && exports.eq(t.index, o.index) && utils_1.eqArr(t.cons, o.cons, exports.eq);
     return t;
 };
 exports.eq = eq;
@@ -398,6 +412,8 @@ const shift = (d, c, t) => {
         return exports.Pi(t.mode, t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Sigma')
         return exports.Sigma(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Data')
+        return exports.DataDef(exports.shift(d, c, t.index), t.cons.map(x => exports.shift(d, c, x)));
     return t;
 };
 exports.shift = shift;
@@ -424,13 +440,15 @@ const subst = (j, s, t) => {
         return exports.Pi(t.mode, t.erased, t.name, exports.subst(j, s, t.type), exports.subst(j + 1, exports.shift(1, 0, s), t.body));
     if (t.tag === 'Sigma')
         return exports.Sigma(t.erased, t.name, exports.subst(j, s, t.type), exports.subst(j + 1, exports.shift(1, 0, s), t.body));
+    if (t.tag === 'Data')
+        return exports.DataDef(exports.subst(j, s, t.index), t.cons.map(x => exports.subst(j, s, x)));
     return t;
 };
 exports.subst = subst;
 const substTop = (t, u) => exports.shift(-1, 0, exports.subst(0, exports.shift(1, 0, u), t));
 exports.substTop = substTop;
 
-},{}],6:[function(require,module,exports){
+},{"./utils/utils":21}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.elaborateDefs = exports.elaborate = void 0;
@@ -758,6 +776,12 @@ const synth = (local, tm) => {
         const [term, type] = createModuleTerm(local, defs);
         return [term, values_1.evaluate(type, local.vs)];
     }
+    if (tm.tag === 'Data') {
+        const index = check(localErased(local), tm.index, V.VPi(C.Expl, false, 'R', values_1.VType, R => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', values_1.VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ => V.VPi(C.Expl, false, '_', R, _ => R)))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> R -> R
+        const vindex = values_1.evaluate(index, local.vs);
+        const cons = tm.cons.map(t => check(localErased(local), t, V.VPi(C.Expl, false, 'R', values_1.VType, R => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', values_1.VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ => V.VPi(C.Expl, false, '_', V.vappEs([vindex, values_1.VType, V.VAbsE('T', values_1.VType, T => V.VAbsE('K', V.VPiE('_', T, _ => values_1.VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), V.VPi(C.Expl, false, '_', R, _ => R)]), _ => V.VPi(C.Expl, false, '_', V.vappEs([vindex, values_1.VType, V.VAbsE('T', values_1.VType, T => V.VAbsE('K', V.VPiE('_', T, _ => values_1.VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), R]), _ => R)))))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> (index * (\(T : *) (K : T -> *). (x : T) -> K x) (R -> R)) -> (index * (\T K. (x : T) -> K x) R) -> R
+        return [C.DataDef(index, cons), V.VDataSort];
+    }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
 const createModuleTerm = (local, entries) => {
@@ -1044,6 +1068,7 @@ const allI = l(d => ap([
 ]));
 const primErasedMap = {
     'Type': id,
+    'Data': id,
     'B': id,
     '0': l(_ => l(y => y)),
     '1': l(x => l(_ => x)),
@@ -1722,6 +1747,20 @@ const exprs = (ts, br) => {
         const b = ts.slice(i + 1);
         return surface_1.Let(false, 'x', exprs(b, '('), exprs(a, '('), surface_1.Var('x'));
     }
+    if (isName(ts[0], 'data')) {
+        if (ts.length < 2)
+            return utils_1.serr(`invalid data, no index`);
+        const [index, b] = expr(ts[1]);
+        if (b)
+            return utils_1.serr(`invalid data, index cannot be implicit`);
+        const cs = ts.slice(2).map(x => {
+            const [e, b] = expr(x);
+            if (b)
+                return utils_1.serr(`invalid data, constructor cannot be implicit`);
+            return e;
+        });
+        return surface_1.DataDef(index, cs);
+    }
     if (isName(ts[0], '\\')) {
         const args = [];
         let found = false;
@@ -1980,6 +2019,7 @@ const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
 const primTypes = {
     'Type': () => values_1.VType,
+    'Data': () => values_1.VType,
     'B': () => values_1.VType,
     '0': () => values_1.VB,
     '1': () => values_1.VB,
@@ -2339,7 +2379,7 @@ exports.deserializeCore = deserializeCore;
 },{"./core":5,"./utils/utils":21}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DExecute = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.Type = exports.Module = exports.Signature = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
+exports.showDefs = exports.showDef = exports.DExecute = exports.DDef = exports.showValZ = exports.showCoreZ = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenSigma = exports.flattenPi = exports.flattenAbs = exports.flattenApp = exports.DataSort = exports.Type = exports.DataDef = exports.Module = exports.Signature = exports.Hole = exports.Meta = exports.Sigma = exports.Pi = exports.Let = exports.Proj = exports.Pair = exports.Abs = exports.App = exports.Prim = exports.Var = exports.PCore = exports.PIndex = exports.PName = void 0;
 const names_1 = require("./names");
 const values_1 = require("./values");
 const list_1 = require("./utils/list");
@@ -2376,7 +2416,10 @@ const Signature = (defs) => ({ tag: 'Signature', defs });
 exports.Signature = Signature;
 const Module = (defs) => ({ tag: 'Module', defs });
 exports.Module = Module;
+const DataDef = (index, cons) => ({ tag: 'Data', index, cons });
+exports.DataDef = DataDef;
 exports.Type = exports.Prim('Type');
+exports.DataSort = exports.Prim('Data');
 const flattenApp = (t) => {
     const r = [];
     while (t.tag === 'App') {
@@ -2470,6 +2513,8 @@ const show = (t) => {
         return `signature { ${t.defs.map(({ erased, name, type }) => `def ${erased ? '_' : ''}${name}${type ? ` : ${exports.show(type)}` : ''}`).join(' ')} }`;
     if (t.tag === 'Module')
         return `module { ${t.defs.map(({ private: private_, erased, name, type, val }) => `${private_ ? 'private def' : 'def'} ${erased ? '-' : ''}${name}${type ? ` : ${exports.show(type)}` : ''} = ${exports.show(val)}`).join(' ')}${t.defs.length > 0 ? ' ' : ''}}`;
+    if (t.tag === 'Data')
+        return `data ${showP(!isSimple(t.index), t.index)}${t.cons.length > 0 ? ' ' : ''}${t.cons.map(x => showP(!isSimple(x), x)).join(' ')}`;
     return t;
 };
 exports.show = show;
@@ -2488,6 +2533,8 @@ const toSurface = (t, ns = list_1.Nil) => {
         return exports.Pair(exports.toSurface(t.fst, ns), exports.toSurface(t.snd, ns));
     if (t.tag === 'Proj')
         return exports.Proj(exports.PCore(t.proj), exports.toSurface(t.term, ns));
+    if (t.tag === 'Data')
+        return exports.DataDef(exports.toSurface(t.index, ns), t.cons.map(x => exports.toSurface(x, ns)));
     if (t.tag === 'Abs') {
         const x = names_1.chooseName(t.name, ns);
         return exports.Abs(t.mode, t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, list_1.Cons(x, ns)));
@@ -2548,6 +2595,8 @@ const erasedprimitives_1 = require("./erasedprimitives");
 const context_1 = require("./context");
 const S = require("./surface");
 const base_1 = require("./base");
+const V = require("./values");
+const C = require("./core");
 const Local = (index, ns, ts, vs, erased) => ({ index, ns, ts, vs, erased });
 const localEmpty = Local(0, list_1.Nil, list_1.Nil, list_1.Nil, false);
 const localExtend = (local, name, ty, erased, val = values_1.VVar(local.index)) => Local(local.index + 1, list_1.Cons(name, local.ns), list_1.Cons([ty, erased], local.ts), list_1.Cons(val, local.vs), local.erased);
@@ -2654,6 +2703,12 @@ const synth = (local, tm) => {
         const m = context_1.getMeta(tm.index);
         return [m.type, E.termId]; // TODO
     }
+    if (tm.tag === 'Data') {
+        check(localErased(local), tm.index, V.VPi(C.Expl, false, 'R', values_1.VType, R => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', values_1.VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ => V.VPi(C.Expl, false, '_', R, _ => R)))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> R -> R
+        const vindex = values_1.evaluate(tm.index, local.vs);
+        tm.cons.forEach(t => check(localErased(local), t, V.VPi(C.Expl, false, 'R', values_1.VType, R => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', values_1.VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ => V.VPi(C.Expl, false, '_', V.vappEs([vindex, values_1.VType, V.VAbsE('T', values_1.VType, T => V.VAbsE('K', V.VPiE('_', T, _ => values_1.VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), V.VPi(C.Expl, false, '_', R, _ => R)]), _ => V.VPi(C.Expl, false, '_', V.vappEs([vindex, values_1.VType, V.VAbsE('T', values_1.VType, T => V.VAbsE('K', V.VPiE('_', T, _ => values_1.VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), R]), _ => R)))))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> (index * (\(T : *) (K : T -> *). (x : T) -> K x) (R -> R)) -> (index * (\T K. (x : T) -> K x) R) -> R
+        return [V.VDataSort, E.termId];
+    }
     return utils_1.terr(`synth failed: ${core_1.show(tm)}`);
 };
 const synthapp = (local, ty, mode, tm) => {
@@ -2722,6 +2777,12 @@ const unify = (k, a_, b_) => {
     if (a.tag === 'VPair' && b.tag === 'VPair') {
         exports.unify(k, a.fst, b.fst);
         return exports.unify(k, a.snd, b.snd);
+    }
+    if (a.tag === 'VData' && b.tag === 'VData' && a.cons.length === b.cons.length) {
+        exports.unify(k, a.index, b.index);
+        for (let i = 0, l = a.cons.length; i < l; i++)
+            exports.unify(k, a.cons[i], b.cons[i]);
+        return;
     }
     if (a.tag === 'VAbs') {
         const v = values_1.VVar(k);
@@ -2892,6 +2953,11 @@ const checkSolution = (erased, k, m, is, t) => {
         const ty = checkSolution(erased, k, m, is, t.type);
         const body = checkSolution(erased, k + 1, m, list_1.Cons([k, t.erased], is), t.body);
         return core_1.Sigma(t.erased, t.name, ty, body);
+    }
+    if (t.tag === 'Data') {
+        const index = checkSolution(erased, k, m, is, t.index);
+        const cons = t.cons.map(x => checkSolution(erased, k, m, is, x));
+        return core_1.DataDef(index, cons);
     }
     return utils_1.impossible(`checkSolution ?${m}: non-normal term: ${core_1.show(t)}`);
 };
@@ -3112,7 +3178,7 @@ exports.last = last;
 },{}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
+exports.eqArr = exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
 const impossible = (msg) => {
     throw new Error(`impossible: ${msg}`);
 };
@@ -3181,12 +3247,22 @@ const mapObj = (o, fn) => {
     return n;
 };
 exports.mapObj = mapObj;
+const eqArr = (a, b, eq = (x, y) => x === y) => {
+    const l = a.length;
+    if (b.length !== l)
+        return false;
+    for (let i = 0; i < l; i++)
+        if (!eq(a[i], b[i]))
+            return false;
+    return true;
+};
+exports.eqArr = eqArr;
 
 },{"fs":24}],22:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.vapp = exports.force = exports.vinst = exports.VAbsU = exports.VAbsEE = exports.VAbsE = exports.VPiU = exports.VPiEE = exports.VPiE = exports.vAllI = exports.VAllI = exports.vInterpI = exports.VInterpI = exports.vicon = exports.VICon = exports.vidata = exports.VIData = exports.VIHRec = exports.VIRec = exports.VIFArg = exports.VIArgE = exports.VIArg = exports.VIEnd = exports.videsc = exports.VIDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
-exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = void 0;
+exports.vinst = exports.VAbsU = exports.VAbsEE = exports.VAbsE = exports.VPiU = exports.VPiEE = exports.VPiE = exports.vAllI = exports.VAllI = exports.vInterpI = exports.VInterpI = exports.vicon = exports.VICon = exports.vidata = exports.VIData = exports.VIHRec = exports.VIRec = exports.VIFArg = exports.VIArgE = exports.VIArg = exports.VIEnd = exports.videsc = exports.VIDesc = exports.vreflheq = exports.vheq = exports.VReflHEq = exports.VHEq = exports.V1 = exports.V0 = exports.VB = exports.VDataSort = exports.VType = exports.vprimArgs = exports.isVPrim = exports.VMeta = exports.VPrim = exports.VVar = exports.VDataDef = exports.VSigma = exports.VPi = exports.VPair = exports.VAbs = exports.VGlobal = exports.VNe = exports.EPrim = exports.EProj = exports.EApp = exports.HMeta = exports.HPrim = exports.HVar = void 0;
+exports.showValZ = exports.showVal = exports.zonk = exports.normalize = exports.quote = exports.evaluate = exports.VUnit = exports.VU = exports.VVoid = exports.velimprim = exports.vproj = exports.vappU = exports.vappEs = exports.vappE = exports.vapp = exports.force = void 0;
 const base_1 = require("./base");
 const config_1 = require("./config");
 const context_1 = require("./context");
@@ -3219,6 +3295,8 @@ const VPi = (mode, erased, name, type, clos) => ({ tag: 'VPi', mode, erased, nam
 exports.VPi = VPi;
 const VSigma = (erased, name, type, clos) => ({ tag: 'VSigma', erased, name, type, clos });
 exports.VSigma = VSigma;
+const VDataDef = (index, cons) => ({ tag: 'VData', index, cons });
+exports.VDataDef = VDataDef;
 const VVar = (index, spine = list_1.Nil) => exports.VNe(exports.HVar(index), spine);
 exports.VVar = VVar;
 const VPrim = (name, spine = list_1.Nil) => exports.VNe(exports.HPrim(name), spine);
@@ -3238,6 +3316,7 @@ const vprimArgs = (v) => {
 };
 exports.vprimArgs = vprimArgs;
 exports.VType = exports.VPrim('Type');
+exports.VDataSort = exports.VPrim('Data');
 exports.VB = exports.VPrim('B');
 exports.V0 = exports.VPrim('0');
 exports.V1 = exports.VPrim('1');
@@ -3504,6 +3583,8 @@ const evaluate = (t, vs) => {
         return exports.VPi(t.mode, t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
     if (t.tag === 'Sigma')
         return exports.VSigma(t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, list_1.Cons(v, vs)));
+    if (t.tag === 'Data')
+        return exports.VDataDef(exports.evaluate(t.index, vs), t.cons.map(x => exports.evaluate(x, vs)));
     if (t.tag === 'Meta') {
         const s = context_1.getMeta(t.index);
         return s.tag === 'Solved' ? s.val : exports.VMeta(t.index);
@@ -3593,6 +3674,8 @@ const quote = (v_, k, full = false) => {
         return core_1.Pi(v.mode, v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VSigma')
         return core_1.Sigma(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
+    if (v.tag === 'VData')
+        return core_1.DataDef(exports.quote(v.index, k, full), v.cons.map(x => exports.quote(x, k, full)));
     return v;
 };
 exports.quote = quote;
@@ -3622,6 +3705,8 @@ const zonk = (tm, vs = list_1.Nil, k = 0, full = false) => {
         return core_1.Pi(tm.mode, tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Sigma')
         return core_1.Sigma(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
+    if (tm.tag === 'Data')
+        return core_1.DataDef(exports.zonk(tm.index, vs, k, full), tm.cons.map(x => exports.zonk(x, vs, k, full)));
     if (tm.tag === 'Let')
         return core_1.Let(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, list_1.Cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Abs')

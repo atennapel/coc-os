@@ -1,5 +1,6 @@
 import { Ix, Name } from './names';
 import { Data } from './utils/adt';
+import { eqArr } from './utils/utils';
 
 export type Mode = Data<{ Expl: {}, ImplUnif: {} }>;
 export const { Expl, ImplUnif } = { Expl: { tag: 'Expl' } as Mode, ImplUnif: { tag: 'ImplUnif' } as Mode };
@@ -19,6 +20,8 @@ export type Term = Data<{
   Proj: { proj: 'fst' | 'snd', term: Term },
 
   Let: { erased: boolean, name: Name, type: Term, val: Term, body: Term },
+
+  Data: { index: Term, cons: Term[] },
 }>;
 export const Var = (index: Ix): Term => ({ tag: 'Var', index });
 export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
@@ -31,11 +34,12 @@ export const Let = (erased: boolean, name: Name, type: Term, val: Term, body: Te
 export const Pi = (mode: Mode, erased: boolean,  name: Name, type: Term, body: Term): Term => ({ tag: 'Pi', mode, erased, name, type, body });
 export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Sigma', erased, name, type, body });
 export const Meta = (index: Ix): Term => ({ tag: 'Meta', index });
+export const DataDef = (index: Term, cons: Term[]): Term => ({ tag: 'Data', index, cons });
 
 export type PrimName = (typeof primNames)[number];
 export const isPrimName = (name: string): name is PrimName => (primNames as any).includes(name);
 export const primNames = [
-  'Type',
+  'Type', 'Data',
   'B', '0', '1', 'elimB',
   'HEq', 'ReflHEq', 'elimHEq',
   'IDesc', 'IEnd', 'IArg', 'IArgE', 'IFArg', 'IRec', 'IHRec', 'elimIDesc', 'InterpI', 'AllI', 'allI',
@@ -44,6 +48,7 @@ export const primNames = [
 export type PrimNameElim = 'elimB' | 'elimHEq' | 'elimIDesc' | 'InterpI' | 'AllI' | 'allI' | 'indI';
 
 export const Type = Prim('Type');
+export const DataSort = Prim('Data');
 
 export const AppE = (left: Term, right: Term): Term => App(left, Expl, right);
 export const AppU = (left: Term, right: Term): Term => App(left, ImplUnif, right);
@@ -89,6 +94,7 @@ export const show = (t: Term): string => {
     return `(${as.map(([x, m, e, ty]) => `${m === ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(ty)}${m === ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(r)})`;
   }
   if (t.tag === 'Sigma') return `((${t.erased ? '-' : ''}${t.name} : ${show(t.type)}) ** ${show(t.body)})`;
+  if (t.tag === 'Data') return `(data ${show(t.index)}${t.cons.length > 0 ? ' ' : ''}${t.cons.map(show).join(' ')})`;
   return t;
 };
 
@@ -104,6 +110,7 @@ export const eq = (t: Term, o: Term): boolean => {
   if (t.tag === 'Let') return o.tag === 'Let' && t.erased === o.erased && eq(t.type, o.type) && eq(t.val, o.val) && eq(t.body, o.body);
   if (t.tag === 'Pi') return o.tag === 'Pi' && t.mode.tag === o.mode.tag && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
   if (t.tag === 'Sigma') return o.tag === 'Sigma' && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
+  if (t.tag === 'Data') return o.tag === 'Data' && eq(t.index, o.index) && eqArr(t.cons, o.cons, eq);
   return t;
 };
 
@@ -119,6 +126,7 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Let') return Let(t.erased, t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
   if (t.tag === 'Pi') return Pi(t.mode, t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Data') return DataDef(shift(d, c, t.index), t.cons.map(x => shift(d, c, x)));
   return t;
 };
 
@@ -134,6 +142,7 @@ export const subst = (j: Ix, s: Term, t: Term): Term => {
   if (t.tag === 'Let') return Let(t.erased, t.name, subst(j, s, t.type), subst(j, s, t.val), subst(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Pi') return Pi(t.mode, t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Sigma') return Sigma(t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Data') return DataDef(subst(j, s, t.index), t.cons.map(x => subst(j, s, x)));
   return t;
 };
 

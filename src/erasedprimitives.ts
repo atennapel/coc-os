@@ -37,6 +37,7 @@ const allI = l(d => ap([
 const primErasedMap: { [K in PrimName]: Val } = {
 
   'Type': id,
+  'Data': id,
   
   'B': id,
   '0': l(_ => l(y => y)),

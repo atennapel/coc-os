@@ -56,3 +56,10 @@ export const mapObj = <K extends string, A, B>(o: { [key in K]: A }, fn: (val: A
   for (const k in o) n[k] = fn(o[k]);
   return n;
 };
+
+export const eqArr = <T>(a: T[], b: T[], eq: (a: T, b: T) => boolean = (x, y) => x === y): boolean => {
+  const l = a.length;
+  if (b.length !== l) return false;
+  for (let i = 0; i < l; i++) if (!eq(a[i], b[i])) return false;
+  return true;
+};

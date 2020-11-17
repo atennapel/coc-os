@@ -5,6 +5,7 @@ import { V0, V1, Val, vappE, VB, vheq, VPiE, vreflheq, VType, vidata, vappEs, vi
 const primTypes: { [K in PrimName]: () => Val } = {
 
   'Type': () => VType,
+  'Data': () => VType,
 
   'B': () => VType,
   '0': () => VB,

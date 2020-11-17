@@ -1,6 +1,6 @@
 import { config, log } from './config';
 import { eqHead } from './conversion';
-import { Abs, App, Pair, Pi, Proj, show, Sigma, Term, Var } from './core';
+import { Abs, App, DataDef, Pair, Pi, Proj, show, Sigma, Term, Var } from './core';
 import { Ix } from './names';
 import { Cons, head, index, indexOfFn, isEmpty, length, List, listToString, map, Nil, reverse, tail, toArray, zipWithR_ } from './utils/list';
 import { hasDuplicates, impossible, terr, tryT, tryTE } from './utils/utils';
@@ -42,6 +42,12 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
   if (a.tag === 'VPair' && b.tag === 'VPair') {
     unify(k, a.fst, b.fst);
     return unify(k, a.snd, b.snd);
+  }
+  if (a.tag === 'VData' && b.tag === 'VData' && a.cons.length === b.cons.length) {
+    unify(k, a.index, b.index);
+    for (let i = 0, l = a.cons.length; i < l; i++)
+      unify(k, a.cons[i], b.cons[i]);
+    return;
   }
 
   if (a.tag === 'VAbs') {
@@ -212,6 +218,11 @@ const checkSolution = (erased: boolean, k: Ix, m: Ix, is: List<[Ix, boolean]>, t
     const ty = checkSolution(erased, k, m, is, t.type);
     const body = checkSolution(erased, k + 1, m, Cons([k, t.erased], is), t.body);
     return Sigma(t.erased, t.name, ty, body);
+  }
+  if (t.tag === 'Data') {
+    const index = checkSolution(erased, k, m, is, t.index);
+    const cons = t.cons.map(x => checkSolution(erased, k, m, is, x));
+    return DataDef(index, cons);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${show(t)}`);
 };

@@ -327,6 +327,19 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     const [term, type] = createModuleTerm(local, defs);
     return [term, evaluate(type, local.vs)];
   }
+  if (tm.tag === 'Data') {
+    const index = check(localErased(local), tm.index,
+      V.VPi(C.Expl, false, 'R', VType, R =>
+      V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ =>
+      V.VPi(C.Expl, false, '_', R, _ => R)))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> R -> R
+    const vindex = evaluate(index, local.vs);
+    const cons = tm.cons.map(t => check(localErased(local), t,
+      V.VPi(C.Expl, false, 'R', VType, R =>
+      V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, 'T', VType, T => V.VPi(C.Expl, false, '_', V.VPi(C.Expl, false, '_', T, _ => R), _ => R)), _ =>
+      V.VPi(C.Expl, false, '_', V.vappEs([vindex, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), V.VPi(C.Expl, false, '_', R, _ => R)]), _ =>
+      V.VPi(C.Expl, false, '_', V.vappEs([vindex, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), R]), _ => R)))))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> (index * (\(T : *) (K : T -> *). (x : T) -> K x) (R -> R)) -> (index * (\T K. (x : T) -> K x) R) -> R
+    return [C.DataDef(index, cons), V.VDataSort];
+  }
   return terr(`unable to synth ${show(tm)}`);
 };
 
