@@ -340,6 +340,22 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
       V.VPi(C.Expl, false, '_', V.vappEs([vindex, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), R]), _ => R)))))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> (index * (\(T : *) (K : T -> *). (x : T) -> K x) (R -> R)) -> (index * (\T K. (x : T) -> K x) R) -> R
     return [C.DataDef(index, cons), V.VDataSort];
   }
+  if (tm.tag === 'TCon') {
+    const data = check(localErased(local), tm.data, V.VDataSort);
+    const vdata = force(evaluate(data, local.vs));
+    if (vdata.tag !== 'VData') return terr(`not a data in tcon: ${show(tm)}`);
+    const ty = V.vappEs([vdata.index, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vappE(K, x)))), VType]); // index * (\(T : *) (K : T -> *). (x : T) -> K x) *
+    const [term, rty, problems] = synthapps(local, ty, C.Type, listFrom(tm.args.map(t => [C.Expl, t])), Nil);
+    if (!isEmpty(problems))
+      log(() => `unsolved constraints in application spine (${show(tm)}): ${listToString(problems, c => showConstraint(local, c))}`);
+    each(problems, ([er, tm, vty, vm]) => {
+      const etm = check(er ? localErased(local) : local, tm, vty);
+      unify(local.index, vm, evaluate(etm, local.vs));
+    });
+    unify(local.index, rty, VType); // TODO: probably not necessary
+    const args = C.flattenApp(term)[1].map(x => x[1]);
+    return [C.TCon(data, args), VType];
+  }
   return terr(`unable to synth ${show(tm)}`);
 };
 
@@ -373,7 +389,7 @@ type Constraint = [boolean, S.Term, Val, Val];
 const showConstraint = (local: Local, c: Constraint): string =>
   `Constraint(${c[0] ? `impl ` : ''}${showVal(local, c[3])} ~> ${show(c[1])} : ${showVal(local, c[2])})`;
 const synthapps = (local: Local, ty: Val, tm: Term, spine: List<[Mode, S.Term]>, problems: List<Constraint>): [Term, Val, List<Constraint>] => {
-  log(() => `synthapp ${showVal(local, ty)} ${listToString(spine, ([m, t]) => `@${m.tag === 'ImplUnif' ? 'impl' : ''} ${show(t)}`)} | ${S.showCore(tm, local.ns)}`);
+  log(() => `synthapps ${showVal(local, ty)} ${listToString(spine, ([m, t]) => `@${m.tag === 'ImplUnif' ? 'impl' : ''} ${show(t)}`)} | ${S.showCore(tm, local.ns)}`);
   if (isEmpty(spine)) return [tm, ty, problems];
   const fty = force(ty);
   const [mode, stm] = spine.head;

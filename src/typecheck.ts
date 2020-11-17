@@ -4,7 +4,7 @@ import { Pi, show, Term, Mode } from './core';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
 import { primType } from './primitives';
-import { Cons, List, Nil } from './utils/list';
+import { Cons, List, listFrom, listToString, Nil } from './utils/list';
 import { terr, tryT } from './utils/utils';
 import { EnvV, evaluate, force, quote, Val, vinst, vproj, VType, VVar } from './values';
 import * as E from './erased';
@@ -142,6 +142,15 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
       V.VPi(C.Expl, false, '_', V.vappEs([vindex, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vapp(K, C.Expl, x)))), R]), _ => R)))))); // (R : *) -> ((T : *) -> (T -> R) -> R) -> (index * (\(T : *) (K : T -> *). (x : T) -> K x) (R -> R)) -> (index * (\T K. (x : T) -> K x) R) -> R
     return [V.VDataSort, E.termId];
   }
+  if (tm.tag === 'TCon') {
+    check(localErased(local), tm.data, V.VDataSort);
+    const vdata = force(evaluate(tm.data, local.vs));
+    if (vdata.tag !== 'VData') return terr(`not a data in tcon: ${show(tm)}`);
+    const ty = V.vappEs([vdata.index, VType, V.VAbsE('T', VType, T => V.VAbsE('K', V.VPiE('_', T, _ => VType), K => V.VPiE('x', T, x => V.vappE(K, x)))), VType]); // index * (\(T : *) (K : T -> *). (x : T) -> K x) *
+    const [rty] = synthapps(local, ty, listFrom(tm.args.map(t => [C.Expl, t])));
+    conv(local.index, rty, VType); // TODO: probably not necessary
+    return [VType, E.termId];
+  }
   return terr(`synth failed: ${show(tm)}`);
 };
 
@@ -154,6 +163,13 @@ const synthapp = (local: Local, ty: Val, mode: Mode, tm: Term): [Val, E.Term | n
     return [vinst(fty, v), fty.erased ? null : er];
   }
   return terr(`not a correct pi type in synthapp: ${showVal(local, ty)} @${mode.tag === 'ImplUnif' ? 'impl' : ''} ${showTerm(local, tm)}`);
+};
+const synthapps = (local: Local, ty: Val, spine: List<[Mode, Term]>): [Val, List<E.Term>] => {
+  log(() => `synthapps ${showVal(local, ty)} ${listToString(spine, ([m, t]) => `@${m.tag === 'ImplUnif' ? 'impl' : ''} ${show(t)}`)}`);
+  if (spine.tag === 'Nil') return [ty, Nil];
+  const [rty, etm] = synthapp(local, ty, spine.head[0], spine.head[1]);
+  const [rty2, etms] = synthapps(local, rty, spine.tail);
+  return [rty2, etm ? Cons(etm, etms) : etms];
 };
 
 export const typecheck = (t: Term, erased: boolean = false): [Term, E.Term] => {

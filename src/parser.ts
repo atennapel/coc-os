@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute, ModuleEntry, Module, SignatureEntry, Signature, DataDef } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute, ModuleEntry, Module, SignatureEntry, Signature, DataDef, TCon } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif, isPrimName } from './core';
 import { config, log } from './config';
@@ -418,6 +418,17 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       return e;
     });
     return DataDef(index, cs);
+  }
+  if (isName(ts[0], 'tcon')) {
+    if (ts.length < 2) return serr(`invalid tcon, no data`);
+    const [data, b] = expr(ts[1]);
+    if (b) return serr(`invalid tcon, data cannot be implicit`);
+    const as = ts.slice(2).map(x => {
+      const [e, b] = expr(x)
+      if (b) return serr(`invalid tcon, argument cannot be implicit`);
+      return e;
+    });
+    return TCon(data, as);
   }
   if (isName(ts[0], '\\')) {
     const args: [Name, boolean, Term | null][] = [];
