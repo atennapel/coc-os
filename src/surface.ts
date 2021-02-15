@@ -38,6 +38,7 @@ export type Term = Data<{
 
   Data: { index: Term, cons: Term[] },
   TCon: { data: Term, args: Term[] },
+  Con: { data: Term, index: Ix, args: Term[] },
 }>;
 export const Var = (name: Name): Term => ({ tag: 'Var', name });
 export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
@@ -54,6 +55,7 @@ export const Signature = (defs: SignatureEntry[]): Term => ({ tag: 'Signature', 
 export const Module = (defs: ModuleEntry[]): Term => ({ tag: 'Module', defs });
 export const DataDef = (index: Term, cons: Term[]): Term => ({ tag: 'Data', index, cons });
 export const TCon = (data: Term, args: Term[]): Term => ({ tag: 'TCon', data, args });
+export const Con = (data: Term, index: Ix, args: Term[]): Term => ({ tag: 'Con', data, index, args });
 
 export const Type = Prim('Type');
 export const DataSort = Prim('Data');
@@ -148,6 +150,8 @@ export const show = (t: Term): string => {
     return `data ${showP(!isSimple(t.index), t.index)}${t.cons.length > 0 ? ' ' : ''}${t.cons.map(x => showP(!isSimple(x), x)).join(' ')}`;
   if (t.tag === 'TCon')
     return `tcon ${showP(!isSimple(t.data), t.data)}${t.args.length > 0 ? ' ' : ''}${t.args.map(x => showP(!isSimple(x), x)).join(' ')}`;
+  if (t.tag === 'Con')
+    return `con ${showP(!isSimple(t.data), t.data)} ${t.index}${t.args.length > 0 ? ' ' : ''}${t.args.map(x => showP(!isSimple(x), x)).join(' ')}`;
   return t;
 };
 
@@ -161,6 +165,7 @@ export const toSurface = (t: C.Term, ns: List<Name> = Nil): Term => {
   if (t.tag === 'Proj') return Proj(PCore(t.proj), toSurface(t.term, ns));
   if (t.tag === 'Data') return DataDef(toSurface(t.index, ns), t.cons.map(x => toSurface(x, ns)));
   if (t.tag === 'TCon') return TCon(toSurface(t.data, ns), t.args.map(x => toSurface(x, ns)));
+  if (t.tag === 'Con') return Con(toSurface(t.data, ns), t.index, t.args.map(x => toSurface(x, ns)));
   if (t.tag === 'Abs') {
     const x = chooseName(t.name, ns);
     return Abs(t.mode, t.erased, x, toSurface(t.type, ns), toSurface(t.body, Cons(x, ns)));

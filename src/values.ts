@@ -1,7 +1,7 @@
 import { getFromBase } from './base';
 import { config } from './config';
 import { getMeta } from './context';
-import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global, DataDef, TCon } from './core';
+import { Abs, App, Let, Meta, Pi, show, Term, Var, Mode, Sigma, Pair, Proj, PrimName, PrimNameElim, Prim, AppE, Expl, ImplUnif, Global, DataDef, TCon, Con } from './core';
 import { getGlobal } from './globals';
 import { Ix, Name } from './names';
 import { Data } from './utils/adt';
@@ -40,6 +40,7 @@ export type Val = Data<{
   VSigma: { erased: boolean, name: Name, type: Val, clos: Clos },
   VData: { index: Val, cons: Val[] },
   VTCon: { data: Val, args: Val[] },
+  VCon: { data: Val, index: Ix, args: Val[] },
 }>;
 export const VNe = (head: Head, spine: Spine): Val => ({ tag: 'VNe', head, spine });
 export const VGlobal = (head: Name, args: List<Elim>, val: Lazy<Val>): Val => ({ tag: 'VGlobal', head, args, val });
@@ -49,6 +50,7 @@ export const VPi = (mode: Mode, erased: boolean, name: Name, type: Val, clos: Cl
 export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): Val => ({ tag: 'VSigma', erased, name, type, clos });
 export const VDataDef = (index: Val, cons: Val[]): Val => ({ tag: 'VData', index, cons });
 export const VTCon = (data: Val, args: Val[]): Val => ({ tag: 'VTCon', data, args });
+export const VCon = (data: Val, index: Ix, args: Val[]): Val => ({ tag: 'VCon', data, index, args });
 
 export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' | 'VSigma' };
 
@@ -313,6 +315,8 @@ export const evaluate = (t: Term, vs: EnvV): Val => {
     return VDataDef(evaluate(t.index, vs), t.cons.map(x => evaluate(x, vs)));
   if (t.tag === 'TCon')
     return VTCon(evaluate(t.data, vs), t.args.map(x => evaluate(x, vs)));
+  if (t.tag === 'Con')
+    return VCon(evaluate(t.data, vs), t.index, t.args.map(x => evaluate(x, vs)));
   if (t.tag === 'Meta') {
     const s = getMeta(t.index);
     return s.tag === 'Solved' ? s.val : VMeta(t.index);
@@ -449,6 +453,8 @@ export const quote = (v_: Val, k: Ix, full: boolean = false): Term => {
     return DataDef(quote(v.index, k, full), v.cons.map(x => quote(x, k, full)));
   if (v.tag === 'VTCon')
     return TCon(quote(v.data, k, full), v.args.map(x => quote(x, k, full)));
+  if (v.tag === 'VCon')
+    return Con(quote(v.data, k, full), v.index, v.args.map(x => quote(x, k, full)));
   return v;
 };
 
@@ -482,6 +488,8 @@ export const zonk = (tm: Term, vs: EnvV = Nil, k: Ix = 0, full: boolean = false)
     return DataDef(zonk(tm.index, vs, k, full), tm.cons.map(x => zonk(x, vs, k, full)));
   if (tm.tag === 'TCon')
     return TCon(zonk(tm.data, vs, k, full), tm.args.map(x => zonk(x, vs, k, full)));
+  if (tm.tag === 'Con')
+    return Con(zonk(tm.data, vs, k, full), tm.index, tm.args.map(x => zonk(x, vs, k, full)));
   if (tm.tag === 'Let')
     return Let(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, Cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Abs')

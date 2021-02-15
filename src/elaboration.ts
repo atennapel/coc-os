@@ -356,6 +356,18 @@ const synth = (local: Local, tm: S.Term): [Term, Val] => {
     const args = C.flattenApp(term)[1].map(x => x[1]);
     return [C.TCon(data, args), VType];
   }
+  if (tm.tag === 'Con') {
+    const data = check(localErased(local), tm.data, V.VDataSort);
+    const vdataclean = evaluate(data, local.vs);
+    const vdata = force(vdataclean);
+    if (vdata.tag !== 'VData') return terr(`not a data in con: ${show(tm)}`);
+    if (tm.index <= 0 || tm.index >= vdata.cons.length) return terr(`invalid con, index out of range (${tm.index}): ${show(tm)}`);
+    // D_cons_i * (\(T : *) (K : T -> *). (x : T) -> K x) () ()
+    const ty = V.vappEs([
+      vdata.cons[tm.index],
+    ]);
+    return terr(`unimplemented`);
+  }
   return terr(`unable to synth ${show(tm)}`);
 };
 

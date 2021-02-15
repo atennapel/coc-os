@@ -1,6 +1,6 @@
 import { config, log } from './config';
 import { eqHead } from './conversion';
-import { Abs, App, DataDef, Pair, Pi, Proj, show, Sigma, TCon, Term, Var } from './core';
+import { Abs, App, Con, DataDef, Pair, Pi, Proj, show, Sigma, TCon, Term, Var } from './core';
 import { Ix } from './names';
 import { Cons, head, index, indexOfFn, isEmpty, length, List, listToString, map, Nil, reverse, tail, toArray, zipWithR_ } from './utils/list';
 import { hasDuplicates, impossible, terr, tryT, tryTE } from './utils/utils';
@@ -50,6 +50,12 @@ export const unify = (k: Ix, a_: Val, b_: Val): void => {
     return;
   }
   if (a.tag === 'VTCon' && b.tag === 'VTCon' && a.args.length === b.args.length) {
+    unify(k, a.data, b.data);
+    for (let i = 0, l = a.args.length; i < l; i++)
+      unify(k, a.args[i], b.args[i]);
+    return;
+  }
+  if (a.tag === 'VCon' && b.tag === 'VCon' && a.index === b.index && a.args.length === b.args.length) {
     unify(k, a.data, b.data);
     for (let i = 0, l = a.args.length; i < l; i++)
       unify(k, a.args[i], b.args[i]);
@@ -234,6 +240,11 @@ const checkSolution = (erased: boolean, k: Ix, m: Ix, is: List<[Ix, boolean]>, t
     const data = checkSolution(erased, k, m, is, t.data);
     const args = t.args.map(x => checkSolution(erased, k, m, is, x));
     return TCon(data, args);
+  }
+  if (t.tag === 'Con') {
+    const data = checkSolution(erased, k, m, is, t.data);
+    const args = t.args.map(x => checkSolution(erased, k, m, is, x));
+    return Con(data, t.index, args);
   }
   return impossible(`checkSolution ?${m}: non-normal term: ${show(t)}`);
 };

@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute, ModuleEntry, Module, SignatureEntry, Signature, DataDef, TCon } from './surface';
+import { Term, Var, App, Abs, Pi, Let, Hole, Sigma, Pair, PCore, PIndex, PName, Proj, Prim, Def, DDef, Type, DExecute, ModuleEntry, Module, SignatureEntry, Signature, DataDef, TCon, Con } from './surface';
 import { Name } from './names';
 import { Expl, ImplUnif, isPrimName } from './core';
 import { config, log } from './config';
@@ -429,6 +429,20 @@ const exprs = (ts: Token[], br: BracketO): Term => {
       return e;
     });
     return TCon(data, as);
+  }
+  if (isName(ts[0], 'con')) {
+    if (ts.length < 3) return serr(`invalid con, no data or no index`);
+    const [data, b] = expr(ts[1]);
+    if (b) return serr(`invalid con, data cannot be implicit`);
+    const ix = ts[2];
+    if (ix.tag !== 'Num' || isNaN(+ix.num)) return serr(`invalid con, index not a number`);
+    const index = +ix.num;
+    const as = ts.slice(3).map(x => {
+      const [e, b] = expr(x)
+      if (b) return serr(`invalid con, argument cannot be implicit`);
+      return e;
+    });
+    return Con(data, index, as);
   }
   if (isName(ts[0], '\\')) {
     const args: [Name, boolean, Term | null][] = [];

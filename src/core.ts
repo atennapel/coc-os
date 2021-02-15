@@ -23,6 +23,7 @@ export type Term = Data<{
 
   Data: { index: Term, cons: Term[] },
   TCon: { data: Term, args: Term[] },
+  Con: { data: Term, index: Ix, args: Term[] },
 }>;
 export const Var = (index: Ix): Term => ({ tag: 'Var', index });
 export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
@@ -37,6 +38,7 @@ export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Term
 export const Meta = (index: Ix): Term => ({ tag: 'Meta', index });
 export const DataDef = (index: Term, cons: Term[]): Term => ({ tag: 'Data', index, cons });
 export const TCon = (data: Term, args: Term[]): Term => ({ tag: 'TCon', data, args });
+export const Con = (data: Term, index: Ix, args: Term[]): Term => ({ tag: 'Con', data, index, args });
 
 export type PrimName = (typeof primNames)[number];
 export const isPrimName = (name: string): name is PrimName => (primNames as any).includes(name);
@@ -98,6 +100,7 @@ export const show = (t: Term): string => {
   if (t.tag === 'Sigma') return `((${t.erased ? '-' : ''}${t.name} : ${show(t.type)}) ** ${show(t.body)})`;
   if (t.tag === 'Data') return `(data ${show(t.index)}${t.cons.length > 0 ? ' ' : ''}${t.cons.map(show).join(' ')})`;
   if (t.tag === 'TCon') return `(tcon ${show(t.data)}${t.args.length > 0 ? ' ' : ''}${t.args.map(show).join(' ')})`;
+  if (t.tag === 'Con') return `(con ${show(t.data)} ${t.index}${t.args.length > 0 ? ' ' : ''}${t.args.map(show).join(' ')})`;
   return t;
 };
 
@@ -115,6 +118,7 @@ export const eq = (t: Term, o: Term): boolean => {
   if (t.tag === 'Sigma') return o.tag === 'Sigma' && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
   if (t.tag === 'Data') return o.tag === 'Data' && eq(t.index, o.index) && eqArr(t.cons, o.cons, eq);
   if (t.tag === 'TCon') return o.tag === 'TCon' && eq(t.data, o.data) && eqArr(t.args, o.args, eq);
+  if (t.tag === 'Con') return o.tag === 'Con' && t.index === o.index && eq(t.data, o.data) && eqArr(t.args, o.args, eq);
   return t;
 };
 
@@ -132,6 +136,7 @@ export const shift = (d: Ix, c: Ix, t: Term): Term => {
   if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Data') return DataDef(shift(d, c, t.index), t.cons.map(x => shift(d, c, x)));
   if (t.tag === 'TCon') return TCon(shift(d, c, t.data), t.args.map(x => shift(d, c, x)));
+  if (t.tag === 'Con') return Con(shift(d, c, t.data), t.index, t.args.map(x => shift(d, c, x)));
   return t;
 };
 
@@ -149,6 +154,7 @@ export const subst = (j: Ix, s: Term, t: Term): Term => {
   if (t.tag === 'Sigma') return Sigma(t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Data') return DataDef(subst(j, s, t.index), t.cons.map(x => subst(j, s, x)));
   if (t.tag === 'TCon') return TCon(subst(j, s, t.data), t.args.map(x => subst(j, s, x)));
+  if (t.tag === 'Con') return Con(subst(j, s, t.data), t.index, t.args.map(x => subst(j, s, x)));
   return t;
 };
 

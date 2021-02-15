@@ -151,6 +151,9 @@ const synth = (local: Local, tm: Term): [Val, E.Term] => {
     conv(local.index, rty, VType); // TODO: probably not necessary
     return [VType, E.termId];
   }
+  if (tm.tag === 'Con') {
+    return terr(`unimplemented`);
+  }
   return terr(`synth failed: ${show(tm)}`);
 };
 
