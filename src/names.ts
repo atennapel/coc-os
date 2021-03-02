@@ -1,7 +1,8 @@
-import { contains, List } from './utils/list';
+import { List } from './utils/List';
 
 export type Name = string;
 export type Ix = number;
+export type Lvl = number;
 
 export const nextName = (x: Name): Name => {
   if (x === '_') return x;
@@ -11,4 +12,4 @@ export const nextName = (x: Name): Name => {
 };
 
 export const chooseName = (x: Name, ns: List<Name>): Name =>
-  x === '_' ? x : contains(ns, x) ? chooseName(nextName(x), ns) : x;
+  x === '_' ? x : ns.contains(x) ? chooseName(nextName(x), ns) : x;

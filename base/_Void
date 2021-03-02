@@ -1,1 +1,0 @@
-{"tag":"Let","erased":false,"type":{"tag":"Prim","name":"Type"},"val":{"tag":"Pi","mode":{"tag":"ImplUnif"},"erased":true,"type":{"tag":"Prim","name":"Type"},"body":{"tag":"Var","index":0}},"body":{"tag":"Var","index":0}}

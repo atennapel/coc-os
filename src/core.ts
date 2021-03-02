@@ -1,161 +1,112 @@
+import { Hash } from './hash';
+import { MetaVar } from './metas';
 import { Ix, Name } from './names';
-import { Data } from './utils/adt';
-import { eqArr } from './utils/utils';
+import { PrimName } from './prims';
+import { List } from './utils/List';
 
-export type Mode = Data<{ Expl: {}, ImplUnif: {} }>;
-export const { Expl, ImplUnif } = { Expl: { tag: 'Expl' } as Mode, ImplUnif: { tag: 'ImplUnif' } as Mode };
+export type SortType = '*' | '**';
 
-export type Term = Data<{
-  Var: { index: Ix },
-  Prim: { name: PrimName },
-  Global: { name: Name },
-  Meta: { index: Ix },
+export type Core =
+  Var | Global |
+  Sort | Prim | Let |
+  Pi | Abs | App |
+  Meta | InsertedMeta;
 
-  Pi: { mode: Mode, erased: boolean, name: Name, type: Term, body: Term },
-  Abs: { mode: Mode, erased: boolean, name: Name, type: Term, body: Term },
-  App: { left: Term, mode: Mode, right: Term },
+export interface Var { readonly tag: 'Var'; readonly index: Ix }
+export const Var = (index: Ix): Var => ({ tag: 'Var', index });
+export interface Sort { readonly tag: 'Sort'; readonly sort: SortType }
+export const Sort = (sort: SortType): Sort => ({ tag: 'Sort', sort });
+export interface Global { readonly tag: 'Global'; readonly name: Name | null; readonly hash: Hash }
+export const Global = (name: Name | null, hash: Hash): Global => ({ tag: 'Global', name, hash });
+export interface Prim { readonly tag: 'Prim'; readonly name: PrimName }
+export const Prim = (name: PrimName): Prim => ({ tag: 'Prim', name });
+export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly val: Core; readonly body: Core }
+export const Let = (erased: boolean, name: Name, type: Core, val: Core, body: Core): Let => ({ tag: 'Let', erased, name, type, val, body });
+export interface Pi { readonly tag: 'Pi'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
+export const Pi = (erased: boolean, name: Name, type: Core, body: Core): Pi => ({ tag: 'Pi', erased, name, type, body });
+export interface Abs { readonly tag: 'Abs'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
+export const Abs = (erased: boolean, name: Name, type: Core, body: Core): Abs => ({ tag: 'Abs', erased, name, type, body });
+export interface App { readonly tag: 'App'; readonly fn: Core; readonly erased: boolean; readonly arg: Core }
+export const App = (fn: Core, erased: boolean, arg: Core): App => ({ tag: 'App', fn, erased, arg });
+export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
+export const Meta = (id: MetaVar): Meta => ({ tag: 'Meta', id });
+export interface InsertedMeta { readonly tag: 'InsertedMeta'; readonly id: MetaVar; readonly spine: List<boolean> }
+export const InsertedMeta = (id: MetaVar, spine: List<boolean>): InsertedMeta => ({ tag: 'InsertedMeta', id, spine });
 
-  Sigma: { erased: boolean, name: Name, type: Term, body: Term },
-  Pair: { fst: Term, snd: Term, type: Term },
-  Proj: { proj: 'fst' | 'snd', term: Term },
+export const Type = Sort('*');
+export const Box = Sort('**');
 
-  Let: { erased: boolean, name: Name, type: Term, val: Term, body: Term },
-
-  Data: { index: Term, cons: Term[] },
-  TCon: { data: Term, args: Term[] },
-  Con: { data: Term, index: Ix, args: Term[] },
-}>;
-export const Var = (index: Ix): Term => ({ tag: 'Var', index });
-export const Prim = (name: PrimName): Term => ({ tag: 'Prim', name });
-export const Global = (name: Name): Term => ({ tag: 'Global', name });
-export const App = (left: Term, mode: Mode, right: Term): Term => ({ tag: 'App', left, mode, right });
-export const Abs = (mode: Mode, erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Abs', name, erased, mode, type, body });
-export const Pair = (fst: Term, snd: Term, type: Term): Term => ({ tag: 'Pair', fst, snd, type });
-export const Proj = (proj: 'fst' | 'snd', term: Term): Term => ({ tag: 'Proj', proj, term });
-export const Let = (erased: boolean, name: Name, type: Term, val: Term, body: Term): Term => ({ tag: 'Let', erased, name, type, val, body });
-export const Pi = (mode: Mode, erased: boolean,  name: Name, type: Term, body: Term): Term => ({ tag: 'Pi', mode, erased, name, type, body });
-export const Sigma = (erased: boolean, name: Name, type: Term, body: Term): Term => ({ tag: 'Sigma', erased, name, type, body });
-export const Meta = (index: Ix): Term => ({ tag: 'Meta', index });
-export const DataDef = (index: Term, cons: Term[]): Term => ({ tag: 'Data', index, cons });
-export const TCon = (data: Term, args: Term[]): Term => ({ tag: 'TCon', data, args });
-export const Con = (data: Term, index: Ix, args: Term[]): Term => ({ tag: 'Con', data, index, args });
-
-export type PrimName = (typeof primNames)[number];
-export const isPrimName = (name: string): name is PrimName => (primNames as any).includes(name);
-export const primNames = [
-  'Type', 'Data',
-  'B', '0', '1', 'elimB',
-  'HEq', 'ReflHEq', 'elimHEq',
-  'IDesc', 'IEnd', 'IArg', 'IArgE', 'IFArg', 'IRec', 'IHRec', 'elimIDesc', 'InterpI', 'AllI', 'allI',
-  'IData', 'ICon', 'indI',
-] as const;
-export type PrimNameElim = 'elimB' | 'elimHEq' | 'elimIDesc' | 'InterpI' | 'AllI' | 'allI' | 'indI';
-
-export const Type = Prim('Type');
-export const DataSort = Prim('Data');
-
-export const AppE = (left: Term, right: Term): Term => App(left, Expl, right);
-export const AppU = (left: Term, right: Term): Term => App(left, ImplUnif, right);
-export const AbsE = (name: Name, type: Term, body: Term): Term => Abs(Expl, false, name, type, body);
-export const AbsU = (name: Name, type: Term, body: Term): Term => Abs(ImplUnif, false, name, type, body);
-export const PiE = (name: Name, type: Term, body: Term): Term => Pi(Expl, false, name, type, body);
-export const PiU = (name: Name, type: Term, body: Term): Term => Pi(ImplUnif, false, name, type, body);
-
-export const showMode = (m: Mode): string => m === ImplUnif ? 'impl' : '';
-
-export const flattenApp = (t: Term): [Term, [Mode, Term][]] => {
-  const r: [Mode, Term][] = [];
-  while (t.tag === 'App') {
-    r.push([t.mode, t.right]);
-    t = t.left;
+export const flattenPi = (t: Core): [[boolean, Name, Core][], Core] => {
+  const params: [boolean, Name, Core][] = [];
+  let c = t;  
+  while (c.tag === 'Pi') {
+    params.push([c.erased, c.name, c.type]);
+    c = c.body;
   }
-  return [t, r.reverse()];
+  return [params, c];
 };
-export const flattenPi = (t: Term): [[Name, Mode, boolean, Term][], Term] => {
-  const r: [Name, Mode, boolean, Term][] = [];
-  while (t.tag === 'Pi') {
-    r.push([t.name, t.mode, t.erased, t.type]);
-    t = t.body;
+export const flattenAbs = (t: Core): [[boolean, Name, Core][], Core] => {
+  const params: [boolean, Name, Core][] = [];
+  let c = t;  
+  while (c.tag === 'Abs') {
+    params.push([c.erased, c.name, c.type]);
+    c = c.body;
   }
-  return [r, t];
+  return [params, c];
+};
+export const flattenApp = (t: Core): [Core, [boolean, Core][]] => {
+  const args: [boolean, Core][] = [];
+  let c = t;  
+  while (c.tag === 'App') {
+    args.push([c.erased, c.arg]);
+    c = c.fn;
+  }
+  return [c, args.reverse()];
 };
 
-export const show = (t: Term): string => {
-  if (t.tag === 'Var') return `${t.index}`;
-  if (t.tag === 'Prim') return t.name === 'Type' ? '*' : `%${t.name}`;
-  if (t.tag === 'Global') return `${t.name}`;
-  if (t.tag === 'Meta') return `?${t.index}`;
-  if (t.tag === 'App') {
-    const [f, as] = flattenApp(t);
-    return `(${show(f)} ${as.map(([m, a]) => `${m === ImplUnif ? '{' : ''}${show(a)}${m === ImplUnif ? '}' : ''}`).join(' ')})`;
-  }
-  if (t.tag === 'Abs') return `(\\${t.mode.tag === 'ImplUnif' ? '{' : '('}${t.erased ? '-' : ''}${t.name} : ${show(t.type)}${t.mode.tag === 'ImplUnif' ? '}' : ')'}. ${show(t.body)})`;
-  if (t.tag === 'Pair') return `(${show(t.fst)}, ${show(t.snd)} : ${show(t.type)})`;
-  if (t.tag === 'Proj') return `(${t.proj} ${show(t.term)})`;
-  if (t.tag === 'Let') return `(let ${t.erased ? '-' : ''}${t.name} : ${show(t.type)} = ${show(t.val)}; ${show(t.body)})`;
+const showP = (b: boolean, t: Core) => b ? `(${show(t)})` : show(t);
+const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Prim' || t.tag === 'Sort' || t.tag === 'Meta' || t.tag === 'InsertedMeta';
+const showS = (t: Core) => showP(!isSimple(t), t);
+export const show = (t: Core): string => {
+  if (t.tag === 'Var') return `'${t.index}`;
+  if (t.tag === 'Global') return `${t.name || ''}#${t.hash}`;
+  if (t.tag === 'Prim') return `${t.name}`;
+  if (t.tag === 'Sort') return `${t.sort}`;
+  if (t.tag === 'Meta') return `?${t.id}`;
+  if (t.tag === 'InsertedMeta') return `?*${t.id}`;
   if (t.tag === 'Pi') {
-    const [as, r] = flattenPi(t);
-    return `(${as.map(([x, m, e, ty]) => `${m === ImplUnif ? '{' : '('}${e ? '-' : ''}${x} : ${show(ty)}${m === ImplUnif ? '}' : ')'}`).join(' -> ')} -> ${show(r)})`;
+    const [params, ret] = flattenPi(t);
+    return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${show(t)}${e ? '}' : ')'}`).join(' -> ')} -> ${show(ret)}`;
   }
-  if (t.tag === 'Sigma') return `((${t.erased ? '-' : ''}${t.name} : ${show(t.type)}) ** ${show(t.body)})`;
-  if (t.tag === 'Data') return `(data ${show(t.index)}${t.cons.length > 0 ? ' ' : ''}${t.cons.map(show).join(' ')})`;
-  if (t.tag === 'TCon') return `(tcon ${show(t.data)}${t.args.length > 0 ? ' ' : ''}${t.args.map(show).join(' ')})`;
-  if (t.tag === 'Con') return `(con ${show(t.data)} ${t.index}${t.args.length > 0 ? ' ' : ''}${t.args.map(show).join(' ')})`;
+  if (t.tag === 'Abs') {
+    const [params, body] = flattenAbs(t);
+    return `\\${params.map(([e, x, t]) => `${e ? '{' : '('}${x} : ${show(t)}${e ? '}' : ')'}`).join(' ')}. ${show(body)}`;
+  }
+  if (t.tag === 'App') {
+    const [fn, args] = flattenApp(t);
+    return `${showS(fn)} ${args.map(([e, a]) => e ? `{${show(a)}}` : showS(a)).join(' ')}`;
+  }
+  if (t.tag === 'Let')
+    return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   return t;
 };
 
-export const eq = (t: Term, o: Term): boolean => {
-  if (t.tag === 'Var') return o.tag === 'Var' && t.index === o.index;
-  if (t.tag === 'Prim') return o.tag === 'Prim' && t.name === o.name;
-  if (t.tag === 'Global') return o.tag === 'Global' && t.name === o.name;
-  if (t.tag === 'Meta') return o.tag === 'Meta' && t.index === o.index;
-  if (t.tag === 'App') return o.tag === 'App' && eq(t.left, o.left) && eq(t.right, o.right);
-  if (t.tag === 'Abs') return o.tag === 'Abs' && t.mode.tag === o.mode.tag && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
-  if (t.tag === 'Pair') return o.tag === 'Pair' && eq(t.fst, o.snd) && eq(t.fst, o.snd);
-  if (t.tag === 'Proj') return o.tag === 'Proj' && t.proj === o.proj && eq(t.term, o.term);
-  if (t.tag === 'Let') return o.tag === 'Let' && t.erased === o.erased && eq(t.type, o.type) && eq(t.val, o.val) && eq(t.body, o.body);
-  if (t.tag === 'Pi') return o.tag === 'Pi' && t.mode.tag === o.mode.tag && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
-  if (t.tag === 'Sigma') return o.tag === 'Sigma' && t.erased === o.erased && eq(t.type, o.type) && eq(t.body, o.body);
-  if (t.tag === 'Data') return o.tag === 'Data' && eq(t.index, o.index) && eqArr(t.cons, o.cons, eq);
-  if (t.tag === 'TCon') return o.tag === 'TCon' && eq(t.data, o.data) && eqArr(t.args, o.args, eq);
-  if (t.tag === 'Con') return o.tag === 'Con' && t.index === o.index && eq(t.data, o.data) && eqArr(t.args, o.args, eq);
-  return t;
-};
-
-export const shift = (d: Ix, c: Ix, t: Term): Term => {
+export const shift = (d: Ix, c: Ix, t: Core): Core => {
   if (t.tag === 'Var') return t.index < c ? t : Var(t.index + d);
-  if (t.tag === 'Prim') return t;
-  if (t.tag === 'Global') return t;
-  if (t.tag === 'Meta') return t;
-  if (t.tag === 'App') return App(shift(d, c, t.left), t.mode, shift(d, c, t.right));
-  if (t.tag === 'Abs') return Abs(t.mode, t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
-  if (t.tag === 'Pair') return Pair(shift(d, c, t.fst), shift(d, c, t.snd), shift(d, c, t.type));
-  if (t.tag === 'Proj') return Proj(t.proj, shift(d, c, t.term));
+  if (t.tag === 'App') return App(shift(d, c, t.fn), t.erased, shift(d, c, t.arg));
+  if (t.tag === 'Abs') return Abs(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Let') return Let(t.erased, t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
-  if (t.tag === 'Pi') return Pi(t.mode, t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
-  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
-  if (t.tag === 'Data') return DataDef(shift(d, c, t.index), t.cons.map(x => shift(d, c, x)));
-  if (t.tag === 'TCon') return TCon(shift(d, c, t.data), t.args.map(x => shift(d, c, x)));
-  if (t.tag === 'Con') return Con(shift(d, c, t.data), t.index, t.args.map(x => shift(d, c, x)));
+  if (t.tag === 'Pi') return Pi(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   return t;
 };
 
-export const subst = (j: Ix, s: Term, t: Term): Term => {
+export const substVar = (j: Ix, s: Core, t: Core): Core => {
   if (t.tag === 'Var') return t.index === j ? s : t;
-  if (t.tag === 'Prim') return t;
-  if (t.tag === 'Global') return t;
-  if (t.tag === 'Meta') return t;
-  if (t.tag === 'App') return App(subst(j, s, t.left), t.mode, subst(j, s, t.right));
-  if (t.tag === 'Abs') return Abs(t.mode, t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
-  if (t.tag === 'Pair') return Pair(subst(j, s, t.fst), subst(j, s, t.snd), subst(j, s, t.type));
-  if (t.tag === 'Proj') return Proj(t.proj, subst(j, s, t.term));
-  if (t.tag === 'Let') return Let(t.erased, t.name, subst(j, s, t.type), subst(j, s, t.val), subst(j + 1, shift(1, 0, s), t.body));
-  if (t.tag === 'Pi') return Pi(t.mode, t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
-  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, subst(j, s, t.type), subst(j + 1, shift(1, 0, s), t.body));
-  if (t.tag === 'Data') return DataDef(subst(j, s, t.index), t.cons.map(x => subst(j, s, x)));
-  if (t.tag === 'TCon') return TCon(subst(j, s, t.data), t.args.map(x => subst(j, s, x)));
-  if (t.tag === 'Con') return Con(subst(j, s, t.data), t.index, t.args.map(x => subst(j, s, x)));
+  if (t.tag === 'App') return App(substVar(j, s, t.fn), t.erased, substVar(j, s, t.arg));
+  if (t.tag === 'Abs') return Abs(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Let') return Let(t.erased, t.name, substVar(j, s, t.type), substVar(j, s, t.val), substVar(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Pi') return Pi(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
   return t;
 };
 
-export const substTop = (t: Term, u: Term): Term => shift(-1, 0, subst(0, shift(1, 0, u), t));
+export const subst = (t: Core, u: Core): Core => shift(-1, 0, substVar(0, shift(1, 0, u), t));

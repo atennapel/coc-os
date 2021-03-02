@@ -1,1 +1,0 @@
-{"tag":"Let","erased":false,"type":{"tag":"Prim","name":"Type"},"val":{"tag":"App","left":{"tag":"Global","name":"Data"},"mode":{"tag":"Expl"},"right":{"tag":"Global","name":"NatD"}},"body":{"tag":"Var","index":0}}

@@ -23,6 +23,18 @@ export const loadFile = (fn: string): Promise<string> => {
   }
 };
 
+export const loadFileSync = (fn: string): string | Error => {
+  if (typeof window === 'undefined') {
+    try {
+      return require('fs').readFileSync(fn, 'utf8');
+    } catch (err) {
+      return err;
+    }
+  } else {
+    return new Error(`cannot synchronously retrieve file in browser: ${fn}`);
+  }
+};
+
 export const range = (n: number): number[] => {
   const a = Array(n);
   for (let i = 0; i < n; i++) a[i] = i;
@@ -62,4 +74,15 @@ export const eqArr = <T>(a: T[], b: T[], eq: (a: T, b: T) => boolean = (x, y) =>
   if (b.length !== l) return false;
   for (let i = 0; i < l; i++) if (!eq(a[i], b[i])) return false;
   return true;
+};
+
+export const pushUniq = <T>(a: T[], x: T): T[] => a.includes(x) ? a : (a.push(x), a);
+
+export const remove = <T>(a: T[], x: T): T[] => {
+  const i = a.indexOf(x);
+  return i >= 0 ? a.splice(i, 1) : a;
+};
+export const removeAll = <T>(a: T[], xs: T[]): T[] => {
+  xs.forEach(x => remove(a, x));
+  return a;
 };

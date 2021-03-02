@@ -1,1 +1,0 @@
-{"tag":"Let","erased":false,"type":{"tag":"Global","name":"Desc"},"val":{"tag":"App","left":{"tag":"App","left":{"tag":"Global","name":"SumD"},"mode":{"tag":"Expl"},"right":{"tag":"Global","name":"End"}},"mode":{"tag":"Expl"},"right":{"tag":"App","left":{"tag":"Global","name":"Rec"},"mode":{"tag":"Expl"},"right":{"tag":"Global","name":"End"}}},"body":{"tag":"Var","index":0}}

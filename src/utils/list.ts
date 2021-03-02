@@ -1,194 +1,246 @@
-export type List<T> = Nil | Cons<T>;
+import { impossible } from './utils';
 
-export interface Nil {
-  readonly tag: 'Nil';
+export abstract class List<T> {
+
+  private static _Nil: List<never>;
+  static Nil(): List<never> {
+    if (List._Nil === undefined)
+      List._Nil = new Nil();
+    return List._Nil;
+  }
+  static Cons<T>(head: T, tail: List<T>): List<T> { return new Cons(head, tail) }
+
+  static from<T>(values: T[]): List<T> {
+    let l: List<T> = List.Nil();
+    for (let i = values.length - 1; i >= 0; i--)
+      l = List.Cons(values[i], l);
+    return l;
+  }
+  static of<T>(...values: T[]): List<T> { return List.from(values) }
+
+  static range(n: number): List<number> {
+    let l: List<number> = List.Nil();
+    for (let i = 0; i < n; i++) l = List.Cons(i, l);
+    return l;
+  }
+
+  abstract isNil(): this is Nil;
+  abstract isCons(): this is Cons<T>;
+  abstract case<R>(nil: () => R, cons: (head: T, tail: List<T>) => R): R;
+  abstract caseFull<R>(nil: (val: Nil) => R, cons: (cons: Cons<T>) => R): R;
+
+  toString(fn: (val: T) => string = val => `${val}`): string {
+    return `[${this.toMappedArray(fn).join(', ')}]`;
+  }
+
+  abstract toMappedArray<R>(fn: (val: T) => R): R[];
+  abstract toArray(): T[];
+  abstract map<R>(fn: (val: T) => R): List<R>;
+  abstract each(fn: (val: T) => void): void;
+  abstract index(ix: number): T | null;
+  abstract updateAt(ix: number, fn: (val: T) => T): List<T>;
+
+  abstract findIndex(fn: (val: T) => boolean): number;
+  abstract find(fn: (val: T) => boolean): T | null;
+
+  abstract indexOf(val: T): number;
+  contains(val: T): boolean { return this.indexOf(val) >= 0 }
+
+  abstract reverse(): List<T>;
+
+  abstract zip<R>(o: List<R>): List<[T, R]>;
+  abstract zipWith<R, U>(o: List<R>, fn: (a: T, b: R) => U): List<U>;
+  abstract zipWith_<R>(o: List<R>, fn: (a: T, b: R) => void): void;
+  abstract zipWithR_<R>(o: List<R>, fn: (a: T, b: R) => void): void;
+
+  abstract foldr<R>(cons: (a: T, b: R) => R, nil: R): R;
+
+  abstract length(): number;
+  abstract uncons(): [T, List<T>];
 }
-export const Nil: Nil = { tag: 'Nil' };
 
-export interface Cons<T> {
-  readonly tag: 'Cons';
+export class Nil extends List<never> {
+
+  isNil(): this is Nil { return true }
+  isCons(): this is Cons<never> { return false }
+  case<R>(nil: () => R, _cons: (head: never, tail: List<never>) => R): R { return nil() }
+  caseFull<R>(nil: (val: Nil) => R, _cons: (cons: Cons<never>) => R): R { return nil(this) }
+
+  toString(): string { return '[]' }
+  toMappedArray(): never[] { return [] }
+  toArray(): never[] { return [] }
+  map(): List<never> { return this }
+  each(): void {}
+  index(): null { return null }
+  updateAt(): List<never> { return this }
+
+  findIndex(): number { return -1 }
+  find(): null { return null }
+
+  indexOf(): number { return -1 }
+  contains(): boolean { return false }
+
+  reverse(): List<never> { return this }
+
+  zip<R>(): List<[never, R]> { return this }
+  zipWith<U>(): List<U> { return this }
+  zipWith_(): void {}
+  zipWithR_(): void {}
+
+  foldr<R>(_cons: (a: never, b: R) => R, nil: R): R { return nil }
+
+  length(): number { return 0 }
+  uncons(): never { return impossible('uncons called on Nil') }
+
+}
+
+export class Cons<T> extends List<T> {
+
   readonly head: T;
   readonly tail: List<T>;
+
+  constructor(head: T, tail: List<T>) {
+    super();
+    this.head = head;
+    this.tail = tail;
+  }
+
+  isNil(): this is Nil { return false }
+  isCons(): this is Cons<T> { return true }
+  case<R>(_nil: () => R, cons: (head: T, tail: List<T>) => R): R { return cons(this.head, this.tail) }
+  caseFull<R>(_nil: (val: Nil) => R, cons: (cons: Cons<T>) => R): R { return cons(this) }
+
+  toMappedArray<R>(fn: (val: T) => R): R[] {
+    const r: R[] = [];
+    let c: List<T> = this;
+    while (c.isCons()) {
+      r.push(fn(c.head));
+      c = c.tail;
+    }
+    return r;
+  }
+  toArray(): T[] {
+    const r: T[] = [];
+    let c: List<T> = this;
+    while (c.isCons()) {
+      r.push(c.head);
+      c = c.tail;
+    }
+    return r;
+  }
+
+  map<R>(fn: (val: T) => R): List<R> {
+    return new Cons(fn(this.head), this.tail.map(fn));
+  }
+  each(fn: (val: T) => void): void {
+    let c: List<T> = this;
+    while (c.isCons()) {
+      fn(c.head);
+      c = c.tail;
+    }
+  }
+
+  index(ix: number): T | null {
+    if (ix < 0) return impossible(`index with negative index: ${ix}`);
+    if (ix === 0) return this.head;
+    let i = ix;
+    let c: List<T> = this;
+    while (c.isCons()) {
+      if (i <= 0) return c.head;
+      c = c.tail;
+      i--;
+    }
+    return null;
+  }
+  updateAt(ix: number, fn: (val: T) => T): List<T> {
+    if (ix < 0) return impossible(`updateAt with negative index: ${ix}`);
+    if (ix === 0) return new Cons(fn(this.head), this.tail);
+    return new Cons(this.head, this.tail.updateAt(ix - 1, fn));
+  }
+
+  findIndex(fn: (val: T) => boolean): number {
+    let i = 0;
+    let c: List<T> = this;
+    while (c.isCons()) {
+      if (fn(c.head)) return i;
+      c = c.tail;
+      i++;
+    }
+    return -1;
+  }
+  find(fn: (val: T) => boolean): T | null {
+    let c: List<T> = this;
+    while (c.isCons()) {
+      if (fn(c.head)) return c.head;
+      c = c.tail;
+    }
+    return null;
+  }
+
+  indexOf(val: T): number {
+    let i = 0;
+    let c: List<T> = this;
+    while (c.isCons()) {
+      if (c.head === val) return i;
+      c = c.tail;
+      i++;
+    }
+    return -1;
+  }
+
+  reverse(): List<T> {
+    let c: List<T> = this;
+    let r: List<T> = List.Nil();
+    while (c.isCons()) {
+      r = new Cons(c.head, r);
+      c = c.tail;
+    }
+    return r;
+  }
+
+  zip<R>(b: List<R>): List<[T, R]> {
+    if (b.isCons()) return new Cons([this.head, b.head], this.tail.zip(b.tail));
+    return List.Nil();
+  }
+  zipWith<R, U>(b: List<R>, fn: (a: T, b: R) => U): List<U> {
+    if (b.isCons()) return new Cons(fn(this.head, b.head), this.tail.zipWith(b.tail, fn));
+    return List.Nil();
+  }
+  zipWith_<R>(o: List<R>, fn: (a: T, b: R) => void): void {
+    let a: List<T> = this;
+    let b: List<R> = o;
+    while (a.isCons() && b.isCons()) {
+      fn(a.head, b.head);
+      a = a.tail;
+      b = b.tail;
+    }
+  }
+  zipWithR_<R>(o: List<R>, fn: (a: T, b: R) => void): void {
+    if (o.isCons()) {
+      this.tail.zipWithR_(o.tail, fn);
+      fn(this.head, o.head);
+    }
+  }
+
+  foldr<R>(cons: (a: T, b: R) => R, nil: R): R {
+    return cons(this.head, this.tail.foldr(cons, nil));
+  }
+
+  length(): number {
+    let i = 0;
+    let c: List<T> = this;
+    while (c.isCons()) {
+      c = c.tail;
+      i++;
+    }
+    return i;
+  }
+
+  uncons(): [T, List<T>] {
+    return [this.head, this.tail];
+  }
+
 }
-export const Cons = <T>(head: T, tail: List<T>): List<T> =>
-  ({ tag: 'Cons', head, tail });
 
-export const listFrom = <T>(a: T[]): List<T> =>
-  a.reduceRight((x, y) => Cons(y, x), Nil as List<T>);
-export const list = <T>(...a: T[]): List<T> => listFrom(a);
-
-export const head = <T>(l: List<T>): T => (l as Cons<T>).head;
-export const tail = <T>(l: List<T>): List<T> => (l as Cons<T>).tail;
-
-export const listToString = <T>(l: List<T>, fn: (val: T) => string = x => `${x}`): string => {
-  const r: string[] = [];
-  let c = l;
-  while (c.tag === 'Cons') {
-    r.push(fn(c.head));
-    c = c.tail;
-  }
-  return `[${r.join(', ')}]`;
-};
-
-export const filter = <T>(l: List<T>, fn: (val: T) => boolean): List<T> =>
-  l.tag === 'Cons' ? (fn(l.head) ? Cons(l.head, filter(l.tail, fn)) : filter(l.tail, fn)) : l;
-export const first = <T>(l: List<T>, fn: (val: T) => boolean): T | null => {
-  let c = l;
-  while (c.tag === 'Cons') {
-    if (fn(c.head)) return c.head;
-    c = c.tail;
-  }
-  return null;
-};
-export const each = <T>(l: List<T>, fn: (val: T) => void): void => {
-  let c = l;
-  while (c.tag === 'Cons') {
-    fn(c.head);
-    c = c.tail;
-  }
-};
-
-export const length = <T>(l: List<T>): number => {
-  let n = 0;
-  let c = l;
-  while (c.tag === 'Cons') {
-    n++;
-    c = c.tail;
-  }
-  return n;
-};
-
-export const isEmpty = <T>(l: List<T>): l is Nil => l.tag === 'Nil';
-
-export const reverse = <T>(l: List<T>): List<T> =>
-  listFrom(toArray(l, x => x).reverse());
-
-export const toArray = <T, R>(l: List<T>, fn: (val: T) => R): R[] => {
-  let c = l;
-  const r = [];
-  while (c.tag === 'Cons') {
-    r.push(fn(c.head));
-    c = c.tail;
-  }
-  return r;
-};
-export const toArrayFilter = <T, R>(l: List<T>, m: (val: T) => R, f: (val: T) => boolean) => {
-  const a = [];
-  while (l.tag === 'Cons') {
-    if (f(l.head)) a.push(m(l.head));
-    l = l.tail;
-  }
-  return a;
-};
-
-export const append = <T>(a: List<T>, b: List<T>): List<T> =>
-  a.tag === 'Cons' ? Cons(a.head, append(a.tail, b)) : b;
-
-export const consAll = <T>(hs: T[], b: List<T>): List<T> =>
-  append(listFrom(hs), b);
-
-export const map = <T, R>(l: List<T>, fn: (val: T) => R): List<R> =>
-  l.tag === 'Cons' ? Cons(fn(l.head), map(l.tail, fn)) : l;
-export const mapIndex = <T, R>(l: List<T>, fn: (ix: number, val: T) => R, i: number = 0): List<R> =>
-  l.tag === 'Cons' ? Cons(fn(i, l.head), mapIndex(l.tail, fn, i + 1)) : l;
-
-export const index = <T>(l: List<T>, i: number): T | null => {
-  while (l.tag === 'Cons') {
-    if (i-- === 0) return l.head;
-    l = l.tail;
-  }
-  return null;
-};
-export const indexOf = <T>(l: List<T>, x: T): number => {
-  let i = 0;
-  while (l.tag === 'Cons') {
-    if (l.head === x) return i;
-    l = l.tail;
-    i++;
-  }
-  return -1;
-};
-export const indexOfFn = <T>(l: List<T>, x: (v: T) => boolean): number => {
-  let i = 0;
-  while (l.tag === 'Cons') {
-    if (x(l.head)) return i;
-    l = l.tail;
-    i++;
-  }
-  return -1;
-};
-
-export const takeWhile = <T>(l: List<T>, fn: (val: T) => boolean): List<T> =>
-  l.tag === 'Cons' && fn(l.head) ? Cons(l.head, takeWhile(l.tail, fn)) : Nil;
-export const dropWhile = <T>(l: List<T>, fn: (val: T) => boolean): List<T> =>
-  l.tag === 'Cons' && fn(l.head) ? dropWhile(l.tail, fn) : l;
-
-export const indecesOf = <T>(l: List<T>, val: T): number[] => {
-  const a: number[] = [];
-  let i = 0;
-  while (l.tag === 'Cons') {
-    if (l.head === val) a.push(i);
-    l = l.tail;
-    i++;
-  }
-  return a;
-};
-
-export const take = <T>(l: List<T>, n: number): List<T> =>
-  n <= 0 || l.tag === 'Nil' ? Nil : Cons(l.head, take(l.tail, n - 1));
-
-export const extend = <K, T>(name: K, val: T, rest: List<[K, T]>): List<[K, T]> =>
-  Cons([name, val] as [K, T], rest);
-export const lookup = <K, T>(l: List<[K, T]>, name: K, eq: (a: K, b: K) => boolean = (x, y) => x === y): T | null => {
-  while (l.tag === 'Cons') {
-    const h = l.head;
-    if (eq(h[0], name)) return h[1];
-    l = l.tail;
-  }
-  return null;
-};
-
-export const foldr = <T, R>(f: (h: T, a: R, j: number) => R, i: R, l: List<T>, j: number = 0): R =>
-  l.tag === 'Nil' ? i : f(l.head, foldr(f, i, l.tail, j + 1), j);
-export const foldl = <T, R>(f: (a: R, h: T) => R, i: R, l: List<T>): R =>
-  l.tag === 'Nil' ? i : foldl(f, f(i, l.head), l.tail);
-export const foldrprim = <T, R>(f: (h: T, a: R, l: List<T>, j: number) => R, i: R, l: List<T>, ind: number = 0): R =>
-  l.tag === 'Nil' ? i : f(l.head, foldrprim(f, i, l.tail, ind + 1), l, ind);
-export const foldlprim = <T, R>(f: (h: T, a: R, l: List<T>, j: number) => R, i: R, l: List<T>, ind: number = 0): R =>
-  l.tag === 'Nil' ? i : foldlprim(f, f(l.head, i, l, ind), l.tail, ind + 1);
-
-export const zipWith = <A, B, R>(f: (a: A, b: B) => R, la: List<A>, lb: List<B>): List<R> =>
-  la.tag === 'Nil' || lb.tag === 'Nil' ? Nil :
-    Cons(f(la.head, lb.head), zipWith(f, la.tail, lb.tail));
-export const zipWithIndex = <A, B, R>(f: (a: A, b: B, i: number) => R, la: List<A>, lb: List<B>, i: number = 0): List<R> =>
-  la.tag === 'Nil' || lb.tag === 'Nil' ? Nil :
-    Cons(f(la.head, lb.head, i), zipWithIndex(f, la.tail, lb.tail, i + 1));
-export const zipWith_ = <A, B>(f: (a: A, b: B) => void, la: List<A>, lb: List<B>): void => {
-  if (la.tag === 'Cons' && lb.tag === 'Cons') {
-    f(la.head, lb.head);
-    zipWith_(f, la.tail, lb.tail);
-  }
-};
-export const zipWithR_ = <A, B>(f: (a: A, b: B) => void, la: List<A>, lb: List<B>): void => {
-  if (la.tag === 'Cons' && lb.tag === 'Cons') {
-    zipWith_(f, la.tail, lb.tail);
-    f(la.head, lb.head);
-  }
-};
-export const and = (l: List<boolean>): boolean =>
-  l.tag === 'Nil' ? true : l.head && and(l.tail);
-
-export const range = (n: number): List<number> =>
-  n <= 0 ? Nil : Cons(n - 1, range(n - 1));
-
-export const contains = <T>(l: List<T>, v: T): boolean =>
-  l.tag === 'Cons' ? (l.head === v || contains(l.tail, v)) : false;
-
-export const max = (l: List<number>): number =>
-  foldl((a, b) => b > a ? b : a, Number.MIN_SAFE_INTEGER, l);
-
-export const last = <T>(l: List<T>): T | null => {
-  let c = l;
-  while (c.tag === 'Cons') if (c.tail.tag === 'Nil') return c.head;
-  return null;
-};
+export const nil: List<never> = new Nil();
+export const cons = <T>(head: T, tail: List<T>): List<T> => new Cons(head, tail);
