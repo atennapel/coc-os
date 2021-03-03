@@ -1,33 +1,41 @@
 import { initREPL, runREPL } from './repl';
-import { setConfig } from './config';
-import { parseDefs } from './parser';
-import { showCore, showVal } from './surface';
-import { elaborateDefs } from './elaboration';
-import { normalize } from './values';
-import { getGlobal } from './globals';
+import { log, setConfig } from './config';
+import { parse } from './parser';
+import { show, showCore } from './surface';
+import { elaborate } from './elaboration';
+import * as C from './core';
+import { typecheck } from './typecheck';
+import * as E from './erased';
+import { nil } from './utils/List';
 
 if (process.argv[2]) {
   const option = process.argv[3] || '';
   if (option.includes('d')) setConfig({ debug: true });
   if (option.includes('e')) setConfig({ showEnvs: true });
-  if (option.includes('b')) setConfig({ useBase: true });
-  if (option.includes('w')) setConfig({ writeToBase: true });
   try {
-    const sc = require('fs').readFileSync(process.argv[2], 'utf8');
-    parseDefs(sc, process.argv[2]).then(ds => {
-      const ns = elaborateDefs(ds, false);
-      const main = getGlobal('main');
-      if (!main) console.log(`defined ${ns.join(' ')}`);
-      else {
-        console.log(`${showCore(main.term)}`);
-        console.log(`${showVal(main.type)}`);
-        console.log(`${showCore(normalize(main.term, true))}`);
-      }
-      process.exit();
-    }).catch(err => {
-      console.error(err);
-      process.exit();
-    });
+    const s = require('fs').readFileSync(process.argv[2], 'utf8');
+    const term = parse(s);
+    log(() => show(term));
+
+    log(() => 'ELABORATE');
+    const [eterm, etype] = elaborate(term);
+    log(() => C.show(eterm));
+    log(() => showCore(eterm));
+    log(() => C.show(etype));
+    log(() => showCore(etype));
+
+    log(() => 'TYPECHECK');
+    const ttype = typecheck(eterm);
+    log(() => C.show(ttype));
+    log(() => showCore(ttype));
+
+    log(() => 'NORMALIZE');
+    const eras = E.erase(eterm);
+    log(() => E.show(eras));
+    const neras = E.normalize(eras, 0, nil, true);
+    log(() => E.show(neras));
+
+    console.log(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\nnorm: ${E.show(neras)}`);
   } catch(err) {
     console.error(err);
     process.exit();

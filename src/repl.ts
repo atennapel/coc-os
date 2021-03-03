@@ -1,16 +1,13 @@
 import { config, log, setConfig } from './config';
-import { elaborate, elaborateDefs } from './elaboration';
-import { parse, parseDefs } from './parser';
+import { parse } from './parser';
 import { show, showCore, showVal } from './surface';
 import * as C from './core';
-import * as E from './erased';
-import * as EV from './erasedvalues';
 import { typecheck } from './typecheck';
-import { normalize } from './values';
 import { deleteGlobal, getGlobal, getGlobals } from './globals';
-import { Nil } from './utils/list';
 import { loadFile } from './utils/utils';
-import { serializeCore } from './serialization';
+import { elaborate } from './elaboration';
+import * as E from './erased';
+import { nil } from './utils/List';
 
 const help = `
 COMMANDS
@@ -38,7 +35,6 @@ COMMANDS
 let showStackTrace = false;
 
 export const initREPL = () => {
-  config.unfold.push('typeof');
   showStackTrace = false;
 };
 
@@ -52,50 +48,21 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       setConfig({ debug: d });
       return cb(`debug: ${d}`);
     }
-    if (s.startsWith(':addunfold')) {
-      const xs = s.slice(10).trim().split(/\s+/g);
-      const u = config.unfold;
-      xs.forEach(x => u.push(x));
-      return cb(`unfold: ${u.join(' ')}`);
-    }
-    if (s === ':postponeInvalidSolution') {
-      const d = !config.postponeInvalidSolution;
-      setConfig({ postponeInvalidSolution: d });
-      return cb(`postponeInvalidSolution: ${d}`);
-    }
     if (s === ':showStackTrace') {
       showStackTrace = !showStackTrace;
       return cb(`showStackTrace: ${showStackTrace}`);
     }
-    if (s === ':useBase') {
-      const d = !config.useBase;
-      setConfig({ useBase: d });
-      return cb(`useBase: ${d}`);
-    }
-    if (s === ':writeToBase') {
-      const d = !config.writeToBase;
-      setConfig({ writeToBase: d });
-      return cb(`writeToBase: ${d}`);
-    }
     if (s === ':defs') {
       const gs = getGlobals();
       const r: string[] = [];
-      for (const [k, e] of gs)
-        r.push(`def ${k} : ${showVal(e.type)} = ${showCore(e.term)}`);
+      for (const x in gs)
+        r.push(`def ${x} : ${showVal(gs[x].type)} = ${showCore(gs[x].term)}`);
       return cb(r.length === 0 ? 'no definitions' : r.join('\n'));
     }
     if (s.startsWith(':del')) {
       const names = s.slice(4).trim().split(/\s+/g);
       names.forEach(x => deleteGlobal(x));
       return cb(`deleted ${names.join(' ')}`);
-    }
-    if ([':def', ':import', ':execute', ':typecheck', ':-execute', '-typecheck'].some(x => s.startsWith(x))) {
-      const rest = s.slice(1);
-      parseDefs(rest).then(ds => {
-        const xs = elaborateDefs(ds, true);
-        return cb(xs.length === 0 ? `done` : `done, defined ${xs.join(' ')}`);
-      }).catch(err => cb(''+err, true));
-      return;
     }
     if (s.startsWith(':view')) {
       const files = s.slice(5).trim().split(/\s+/g);
@@ -114,7 +81,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const name = s.slice(6).trim();
       const res = getGlobal(name);
       if (!res) return cb(`undefined global: ${name}`, true);
-      return cb(showVal(res.type, 0, Nil, true));
+      return cb(showVal(res.type, 0, true));
     }
     if (s.startsWith(':gelab')) {
       const name = s.slice(6).trim();
@@ -126,25 +93,13 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const name = s.slice(6).trim();
       const res = getGlobal(name);
       if (!res) return cb(`undefined global: ${name}`, true);
-      return cb(showVal(res.val));
+      return cb(showVal(res.value));
     }
     if (s.startsWith(':gnorm')) {
       const name = s.slice(6).trim();
       const res = getGlobal(name);
       if (!res) return cb(`undefined global: ${name}`, true);
-      return cb(showVal(res.val, 0, Nil, true));
-    }
-    if (s.startsWith(':geras')) {
-      const name = s.slice(6).trim();
-      const res = getGlobal(name);
-      if (!res) return cb(`undefined global: ${name}`, true);
-      return cb(E.show(res.termerased));
-    }
-    if (s.startsWith(':gnera')) {
-      const name = s.slice(6).trim();
-      const res = getGlobal(name);
-      if (!res) return cb(`undefined global: ${name}`, true);
-      return cb(E.show(EV.quote(res.valerased, 0, true)));
+      return cb(showVal(res.value, 0, true));
     }
 
     const term = parse(s);
@@ -156,20 +111,19 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => showCore(eterm));
     log(() => C.show(etype));
     log(() => showCore(etype));
-    const [ser, ns] = serializeCore(eterm);
-    log(() => `serialized: ${ser}`);
-    log(() => `names: ${JSON.stringify(ns)}`);
-
-    const unfolded = normalize(eterm, false);
-    log(() => showCore(unfolded));
 
     log(() => 'TYPECHECK');
-    const [ttype, er] = typecheck(eterm);
+    const ttype = typecheck(eterm);
     log(() => C.show(ttype));
     log(() => showCore(ttype));
-    log(() => E.show(er));
 
-    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\netru: ${showCore(unfolded)}\neras: ${E.show(er)}\nnera: ${E.show(EV.normalize(er, true))}`);
+    log(() => 'NORMALIZE');
+    const eras = E.erase(eterm);
+    log(() => E.show(eras));
+    const neras = E.normalize(eras, 0, nil, true);
+    log(() => E.show(neras));
+
+    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\nnorm: ${E.show(neras)}`);
   } catch (err) {
     if (showStackTrace) console.error(err);
     return cb(`${err}`, true);

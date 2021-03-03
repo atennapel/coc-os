@@ -54,6 +54,7 @@ export abstract class List<T> {
   abstract zipWithR_<R>(o: List<R>, fn: (a: T, b: R) => void): void;
 
   abstract foldr<R>(cons: (a: T, b: R) => R, nil: R): R;
+  abstract foldl<R>(cons: (a: R, b: T) => R, nil: R): R;
 
   abstract length(): number;
   abstract uncons(): [T, List<T>];
@@ -88,6 +89,7 @@ export class Nil extends List<never> {
   zipWithR_(): void {}
 
   foldr<R>(_cons: (a: never, b: R) => R, nil: R): R { return nil }
+  foldl<R>(_cons: (a: R, b: never) => R, nil: R): R { return nil }
 
   length(): number { return 0 }
   uncons(): never { return impossible('uncons called on Nil') }
@@ -224,6 +226,9 @@ export class Cons<T> extends List<T> {
 
   foldr<R>(cons: (a: T, b: R) => R, nil: R): R {
     return cons(this.head, this.tail.foldr(cons, nil));
+  }
+  foldl<R>(cons: (a: R, b: T) => R, nil: R): R {
+    return this.tail.foldl(cons, cons(nil, this.head));
   }
 
   length(): number {

@@ -1,14 +1,13 @@
-import { Hash } from './hash';
 import { MetaVar } from './metas';
 import { Ix, Name } from './names';
-import { PrimName } from './prims';
+import { AxiomName } from './axioms';
 import { List } from './utils/List';
 
 export type SortType = '*' | '**';
 
 export type Core =
   Var | Global |
-  Sort | Prim | Let |
+  Sort | Axiom | Let |
   Pi | Abs | App |
   Meta | InsertedMeta;
 
@@ -16,10 +15,10 @@ export interface Var { readonly tag: 'Var'; readonly index: Ix }
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
 export interface Sort { readonly tag: 'Sort'; readonly sort: SortType }
 export const Sort = (sort: SortType): Sort => ({ tag: 'Sort', sort });
-export interface Global { readonly tag: 'Global'; readonly name: Name | null; readonly hash: Hash }
-export const Global = (name: Name | null, hash: Hash): Global => ({ tag: 'Global', name, hash });
-export interface Prim { readonly tag: 'Prim'; readonly name: PrimName }
-export const Prim = (name: PrimName): Prim => ({ tag: 'Prim', name });
+export interface Global { readonly tag: 'Global'; readonly name: Name }
+export const Global = (name: Name): Global => ({ tag: 'Global', name });
+export interface Axiom { readonly tag: 'Axiom'; readonly name: AxiomName }
+export const Axiom = (name: AxiomName): Axiom => ({ tag: 'Axiom', name });
 export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly val: Core; readonly body: Core }
 export const Let = (erased: boolean, name: Name, type: Core, val: Core, body: Core): Let => ({ tag: 'Let', erased, name, type, val, body });
 export interface Pi { readonly tag: 'Pi'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
@@ -65,12 +64,12 @@ export const flattenApp = (t: Core): [Core, [boolean, Core][]] => {
 };
 
 const showP = (b: boolean, t: Core) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Prim' || t.tag === 'Sort' || t.tag === 'Meta' || t.tag === 'InsertedMeta';
+const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Axiom' || t.tag === 'Sort' || t.tag === 'Meta' || t.tag === 'InsertedMeta';
 const showS = (t: Core) => showP(!isSimple(t), t);
 export const show = (t: Core): string => {
   if (t.tag === 'Var') return `'${t.index}`;
-  if (t.tag === 'Global') return `${t.name || ''}#${t.hash}`;
-  if (t.tag === 'Prim') return `${t.name}`;
+  if (t.tag === 'Global') return `${t.name}`;
+  if (t.tag === 'Axiom') return `%${t.name}`;
   if (t.tag === 'Sort') return `${t.sort}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'InsertedMeta') return `?*${t.id}`;
