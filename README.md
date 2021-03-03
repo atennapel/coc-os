@@ -16,7 +16,7 @@ yarn start filename
 
 ```
 TODO:
-- definitions
+- add def and import to repl
 - holes
 - fix cli (definitions)
 - fix repl (definitions, globals)

@@ -113,3 +113,14 @@ export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
 
 export const showCore = (t: Core, ns: List<Name> = nil): string => show(toSurface(t, ns));
 export const showVal = (v: Val, k: Lvl = 0, full: boolean = false, ns: List<Name> = nil): string => show(toSurface(quote(v, k, full), ns));
+
+export type Def = DDef;
+
+export interface DDef { readonly tag: 'DDef'; readonly erased: boolean; readonly name: Name; readonly value: Surface }
+export const DDef = (erased: boolean, name: Name, value: Surface): DDef => ({ tag: 'DDef', erased, name, value });
+
+export const showDef = (d: Def): string => {
+  if (d.tag === 'DDef') return `def ${d.erased ? '{' : ''}${d.name}${d.erased ? '}' : ''} = ${show(d.value)}`;
+  return d.tag;
+};
+export const showDefs = (ds: Def[]): string => ds.map(showDef).join('\n');

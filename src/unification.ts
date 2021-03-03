@@ -27,7 +27,7 @@ const invertSpine = (sp: Spine): [Lvl, IntMap<Lvl>] =>
     const v = force(app.arg);
     if (!isVVar(v)) return terr(`not a variable in the spine`);
     const x =  v.head.level;
-    if (typeof ren[x] === 'number') return terr(`unification error`);
+    if (typeof ren[x] === 'number') return terr(`non-linear spine`);
     return [dom + 1, insert(ren, x, dom)];
   }, [0, {} as IntMap<Lvl>]);
 

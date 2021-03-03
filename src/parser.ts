@@ -1,7 +1,8 @@
-import { serr } from './utils/utils';
-import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Axiom } from './surface';
+import { loadFile, serr } from './utils/utils';
+import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Axiom, Def, DDef } from './surface';
 import { Name } from './names';
 import { isAxiomName } from './axioms';
+import { log } from './config';
 
 type BracketO = '(' | '{'
 type Bracket = BracketO | ')' | '}';
@@ -319,4 +320,64 @@ export const parse = (s: string): Surface => {
   const ts = tokenize(s);
   const ex = exprs(ts, '(');
   return ex;
+};
+
+export type ImportMap = { [key: string]: boolean };
+export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]> => {
+  if (c.length === 0) return [];
+  if (c[0].tag === 'Name' && c[0].name === 'import') {
+    const files = c.slice(1).map(t => {
+      if (t.tag !== 'Name') return serr(`trying to import a non-path`);
+      if (importMap[t.name]) {
+        log(() => `skipping import ${t.name}`);
+        return null;
+      }
+      return t.name;
+    }).filter(x => x) as string[];
+    log(() => `import ${files.join(' ')}`);
+    const imps: string[] = await Promise.all(files.map(loadFile));
+    const defs: Def[][] = await Promise.all(imps.map(s => parseDefs(s, importMap)));
+    const fdefs = defs.reduce((x, y) => x.concat(y), []);
+    fdefs.forEach(t => importMap[t.name] = true);
+    log(() => `imported ${fdefs.map(x => x.name).join(' ')}`);
+    return fdefs;
+  } else if (c[0].tag === 'Name' && c[0].name === 'def') {
+    let name = '';
+    let erased = false;
+    if (c[1].tag === 'Name') name = c[1].name;
+    else if (c[1].tag === 'List' && c[1].bracket === '{') {
+      const xs = c[1].list;
+      if (xs.length === 1 && xs[0].tag === 'Name') {
+        name = xs[0].name;
+        erased = true;
+      } else return serr(`invalid name for def`);
+    } else return serr(`invalid name for def`);
+    const fst = 2;
+    const sym = c[fst];
+    if (sym.tag !== 'Name') return serr(`def: after name should be : or =`);
+    if (sym.name === '=') {
+      return [DDef(erased, name, exprs(c.slice(fst + 1), '('))];
+    } else if (sym.name === ':') {
+      const tyts: Token[] = [];
+      let j = fst + 1;
+      for (; j < c.length; j++) {
+        const v = c[j];
+        if (v.tag === 'Name' && v.name === '=')
+          break;
+        else tyts.push(v);
+      }
+      const ety = exprs(tyts, '(');
+      const body = exprs(c.slice(j + 1), '(');
+      return [DDef(erased, name, Let(false, name, ety, body, Var(name)))];
+    } else return serr(`def: : or = expected but got ${sym.name}`);
+  } else return serr(`def should start with def or import`);
+};
+
+export const parseDefs = async (s: string, importMap: ImportMap): Promise<Def[]> => {
+  const ts = tokenize(s);
+  if (ts[0].tag !== 'Name' || (ts[0].name !== 'def' && ts[0].name !== 'import'))
+    return serr(`def should start with "def" or "import"`);
+  const spl = splitTokens(ts, t => t.tag === 'Name' && (t.name === 'def' || t.name === 'import'), true);
+  const ds: Def[][] = await Promise.all(spl.map(s => parseDef(s, importMap)));
+  return ds.reduce((x, y) => x.concat(y), []);
 };

@@ -6,19 +6,28 @@ const erased_1 = require("./erased");
 const Lazy_1 = require("./utils/Lazy");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
-exports.AxiomNames = ['cast'];
+exports.AxiomNames = ['cast', 'elim'];
 const isAxiomName = (name) => exports.AxiomNames.includes(name);
 exports.isAxiomName = isAxiomName;
+// {f : * -> *} -> f a -> f b
 const Eq = (a, b) => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)));
+// {a b : *} -> (a -> b) -> f a -> f b
+const Functor = (f) => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(false, '_', values_1.VPi(false, '_', a, _ => b), _ => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))));
+// {t : *} -> ({r : *} -> (r -> t) -> f r -> t) -> t
+const Data = (f) => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t))), _ => t));
 const axiomTypes = utils_1.mapObj({
     // {a b : *} -> {_ : Eq a b} -> a -> b (Eq a b = {f : * -> *} -> f a -> f b)
     cast: () => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(true, '_', Eq(a, b), _ => values_1.VPi(false, '_', a, _ => b)))),
+    // {f : * -> *} -> {t : *} -> {_ : Functor f} -> Data f -> ({r : *} -> (r -> Data f) -> (r -> t) -> f r -> t) -> t
+    elim: () => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(true, '_', Functor(f), _ => values_1.VPi(false, '_', Data(f), _ => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => Data(f)), _ => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t)))), _ => t))))),
 }, Lazy_1.Lazy.from);
 const synthAxiom = (name) => axiomTypes[name].get();
 exports.synthAxiom = synthAxiom;
 const axiomErasures = utils_1.mapObj({
     // \x. x
     cast: () => erased_1.idTerm,
+    // \x alg. x (alg (\y. y))
+    elim: () => erased_1.Abs(erased_1.Abs(erased_1.App(erased_1.Var(1), erased_1.App(erased_1.Var(0), erased_1.idTerm)))),
 }, Lazy_1.Lazy.from);
 const eraseAxiom = (name) => axiomErasures[name].get();
 exports.eraseAxiom = eraseAxiom;
@@ -165,7 +174,7 @@ exports.subst = subst;
 },{}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.elaborate = void 0;
+exports.elaborateDefs = exports.elaborateDef = exports.elaborate = void 0;
 const core_1 = require("./core");
 const local_1 = require("./local");
 const metas_1 = require("./metas");
@@ -179,6 +188,7 @@ const unification_1 = require("./unification");
 const globals_1 = require("./globals");
 const axioms_1 = require("./axioms");
 const typecheck_1 = require("./typecheck");
+const E = require("./erased");
 const showVal = (local, val) => S.showVal(val, local.level, false, local.ns);
 const newMeta = (local) => {
     const id = metas_1.freshMeta();
@@ -393,8 +403,29 @@ const elaborate = (t, erased = false) => {
     return [ztm, zty];
 };
 exports.elaborate = elaborate;
+const elaborateDef = (d) => {
+    config_1.log(() => `elaborateDef ${S.showDef(d)}`);
+    if (d.tag === 'DDef') {
+        const [term, type] = exports.elaborate(d.value, d.erased);
+        let erasedTerm = null;
+        if (!d.erased) {
+            const eras = E.erase(term);
+            const val = E.evaluate(eras, List_1.nil);
+            erasedTerm = [eras, val];
+        }
+        globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), term, erasedTerm);
+        return;
+    }
+    return d.tag;
+};
+exports.elaborateDef = elaborateDef;
+const elaborateDefs = (ds) => {
+    for (let i = 0, l = ds.length; i < l; i++)
+        exports.elaborateDef(ds[i]);
+};
+exports.elaborateDefs = elaborateDefs;
 
-},{"./axioms":1,"./config":2,"./core":3,"./globals":6,"./local":7,"./metas":8,"./surface":12,"./typecheck":13,"./unification":14,"./utils/List":16,"./utils/utils":17,"./values":18}],5:[function(require,module,exports){
+},{"./axioms":1,"./config":2,"./core":3,"./erased":5,"./globals":6,"./local":7,"./metas":8,"./surface":12,"./typecheck":13,"./unification":14,"./utils/List":16,"./utils/utils":17,"./values":18}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.vappSpine = exports.force = exports.VVar = exports.vinst = exports.VAbs = exports.VGlobal = exports.VRigid = exports.erase = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.idTerm = exports.App = exports.Abs = exports.Global = exports.Var = void 0;
@@ -684,10 +715,11 @@ exports.chooseName = chooseName;
 },{}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parse = void 0;
+exports.parseDefs = exports.parseDef = exports.parse = void 0;
 const utils_1 = require("./utils/utils");
 const surface_1 = require("./surface");
 const axioms_1 = require("./axioms");
+const config_1 = require("./config");
 const matchingBracket = (c) => {
     if (c === '(')
         return ')';
@@ -1054,8 +1086,82 @@ const parse = (s) => {
     return ex;
 };
 exports.parse = parse;
+const parseDef = async (c, importMap) => {
+    if (c.length === 0)
+        return [];
+    if (c[0].tag === 'Name' && c[0].name === 'import') {
+        const files = c.slice(1).map(t => {
+            if (t.tag !== 'Name')
+                return utils_1.serr(`trying to import a non-path`);
+            if (importMap[t.name]) {
+                config_1.log(() => `skipping import ${t.name}`);
+                return null;
+            }
+            return t.name;
+        }).filter(x => x);
+        config_1.log(() => `import ${files.join(' ')}`);
+        const imps = await Promise.all(files.map(utils_1.loadFile));
+        const defs = await Promise.all(imps.map(s => exports.parseDefs(s, importMap)));
+        const fdefs = defs.reduce((x, y) => x.concat(y), []);
+        fdefs.forEach(t => importMap[t.name] = true);
+        config_1.log(() => `imported ${fdefs.map(x => x.name).join(' ')}`);
+        return fdefs;
+    }
+    else if (c[0].tag === 'Name' && c[0].name === 'def') {
+        let name = '';
+        let erased = false;
+        if (c[1].tag === 'Name')
+            name = c[1].name;
+        else if (c[1].tag === 'List' && c[1].bracket === '{') {
+            const xs = c[1].list;
+            if (xs.length === 1 && xs[0].tag === 'Name') {
+                name = xs[0].name;
+                erased = true;
+            }
+            else
+                return utils_1.serr(`invalid name for def`);
+        }
+        else
+            return utils_1.serr(`invalid name for def`);
+        const fst = 2;
+        const sym = c[fst];
+        if (sym.tag !== 'Name')
+            return utils_1.serr(`def: after name should be : or =`);
+        if (sym.name === '=') {
+            return [surface_1.DDef(erased, name, exprs(c.slice(fst + 1), '('))];
+        }
+        else if (sym.name === ':') {
+            const tyts = [];
+            let j = fst + 1;
+            for (; j < c.length; j++) {
+                const v = c[j];
+                if (v.tag === 'Name' && v.name === '=')
+                    break;
+                else
+                    tyts.push(v);
+            }
+            const ety = exprs(tyts, '(');
+            const body = exprs(c.slice(j + 1), '(');
+            return [surface_1.DDef(erased, name, surface_1.Let(false, name, ety, body, surface_1.Var(name)))];
+        }
+        else
+            return utils_1.serr(`def: : or = expected but got ${sym.name}`);
+    }
+    else
+        return utils_1.serr(`def should start with def or import`);
+};
+exports.parseDef = parseDef;
+const parseDefs = async (s, importMap) => {
+    const ts = tokenize(s);
+    if (ts[0].tag !== 'Name' || (ts[0].name !== 'def' && ts[0].name !== 'import'))
+        return utils_1.serr(`def should start with "def" or "import"`);
+    const spl = splitTokens(ts, t => t.tag === 'Name' && (t.name === 'def' || t.name === 'import'), true);
+    const ds = await Promise.all(spl.map(s => exports.parseDef(s, importMap)));
+    return ds.reduce((x, y) => x.concat(y), []);
+};
+exports.parseDefs = parseDefs;
 
-},{"./axioms":1,"./surface":12,"./utils/utils":17}],11:[function(require,module,exports){
+},{"./axioms":1,"./config":2,"./surface":12,"./utils/utils":17}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runREPL = exports.initREPL = void 0;
@@ -1194,7 +1300,7 @@ exports.runREPL = runREPL;
 },{"./config":2,"./core":3,"./elaboration":4,"./erased":5,"./globals":6,"./parser":10,"./surface":12,"./typecheck":13,"./utils/List":16,"./utils/utils":17}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Box = exports.Type = exports.Hole = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Axiom = exports.Global = exports.Sort = exports.Var = void 0;
+exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Box = exports.Type = exports.Hole = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Axiom = exports.Global = exports.Sort = exports.Var = void 0;
 const names_1 = require("./names");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
@@ -1314,6 +1420,16 @@ const showCore = (t, ns = List_1.nil) => exports.show(exports.toSurface(t, ns));
 exports.showCore = showCore;
 const showVal = (v, k = 0, full = false, ns = List_1.nil) => exports.show(exports.toSurface(values_1.quote(v, k, full), ns));
 exports.showVal = showVal;
+const DDef = (erased, name, value) => ({ tag: 'DDef', erased, name, value });
+exports.DDef = DDef;
+const showDef = (d) => {
+    if (d.tag === 'DDef')
+        return `def ${d.erased ? '{' : ''}${d.name}${d.erased ? '}' : ''} = ${exports.show(d.value)}`;
+    return d.tag;
+};
+exports.showDef = showDef;
+const showDefs = (ds) => ds.map(exports.showDef).join('\n');
+exports.showDefs = showDefs;
 
 },{"./names":9,"./utils/List":16,"./utils/utils":17,"./values":18}],13:[function(require,module,exports){
 "use strict";
@@ -1445,7 +1561,7 @@ const invertSpine = (sp) => sp.foldr((app, [dom, ren]) => {
         return utils_1.terr(`not a variable in the spine`);
     const x = v.head.level;
     if (typeof ren[x] === 'number')
-        return utils_1.terr(`unification error`);
+        return utils_1.terr(`non-linear spine`);
     return [dom + 1, insert(ren, x, dom)];
 }, [0, {}]);
 const invert = (gamma, sp) => {

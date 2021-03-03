@@ -9,9 +9,10 @@ import { log } from './config';
 import { terr, tryT } from './utils/utils';
 import { unify } from './unification';
 import { Name } from './names';
-import { getGlobal } from './globals';
+import { getGlobal, setGlobal } from './globals';
 import { synthAxiom } from './axioms';
 import { typecheck } from './typecheck';
+import * as E from './erased';
 
 export type HoleInfo = [Val, Val, Local, boolean];
 
@@ -217,4 +218,25 @@ export const elaborate = (t: Surface, erased: boolean = false): [Core, Core] => 
   if (!allMetasSolved())
     return terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
   return [ztm, zty];
+};
+
+export const elaborateDef = (d: S.Def): void => {
+  log(() => `elaborateDef ${S.showDef(d)}`);
+  if (d.tag === 'DDef') {
+    const [term, type] = elaborate(d.value, d.erased);
+    let erasedTerm: [E.Erased, E.Val] | null = null;
+    if (!d.erased) {
+      const eras = E.erase(term);
+      const val = E.evaluate(eras, nil);
+      erasedTerm = [eras, val];
+    }
+    setGlobal(d.name, evaluate(type, nil), evaluate(term, nil), term, erasedTerm);
+    return;
+  }
+  return d.tag;
+};
+
+export const elaborateDefs = (ds: S.Def[]): void => {
+  for (let i = 0, l = ds.length; i < l; i++)
+    elaborateDef(ds[i]);
 };
