@@ -3,6 +3,8 @@ import { log, setConfig } from './config';
 import { parseDefs } from './parser';
 import { showDefs } from './surface';
 import { elaborateDefs } from './elaboration';
+import { getGlobals } from './globals';
+import * as E from './erased';
 
 if (process.argv[2]) {
   const option = process.argv[3] || '';
@@ -15,6 +17,12 @@ if (process.argv[2]) {
 
       log(() => 'ELABORATE');
       elaborateDefs(ds);
+
+      const gs = getGlobals();
+      if (gs.main) {
+        const e = gs.main;
+        if (e.erasedTerm) console.log(E.show(E.quote(e.erasedTerm[1], 0, true)));
+      }
     }).catch(err => {
       console.error(err);
       process.exit();
