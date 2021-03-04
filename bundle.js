@@ -16,8 +16,8 @@ const Functor = (f) => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi
 // {t : *} -> ({r : *} -> (r -> t) -> f r -> t) -> t
 const Data = (f) => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t))), _ => t));
 const axiomTypes = utils_1.mapObj({
-    // {a b : *} -> {_ : Eq a b} -> a -> b (Eq a b = {f : * -> *} -> f a -> f b)
-    cast: () => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(true, '_', Eq(a, b), _ => values_1.VPi(false, '_', a, _ => b)))),
+    // {a b : *} -> {_ : Eq a b} -> {f : * -> *} -> f a -> f b
+    cast: () => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(true, '_', Eq(a, b), _ => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))))),
     // {f : * -> *} -> {t : *} -> {_ : Functor f} -> Data f -> ({r : *} -> (r -> Data f) -> (r -> t) -> f r -> t) -> t
     elim: () => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(true, '_', Functor(f), _ => values_1.VPi(false, '_', Data(f), _ => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => Data(f)), _ => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t)))), _ => t))))),
 }, Lazy_1.Lazy.from);

@@ -23,12 +23,13 @@ const Data = (f: Val): Val =>
   VPi(false, '_', VPi(true, 'r', VType, r => VPi(false, '_', VPi(false, '_', r, _ => t), _ => VPi(false, '_', vapp(f, false, r), _ => t))), _ => t));
 
 const axiomTypes: { [K in AxiomName]: Lazy<Val> } = mapObj({
-  // {a b : *} -> {_ : Eq a b} -> a -> b (Eq a b = {f : * -> *} -> f a -> f b)
+  // {a b : *} -> {_ : Eq a b} -> {f : * -> *} -> f a -> f b
   cast: () =>
     VPi(true, 'a', VType, a =>
     VPi(true, 'b', VType, b =>
     VPi(true, '_', Eq(a, b), _ =>
-    VPi(false, '_', a, _ => b)))),
+    VPi(true, 'f', VPi(false, '_', VType, _ => VType), f =>
+    VPi(false, '_', vapp(f, false, a), _ => vapp(f, false, b)))))),
 
   // {f : * -> *} -> {t : *} -> {_ : Functor f} -> Data f -> ({r : *} -> (r -> Data f) -> (r -> t) -> f r -> t) -> t
   elim: () =>
