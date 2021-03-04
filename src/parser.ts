@@ -24,7 +24,7 @@ const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
-const SYM1: string[] = ['\\', ':', '=', '*', ';'];
+const SYM1: string[] = ['\\', ':', '=', '*', ';', ','];
 const SYM2: string[] = ['->'];
 
 const START = 0;
@@ -88,8 +88,10 @@ const tokenize = (sc: string): Token[] => {
   return r;
 };
 
-const tunit = Var('U');
-const unit = Var('Unit');
+const tunit = Var('Unit');
+const unit = Var('UnitValue');
+const Pair = Var('MkPair');
+const pair = (a: Surface, b: Surface): Surface => App(App(Pair, false, a), false, b);
 
 const isName = (t: Token, x: Name): boolean =>
   t.tag === 'Name' && t.name === x;
@@ -301,6 +303,25 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
       .reduce((x, y) => x.concat(y), []);
     const body = exprs(s[s.length - 1], '(');
     return args.reduceRight((x, [name, impl, ty]) => Pi(impl, name, ty, x), body);
+  }
+  const jp = ts.findIndex(x => isName(x, ','));
+  if (jp >= 0) {
+    const s = splitTokens(ts, x => isName(x, ','));
+    if (s.length < 2) return serr(`parsing failed with ,`);
+    const args: [Surface, boolean][] = s.map(x => {
+      if (x.length === 1) {
+        const h = x[0];
+        if (h.tag === 'List' && h.bracket === '{')
+          return expr(h)
+      }
+      return [exprs(x, '('), false];
+    });
+    if (args.length === 0) return unit;
+    if (args.length === 1) return args[0][0];
+    const last1 = args[args.length - 1];
+    const last2 = args[args.length - 2];
+    const lastitem = pair(last2[0], last1[0]);
+    return args.slice(0, -2).reduceRight((x, [y, _p]) => pair(y, x), lastitem);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];

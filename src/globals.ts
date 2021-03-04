@@ -8,6 +8,7 @@ import * as E from './erased';
 export interface GlobalEntry {
   readonly type: Val;
   readonly value: Val;
+  readonly etype: Core;
   readonly term: Core;
   readonly erasedTerm: [Erased, E.Val] | null;
 }
@@ -26,8 +27,8 @@ export const getGlobal = (name: Name): GlobalEntry => {
 
 export const getGlobals = (): Globals => globals;
 
-export const setGlobal = (name: Name, type: Val, value: Val, term: Core, erasedTerm: [Erased, E.Val] | null): void => {
-  globals[name] = { type, value, term, erasedTerm };
+export const setGlobal = (name: Name, type: Val, value: Val, etype: Core, term: Core, erasedTerm: [Erased, E.Val] | null): void => {
+  globals[name] = { type, value, etype, term, erasedTerm };
 };
 
 export const deleteGlobal = (name: Name): void => {

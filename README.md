@@ -16,10 +16,8 @@ yarn start filename
 
 ```
 TODO:
-- add def and import to repl
-- holes
-- fix cli (definitions)
-- fix repl (definitions, globals)
+- add IO
 - abstract machine
 - type verification: improve sort check for abs
+- impredicative instantiation
 ```

@@ -1,11 +1,11 @@
 import { config, log, setConfig } from './config';
-import { parse } from './parser';
+import { ImportMap, parse, parseDefs } from './parser';
 import { show, showCore, showVal } from './surface';
 import * as C from './core';
 import { typecheck } from './typecheck';
 import { deleteGlobal, getGlobal, getGlobals } from './globals';
 import { loadFile } from './utils/utils';
-import { elaborate } from './elaboration';
+import { elaborate, elaborateDefs } from './elaboration';
 import * as E from './erased';
 import { nil } from './utils/List';
 
@@ -33,9 +33,11 @@ COMMANDS
 `.trim();
 
 let showStackTrace = false;
+let importMap: ImportMap = {};
 
 export const initREPL = () => {
   showStackTrace = false;
+  importMap = {};
 };
 
 export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) => {
@@ -71,6 +73,10 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       }).catch(err => cb(''+err, true));
       return;
     }
+    if (s.startsWith(':clearImportMap')) {
+      importMap = {};
+      return cb(`cleared import map`);
+    }
     if (s.startsWith(':gtype')) {
       const name = s.slice(6).trim();
       const res = getGlobal(name);
@@ -100,6 +106,15 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const res = getGlobal(name);
       if (!res) return cb(`undefined global: ${name}`, true);
       return cb(showVal(res.value, 0, true));
+    }
+    if (s.startsWith(':')) return cb(`invalid command: ${s}`, true);
+
+    if (['def', 'import'].some(x => s.startsWith(x))) {
+      parseDefs(s, importMap).then(ds => {
+        elaborateDefs(ds); // TODO: show which items were defined
+        return cb(`done`);
+      }).catch(err => cb(`${err}`, true));
+      return;
     }
 
     const term = parse(s);

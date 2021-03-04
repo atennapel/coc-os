@@ -1,2 +1,2 @@
-def {UnitType} = {t : *} -> t -> t
-def Unit : UnitType = \x. x
+def {Unit} = {t : *} -> t -> t
+def UnitValue : Unit = \x. x

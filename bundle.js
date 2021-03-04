@@ -234,7 +234,9 @@ const check = (local, tm, ty) => {
     if (tm.tag === 'Hole') {
         const x = newMeta(local);
         if (tm.name) {
-            // TODO: holes
+            if (holes[tm.name])
+                return utils_1.terr(`duplicate hole ${tm.name}`);
+            holes[tm.name] = [values_1.evaluate(x, local.vs), ty, local];
         }
         return x;
     }
@@ -364,7 +366,9 @@ const synth = (local, tm) => {
         const t = newMeta(local);
         const vt = values_1.evaluate(newMeta(local), local.vs);
         if (tm.name) {
-            // TODO: holes
+            if (holes[tm.name])
+                return utils_1.terr(`duplicate hole ${tm.name}`);
+            holes[tm.name] = [values_1.evaluate(t, local.vs), vt, local];
         }
         return [t, vt];
     }
@@ -393,11 +397,29 @@ const synthapp = (local, ty_, erased, tm, tmall) => {
     }
     return utils_1.terr(`invalid type or plicity mismatch in synthapp in ${surface_1.show(tmall)}: ${showVal(local, ty)} ${erased ? '-' : ''}@ ${surface_1.show(tm)}`);
 };
+let holes = {};
+const showValSZ = (local, v) => S.showCore(values_1.zonk(values_1.quote(v, local.level, false), local.vs, local.level, false), local.ns);
+const showHoles = (tm, ty) => {
+    const holeprops = Object.entries(holes);
+    if (holeprops.length === 0)
+        return;
+    const strtype = S.showCore(ty);
+    const strterm = S.showCore(tm);
+    const str = holeprops.map(([x, [v, t, local]]) => {
+        const fst = local.ns.zipWith(local.vs, (x, v) => [x, v]);
+        const all = fst.zipWith(local.ts, ([x, v], { bound: def, type: ty, inserted, erased }) => [x, v, def, ty, inserted, erased]);
+        const allstr = all.toMappedArray(([x, v, b, t, _, p]) => `${p ? `{${x}}` : x} : ${showValSZ(local, t)}${b ? '' : ` = ${showValSZ(local, v)}`}`).join('\n');
+        return `\n_${x} : ${showValSZ(local, v)} = ${showValSZ(local, t)}\nlocal:\n${allstr}\n`;
+    }).join('\n');
+    return utils_1.terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
+};
 const elaborate = (t, erased = false) => {
+    holes = {};
     metas_1.resetMetas();
     const [tm, ty] = synth(erased ? local_1.Local.empty().inType() : local_1.Local.empty(), t);
-    const ztm = values_1.zonk(tm); // TODO: zonk
-    const zty = values_1.zonk(values_1.quote(ty, 0)); // TODO: zonk
+    const ztm = values_1.zonk(tm);
+    const zty = values_1.zonk(values_1.quote(ty, 0));
+    showHoles(ztm, zty);
     if (!metas_1.allMetasSolved())
         return utils_1.terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
     return [ztm, zty];
@@ -413,7 +435,7 @@ const elaborateDef = (d) => {
             const val = E.evaluate(eras, List_1.nil);
             erasedTerm = [eras, val];
         }
-        globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), term, erasedTerm);
+        globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), type, term, erasedTerm);
         return;
     }
     return d.tag;
@@ -588,8 +610,8 @@ const getGlobal = (name) => {
 exports.getGlobal = getGlobal;
 const getGlobals = () => globals;
 exports.getGlobals = getGlobals;
-const setGlobal = (name, type, value, term, erasedTerm) => {
-    globals[name] = { type, value, term, erasedTerm };
+const setGlobal = (name, type, value, etype, term, erasedTerm) => {
+    globals[name] = { type, value, etype, term, erasedTerm };
 };
 exports.setGlobal = setGlobal;
 const deleteGlobal = (name) => {
@@ -735,7 +757,7 @@ const TName = (name) => ({ tag: 'Name', name });
 const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list, bracket) => ({ tag: 'List', list, bracket });
 const TStr = (str) => ({ tag: 'Str', str });
-const SYM1 = ['\\', ':', '=', '*', ';'];
+const SYM1 = ['\\', ':', '=', '*', ';', ','];
 const SYM2 = ['->'];
 const START = 0;
 const NAME = 1;
@@ -824,8 +846,10 @@ const tokenize = (sc) => {
         return utils_1.serr(`escape is true after tokenize`);
     return r;
 };
-const tunit = surface_1.Var('U');
-const unit = surface_1.Var('Unit');
+const tunit = surface_1.Var('Unit');
+const unit = surface_1.Var('UnitValue');
+const Pair = surface_1.Var('MkPair');
+const pair = (a, b) => surface_1.App(surface_1.App(Pair, false, a), false, b);
 const isName = (t, x) => t.tag === 'Name' && t.name === x;
 const isNames = (t) => t.map(x => {
     if (x.tag !== 'Name')
@@ -1064,6 +1088,28 @@ const exprs = (ts, br) => {
         const body = exprs(s[s.length - 1], '(');
         return args.reduceRight((x, [name, impl, ty]) => surface_1.Pi(impl, name, ty, x), body);
     }
+    const jp = ts.findIndex(x => isName(x, ','));
+    if (jp >= 0) {
+        const s = splitTokens(ts, x => isName(x, ','));
+        if (s.length < 2)
+            return utils_1.serr(`parsing failed with ,`);
+        const args = s.map(x => {
+            if (x.length === 1) {
+                const h = x[0];
+                if (h.tag === 'List' && h.bracket === '{')
+                    return expr(h);
+            }
+            return [exprs(x, '('), false];
+        });
+        if (args.length === 0)
+            return unit;
+        if (args.length === 1)
+            return args[0][0];
+        const last1 = args[args.length - 1];
+        const last2 = args[args.length - 2];
+        const lastitem = pair(last2[0], last1[0]);
+        return args.slice(0, -2).reduceRight((x, [y, _p]) => pair(y, x), lastitem);
+    }
     const l = ts.findIndex(x => isName(x, '\\'));
     let all = [];
     if (l >= 0) {
@@ -1198,8 +1244,10 @@ COMMANDS
 [:showStackTrace] show stack trace of error
 `.trim();
 let showStackTrace = false;
+let importMap = {};
 const initREPL = () => {
     showStackTrace = false;
+    importMap = {};
 };
 exports.initREPL = initREPL;
 const runREPL = (s_, cb) => {
@@ -1235,6 +1283,10 @@ const runREPL = (s_, cb) => {
             }).catch(err => cb('' + err, true));
             return;
         }
+        if (s.startsWith(':clearImportMap')) {
+            importMap = {};
+            return cb(`cleared import map`);
+        }
         if (s.startsWith(':gtype')) {
             const name = s.slice(6).trim();
             const res = globals_1.getGlobal(name);
@@ -1269,6 +1321,15 @@ const runREPL = (s_, cb) => {
             if (!res)
                 return cb(`undefined global: ${name}`, true);
             return cb(surface_1.showVal(res.value, 0, true));
+        }
+        if (s.startsWith(':'))
+            return cb(`invalid command: ${s}`, true);
+        if (['def', 'import'].some(x => s.startsWith(x))) {
+            parser_1.parseDefs(s, importMap).then(ds => {
+                elaboration_1.elaborateDefs(ds); // TODO: show which items were defined
+                return cb(`done`);
+            }).catch(err => cb(`${err}`, true));
+            return;
         }
         const term = parser_1.parse(s);
         config_1.log(() => surface_1.show(term));

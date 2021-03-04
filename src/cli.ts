@@ -1,7 +1,7 @@
 import { initREPL, runREPL } from './repl';
 import { log, setConfig } from './config';
 import { parseDefs } from './parser';
-import { showDefs } from './surface';
+import { showCore, showDefs } from './surface';
 import { elaborateDefs } from './elaboration';
 import { getGlobals } from './globals';
 import * as E from './erased';
@@ -21,8 +21,14 @@ if (process.argv[2]) {
       const gs = getGlobals();
       if (gs.main) {
         const e = gs.main;
-        if (e.erasedTerm) console.log(E.show(E.quote(e.erasedTerm[1], 0, true)));
-      }
+        const eterm = e.term;
+        const etype = e.etype;
+        let neras: string | null = '';
+
+        if (e.erasedTerm) neras = E.show(E.quote(e.erasedTerm[1], 0, true));
+
+        console.log(`type: ${showCore(etype)}\netrm: ${showCore(eterm)}${neras ? `\nnorm: ${neras}` : ''}`);
+      } else console.log('no main definition');
     }).catch(err => {
       console.error(err);
       process.exit();

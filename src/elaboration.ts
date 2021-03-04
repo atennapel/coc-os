@@ -55,7 +55,8 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
   if (tm.tag === 'Hole') {
     const x = newMeta(local);
     if (tm.name) {
-      // TODO: holes
+      if (holes[tm.name]) return terr(`duplicate hole ${tm.name}`);
+      holes[tm.name] = [evaluate(x, local.vs), ty, local];
     }
     return x;
   }
@@ -177,7 +178,8 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     const t = newMeta(local);
     const vt = evaluate(newMeta(local), local.vs);
     if (tm.name) {
-      // TODO: holes
+      if (holes[tm.name]) return terr(`duplicate hole ${tm.name}`);
+      holes[tm.name] = [evaluate(t, local.vs), vt, local];
     }
     return [t, vt];
   }
@@ -208,12 +210,34 @@ const synthapp = (local: Local, ty_: Val, erased: boolean, tm: Surface, tmall: S
   return terr(`invalid type or plicity mismatch in synthapp in ${show(tmall)}: ${showVal(local, ty)} ${erased ? '-' : ''}@ ${show(tm)}`);
 };
 
+type Holes = { [key: string]: [Val, Val, Local] }
+let holes: Holes = {};
+
+const showValSZ = (local: Local, v: Val) =>
+  S.showCore(zonk(quote(v, local.level, false), local.vs, local.level, false), local.ns);
+const showHoles = (tm: Core, ty: Core) => {
+  const holeprops = Object.entries(holes);
+  if (holeprops.length === 0) return;
+  const strtype = S.showCore(ty);
+  const strterm = S.showCore(tm);
+  const str = holeprops.map(([x, [v, t, local]]) => {
+    const fst = local.ns.zipWith(local.vs, (x, v) => [x, v] as [Name, Val]);
+    const all = fst.zipWith(local.ts, ([x, v], { bound: def, type: ty, inserted, erased }) => [x, v, def, ty, inserted, erased] as [Name, Val, boolean, Val, boolean, boolean]);
+    const allstr = all.toMappedArray(([x, v, b, t, _, p]) => `${p ? `{${x}}` : x} : ${showValSZ(local, t)}${b ? '' : ` = ${showValSZ(local, v)}`}`).join('\n');
+    return `\n_${x} : ${showValSZ(local, v)} = ${showValSZ(local, t)}\nlocal:\n${allstr}\n`;
+  }).join('\n');
+  return terr(`unsolved holes\ntype: ${strtype}\nterm: ${strterm}\n${str}`);
+};
+
 export const elaborate = (t: Surface, erased: boolean = false): [Core, Core] => {
+  holes = {};
   resetMetas();
   const [tm, ty] = synth(erased ? Local.empty().inType() : Local.empty(), t);
 
-  const ztm = zonk(tm); // TODO: zonk
-  const zty = zonk(quote(ty, 0)); // TODO: zonk
+  const ztm = zonk(tm);
+  const zty = zonk(quote(ty, 0));
+
+  showHoles(ztm, zty);
 
   if (!allMetasSolved())
     return terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
@@ -230,7 +254,7 @@ export const elaborateDef = (d: S.Def): void => {
       const val = E.evaluate(eras, nil);
       erasedTerm = [eras, val];
     }
-    setGlobal(d.name, evaluate(type, nil), evaluate(term, nil), term, erasedTerm);
+    setGlobal(d.name, evaluate(type, nil), evaluate(term, nil), type, term, erasedTerm);
     return;
   }
   return d.tag;
