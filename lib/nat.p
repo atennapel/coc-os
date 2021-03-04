@@ -1,17 +1,17 @@
 import lib/maybe.p
 import lib/data.p
 
-def {Nat} = Data Maybe
-def Z : Nat = Con {Maybe} Nothing
-def S : Nat -> Nat = \n. Con {Maybe} (Just {Nat} n)
+def {Nat} = %Rigid (Data Maybe)
+def Z : Nat = %rigid {Data Maybe} (Con {Maybe} Nothing)
+def S : Nat -> Nat = \n. %rigid {Data Maybe} (Con {Maybe} (Just {Data Maybe} (%unrigid n)))
 
 def caseNat
   : {t : *} -> Nat -> t -> (Nat -> t) -> t
-  = \{t} n z s. elim {Maybe} {t} {functorMaybe} n (\out _ m. m z (\k. s (out k)))
+  = \{t} n z s. elim {Maybe} {t} {functorMaybe} (%unrigid n) (\out _ m. m z (\k. s (%rigid {Data Maybe} (out k))))
 
 def paraNat
   : {t : *} -> Nat -> t -> (Nat -> t -> t) -> t
-  = \{t} n z s. elim {Maybe} {t} {functorMaybe} n (\out rec m. m z (\k. s (out k) (rec k)))
+  = \{t} n z s. elim {Maybe} {t} {functorMaybe} (%unrigid n) (\out rec m. m z (\k. s (%rigid {Data Maybe} (out k)) (rec k)))
 
 def cataNat
   : {t : *} -> Nat -> t -> (t -> t) -> t

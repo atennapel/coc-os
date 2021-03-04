@@ -1,9 +1,11 @@
-import { Abs, App, Axiom, Core, Meta, Pi, Sort, Type, Var } from './core';
+import { log } from './config';
+import { Abs, App, Axiom, Core, Meta, Pi, Sort, Type, Var, Global } from './core';
 import { MetaVar, setMeta } from './metas';
 import { Lvl } from './names';
 import { List, nil } from './utils/List';
-import { impossible, terr, tryT } from './utils/utils';
+import { terr, tryT } from './utils/utils';
 import { force, isVVar, Spine, vinst, VVar, Val, evaluate, vapp, show, Head } from './values';
+import * as C from './core';
 
 // following: https://github.com/AndrasKovacs/elaboration-zoo
 
@@ -40,7 +42,7 @@ const renameSpine = (id: MetaVar, pren: PartialRenaming, t: Core, sp: Spine): Co
   sp.foldr((app, fn) => App(fn, app.erased, rename(id, pren, app.arg)), t);
 
 const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
-  const v = force(v_);
+  const v = force(v_, false);
   if (v.tag === 'VFlex') {
     if (v.head === id) return terr(`occurs check failed: ${id}`);
     return renameSpine(id, pren, Meta(v.head), v.spine);
@@ -57,7 +59,7 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
   if (v.tag === 'VPi')
     return Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VSort') return Sort(v.sort);
-  if (v.tag === 'VGlobal') return impossible(`global in rename`);
+  if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name), v.spine); // TODO: should global be forced?
   return v;
 };
 
@@ -65,9 +67,12 @@ const lams = (is: List<boolean>, t: Core, n: number = 0): Core =>
   is.case(() => t, (i, rest) => Abs(i, `x${n}`, Type, lams(rest, t, n + 1))); // TODO: lambda type
 
 const solve = (gamma: Lvl, m: MetaVar, sp: Spine, rhs_: Val): void => {
+  log(() => `solve ?${m}${sp.reverse().toString(v => `${v.erased ? '{' : ''}${show(v.arg, gamma)}${v.erased ? '}' : ''}`)} := ${show(rhs_, gamma)}`);
   const pren = invert(gamma, sp);
   const rhs = rename(m, pren, rhs_);
-  const solution = evaluate(lams(sp.reverse().map(app => app.erased), rhs), nil);
+  const solutionq = lams(sp.reverse().map(app => app.erased), rhs);
+  log(() => `solution: ${C.show(solutionq)}`);
+  const solution = evaluate(solutionq, nil);
   setMeta(m, solution);
 };
 
@@ -84,6 +89,7 @@ export const eqHead = (a: Head, b: Head): boolean => {
 export const unify = (l: Lvl, a_: Val, b_: Val): void => {
   const a = force(a_, false);
   const b = force(b_, false);
+  log(() => `unify ${show(a, l)} ~ ${show(b, l)}`);
   if (a === b) return;
   if (a.tag === 'VSort' && b.tag === 'VSort' && a.sort === b.sort) return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {

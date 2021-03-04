@@ -2,10 +2,10 @@ import { Abs, App, Erased, idTerm, Var } from './erased';
 import { Name } from './names';
 import { Lazy } from './utils/Lazy';
 import { mapObj } from './utils/utils';
-import { Val, vapp, VPi, VType } from './values';
+import { Val, vapp, VAxiom, VPi, VType } from './values';
 
-export type AxiomName = 'cast' | 'elim';
-export const AxiomNames: string[] = ['cast', 'elim'];
+export type AxiomName = 'cast' | 'elim' | 'Rigid' | 'rigid' | 'unrigid';
+export const AxiomNames: string[] = ['cast', 'elim', 'Rigid', 'rigid', 'unrigid'];
 
 export const isAxiomName = (name: Name): name is AxiomName => AxiomNames.includes(name);
 
@@ -21,6 +21,8 @@ const Functor = (f: Val): Val =>
 const Data = (f: Val): Val =>
   VPi(true, 't', VType, t =>
   VPi(false, '_', VPi(true, 'r', VType, r => VPi(false, '_', VPi(false, '_', r, _ => t), _ => VPi(false, '_', vapp(f, false, r), _ => t))), _ => t));
+const RigidC = VAxiom('Rigid');
+const Rigid = (t: Val): Val => vapp(RigidC, false, t);
 
 const axiomTypes: { [K in AxiomName]: Lazy<Val> } = mapObj({
   // {a b : *} -> {_ : Eq a b} -> {f : * -> *} -> f a -> f b
@@ -38,16 +40,26 @@ const axiomTypes: { [K in AxiomName]: Lazy<Val> } = mapObj({
     VPi(true, '_', Functor(f), _ =>
     VPi(false, '_', Data(f), _ =>
     VPi(false, '_', VPi(true, 'r', VType, r => VPi(false, '_', VPi(false, '_', r, _ => Data(f)), _ => VPi(false, '_', VPi(false, '_', r, _ => t), _ => VPi(false, '_', vapp(f, false, r), _ => t)))), _ => t))))),
+
+  // * -> *
+  Rigid: () => VPi(false, '_', VType, _ => VType),
+  // {t : *} -> t -> Rigid t
+  rigid: () => VPi(true, 't', VType, t => VPi(false, '_', t, _=> Rigid(t))),
+  // {t : *} -> Rigid t -> t
+  unrigid: () => VPi(true, 't', VType, t => VPi(false, '_', Rigid(t), _=> t)),
 }, Lazy.from);
 
 export const synthAxiom = (name: AxiomName): Val => axiomTypes[name].get();
 
 const axiomErasures: { [K in AxiomName]: Lazy<Erased> } = mapObj({
-  // \x. x
   cast: () => idTerm,
 
   // \x alg. x (alg (\y. y))
   elim: () => Abs(Abs(App(Var(1), App(Var(0), idTerm)))),
+
+  Rigid: () => idTerm,
+  rigid: () => idTerm,
+  unrigid: () => idTerm,
 }, Lazy.from);
 
 export const eraseAxiom = (name: AxiomName): Erased => axiomErasures[name].get();

@@ -6,7 +6,7 @@ const erased_1 = require("./erased");
 const Lazy_1 = require("./utils/Lazy");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
-exports.AxiomNames = ['cast', 'elim'];
+exports.AxiomNames = ['cast', 'elim', 'Rigid', 'rigid', 'unrigid'];
 const isAxiomName = (name) => exports.AxiomNames.includes(name);
 exports.isAxiomName = isAxiomName;
 // {f : * -> *} -> f a -> f b
@@ -15,19 +15,29 @@ const Eq = (a, b) => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.V
 const Functor = (f) => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(false, '_', values_1.VPi(false, '_', a, _ => b), _ => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))));
 // {t : *} -> ({r : *} -> (r -> t) -> f r -> t) -> t
 const Data = (f) => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t))), _ => t));
+const RigidC = values_1.VAxiom('Rigid');
+const Rigid = (t) => values_1.vapp(RigidC, false, t);
 const axiomTypes = utils_1.mapObj({
     // {a b : *} -> {_ : Eq a b} -> {f : * -> *} -> f a -> f b
     cast: () => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(true, '_', Eq(a, b), _ => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))))),
     // {f : * -> *} -> {t : *} -> {_ : Functor f} -> Data f -> ({r : *} -> (r -> Data f) -> (r -> t) -> f r -> t) -> t
     elim: () => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(true, '_', Functor(f), _ => values_1.VPi(false, '_', Data(f), _ => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => Data(f)), _ => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t)))), _ => t))))),
+    // * -> *
+    Rigid: () => values_1.VPi(false, '_', values_1.VType, _ => values_1.VType),
+    // {t : *} -> t -> Rigid t
+    rigid: () => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', t, _ => Rigid(t))),
+    // {t : *} -> Rigid t -> t
+    unrigid: () => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', Rigid(t), _ => t)),
 }, Lazy_1.Lazy.from);
 const synthAxiom = (name) => axiomTypes[name].get();
 exports.synthAxiom = synthAxiom;
 const axiomErasures = utils_1.mapObj({
-    // \x. x
     cast: () => erased_1.idTerm,
     // \x alg. x (alg (\y. y))
     elim: () => erased_1.Abs(erased_1.Abs(erased_1.App(erased_1.Var(1), erased_1.App(erased_1.Var(0), erased_1.idTerm)))),
+    Rigid: () => erased_1.idTerm,
+    rigid: () => erased_1.idTerm,
+    unrigid: () => erased_1.idTerm,
 }, Lazy_1.Lazy.from);
 const eraseAxiom = (name) => axiomErasures[name].get();
 exports.eraseAxiom = eraseAxiom;
@@ -405,7 +415,7 @@ const showHoles = (tm, ty) => {
         return;
     const strtype = S.showCore(ty);
     const strterm = S.showCore(tm);
-    const str = holeprops.map(([x, [v, t, local]]) => {
+    const str = holeprops.map(([x, [t, v, local]]) => {
         const fst = local.ns.zipWith(local.vs, (x, v) => [x, v]);
         const all = fst.zipWith(local.ts, ([x, v], { bound: def, type: ty, inserted, erased }) => [x, v, def, ty, inserted, erased]);
         const allstr = all.toMappedArray(([x, v, b, t, _, p]) => `${p ? `{${x}}` : x} : ${showValSZ(local, t)}${b ? '' : ` = ${showValSZ(local, v)}`}`).join('\n');
@@ -1608,11 +1618,13 @@ exports.typecheck = typecheck;
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.unify = exports.eqHead = void 0;
+const config_1 = require("./config");
 const core_1 = require("./core");
 const metas_1 = require("./metas");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
+const C = require("./core");
 const insert = (map, key, value) => ({ ...map, [key]: value });
 const PRen = (dom, cod, ren) => ({ dom, cod, ren });
 const lift = (pren) => PRen(pren.dom + 1, pren.cod + 1, insert(pren.ren, pren.cod, pren.dom));
@@ -1631,7 +1643,7 @@ const invert = (gamma, sp) => {
 };
 const renameSpine = (id, pren, t, sp) => sp.foldr((app, fn) => core_1.App(fn, app.erased, rename(id, pren, app.arg)), t);
 const rename = (id, pren, v_) => {
-    const v = values_1.force(v_);
+    const v = values_1.force(v_, false);
     if (v.tag === 'VFlex') {
         if (v.head === id)
             return utils_1.terr(`occurs check failed: ${id}`);
@@ -1652,14 +1664,17 @@ const rename = (id, pren, v_) => {
     if (v.tag === 'VSort')
         return core_1.Sort(v.sort);
     if (v.tag === 'VGlobal')
-        return utils_1.impossible(`global in rename`);
+        return renameSpine(id, pren, core_1.Global(v.name), v.spine); // TODO: should global be forced?
     return v;
 };
 const lams = (is, t, n = 0) => is.case(() => t, (i, rest) => core_1.Abs(i, `x${n}`, core_1.Type, lams(rest, t, n + 1))); // TODO: lambda type
 const solve = (gamma, m, sp, rhs_) => {
+    config_1.log(() => `solve ?${m}${sp.reverse().toString(v => `${v.erased ? '{' : ''}${values_1.show(v.arg, gamma)}${v.erased ? '}' : ''}`)} := ${values_1.show(rhs_, gamma)}`);
     const pren = invert(gamma, sp);
     const rhs = rename(m, pren, rhs_);
-    const solution = values_1.evaluate(lams(sp.reverse().map(app => app.erased), rhs), List_1.nil);
+    const solutionq = lams(sp.reverse().map(app => app.erased), rhs);
+    config_1.log(() => `solution: ${C.show(solutionq)}`);
+    const solution = values_1.evaluate(solutionq, List_1.nil);
     metas_1.setMeta(m, solution);
 };
 const unifySpines = (l, a, b) => a.zipWithR_(b, (x, y) => exports.unify(l, x.arg, y.arg));
@@ -1676,6 +1691,7 @@ exports.eqHead = eqHead;
 const unify = (l, a_, b_) => {
     const a = values_1.force(a_, false);
     const b = values_1.force(b_, false);
+    config_1.log(() => `unify ${values_1.show(a, l)} ~ ${values_1.show(b, l)}`);
     if (a === b)
         return;
     if (a.tag === 'VSort' && b.tag === 'VSort' && a.sort === b.sort)
@@ -1715,7 +1731,7 @@ const unify = (l, a_, b_) => {
 };
 exports.unify = unify;
 
-},{"./core":3,"./metas":8,"./utils/List":16,"./utils/utils":17,"./values":18}],15:[function(require,module,exports){
+},{"./config":2,"./core":3,"./metas":8,"./utils/List":16,"./utils/utils":17,"./values":18}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Lazy = void 0;

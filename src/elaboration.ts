@@ -220,7 +220,7 @@ const showHoles = (tm: Core, ty: Core) => {
   if (holeprops.length === 0) return;
   const strtype = S.showCore(ty);
   const strterm = S.showCore(tm);
-  const str = holeprops.map(([x, [v, t, local]]) => {
+  const str = holeprops.map(([x, [t, v, local]]) => {
     const fst = local.ns.zipWith(local.vs, (x, v) => [x, v] as [Name, Val]);
     const all = fst.zipWith(local.ts, ([x, v], { bound: def, type: ty, inserted, erased }) => [x, v, def, ty, inserted, erased] as [Name, Val, boolean, Val, boolean, boolean]);
     const allstr = all.toMappedArray(([x, v, b, t, _, p]) => `${p ? `{${x}}` : x} : ${showValSZ(local, t)}${b ? '' : ` = ${showValSZ(local, v)}`}`).join('\n');
