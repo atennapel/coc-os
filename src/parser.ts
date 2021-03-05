@@ -192,7 +192,7 @@ const expr = (t: Token): [Surface, boolean] => {
       if (isAxiomName(rest)) return [Axiom(rest), false];
       return serr(`invalid axiom: ${x}`);
     }
-    if (/[a-z]/i.test(x[0])) return [Var(x), false];
+    if (/[a-z\@]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
   }
   if (t.tag === 'Num') {

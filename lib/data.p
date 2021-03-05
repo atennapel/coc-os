@@ -1,6 +1,6 @@
 import lib/functor.p
 
-def {Data} = \f. {t : *} -> ({r : *} -> (r -> t) -> f r -> t) -> t
+def {Data} = \f. {@t : *} -> ({r : *} -> (r -> @t) -> f r -> @t) -> @t
 
 def Con
   : {f : * -> *} -> f (Data f) -> Data f

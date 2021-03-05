@@ -26,7 +26,7 @@ const newMeta = (local: Local): Core => {
 
 const inst = (local: Local, ty_: Val): [Val, List<Core>] => {
   const ty = force(ty_);
-  if (ty.tag === 'VPi' && ty.erased) {
+  if (ty.tag === 'VPi' && ty.erased && !ty.name.startsWith('@')) {
     const m = newMeta(local);
     const vm = evaluate(m, local.vs);
     const [res, args] = inst(local, vinst(ty, vm));
@@ -67,7 +67,7 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
     const body = check(local.bind(fty.erased, x, fty.type), tm.body, vinst(fty, v));
     return Abs(fty.erased, x, quote(fty.type, local.level), body);
   }
-  if (fty.tag === 'VPi' && fty.erased) {
+  if (fty.tag === 'VPi' && fty.erased && !fty.name.startsWith('@')) {
     const v = VVar(local.level);
     const term = check(local.insert(true, fty.name, fty.type), tm, vinst(fty, v));
     return Abs(fty.erased, fty.name, quote(fty.type, local.level), term);
@@ -94,6 +94,7 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
   const [ty2inst, ms] = inst(local, ty2);
   return tryT(() => {
     log(() => `unify ${showVal(local, ty2inst)} ~ ${showVal(local, ty)}`);
+    log(() => `for check ${show(tm)} : ${showVal(local, ty)}`);
     unify(local.level, ty2inst, ty);
     return ms.foldl((a, m) => App(a, true, m), term);
   }, e => terr(`check failed (${show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));

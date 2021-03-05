@@ -6,7 +6,7 @@ const erased_1 = require("./erased");
 const Lazy_1 = require("./utils/Lazy");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
-exports.AxiomNames = ['cast', 'elim', 'Rigid', 'rigid', 'unrigid'];
+exports.AxiomNames = ['cast', 'elim'];
 const isAxiomName = (name) => exports.AxiomNames.includes(name);
 exports.isAxiomName = isAxiomName;
 // {f : * -> *} -> f a -> f b
@@ -14,20 +14,12 @@ const Eq = (a, b) => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.V
 // {a b : *} -> (a -> b) -> f a -> f b
 const Functor = (f) => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(false, '_', values_1.VPi(false, '_', a, _ => b), _ => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))));
 // {t : *} -> ({r : *} -> (r -> t) -> f r -> t) -> t
-const Data = (f) => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t))), _ => t));
-const RigidC = values_1.VAxiom('Rigid');
-const Rigid = (t) => values_1.vapp(RigidC, false, t);
+const Data = (f) => values_1.VPi(true, '@t', values_1.VType, t => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t))), _ => t));
 const axiomTypes = utils_1.mapObj({
     // {a b : *} -> {_ : Eq a b} -> {f : * -> *} -> f a -> f b
     cast: () => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(true, '_', Eq(a, b), _ => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))))),
     // {f : * -> *} -> {t : *} -> {_ : Functor f} -> Data f -> ({r : *} -> (r -> Data f) -> (r -> t) -> f r -> t) -> t
     elim: () => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(true, '_', Functor(f), _ => values_1.VPi(false, '_', Data(f), _ => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => Data(f)), _ => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t)))), _ => t))))),
-    // * -> *
-    Rigid: () => values_1.VPi(false, '_', values_1.VType, _ => values_1.VType),
-    // {t : *} -> t -> Rigid t
-    rigid: () => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', t, _ => Rigid(t))),
-    // {t : *} -> Rigid t -> t
-    unrigid: () => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(false, '_', Rigid(t), _ => t)),
 }, Lazy_1.Lazy.from);
 const synthAxiom = (name) => axiomTypes[name].get();
 exports.synthAxiom = synthAxiom;
@@ -35,9 +27,6 @@ const axiomErasures = utils_1.mapObj({
     cast: () => erased_1.idTerm,
     // \x alg. x (alg (\y. y))
     elim: () => erased_1.Abs(erased_1.Abs(erased_1.App(erased_1.Var(1), erased_1.App(erased_1.Var(0), erased_1.idTerm)))),
-    Rigid: () => erased_1.idTerm,
-    rigid: () => erased_1.idTerm,
-    unrigid: () => erased_1.idTerm,
 }, Lazy_1.Lazy.from);
 const eraseAxiom = (name) => axiomErasures[name].get();
 exports.eraseAxiom = eraseAxiom;
@@ -207,7 +196,7 @@ const newMeta = (local) => {
 };
 const inst = (local, ty_) => {
     const ty = values_1.force(ty_);
-    if (ty.tag === 'VPi' && ty.erased) {
+    if (ty.tag === 'VPi' && ty.erased && !ty.name.startsWith('@')) {
         const m = newMeta(local);
         const vm = values_1.evaluate(m, local.vs);
         const [res, args] = inst(local, values_1.vinst(ty, vm));
@@ -257,7 +246,7 @@ const check = (local, tm, ty) => {
         const body = check(local.bind(fty.erased, x, fty.type), tm.body, values_1.vinst(fty, v));
         return core_1.Abs(fty.erased, x, values_1.quote(fty.type, local.level), body);
     }
-    if (fty.tag === 'VPi' && fty.erased) {
+    if (fty.tag === 'VPi' && fty.erased && !fty.name.startsWith('@')) {
         const v = values_1.VVar(local.level);
         const term = check(local.insert(true, fty.name, fty.type), tm, values_1.vinst(fty, v));
         return core_1.Abs(fty.erased, fty.name, values_1.quote(fty.type, local.level), term);
@@ -285,6 +274,7 @@ const check = (local, tm, ty) => {
     const [ty2inst, ms] = inst(local, ty2);
     return utils_1.tryT(() => {
         config_1.log(() => `unify ${showVal(local, ty2inst)} ~ ${showVal(local, ty)}`);
+        config_1.log(() => `for check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
         unification_1.unify(local.level, ty2inst, ty);
         return ms.foldl((a, m) => core_1.App(a, true, m), term);
     }, e => utils_1.terr(`check failed (${surface_1.show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
@@ -965,7 +955,7 @@ const expr = (t) => {
                 return [surface_1.Axiom(rest), false];
             return utils_1.serr(`invalid axiom: ${x}`);
         }
-        if (/[a-z]/i.test(x[0]))
+        if (/[a-z\@]/i.test(x[0]))
             return [surface_1.Var(x), false];
         return utils_1.serr(`invalid name: ${x}`);
     }

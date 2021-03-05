@@ -16,6 +16,7 @@ yarn start filename
 
 ```
 TODO:
+- add erased, non-implicit functions
 - add IO
 - abstract machine
 - type verification: improve sort check for abs
