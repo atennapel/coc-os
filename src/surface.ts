@@ -10,12 +10,10 @@ export type Surface =
   Pi | Abs | App |
   Meta | Hole;
 
-export interface Var { readonly tag: 'Var'; readonly name: Name }
-export const Var = (name: Name): Var => ({ tag: 'Var', name });
+export interface Var { readonly tag: 'Var'; readonly name: Name; readonly lift: Ix }
+export const Var = (name: Name, lift: Ix): Var => ({ tag: 'Var', name, lift });
 export interface Type { readonly tag: 'Type'; readonly index: Ix }
 export const Type = (index: Ix): Type => ({ tag: 'Type', index });
-export interface Global { readonly tag: 'Global'; readonly name: Name }
-export const Global = (name: Name): Global => ({ tag: 'Global', name });
 export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Surface | null; readonly val: Surface; readonly body: Surface }
 export const Let = (erased: boolean, name: Name, type: Surface | null, val: Surface, body: Surface): Let => ({ tag: 'Let', erased, name, type, val, body });
 export interface Pi { readonly tag: 'Pi'; readonly erased: boolean; readonly name: Name; readonly type: Surface; readonly body: Surface }
@@ -61,7 +59,7 @@ const showP = (b: boolean, t: Surface) => b ? `(${show(t)})` : show(t);
 const isSimple = (t: Surface) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type';
 const showS = (t: Surface) => showP(!isSimple(t), t);
 export const show = (t: Surface): string => {
-  if (t.tag === 'Var') return `${t.name}`;
+  if (t.tag === 'Var') return `${t.name}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
   if (t.tag === 'Type') return `*${t.index > 0 ? t.index : ''}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'Hole') return `_${t.name || ''}`;
@@ -83,10 +81,10 @@ export const show = (t: Surface): string => {
 };
 
 export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
-  if (t.tag === 'Global') return Var(t.name);
+  if (t.tag === 'Global') return Var(t.name, t.lift);
   if (t.tag === 'Type') return Type(t.index);
   if (t.tag === 'Meta' || t.tag === 'InsertedMeta') return Meta(t.id);
-  if (t.tag === 'Var') return Var(ns.index(t.index) || impossible(`var out of range in toSurface: ${t.index}`));
+  if (t.tag === 'Var') return Var(ns.index(t.index) || impossible(`var out of range in toSurface: ${t.index}`), 0);
   if (t.tag === 'App') return App(toSurface(t.fn, ns), t.erased, toSurface(t.arg, ns));
   if (t.tag === 'Abs') {
     const x = chooseName(t.name, ns);

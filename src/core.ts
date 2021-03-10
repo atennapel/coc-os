@@ -1,6 +1,7 @@
 import { MetaVar } from './metas';
 import { Ix, Name } from './names';
 import { List } from './utils/List';
+import { impossible } from './utils/utils';
 
 export type Core =
   Var | Global | Type | Let |
@@ -11,8 +12,8 @@ export interface Var { readonly tag: 'Var'; readonly index: Ix }
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
 export interface Type { readonly tag: 'Type'; readonly index: Ix }
 export const Type = (index: Ix): Type => ({ tag: 'Type', index });
-export interface Global { readonly tag: 'Global'; readonly name: Name }
-export const Global = (name: Name): Global => ({ tag: 'Global', name });
+export interface Global { readonly tag: 'Global'; readonly name: Name; readonly lift: Ix }
+export const Global = (name: Name, lift: Ix): Global => ({ tag: 'Global', name, lift });
 export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly val: Core; readonly body: Core }
 export const Let = (erased: boolean, name: Name, type: Core, val: Core, body: Core): Let => ({ tag: 'Let', erased, name, type, val, body });
 export interface Pi { readonly tag: 'Pi'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
@@ -59,7 +60,7 @@ const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag ===
 const showS = (t: Core) => showP(!isSimple(t), t);
 export const show = (t: Core): string => {
   if (t.tag === 'Var') return `'${t.index}`;
-  if (t.tag === 'Global') return `${t.name}`;
+  if (t.tag === 'Global') return `${t.name}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
   if (t.tag === 'Type') return `*${t.index > 0 ? t.index : ''}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'InsertedMeta') return `?*${t.id}`;
@@ -99,3 +100,16 @@ export const substVar = (j: Ix, s: Core, t: Core): Core => {
 };
 
 export const subst = (t: Core, u: Core): Core => shift(-1, 0, substVar(0, shift(1, 0, u), t));
+
+export const liftType = (l: Ix, t: Core): Core => {
+  if (t.tag === 'Type') return Type(t.index + l);
+  if (t.tag === 'Var') return t;
+  if (t.tag === 'Abs') return Abs(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
+  if (t.tag === 'Pi') return Pi(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
+  if (t.tag === 'App') return App(liftType(l, t.fn), t.erased, liftType(l, t.arg));
+  if (t.tag === 'Let') return Let(t.erased, t.name, liftType(l, t.type), liftType(l, t.val), liftType(l, t.body));
+  if (t.tag === 'Global') return Global(t.name, t.lift + l);
+  if (t.tag === 'Meta') return impossible(`meta in liftType: ${show(t)}`);
+  if (t.tag === 'InsertedMeta') return impossible(`meta in liftType: ${show(t)}`);
+  return t;
+};

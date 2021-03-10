@@ -112,6 +112,14 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       if (!res) return cb(`undefined global: ${name}`, true);
       return cb(showVal(res.value, 0, true));
     }
+    if (s.startsWith(':lift')) {
+      const name = s.slice(5).trim();
+      const res = getGlobal(name);
+      if (!res) return cb(`undefined global: ${name}`, true);
+      const eterm = C.liftType(1, res.term);
+      const type = typecheck(eterm, Local.empty().inType());
+      return cb(`term: ${showCore(eterm)}\ntype: ${showCore(type)}`);
+    }
     let inType = false;
     if (s.startsWith(':t')) {
       inType = true;

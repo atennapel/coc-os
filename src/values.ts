@@ -1,4 +1,4 @@
-import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type } from './core';
+import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType } from './core';
 import { getMeta, MetaVar } from './metas';
 import { Ix, Lvl, Name } from './names';
 import { Lazy } from './utils/Lazy';
@@ -23,8 +23,8 @@ export interface VRigid { readonly tag: 'VRigid'; readonly head: Lvl; readonly s
 export const VRigid = (head: Lvl, spine: Spine): VRigid => ({ tag: 'VRigid', head, spine });
 export interface VFlex { readonly tag: 'VFlex'; readonly head: MetaVar; readonly spine: Spine }
 export const VFlex = (head: MetaVar, spine: Spine): VFlex => ({ tag: 'VFlex', head, spine });
-export interface VGlobal { readonly tag: 'VGlobal'; readonly name: Name; readonly spine: Spine; readonly val: Lazy<Val> };
-export const VGlobal = (name: Name, spine: Spine, val: Lazy<Val>): VGlobal => ({ tag: 'VGlobal', name, spine, val });
+export interface VGlobal { readonly tag: 'VGlobal'; readonly name: Name; readonly lift: Ix; readonly spine: Spine; readonly val: Lazy<Val> };
+export const VGlobal = (name: Name, lift: Ix, spine: Spine, val: Lazy<Val>): VGlobal => ({ tag: 'VGlobal', name, lift, spine, val });
 export interface VAbs { readonly tag: 'VAbs'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
 export const VAbs = (erased: boolean, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', erased, name, type, clos });
 export interface VPi { readonly tag: 'VPi'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
@@ -59,7 +59,7 @@ export const vapp = (left: Val, erased: boolean, right: Val): Val => {
   if (left.tag === 'VAbs') return vinst(left, right);
   if (left.tag === 'VRigid') return VRigid(left.head, cons(EApp(erased, right), left.spine));
   if (left.tag === 'VFlex') return VFlex(left.head, cons(EApp(erased, right), left.spine));
-  if (left.tag === 'VGlobal') return VGlobal(left.name, cons(EApp(erased, right), left.spine), left.val.map(v => vapp(v, erased, right)));
+  if (left.tag === 'VGlobal') return VGlobal(left.name, left.lift, cons(EApp(erased, right), left.spine), left.val.map(v => vapp(v, erased, right)));
   return impossible(`vapp: ${left.tag}`);
 };
 
@@ -82,8 +82,8 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
   if (t.tag === 'Global') {
     const entry = getGlobal(t.name);
     if (!entry) return impossible(`tried to load undefined global ${t.name}`);
-    const val = entry.value;
-    return VGlobal(t.name, nil, Lazy.of(val));
+    const val = t.lift === 0 ? entry.value : evaluate(liftType(t.lift, entry.term), vs);
+    return VGlobal(t.name, t.lift, nil, Lazy.of(val));
   }
   return t;
 };
@@ -109,7 +109,7 @@ export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
     if (full) return quote(v.val.get(), k, full);
     return v.spine.foldr(
       (x, y) => quoteElim(y, x, k, full),
-      Global(v.name) as Core,
+      Global(v.name, v.lift) as Core,
     );
   }
   if (v.tag === 'VAbs') return Abs(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));

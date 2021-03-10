@@ -1,4 +1,4 @@
-import { Abs, App, Core, Global, InsertedMeta, Let, Pi, Type, Var } from './core';
+import { Abs, App, Core, Global, InsertedMeta, Let, liftType, Pi, Type, Var } from './core';
 import { indexEnvT, Local } from './local';
 import { allMetasSolved, freshMeta, resetMetas } from './metas';
 import { show, Surface } from './surface';
@@ -106,9 +106,15 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
       const entry = getGlobal(tm.name);
       if (!entry) return terr(`global ${tm.name} not found`);
       if (entry.erased && !local.erased) return terr(`erased global used: ${show(tm)}`);
-      const ty = entry.type;
-      return [Global(tm.name), ty];
+      let ty;
+      if (tm.lift === 0) {
+        ty = entry.type;
+      } else {
+        ty = evaluate(liftType(tm.lift, entry.etype), local.vs);
+      }
+      return [Global(tm.name, tm.lift), ty];
     } else {
+      if (tm.lift > 0) return terr(`local variables cannot be lifted: ${show(tm)}`);
       const [entry, j] = indexEnvT(local.ts, i) || terr(`var out of scope ${show(tm)}`);
       if (entry.erased && !local.erased) return terr(`erased var used: ${show(tm)}`);
       return [Var(j), entry.type];

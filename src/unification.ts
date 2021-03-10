@@ -57,7 +57,7 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
   if (v.tag === 'VPi')
     return Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VType') return Type(v.index);
-  if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name), v.spine); // TODO: should global be forced?
+  if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name, v.lift), v.spine); // TODO: should global be forced?
   return v;
 };
 
@@ -106,9 +106,12 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
     return unifySpines(l, a.spine, b.spine);
   if (a.tag === 'VFlex') return solve(l, a.head, a.spine, b);
   if (b.tag === 'VFlex') return solve(l, b.head, b.spine, a);
+
+  // TODO: does global lifting affect this?
   if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.name === b.name)
     return tryT(() => unifySpines(l, a.spine, b.spine), () => unify(l, a.val.get(), b.val.get()));
   if (a.tag === 'VGlobal') return unify(l, a.val.get(), b);
   if (b.tag === 'VGlobal') return unify(l, a, b.val.get());
+
   return terr(`failed to unify: ${show(a, l)} ~ ${show(b, l)}`);
 };

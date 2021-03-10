@@ -60,7 +60,7 @@ const tokenize = (sc: string): Token[] => {
       else if (/\s/.test(c)) continue;
       else return serr(`invalid char ${c} in tokenize`);
     } else if (state === NAME) {
-      if (!(/[a-z0-9\-\_\/]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
+      if (!(/[a-z0-9\-\_\/\^]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
         r.push(TName(t));
         t = '', i--, state = START;
       } else t += c;
@@ -87,9 +87,9 @@ const tokenize = (sc: string): Token[] => {
   return r;
 };
 
-const tunit = Var('Unit');
-const unit = Var('UnitValue');
-const Pair = Var('MkPair');
+const tunit = Var('Unit', 0);
+const unit = Var('UnitValue', 0);
+const Pair = Var('MkPair', 0);
 const pair = (a: Surface, b: Surface): Surface => App(App(Pair, false, a), false, b);
 
 const isName = (t: Token, x: Name): boolean =>
@@ -164,8 +164,8 @@ const codepoints = (s: string): number[] => {
 
 const numToNat = (n: number): Surface => {
   if (isNaN(n)) return serr(`invalid nat number: ${n}`);
-  const s = Var('S');
-  let c: Surface = Var('Z');
+  const s = Var('S', 0);
+  let c: Surface = Var('Z', 0);
   for (let i = 0; i < n; i++) c = App(s, false, c);
   return c;
 };
@@ -175,8 +175,8 @@ const expr = (t: Token): [Surface, boolean] => {
     return [exprs(t.list, '('), t.bracket === '{'];
   if (t.tag === 'Str') {
     const s = codepoints(t.str).reverse();
-    const Cons = Var('Cons');
-    const Nil = Var('Nil');
+    const Cons = Var('Cons', 0);
+    const Nil = Var('Nil', 0);
     return [s.reduce((t, n) => App(App(Cons, false, numToNat(n)), false, t), Nil as Surface), false];
   }
   if (t.tag === 'Name') {
@@ -191,24 +191,34 @@ const expr = (t: Token): [Surface, boolean] => {
       const rest = x.slice(1);
       return [Hole(rest.length > 0 ? rest : null), false];
     }
-    if (/[a-z]/i.test(x[0])) return [Var(x), false];
+    if (/[a-z]/i.test(x[0])) {
+      if (x.includes('^')) {
+        const spl = x.split('^');
+        if (spl.length !== 2) return serr(`invalid var ${x}`);
+        if (spl[1] === '') return [Var(spl[0], 1), false]
+        const n = +spl[1];
+        if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid var ${x}`);
+        return [Var(spl[0], n), false];
+      }
+      return [Var(x, 0), false];
+    }
     return serr(`invalid name: ${x}`);
   }
   if (t.tag === 'Num') {
     if (t.num.endsWith('b')) {
       const n = +t.num.slice(0, -1);
       if (isNaN(n)) return serr(`invalid number: ${t.num}`);
-      const s0 = Var('B0');
-      const s1 = Var('B1');
-      let c: Surface = Var('BE');
+      const s0 = Var('B0', 0);
+      const s1 = Var('B1', 0);
+      let c: Surface = Var('BE', 0);
       const s = n.toString(2);
       for (let i = 0; i < s.length; i++) c = App(s[i] === '0' ? s0 : s1, false, c);
       return [c, false];
     } else if (t.num.endsWith('f')) {
       const n = +t.num.slice(0, -1);
       if (isNaN(n)) return serr(`invalid number: ${t.num}`);
-      const s = Var('FS');
-      let c: Surface = Var('FZ');
+      const s = Var('FS', 0);
+      let c: Surface = Var('FZ', 0);
       for (let i = 0; i < n; i++) c = App(s, false, c);
       return [c, false];
     } else if (t.num.endsWith('n')) {
@@ -275,7 +285,7 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
   if (i >= 0) {
     const a = ts.slice(0, i);
     const b = ts.slice(i + 1);
-    return Let(false, 'x', exprs(b, '('), exprs(a, '('), Var('x'));
+    return Let(false, 'x', exprs(b, '('), exprs(a, '('), Var('x', 0));
   }
   if (isName(ts[0], '\\')) {
     const args: [Name, boolean, Surface | null][] = [];
@@ -388,7 +398,7 @@ export const parseDef = async (c: Token[], importMap: ImportMap): Promise<Def[]>
       }
       const ety = exprs(tyts, '(');
       const body = exprs(c.slice(j + 1), '(');
-      return [DDef(erased, name, Let(false, name, ety, body, Var(name)))];
+      return [DDef(erased, name, Let(false, name, ety, body, Var(name, 0)))];
     } else return serr(`def: : or = expected but got ${sym.name}`);
   } else return serr(`def should start with def or import`);
 };

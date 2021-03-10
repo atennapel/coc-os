@@ -1,6 +1,6 @@
 import lib/functor.p
 
-def {Maybe} = \t. {r : *} -> r -> (t -> r) -> r
+def {Maybe} = \(t : *). {r : *} -> r -> (t -> r) -> r
 def Nothing : {t : *} -> Maybe t = \{t} {r} n j. n
 def Just : {t : *} -> t -> Maybe t = \{t} x {r} n j. j x
 

@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Core, Pi, show } from './core';
+import { Core, liftType, Pi, show } from './core';
 import { getGlobal } from './globals';
 import { indexEnvT, Local } from './local';
 import { impossible, terr, tryT } from './utils/utils';
@@ -42,7 +42,11 @@ const synth = (local: Local, tm: Core): Val => {
     const e = getGlobal(tm.name);
     if (!e) return terr(`undefined global ${show(tm)}`);
     if (e.erased && !local.erased) return terr(`erased global used: ${show(tm)}`);
-    return e.type;
+    if (tm.lift === 0) {
+      return e.type;
+    } else {
+      return evaluate(liftType(tm.lift, e.etype), local.vs);
+    }
   }
   if (tm.tag === 'App') {
     const fnty = synth(local, tm.fn);

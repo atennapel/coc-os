@@ -20,12 +20,13 @@ exports.log = log;
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
+exports.liftType = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
+const utils_1 = require("./utils/utils");
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
 const Type = (index) => ({ tag: 'Type', index });
 exports.Type = Type;
-const Global = (name) => ({ tag: 'Global', name });
+const Global = (name, lift) => ({ tag: 'Global', name, lift });
 exports.Global = Global;
 const Let = (erased, name, type, val, body) => ({ tag: 'Let', erased, name, type, val, body });
 exports.Let = Let;
@@ -76,7 +77,7 @@ const show = (t) => {
     if (t.tag === 'Var')
         return `'${t.index}`;
     if (t.tag === 'Global')
-        return `${t.name}`;
+        return `${t.name}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
     if (t.tag === 'Type')
         return `*${t.index > 0 ? t.index : ''}`;
     if (t.tag === 'Meta')
@@ -130,8 +131,30 @@ const substVar = (j, s, t) => {
 exports.substVar = substVar;
 const subst = (t, u) => exports.shift(-1, 0, exports.substVar(0, exports.shift(1, 0, u), t));
 exports.subst = subst;
+const liftType = (l, t) => {
+    if (t.tag === 'Type')
+        return exports.Type(t.index + l);
+    if (t.tag === 'Var')
+        return t;
+    if (t.tag === 'Abs')
+        return exports.Abs(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.body));
+    if (t.tag === 'Pi')
+        return exports.Pi(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.body));
+    if (t.tag === 'App')
+        return exports.App(exports.liftType(l, t.fn), t.erased, exports.liftType(l, t.arg));
+    if (t.tag === 'Let')
+        return exports.Let(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.val), exports.liftType(l, t.body));
+    if (t.tag === 'Global')
+        return exports.Global(t.name, t.lift + l);
+    if (t.tag === 'Meta')
+        return utils_1.impossible(`meta in liftType: ${exports.show(t)}`);
+    if (t.tag === 'InsertedMeta')
+        return utils_1.impossible(`meta in liftType: ${exports.show(t)}`);
+    return t;
+};
+exports.liftType = liftType;
 
-},{}],3:[function(require,module,exports){
+},{"./utils/utils":15}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.elaborateDefs = exports.elaborateDef = exports.elaborate = void 0;
@@ -239,10 +262,18 @@ const synth = (local, tm) => {
                 return utils_1.terr(`global ${tm.name} not found`);
             if (entry.erased && !local.erased)
                 return utils_1.terr(`erased global used: ${surface_1.show(tm)}`);
-            const ty = entry.type;
-            return [core_1.Global(tm.name), ty];
+            let ty;
+            if (tm.lift === 0) {
+                ty = entry.type;
+            }
+            else {
+                ty = values_1.evaluate(core_1.liftType(tm.lift, entry.etype), local.vs);
+            }
+            return [core_1.Global(tm.name, tm.lift), ty];
         }
         else {
+            if (tm.lift > 0)
+                return utils_1.terr(`local variables cannot be lifted: ${surface_1.show(tm)}`);
             const [entry, j] = local_1.indexEnvT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
             if (entry.erased && !local.erased)
                 return utils_1.terr(`erased var used: ${surface_1.show(tm)}`);
@@ -589,7 +620,7 @@ const tokenize = (sc) => {
                 return utils_1.serr(`invalid char ${c} in tokenize`);
         }
         else if (state === NAME) {
-            if (!(/[a-z0-9\-\_\/]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
+            if (!(/[a-z0-9\-\_\/\^]/i.test(c) || (c === '.' && /[a-z0-9]/i.test(next)))) {
                 r.push(TName(t));
                 t = '', i--, state = START;
             }
@@ -629,9 +660,9 @@ const tokenize = (sc) => {
         return utils_1.serr(`escape is true after tokenize`);
     return r;
 };
-const tunit = surface_1.Var('Unit');
-const unit = surface_1.Var('UnitValue');
-const Pair = surface_1.Var('MkPair');
+const tunit = surface_1.Var('Unit', 0);
+const unit = surface_1.Var('UnitValue', 0);
+const Pair = surface_1.Var('MkPair', 0);
 const pair = (a, b) => surface_1.App(surface_1.App(Pair, false, a), false, b);
 const isName = (t, x) => t.tag === 'Name' && t.name === x;
 const isNames = (t) => t.map(x => {
@@ -709,8 +740,8 @@ const codepoints = (s) => {
 const numToNat = (n) => {
     if (isNaN(n))
         return utils_1.serr(`invalid nat number: ${n}`);
-    const s = surface_1.Var('S');
-    let c = surface_1.Var('Z');
+    const s = surface_1.Var('S', 0);
+    let c = surface_1.Var('Z', 0);
     for (let i = 0; i < n; i++)
         c = surface_1.App(s, false, c);
     return c;
@@ -720,8 +751,8 @@ const expr = (t) => {
         return [exprs(t.list, '('), t.bracket === '{'];
     if (t.tag === 'Str') {
         const s = codepoints(t.str).reverse();
-        const Cons = surface_1.Var('Cons');
-        const Nil = surface_1.Var('Nil');
+        const Cons = surface_1.Var('Cons', 0);
+        const Nil = surface_1.Var('Nil', 0);
         return [s.reduce((t, n) => surface_1.App(surface_1.App(Cons, false, numToNat(n)), false, t), Nil), false];
     }
     if (t.tag === 'Name') {
@@ -738,8 +769,20 @@ const expr = (t) => {
             const rest = x.slice(1);
             return [surface_1.Hole(rest.length > 0 ? rest : null), false];
         }
-        if (/[a-z]/i.test(x[0]))
-            return [surface_1.Var(x), false];
+        if (/[a-z]/i.test(x[0])) {
+            if (x.includes('^')) {
+                const spl = x.split('^');
+                if (spl.length !== 2)
+                    return utils_1.serr(`invalid var ${x}`);
+                if (spl[1] === '')
+                    return [surface_1.Var(spl[0], 1), false];
+                const n = +spl[1];
+                if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                    return utils_1.serr(`invalid var ${x}`);
+                return [surface_1.Var(spl[0], n), false];
+            }
+            return [surface_1.Var(x, 0), false];
+        }
         return utils_1.serr(`invalid name: ${x}`);
     }
     if (t.tag === 'Num') {
@@ -747,9 +790,9 @@ const expr = (t) => {
             const n = +t.num.slice(0, -1);
             if (isNaN(n))
                 return utils_1.serr(`invalid number: ${t.num}`);
-            const s0 = surface_1.Var('B0');
-            const s1 = surface_1.Var('B1');
-            let c = surface_1.Var('BE');
+            const s0 = surface_1.Var('B0', 0);
+            const s1 = surface_1.Var('B1', 0);
+            let c = surface_1.Var('BE', 0);
             const s = n.toString(2);
             for (let i = 0; i < s.length; i++)
                 c = surface_1.App(s[i] === '0' ? s0 : s1, false, c);
@@ -759,8 +802,8 @@ const expr = (t) => {
             const n = +t.num.slice(0, -1);
             if (isNaN(n))
                 return utils_1.serr(`invalid number: ${t.num}`);
-            const s = surface_1.Var('FS');
-            let c = surface_1.Var('FZ');
+            const s = surface_1.Var('FS', 0);
+            let c = surface_1.Var('FZ', 0);
             for (let i = 0; i < n; i++)
                 c = surface_1.App(s, false, c);
             return [c, false];
@@ -841,7 +884,7 @@ const exprs = (ts, br) => {
     if (i >= 0) {
         const a = ts.slice(0, i);
         const b = ts.slice(i + 1);
-        return surface_1.Let(false, 'x', exprs(b, '('), exprs(a, '('), surface_1.Var('x'));
+        return surface_1.Let(false, 'x', exprs(b, '('), exprs(a, '('), surface_1.Var('x', 0));
     }
     if (isName(ts[0], '\\')) {
         const args = [];
@@ -971,7 +1014,7 @@ const parseDef = async (c, importMap) => {
             }
             const ety = exprs(tyts, '(');
             const body = exprs(c.slice(j + 1), '(');
-            return [surface_1.DDef(erased, name, surface_1.Let(false, name, ety, body, surface_1.Var(name)))];
+            return [surface_1.DDef(erased, name, surface_1.Let(false, name, ety, body, surface_1.Var(name, 0)))];
         }
         else
             return utils_1.serr(`def: : or = expected but got ${sym.name}`);
@@ -1110,6 +1153,15 @@ const runREPL = (s_, cb) => {
                 return cb(`undefined global: ${name}`, true);
             return cb(surface_1.showVal(res.value, 0, true));
         }
+        if (s.startsWith(':lift')) {
+            const name = s.slice(5).trim();
+            const res = globals_1.getGlobal(name);
+            if (!res)
+                return cb(`undefined global: ${name}`, true);
+            const eterm = C.liftType(1, res.term);
+            const type = typecheck_1.typecheck(eterm, local_1.Local.empty().inType());
+            return cb(`term: ${surface_1.showCore(eterm)}\ntype: ${surface_1.showCore(type)}`);
+        }
         let inType = false;
         if (s.startsWith(':t')) {
             inType = true;
@@ -1154,17 +1206,15 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":2,"./elaboration":3,"./globals":4,"./local":5,"./parser":8,"./surface":10,"./typecheck":11,"./utils/List":14,"./utils/utils":15,"./values":16}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
+exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Type = exports.Var = void 0;
 const names_1 = require("./names");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
-const Var = (name) => ({ tag: 'Var', name });
+const Var = (name, lift) => ({ tag: 'Var', name, lift });
 exports.Var = Var;
 const Type = (index) => ({ tag: 'Type', index });
 exports.Type = Type;
-const Global = (name) => ({ tag: 'Global', name });
-exports.Global = Global;
 const Let = (erased, name, type, val, body) => ({ tag: 'Let', erased, name, type, val, body });
 exports.Let = Let;
 const Pi = (erased, name, type, body) => ({ tag: 'Pi', erased, name, type, body });
@@ -1212,7 +1262,7 @@ const isSimple = (t) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type';
 const showS = (t) => showP(!isSimple(t), t);
 const show = (t) => {
     if (t.tag === 'Var')
-        return `${t.name}`;
+        return `${t.name}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
     if (t.tag === 'Type')
         return `*${t.index > 0 ? t.index : ''}`;
     if (t.tag === 'Meta')
@@ -1238,13 +1288,13 @@ const show = (t) => {
 exports.show = show;
 const toSurface = (t, ns = List_1.nil) => {
     if (t.tag === 'Global')
-        return exports.Var(t.name);
+        return exports.Var(t.name, t.lift);
     if (t.tag === 'Type')
         return exports.Type(t.index);
     if (t.tag === 'Meta' || t.tag === 'InsertedMeta')
         return exports.Meta(t.id);
     if (t.tag === 'Var')
-        return exports.Var(ns.index(t.index) || utils_1.impossible(`var out of range in toSurface: ${t.index}`));
+        return exports.Var(ns.index(t.index) || utils_1.impossible(`var out of range in toSurface: ${t.index}`), 0);
     if (t.tag === 'App')
         return exports.App(exports.toSurface(t.fn, ns), t.erased, exports.toSurface(t.arg, ns));
     if (t.tag === 'Abs') {
@@ -1325,7 +1375,12 @@ const synth = (local, tm) => {
             return utils_1.terr(`undefined global ${core_1.show(tm)}`);
         if (e.erased && !local.erased)
             return utils_1.terr(`erased global used: ${core_1.show(tm)}`);
-        return e.type;
+        if (tm.lift === 0) {
+            return e.type;
+        }
+        else {
+            return values_1.evaluate(core_1.liftType(tm.lift, e.etype), local.vs);
+        }
     }
     if (tm.tag === 'App') {
         const fnty = synth(local, tm.fn);
@@ -1426,7 +1481,7 @@ const rename = (id, pren, v_) => {
     if (v.tag === 'VType')
         return core_1.Type(v.index);
     if (v.tag === 'VGlobal')
-        return renameSpine(id, pren, core_1.Global(v.name), v.spine); // TODO: should global be forced?
+        return renameSpine(id, pren, core_1.Global(v.name, v.lift), v.spine); // TODO: should global be forced?
     return v;
 };
 const lams = (is, t, n = 0) => is.case(() => t, (i, rest) => core_1.Abs(i, `x${n}`, core_1.Type(0), lams(rest, t, n + 1))); // TODO: lambda type
@@ -1473,6 +1528,7 @@ const unify = (l, a_, b_) => {
         return solve(l, a.head, a.spine, b);
     if (b.tag === 'VFlex')
         return solve(l, b.head, b.spine, a);
+    // TODO: does global lifting affect this?
     if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.name === b.name)
         return utils_1.tryT(() => unifySpines(l, a.spine, b.spine), () => exports.unify(l, a.val.get(), b.val.get()));
     if (a.tag === 'VGlobal')
@@ -1853,7 +1909,7 @@ exports.VRigid = VRigid;
 const VFlex = (head, spine) => ({ tag: 'VFlex', head, spine });
 exports.VFlex = VFlex;
 ;
-const VGlobal = (name, spine, val) => ({ tag: 'VGlobal', name, spine, val });
+const VGlobal = (name, lift, spine, val) => ({ tag: 'VGlobal', name, lift, spine, val });
 exports.VGlobal = VGlobal;
 const VAbs = (erased, name, type, clos) => ({ tag: 'VAbs', erased, name, type, clos });
 exports.VAbs = VAbs;
@@ -1893,7 +1949,7 @@ const vapp = (left, erased, right) => {
     if (left.tag === 'VFlex')
         return exports.VFlex(left.head, List_1.cons(exports.EApp(erased, right), left.spine));
     if (left.tag === 'VGlobal')
-        return exports.VGlobal(left.name, List_1.cons(exports.EApp(erased, right), left.spine), left.val.map(v => exports.vapp(v, erased, right)));
+        return exports.VGlobal(left.name, left.lift, List_1.cons(exports.EApp(erased, right), left.spine), left.val.map(v => exports.vapp(v, erased, right)));
     return utils_1.impossible(`vapp: ${left.tag}`);
 };
 exports.vapp = vapp;
@@ -1926,8 +1982,8 @@ const evaluate = (t, vs) => {
         const entry = globals_1.getGlobal(t.name);
         if (!entry)
             return utils_1.impossible(`tried to load undefined global ${t.name}`);
-        const val = entry.value;
-        return exports.VGlobal(t.name, List_1.nil, Lazy_1.Lazy.of(val));
+        const val = t.lift === 0 ? entry.value : exports.evaluate(core_1.liftType(t.lift, entry.term), vs);
+        return exports.VGlobal(t.name, t.lift, List_1.nil, Lazy_1.Lazy.of(val));
     }
     return t;
 };
@@ -1948,7 +2004,7 @@ const quote = (v_, k, full = false) => {
     if (v.tag === 'VGlobal') {
         if (full)
             return exports.quote(v.val.get(), k, full);
-        return v.spine.foldr((x, y) => quoteElim(y, x, k, full), core_1.Global(v.name));
+        return v.spine.foldr((x, y) => quoteElim(y, x, k, full), core_1.Global(v.name, v.lift));
     }
     if (v.tag === 'VAbs')
         return core_1.Abs(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
