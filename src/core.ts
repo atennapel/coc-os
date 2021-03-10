@@ -9,8 +9,8 @@ export type Core =
 
 export interface Var { readonly tag: 'Var'; readonly index: Ix }
 export const Var = (index: Ix): Var => ({ tag: 'Var', index });
-export interface Type { readonly tag: 'Type' }
-export const Type: Type = { tag: 'Type' };
+export interface Type { readonly tag: 'Type'; readonly index: Ix }
+export const Type = (index: Ix): Type => ({ tag: 'Type', index });
 export interface Global { readonly tag: 'Global'; readonly name: Name }
 export const Global = (name: Name): Global => ({ tag: 'Global', name });
 export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly val: Core; readonly body: Core }
@@ -60,7 +60,7 @@ const showS = (t: Core) => showP(!isSimple(t), t);
 export const show = (t: Core): string => {
   if (t.tag === 'Var') return `'${t.index}`;
   if (t.tag === 'Global') return `${t.name}`;
-  if (t.tag === 'Type') return `*`;
+  if (t.tag === 'Type') return `*${t.index > 0 ? t.index : ''}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'InsertedMeta') return `?*${t.id}`;
   if (t.tag === 'Pi') {

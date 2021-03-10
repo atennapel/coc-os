@@ -1,6 +1,6 @@
 import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type } from './core';
 import { getMeta, MetaVar } from './metas';
-import { Lvl, Name } from './names';
+import { Ix, Lvl, Name } from './names';
 import { Lazy } from './utils/Lazy';
 import { cons, List, Nil, nil } from './utils/List';
 import { impossible } from './utils/utils';
@@ -17,8 +17,8 @@ export type Clos = (val: Val) => Val;
 
 export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi;
 
-export interface VType { readonly tag: 'VType' }
-export const VType: VType = { tag: 'VType' };
+export interface VType { readonly tag: 'VType'; readonly index: Ix }
+export const VType = (index: Ix): VType => ({ tag: 'VType', index });
 export interface VRigid { readonly tag: 'VRigid'; readonly head: Lvl; readonly spine: Spine }
 export const VRigid = (head: Lvl, spine: Spine): VRigid => ({ tag: 'VRigid', head, spine });
 export interface VFlex { readonly tag: 'VFlex'; readonly head: MetaVar; readonly spine: Spine }
@@ -71,7 +71,7 @@ export const velimBD = (env: EnvV, v: Val, s: List<boolean>): Val => {
 };
 
 export const evaluate = (t: Core, vs: EnvV): Val => {
-  if (t.tag === 'Type') return VType;
+  if (t.tag === 'Type') return VType(t.index);
   if (t.tag === 'Abs') return VAbs(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Pi') return VPi(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Var') return vs.index(t.index) || impossible(`evaluate: var ${t.index} has no value`);
@@ -94,7 +94,7 @@ const quoteElim = (t: Core, e: Elim, k: Lvl, full: boolean): Core => {
 };
 export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
   const v = force(v_, false);
-  if (v.tag === 'VType') return Type;
+  if (v.tag === 'VType') return Type(v.index);
   if (v.tag === 'VRigid')
     return v.spine.foldr(
       (x, y) => quoteElim(y, x, k, full),

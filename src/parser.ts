@@ -23,7 +23,7 @@ const TNum = (num: string): Token => ({ tag: 'Num', num });
 const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list, bracket });
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
-const SYM1: string[] = ['\\', ':', '=', '*', ';', ','];
+const SYM1: string[] = ['\\', ':', '=', ';'];
 const SYM2: string[] = ['->'];
 
 const START = 0;
@@ -46,7 +46,7 @@ const tokenize = (sc: string): Token[] => {
       else if (c === '"') state = STRING;
       else if (c === '.' && !/[\.\%\_a-z]/i.test(next)) r.push(TName('.'));
       else if (c + next === '--') i++, state = COMMENT;
-      else if (/[\-\.\?\#\%\_a-z]/i.test(c)) t += c, state = NAME;
+      else if (/[\*\-\.\?\#\%\_a-z]/i.test(c)) t += c, state = NAME;
       else if (/[0-9]/.test(c)) t += c, state = NUMBER;
       else if(c === '(' || c === '{') b.push(c), p.push(r), r = [];
       else if(c === ')' || c === '}') {
@@ -181,7 +181,12 @@ const expr = (t: Token): [Surface, boolean] => {
   }
   if (t.tag === 'Name') {
     const x = t.name;
-    if (x === '*') return [Type, false];
+    if (x === '*') return [Type(0), false];
+    if (x.startsWith('*')) {
+      const n = +x.slice(1);
+      if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid universe: ${x}`);
+      return [Type(n), false];
+    }
     if (x.startsWith('_')) {
       const rest = x.slice(1);
       return [Hole(rest.length > 0 ? rest : null), false];

@@ -1,5 +1,5 @@
 import { MetaVar } from './metas';
-import { chooseName, Lvl, Name } from './names';
+import { chooseName, Ix, Lvl, Name } from './names';
 import { Core } from './core';
 import { cons, List, nil } from './utils/List';
 import { impossible } from './utils/utils';
@@ -12,8 +12,8 @@ export type Surface =
 
 export interface Var { readonly tag: 'Var'; readonly name: Name }
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
-export interface Type { readonly tag: 'Type' }
-export const Type: Type = { tag: 'Type' };
+export interface Type { readonly tag: 'Type'; readonly index: Ix }
+export const Type = (index: Ix): Type => ({ tag: 'Type', index });
 export interface Global { readonly tag: 'Global'; readonly name: Name }
 export const Global = (name: Name): Global => ({ tag: 'Global', name });
 export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Surface | null; readonly val: Surface; readonly body: Surface }
@@ -62,7 +62,7 @@ const isSimple = (t: Surface) => t.tag === 'Var' || t.tag === 'Meta' || t.tag ==
 const showS = (t: Surface) => showP(!isSimple(t), t);
 export const show = (t: Surface): string => {
   if (t.tag === 'Var') return `${t.name}`;
-  if (t.tag === 'Type') return `*`;
+  if (t.tag === 'Type') return `*${t.index > 0 ? t.index : ''}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'Hole') return `_${t.name || ''}`;
   if (t.tag === 'Pi') {
@@ -84,7 +84,7 @@ export const show = (t: Surface): string => {
 
 export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
   if (t.tag === 'Global') return Var(t.name);
-  if (t.tag === 'Type') return Type;
+  if (t.tag === 'Type') return Type(t.index);
   if (t.tag === 'Meta' || t.tag === 'InsertedMeta') return Meta(t.id);
   if (t.tag === 'Var') return Var(ns.index(t.index) || impossible(`var out of range in toSurface: ${t.index}`));
   if (t.tag === 'App') return App(toSurface(t.fn, ns), t.erased, toSurface(t.arg, ns));

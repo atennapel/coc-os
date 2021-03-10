@@ -1,6 +1,6 @@
 Try it out at https://atennapel.github.io/coc-os
 
-Programming language based on System F-omega, erases to the pure untyped lambda calculus.
+Elaboration for a dependently typed language with simple universe.
 
 Run CLI REPL:
 ```
@@ -16,9 +16,5 @@ yarn start filename
 
 ```
 TODO:
-- add erased, non-implicit functions
-- add IO
-- abstract machine
-- type verification: improve sort check for abs
-- impredicative instantiation
+- universe elaboration
 ```

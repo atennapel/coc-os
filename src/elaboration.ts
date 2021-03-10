@@ -8,12 +8,12 @@ import * as S from './surface';
 import { log } from './config';
 import { terr, tryT } from './utils/utils';
 import { unify } from './unification';
-import { Name } from './names';
+import { Ix, Name } from './names';
 import { getGlobal, setGlobal } from './globals';
 
 export type HoleInfo = [Val, Val, Local, boolean];
 
-const showVal = (local: Local, val: Val): string => S.showVal(val, local.level, false, local.ns);
+const showV = (local: Local, val: Val): string => S.showVal(val, local.level, false, local.ns);
 
 const newMeta = (local: Local): Core => {
   const id = freshMeta();
@@ -33,7 +33,7 @@ const inst = (local: Local, ty_: Val): [Val, List<Core>] => {
 };
 
 const check = (local: Local, tm: Surface, ty: Val): Core => {
-  log(() => `check ${show(tm)} : ${showVal(local, ty)}`);
+  log(() => `check ${show(tm)} : ${showV(local, ty)}`);
   if (tm.tag === 'Hole') {
     const x = newMeta(local);
     if (tm.name) {
@@ -59,7 +59,7 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
     let vty: Val;
     let val: Core;
     if (tm.type) {
-      vtype = check(local.inType(), tm.type, VType);
+      [vtype] = synthType(local.inType(), tm.type);
       vty = evaluate(vtype, local.vs);
       val = check(tm.erased ? local.inType() : local, tm.val, ty);
     } else {
@@ -73,11 +73,11 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
   const [term, ty2] = synth(local, tm);
   const [ty2inst, ms] = inst(local, ty2);
   return tryT(() => {
-    log(() => `unify ${showVal(local, ty2inst)} ~ ${showVal(local, ty)}`);
-    log(() => `for check ${show(tm)} : ${showVal(local, ty)}`);
+    log(() => `unify ${showV(local, ty2inst)} ~ ${showV(local, ty)}`);
+    log(() => `for check ${show(tm)} : ${showV(local, ty)}`);
     unify(local.level, ty2inst, ty);
     return ms.foldl((a, m) => App(a, true, m), term);
-  }, e => terr(`check failed (${show(tm)}): ${showVal(local, ty2)} ~ ${showVal(local, ty)}: ${e}`));
+  }, e => terr(`check failed (${show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}: ${e}`));
 };
 
 const freshPi = (local: Local, erased: boolean, x: Name): Val => {
@@ -87,11 +87,18 @@ const freshPi = (local: Local, erased: boolean, x: Name): Val => {
   return evaluate(Pi(erased, x, a, b), local.vs);
 };
 
+const synthType = (local: Local, tm: Surface): [Core, Ix] => {
+  const [type, ty] = synth(local, tm);
+  const fty = force(ty);
+  if (fty.tag !== 'VType') return terr(`expected type but got ${showV(local, ty)}, while synthesizing ${show(tm)}`);
+  return [type, fty.index];
+};
+
 const synth = (local: Local, tm: Surface): [Core, Val] => {
   log(() => `synth ${show(tm)}`);
   if (tm.tag === 'Type') {
     if (!local.erased) return terr(`type in non-type context: ${show(tm)}`);
-    return [Type, VType];
+    return [Type(tm.index), VType(tm.index + 1)];
   }
   if (tm.tag === 'Var') {
     const i = local.nsSurface.indexOf(tm.name);
@@ -114,7 +121,7 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
   }
   if (tm.tag === 'Abs') {
     if (tm.type) {
-      const type = check(local.inType(), tm.type, VType);
+      const [type] = synthType(local.inType(), tm.type);
       const ty = evaluate(type, local.vs);
       const [body, rty] = synth(local.bind(tm.erased, tm.name, ty), tm.body);
       const qpi = Pi(tm.erased, tm.name, type, quote(rty, local.level + 1));
@@ -128,17 +135,17 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
   }
   if (tm.tag === 'Pi') {
     if (!local.erased) return terr(`pi type in non-type context: ${show(tm)}`);
-    const type = check(local.inType(), tm.type, VType);
+    const [type, s1] = synthType(local.inType(), tm.type);
     const ty = evaluate(type, local.vs);
-    const body = check(local.inType().bind(tm.erased, tm.name, ty), tm.body, VType);
-    return [Pi(tm.erased, tm.name, type, body), VType];
+    const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
+    return [Pi(tm.erased, tm.name, type, body), VType(Math.max(s1, s2))];
   }
   if (tm.tag === 'Let') {
     let type: Core;
     let ty: Val;
     let val: Core;
     if (tm.type) {
-      type = check(local.inType(), tm.type, VType);
+      [type] = synthType(local.inType(), tm.type);
       ty = evaluate(type, local.vs);
       val = check(tm.erased ? local.inType() : local, tm.val, ty);
     } else {
@@ -162,7 +169,7 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
 };
 
 const synthapp = (local: Local, ty_: Val, erased: boolean, tm: Surface, tmall: Surface): [Core, Val, List<Core>] => {
-  log(() => `synthapp ${showVal(local, ty_)} ${erased ? '-' : ''}@ ${show(tm)}`);
+  log(() => `synthapp ${showV(local, ty_)} ${erased ? '-' : ''}@ ${show(tm)}`);
   const ty = force(ty_);
   if (ty.tag === 'VPi' && ty.erased && !erased) {
     const m = newMeta(local);
@@ -182,7 +189,7 @@ const synthapp = (local: Local, ty_: Val, erased: boolean, tm: Surface, tmall: S
     unify(local.level, ty, pi);
     return synthapp(local, pi, erased, tm, tmall);
   }
-  return terr(`invalid type or plicity mismatch in synthapp in ${show(tmall)}: ${showVal(local, ty)} ${erased ? '-' : ''}@ ${show(tm)}`);
+  return terr(`invalid type or plicity mismatch in synthapp in ${show(tmall)}: ${showV(local, ty)} ${erased ? '-' : ''}@ ${show(tm)}`);
 };
 
 type Holes = { [key: string]: [Val, Val, Local] }

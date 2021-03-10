@@ -6,6 +6,7 @@ import { impossible, terr, tryT } from './utils/utils';
 import { evaluate, force, quote, Val, vinst, VType } from './values';
 import * as V from './values';
 import { unify } from './unification';
+import { Ix } from './names';
 
 const showV = (local: Local, v: Val) => V.show(v, local.level);
 
@@ -19,11 +20,18 @@ const check = (local: Local, tm: Core, ty: Val): void => {
   }, e => terr(`check failed (${show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}: ${e}`));
 };
 
+const synthType = (local: Local, tm: Core): Ix => {
+  const ty = synth(local, tm);
+  const fty = force(ty);
+  if (fty.tag !== 'VType') return terr(`expected type but got ${showV(local, ty)}, while synthesizing ${show(tm)}`);
+  return fty.index;
+};
+
 const synth = (local: Local, tm: Core): Val => {
   log(() => `synth ${show(tm)}`);
   if (tm.tag === 'Type') {
     if (!local.erased) return terr(`type in non-type context: ${show(tm)}`);
-    return VType;
+    return VType(tm.index + 1);
   }
   if (tm.tag === 'Var') {
     const [entry] = indexEnvT(local.ts, tm.index) || terr(`var out of scope ${show(tm)}`);
@@ -42,7 +50,7 @@ const synth = (local: Local, tm: Core): Val => {
     return rty;
   }
   if (tm.tag === 'Abs') {
-    check(local.inType(), tm.type, VType);
+    synthType(local.inType(), tm.type);
     const ty = evaluate(tm.type, local.vs);
     const rty = synth(local.bind(tm.erased, tm.name, ty), tm.body);
     const qpi = Pi(tm.erased, tm.name, tm.type, quote(rty, local.level + 1));
@@ -51,13 +59,13 @@ const synth = (local: Local, tm: Core): Val => {
   }
   if (tm.tag === 'Pi') {
     if (!local.erased) return terr(`pi type in non-type context: ${show(tm)}`);
-    check(local.inType(), tm.type, VType);
+    const s1 = synthType(local.inType(), tm.type);
     const ty = evaluate(tm.type, local.vs);
-    check(local.inType().bind(tm.erased, tm.name, ty), tm.body, VType);
-    return VType;
+    const s2 = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
+    return VType(Math.max(s1, s2));
   }
   if (tm.tag === 'Let') {
-    check(local.inType(), tm.type, VType);
+    synthType(local.inType(), tm.type);
     const ty = evaluate(tm.type, local.vs);
     check(tm.erased ? local.inType() : local, tm.val, ty);
     const v = evaluate(tm.val, local.vs);

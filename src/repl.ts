@@ -8,6 +8,7 @@ import { loadFile } from './utils/utils';
 import { elaborate, elaborateDefs } from './elaboration';
 import { nil } from './utils/List';
 import { normalize } from './values';
+import { Local } from './local';
 
 const help = `
 COMMANDS
@@ -27,6 +28,7 @@ COMMANDS
 [:import files] import a file
 [:showStackTrace] show stack trace of error
 [:showFullNorm] show full normalization
+[:t term] elaborate in erased context
 `.trim();
 
 let showStackTrace = false;
@@ -41,7 +43,7 @@ export const initREPL = () => {
 
 export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) => {
   try {
-    const s = s_.trim();
+    let s = s_.trim();
     if (s === ':help' || s === ':h')
       return cb(help);
     if (s === ':d' || s === ':debug') {
@@ -110,6 +112,11 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       if (!res) return cb(`undefined global: ${name}`, true);
       return cb(showVal(res.value, 0, true));
     }
+    let inType = false;
+    if (s.startsWith(':t')) {
+      inType = true;
+      s = s.slice(2);
+    }
     if (s.startsWith(':')) return cb(`invalid command: ${s}`, true);
 
     if (['def', 'import'].some(x => s.startsWith(x))) {
@@ -124,14 +131,14 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => show(term));
 
     log(() => 'ELABORATE');
-    const [eterm, etype] = elaborate(term);
+    const [eterm, etype] = elaborate(term, inType);
     log(() => C.show(eterm));
     log(() => showCore(eterm));
     log(() => C.show(etype));
     log(() => showCore(etype));
 
     log(() => 'TYPECHECK');
-    const ttype = typecheck(eterm);
+    const ttype = inType ? typecheck(eterm, Local.empty().inType()) : typecheck(eterm);
     log(() => C.show(ttype));
     log(() => showCore(ttype));
 

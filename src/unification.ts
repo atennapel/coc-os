@@ -56,13 +56,13 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
     return Abs(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VPi')
     return Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
-  if (v.tag === 'VType') return Type;
+  if (v.tag === 'VType') return Type(v.index);
   if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name), v.spine); // TODO: should global be forced?
   return v;
 };
 
 const lams = (is: List<boolean>, t: Core, n: number = 0): Core =>
-  is.case(() => t, (i, rest) => Abs(i, `x${n}`, Type, lams(rest, t, n + 1))); // TODO: lambda type
+  is.case(() => t, (i, rest) => Abs(i, `x${n}`, Type(0), lams(rest, t, n + 1))); // TODO: lambda type
 
 const solve = (gamma: Lvl, m: MetaVar, sp: Spine, rhs_: Val): void => {
   log(() => `solve ?${m}${sp.reverse().toString(v => `${v.erased ? '{' : ''}${show(v.arg, gamma)}${v.erased ? '}' : ''}`)} := ${show(rhs_, gamma)}`);
@@ -82,7 +82,7 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
   const b = force(b_, false);
   log(() => `unify ${show(a, l)} ~ ${show(b, l)}`);
   if (a === b) return;
-  if (a.tag === 'VType' && b.tag === 'VType') return;
+  if (a.tag === 'VType' && b.tag === 'VType' && a.index === b.index) return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const v = VVar(l);
     return unify(l + 1, vinst(a, v), vinst(b, v));
