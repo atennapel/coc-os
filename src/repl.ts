@@ -6,8 +6,8 @@ import { typecheck } from './typecheck';
 import { deleteGlobal, getGlobal, getGlobals } from './globals';
 import { loadFile } from './utils/utils';
 import { elaborate, elaborateDefs } from './elaboration';
-import * as E from './erased';
 import { nil } from './utils/List';
+import { normalize } from './values';
 
 const help = `
 COMMANDS
@@ -25,18 +25,17 @@ COMMANDS
 [:view files] view a file
 [:def definitions] define names
 [:import files] import a file
-[:addunfold x y z] always unfold globals
-[:postponeInvalidSolution] postpone more invalid meta solutions
-[:useBase] use the base library
-[:writeToBase] write definitions to base
 [:showStackTrace] show stack trace of error
+[:showFullNorm] show full normalization
 `.trim();
 
 let showStackTrace = false;
+let showFullNorm = false;
 let importMap: ImportMap = {};
 
 export const initREPL = () => {
   showStackTrace = false;
+  showFullNorm = false;
   importMap = {};
 };
 
@@ -53,6 +52,10 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     if (s === ':showStackTrace') {
       showStackTrace = !showStackTrace;
       return cb(`showStackTrace: ${showStackTrace}`);
+    }
+    if (s === ':showFullNorm') {
+      showFullNorm = !showFullNorm;
+      return cb(`showFullNorm: ${showFullNorm}`);
     }
     if (s === ':defs') {
       const gs = getGlobals();
@@ -133,12 +136,12 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => showCore(ttype));
 
     log(() => 'NORMALIZE');
-    const eras = E.erase(eterm);
-    log(() => E.show(eras));
-    const neras = E.normalize(eras, 0, nil, true);
-    log(() => E.show(neras));
+    const norm = normalize(eterm);
+    log(() => showCore(norm));
+    const fnorm = normalize(eterm, 0, nil, true);
+    log(() => showCore(fnorm));
 
-    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\nnorm: ${E.show(neras)}`);
+    return cb(`term: ${show(term)}\ntype: ${showCore(etype)}\netrm: ${showCore(eterm)}\nnorm: ${showCore(norm)}${showFullNorm ? `\nnorf: ${showCore(fnorm)}` : ''}`);
   } catch (err) {
     if (showStackTrace) console.error(err);
     return cb(`${err}`, true);

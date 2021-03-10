@@ -4,12 +4,15 @@ import { parseDefs } from './parser';
 import { showCore, showDefs } from './surface';
 import { elaborateDefs } from './elaboration';
 import { getGlobals } from './globals';
-import * as E from './erased';
+import { normalize } from './values';
+import { nil } from './utils/List';
 
 if (process.argv[2]) {
+  let showFullNorm = false;
   const option = process.argv[3] || '';
   if (option.includes('d')) setConfig({ debug: true });
   if (option.includes('e')) setConfig({ showEnvs: true });
+  if (option.includes('n')) showFullNorm = true;
   try {
     const s = require('fs').readFileSync(process.argv[2], 'utf8');
     parseDefs(s, {}).then(ds => {
@@ -23,11 +26,11 @@ if (process.argv[2]) {
         const e = gs.main;
         const eterm = e.term;
         const etype = e.etype;
-        let neras: string | null = '';
 
-        if (e.erasedTerm) neras = E.show(E.quote(e.erasedTerm[1], 0, true));
+        const norm = normalize(eterm);
+        const fnorm = normalize(eterm, 0, nil, true);
 
-        console.log(`type: ${showCore(etype)}\netrm: ${showCore(eterm)}${neras ? `\nnorm: ${neras}` : ''}`);
+        console.log(`type: ${showCore(etype)}\netrm: ${showCore(eterm)}\nnorm: ${showCore(norm)}${showFullNorm ? `\nnorf: ${showCore(fnorm)}` : ''}`);
       } else console.log('no main definition');
     }).catch(err => {
       console.error(err);

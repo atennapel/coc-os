@@ -1,24 +1,21 @@
 import { MetaVar } from './metas';
 import { chooseName, Lvl, Name } from './names';
-import { AxiomName } from './axioms';
-import { Core, SortType } from './core';
+import { Core } from './core';
 import { cons, List, nil } from './utils/List';
 import { impossible } from './utils/utils';
 import { quote, Val } from './values';
 
 export type Surface =
-  Var | Sort | Axiom | Let |
+  Var | Type | Let |
   Pi | Abs | App |
   Meta | Hole;
 
 export interface Var { readonly tag: 'Var'; readonly name: Name }
 export const Var = (name: Name): Var => ({ tag: 'Var', name });
-export interface Sort { readonly tag: 'Sort'; readonly sort: SortType }
-export const Sort = (sort: SortType): Sort => ({ tag: 'Sort', sort });
+export interface Type { readonly tag: 'Type' }
+export const Type: Type = { tag: 'Type' };
 export interface Global { readonly tag: 'Global'; readonly name: Name }
 export const Global = (name: Name): Global => ({ tag: 'Global', name });
-export interface Axiom { readonly tag: 'Axiom'; readonly name: AxiomName }
-export const Axiom = (name: AxiomName): Axiom => ({ tag: 'Axiom', name });
 export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Surface | null; readonly val: Surface; readonly body: Surface }
 export const Let = (erased: boolean, name: Name, type: Surface | null, val: Surface, body: Surface): Let => ({ tag: 'Let', erased, name, type, val, body });
 export interface Pi { readonly tag: 'Pi'; readonly erased: boolean; readonly name: Name; readonly type: Surface; readonly body: Surface }
@@ -31,9 +28,6 @@ export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
 export const Meta = (id: MetaVar): Meta => ({ tag: 'Meta', id });
 export interface Hole { readonly tag: 'Hole'; readonly name: Name | null }
 export const Hole = (name: Name | null): Hole => ({ tag: 'Hole', name });
-
-export const Type = Sort('*');
-export const Box = Sort('**');
 
 export const flattenPi = (t: Surface): [[boolean, Name, Surface][], Surface] => {
   const params: [boolean, Name, Surface][] = [];
@@ -64,12 +58,11 @@ export const flattenApp = (t: Surface): [Surface, [boolean, Surface][]] => {
 };
 
 const showP = (b: boolean, t: Surface) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Surface) => t.tag === 'Var' || t.tag === 'Axiom' || t.tag === 'Sort' || t.tag === 'Meta';
+const isSimple = (t: Surface) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type';
 const showS = (t: Surface) => showP(!isSimple(t), t);
 export const show = (t: Surface): string => {
   if (t.tag === 'Var') return `${t.name}`;
-  if (t.tag === 'Axiom') return `%${t.name}`;
-  if (t.tag === 'Sort') return `${t.sort}`;
+  if (t.tag === 'Type') return `*`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'Hole') return `_${t.name || ''}`;
   if (t.tag === 'Pi') {
@@ -91,8 +84,7 @@ export const show = (t: Surface): string => {
 
 export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
   if (t.tag === 'Global') return Var(t.name);
-  if (t.tag === 'Sort') return Sort(t.sort);
-  if (t.tag === 'Axiom') return Axiom(t.name);
+  if (t.tag === 'Type') return Type;
   if (t.tag === 'Meta' || t.tag === 'InsertedMeta') return Meta(t.id);
   if (t.tag === 'Var') return Var(ns.index(t.index) || impossible(`var out of range in toSurface: ${t.index}`));
   if (t.tag === 'App') return App(toSurface(t.fn, ns), t.erased, toSurface(t.arg, ns));

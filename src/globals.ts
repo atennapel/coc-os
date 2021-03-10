@@ -1,16 +1,14 @@
 import { Core } from './core';
-import { Erased } from './erased';
 import { Name } from './names';
 import { impossible } from './utils/utils';
 import { Val } from './values';
-import * as E from './erased';
 
 export interface GlobalEntry {
   readonly type: Val;
   readonly value: Val;
   readonly etype: Core;
   readonly term: Core;
-  readonly erasedTerm: [Erased, E.Val] | null;
+  readonly erased: boolean;
 }
 
 export type Globals = { [key: string]: GlobalEntry };
@@ -27,8 +25,8 @@ export const getGlobal = (name: Name): GlobalEntry => {
 
 export const getGlobals = (): Globals => globals;
 
-export const setGlobal = (name: Name, type: Val, value: Val, etype: Core, term: Core, erasedTerm: [Erased, E.Val] | null): void => {
-  globals[name] = { type, value, etype, term, erasedTerm };
+export const setGlobal = (name: Name, type: Val, value: Val, etype: Core, term: Core, erased: boolean): void => {
+  globals[name] = { type, value, etype, term, erased };
 };
 
 export const deleteGlobal = (name: Name): void => {
