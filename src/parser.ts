@@ -1,7 +1,6 @@
 import { loadFile, serr } from './utils/utils';
-import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Axiom, Def, DDef } from './surface';
+import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef } from './surface';
 import { Name } from './names';
-import { isAxiomName } from './axioms';
 import { log } from './config';
 
 type BracketO = '(' | '{'
@@ -47,7 +46,7 @@ const tokenize = (sc: string): Token[] => {
       else if (c === '"') state = STRING;
       else if (c === '.' && !/[\.\%\_a-z]/i.test(next)) r.push(TName('.'));
       else if (c + next === '--') i++, state = COMMENT;
-      else if (/[\-\.\?\@\#\%\_a-z]/i.test(c)) t += c, state = NAME;
+      else if (/[\-\.\?\#\%\_a-z]/i.test(c)) t += c, state = NAME;
       else if (/[0-9]/.test(c)) t += c, state = NUMBER;
       else if(c === '(' || c === '{') b.push(c), p.push(r), r = [];
       else if(c === ')' || c === '}') {
@@ -187,12 +186,7 @@ const expr = (t: Token): [Surface, boolean] => {
       const rest = x.slice(1);
       return [Hole(rest.length > 0 ? rest : null), false];
     }
-    if (x[0] === '%') {
-      const rest = x.slice(1);
-      if (isAxiomName(rest)) return [Axiom(rest), false];
-      return serr(`invalid axiom: ${x}`);
-    }
-    if (/[a-z\@]/i.test(x[0])) return [Var(x), false];
+    if (/[a-z]/i.test(x[0])) return [Var(x), false];
     return serr(`invalid name: ${x}`);
   }
   if (t.tag === 'Num') {

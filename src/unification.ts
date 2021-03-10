@@ -1,10 +1,10 @@
 import { log } from './config';
-import { Abs, App, Axiom, Core, Meta, Pi, Sort, Type, Var, Global } from './core';
+import { Abs, App, Core, Meta, Pi, Type, Var, Global } from './core';
 import { MetaVar, setMeta } from './metas';
 import { Lvl } from './names';
 import { List, nil } from './utils/List';
 import { terr, tryT } from './utils/utils';
-import { force, isVVar, Spine, vinst, VVar, Val, evaluate, vapp, show, Head } from './values';
+import { force, isVVar, Spine, vinst, VVar, Val, evaluate, vapp, show } from './values';
 import * as C from './core';
 
 // following: https://github.com/AndrasKovacs/elaboration-zoo
@@ -28,7 +28,7 @@ const invertSpine = (sp: Spine): [Lvl, IntMap<Lvl>] =>
   sp.foldr((app, [dom, ren]) => {
     const v = force(app.arg);
     if (!isVVar(v)) return terr(`not a variable in the spine`);
-    const x =  v.head.level;
+    const x = v.head;
     if (typeof ren[x] === 'number') return terr(`non-linear spine`);
     return [dom + 1, insert(ren, x, dom)];
   }, [0, {} as IntMap<Lvl>]);
@@ -48,17 +48,15 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
     return renameSpine(id, pren, Meta(v.head), v.spine);
   }
   if (v.tag === 'VRigid') {
-    if (v.head.tag === 'HAxiom')
-      return renameSpine(id, pren, Axiom(v.head.name), v.spine);
-    const x = pren.ren[v.head.level];
-    if (typeof x !== 'number') return terr(`escaping variable ${v.head.level}`);
+    const x = pren.ren[v.head];
+    if (typeof x !== 'number') return terr(`escaping variable ${v.head}`);
     return renameSpine(id, pren, Var(pren.dom - x - 1), v.spine);
   }
   if (v.tag === 'VAbs')
     return Abs(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VPi')
     return Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
-  if (v.tag === 'VSort') return Sort(v.sort);
+  if (v.tag === 'VType') return Type;
   if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name), v.spine); // TODO: should global be forced?
   return v;
 };
@@ -79,19 +77,12 @@ const solve = (gamma: Lvl, m: MetaVar, sp: Spine, rhs_: Val): void => {
 const unifySpines = (l: Lvl, a: Spine, b: Spine): void =>
   a.zipWithR_(b, (x, y) => unify(l, x.arg, y.arg));
 
-export const eqHead = (a: Head, b: Head): boolean => {
-  if (a === b) return true;
-  if (a.tag === 'HVar') return b.tag === 'HVar' && a.level === b.level;
-  if (a.tag === 'HAxiom') return b.tag === 'HAxiom' && a.name === b.name;
-  return false;
-};
-
 export const unify = (l: Lvl, a_: Val, b_: Val): void => {
   const a = force(a_, false);
   const b = force(b_, false);
   log(() => `unify ${show(a, l)} ~ ${show(b, l)}`);
   if (a === b) return;
-  if (a.tag === 'VSort' && b.tag === 'VSort' && a.sort === b.sort) return;
+  if (a.tag === 'VType' && b.tag === 'VType') return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const v = VVar(l);
     return unify(l + 1, vinst(a, v), vinst(b, v));
@@ -109,7 +100,7 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
     const v = VVar(l);
     return unify(l + 1, vinst(a, v), vinst(b, v));
   }
-  if (a.tag === 'VRigid' && b.tag === 'VRigid' && eqHead(a.head, b.head))
+  if (a.tag === 'VRigid' && b.tag === 'VRigid' && a.head === b.head)
     return unifySpines(l, a.spine, b.spine);
   if (a.tag === 'VFlex' && b.tag === 'VFlex' && a.head === b.head)
     return unifySpines(l, a.spine, b.spine);

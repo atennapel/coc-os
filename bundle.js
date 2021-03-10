@@ -1,39 +1,6 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.eraseAxiom = exports.synthAxiom = exports.isAxiomName = exports.AxiomNames = void 0;
-const erased_1 = require("./erased");
-const Lazy_1 = require("./utils/Lazy");
-const utils_1 = require("./utils/utils");
-const values_1 = require("./values");
-exports.AxiomNames = ['cast', 'elim'];
-const isAxiomName = (name) => exports.AxiomNames.includes(name);
-exports.isAxiomName = isAxiomName;
-// {f : * -> *} -> f a -> f b
-const Eq = (a, b) => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)));
-// {a b : *} -> (a -> b) -> f a -> f b
-const Functor = (f) => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(false, '_', values_1.VPi(false, '_', a, _ => b), _ => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))));
-// {t : *} -> ({r : *} -> (r -> t) -> f r -> t) -> t
-const Data = (f) => values_1.VPi(true, '@t', values_1.VType, t => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t))), _ => t));
-const axiomTypes = utils_1.mapObj({
-    // {a b : *} -> {_ : Eq a b} -> {f : * -> *} -> f a -> f b
-    cast: () => values_1.VPi(true, 'a', values_1.VType, a => values_1.VPi(true, 'b', values_1.VType, b => values_1.VPi(true, '_', Eq(a, b), _ => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(false, '_', values_1.vapp(f, false, a), _ => values_1.vapp(f, false, b)))))),
-    // {f : * -> *} -> {t : *} -> {_ : Functor f} -> Data f -> ({r : *} -> (r -> Data f) -> (r -> t) -> f r -> t) -> t
-    elim: () => values_1.VPi(true, 'f', values_1.VPi(false, '_', values_1.VType, _ => values_1.VType), f => values_1.VPi(true, 't', values_1.VType, t => values_1.VPi(true, '_', Functor(f), _ => values_1.VPi(false, '_', Data(f), _ => values_1.VPi(false, '_', values_1.VPi(true, 'r', values_1.VType, r => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => Data(f)), _ => values_1.VPi(false, '_', values_1.VPi(false, '_', r, _ => t), _ => values_1.VPi(false, '_', values_1.vapp(f, false, r), _ => t)))), _ => t))))),
-}, Lazy_1.Lazy.from);
-const synthAxiom = (name) => axiomTypes[name].get();
-exports.synthAxiom = synthAxiom;
-const axiomErasures = utils_1.mapObj({
-    cast: () => erased_1.idTerm,
-    // \x alg. x (alg (\y. y))
-    elim: () => erased_1.Abs(erased_1.Abs(erased_1.App(erased_1.Var(1), erased_1.App(erased_1.Var(0), erased_1.idTerm)))),
-}, Lazy_1.Lazy.from);
-const eraseAxiom = (name) => axiomErasures[name].get();
-exports.eraseAxiom = eraseAxiom;
-
-},{"./erased":5,"./utils/Lazy":15,"./utils/utils":17,"./values":18}],2:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 exports.log = exports.setConfig = exports.config = void 0;
 exports.config = {
     debug: false,
@@ -50,18 +17,15 @@ const log = (msg) => {
 };
 exports.log = log;
 
-},{}],3:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Box = exports.Type = exports.InsertedMeta = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Axiom = exports.Global = exports.Sort = exports.Var = void 0;
+exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
-const Sort = (sort) => ({ tag: 'Sort', sort });
-exports.Sort = Sort;
+exports.Type = { tag: 'Type' };
 const Global = (name) => ({ tag: 'Global', name });
 exports.Global = Global;
-const Axiom = (name) => ({ tag: 'Axiom', name });
-exports.Axiom = Axiom;
 const Let = (erased, name, type, val, body) => ({ tag: 'Let', erased, name, type, val, body });
 exports.Let = Let;
 const Pi = (erased, name, type, body) => ({ tag: 'Pi', erased, name, type, body });
@@ -74,8 +38,6 @@ const Meta = (id) => ({ tag: 'Meta', id });
 exports.Meta = Meta;
 const InsertedMeta = (id, spine) => ({ tag: 'InsertedMeta', id, spine });
 exports.InsertedMeta = InsertedMeta;
-exports.Type = exports.Sort('*');
-exports.Box = exports.Sort('**');
 const flattenPi = (t) => {
     const params = [];
     let c = t;
@@ -107,17 +69,15 @@ const flattenApp = (t) => {
 };
 exports.flattenApp = flattenApp;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Axiom' || t.tag === 'Sort' || t.tag === 'Meta' || t.tag === 'InsertedMeta';
+const isSimple = (t) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta';
 const showS = (t) => showP(!isSimple(t), t);
 const show = (t) => {
     if (t.tag === 'Var')
         return `'${t.index}`;
     if (t.tag === 'Global')
         return `${t.name}`;
-    if (t.tag === 'Axiom')
-        return `%${t.name}`;
-    if (t.tag === 'Sort')
-        return `${t.sort}`;
+    if (t.tag === 'Type')
+        return `*`;
     if (t.tag === 'Meta')
         return `?${t.id}`;
     if (t.tag === 'InsertedMeta')
@@ -170,7 +130,7 @@ exports.substVar = substVar;
 const subst = (t, u) => exports.shift(-1, 0, exports.substVar(0, exports.shift(1, 0, u), t));
 exports.subst = subst;
 
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.elaborateDefs = exports.elaborateDef = exports.elaborate = void 0;
@@ -185,9 +145,6 @@ const config_1 = require("./config");
 const utils_1 = require("./utils/utils");
 const unification_1 = require("./unification");
 const globals_1 = require("./globals");
-const axioms_1 = require("./axioms");
-const typecheck_1 = require("./typecheck");
-const E = require("./erased");
 const showVal = (local, val) => S.showVal(val, local.level, false, local.ns);
 const newMeta = (local) => {
     const id = metas_1.freshMeta();
@@ -196,37 +153,13 @@ const newMeta = (local) => {
 };
 const inst = (local, ty_) => {
     const ty = values_1.force(ty_);
-    if (ty.tag === 'VPi' && ty.erased && !ty.name.startsWith('@')) {
+    if (ty.tag === 'VPi' && ty.erased) {
         const m = newMeta(local);
         const vm = values_1.evaluate(m, local.vs);
         const [res, args] = inst(local, values_1.vinst(ty, vm));
         return [res, List_1.cons(m, args)];
     }
     return [ty_, List_1.nil];
-};
-const synthSort = (local, s1, s2) => {
-    let s1f = values_1.force(s1);
-    let s2f = values_1.force(s2);
-    if (s1f.tag === 'VFlex') {
-        unification_1.unify(local.level, s1, values_1.VType);
-        s1f = values_1.force(s1);
-    }
-    if (s2f.tag === 'VFlex') {
-        unification_1.unify(local.level, s2, values_1.VType);
-        s2f = values_1.force(s2);
-    }
-    if (s1f.tag === 'VSort' && s2f.tag === 'VSort' && !(s1f.sort === '*' && s2f.sort === '**'))
-        return s2;
-    return utils_1.terr(`sort check failed: ${showVal(local, s1)} and ${showVal(local, s2)}`);
-};
-const checkSort = (local, s) => {
-    let ss = values_1.force(s);
-    if (ss.tag === 'VFlex') {
-        unification_1.unify(local.level, s, values_1.VType);
-        ss = values_1.force(s);
-    }
-    if (ss.tag !== 'VSort')
-        return utils_1.terr(`expected sort but got ${showVal(local, s)}`);
 };
 const check = (local, tm, ty) => {
     config_1.log(() => `check ${surface_1.show(tm)} : ${showVal(local, ty)}`);
@@ -246,7 +179,7 @@ const check = (local, tm, ty) => {
         const body = check(local.bind(fty.erased, x, fty.type), tm.body, values_1.vinst(fty, v));
         return core_1.Abs(fty.erased, x, values_1.quote(fty.type, local.level), body);
     }
-    if (fty.tag === 'VPi' && fty.erased && !fty.name.startsWith('@')) {
+    if (fty.tag === 'VPi' && fty.erased) {
         const v = values_1.VVar(local.level);
         const term = check(local.insert(true, fty.name, fty.type), tm, values_1.vinst(fty, v));
         return core_1.Abs(fty.erased, fty.name, values_1.quote(fty.type, local.level), term);
@@ -256,9 +189,7 @@ const check = (local, tm, ty) => {
         let vty;
         let val;
         if (tm.type) {
-            const [type_, s] = synth(local.inType(), tm.type);
-            vtype = type_;
-            checkSort(local, s);
+            vtype = check(local.inType(), tm.type, values_1.VType);
             vty = values_1.evaluate(vtype, local.vs);
             val = check(tm.erased ? local.inType() : local, tm.val, ty);
         }
@@ -287,20 +218,18 @@ const freshPi = (local, erased, x) => {
 };
 const synth = (local, tm) => {
     config_1.log(() => `synth ${surface_1.show(tm)}`);
-    if (tm.tag === 'Sort' && tm.sort === '*') {
+    if (tm.tag === 'Type') {
         if (!local.erased)
-            return utils_1.terr(`sort type in non-type context: ${surface_1.show(tm)}`);
-        return [core_1.Type, values_1.VBox];
+            return utils_1.terr(`type in non-type context: ${surface_1.show(tm)}`);
+        return [core_1.Type, values_1.VType];
     }
-    if (tm.tag === 'Axiom')
-        return [core_1.Axiom(tm.name), axioms_1.synthAxiom(tm.name)];
     if (tm.tag === 'Var') {
         const i = local.nsSurface.indexOf(tm.name);
         if (i < 0) {
             const entry = globals_1.getGlobal(tm.name);
             if (!entry)
                 return utils_1.terr(`global ${tm.name} not found`);
-            if (!entry.erasedTerm && !local.erased)
+            if (entry.erased && !local.erased)
                 return utils_1.terr(`erased global used: ${surface_1.show(tm)}`);
             const ty = entry.type;
             return [core_1.Global(tm.name), ty];
@@ -319,17 +248,15 @@ const synth = (local, tm) => {
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
-            const [type, s1] = synth(local.inType(), tm.type);
-            checkSort(local, s1);
+            const type = check(local.inType(), tm.type, values_1.VType);
             const ty = values_1.evaluate(type, local.vs);
             const [body, rty] = synth(local.bind(tm.erased, tm.name, ty), tm.body);
             const qpi = core_1.Pi(tm.erased, tm.name, type, values_1.quote(rty, local.level + 1));
-            typecheck_1.typecheck(qpi, local.inType()); // TODO: improve sort check
             const pi = values_1.evaluate(qpi, local.vs);
             return [core_1.Abs(tm.erased, tm.name, type, body), pi];
         }
         else {
-            const pi = freshPi(local, tm.erased, tm.name); // TODO: sort check
+            const pi = freshPi(local, tm.erased, tm.name);
             const term = check(local, tm, pi);
             return [term, pi];
         }
@@ -337,20 +264,17 @@ const synth = (local, tm) => {
     if (tm.tag === 'Pi') {
         if (!local.erased)
             return utils_1.terr(`pi type in non-type context: ${surface_1.show(tm)}`);
-        const [type, s1] = synth(local.inType(), tm.type);
+        const type = check(local.inType(), tm.type, values_1.VType);
         const ty = values_1.evaluate(type, local.vs);
-        const [body, s2] = synth(local.inType().bind(tm.erased, tm.name, ty), tm.body);
-        const s3 = synthSort(local, s1, s2);
-        return [core_1.Pi(tm.erased, tm.name, type, body), s3];
+        const body = check(local.inType().bind(tm.erased, tm.name, ty), tm.body, values_1.VType);
+        return [core_1.Pi(tm.erased, tm.name, type, body), values_1.VType];
     }
     if (tm.tag === 'Let') {
         let type;
         let ty;
         let val;
         if (tm.type) {
-            const [type_, s] = synth(local.inType(), tm.type);
-            type = type_;
-            checkSort(local, s);
+            type = check(local.inType(), tm.type, values_1.VType);
             ty = values_1.evaluate(type, local.vs);
             val = check(tm.erased ? local.inType() : local, tm.val, ty);
         }
@@ -428,14 +352,12 @@ exports.elaborate = elaborate;
 const elaborateDef = (d) => {
     config_1.log(() => `elaborateDef ${S.showDef(d)}`);
     if (d.tag === 'DDef') {
-        const [term, type] = exports.elaborate(d.value, d.erased);
-        let erasedTerm = null;
-        if (!d.erased) {
-            const eras = E.erase(term);
-            const val = E.evaluate(eras, List_1.nil);
-            erasedTerm = [eras, val];
-        }
-        globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), type, term, erasedTerm);
+        utils_1.tryT(() => {
+            const [term, type] = exports.elaborate(d.value, d.erased);
+            globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), type, term, d.erased);
+        }, err => {
+            utils_1.terr(`while elaborating definition ${d.name}: ${err}`);
+        });
         return;
     }
     return d.tag;
@@ -447,153 +369,7 @@ const elaborateDefs = (ds) => {
 };
 exports.elaborateDefs = elaborateDefs;
 
-},{"./axioms":1,"./config":2,"./core":3,"./erased":5,"./globals":6,"./local":7,"./metas":8,"./surface":12,"./typecheck":13,"./unification":14,"./utils/List":16,"./utils/utils":17,"./values":18}],5:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.normalize = exports.quote = exports.evaluate = exports.vapp = exports.vappSpine = exports.force = exports.VVar = exports.vinst = exports.VAbs = exports.VGlobal = exports.VRigid = exports.erase = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.idTerm = exports.App = exports.Abs = exports.Global = exports.Var = void 0;
-const axioms_1 = require("./axioms");
-const globals_1 = require("./globals");
-const Lazy_1 = require("./utils/Lazy");
-const List_1 = require("./utils/List");
-const utils_1 = require("./utils/utils");
-const Var = (index) => ({ tag: 'Var', index });
-exports.Var = Var;
-const Global = (name) => ({ tag: 'Global', name });
-exports.Global = Global;
-const Abs = (body) => ({ tag: 'Abs', body });
-exports.Abs = Abs;
-const App = (fn, arg) => ({ tag: 'App', fn, arg });
-exports.App = App;
-exports.idTerm = exports.Abs(exports.Var(0));
-const flattenApp = (t) => {
-    const args = [];
-    let c = t;
-    while (c.tag === 'App') {
-        args.push(c.arg);
-        c = c.fn;
-    }
-    return [c, args.reverse()];
-};
-exports.flattenApp = flattenApp;
-const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Var' || t.tag === 'Global';
-const showS = (t) => showP(!isSimple(t), t);
-const show = (t) => {
-    if (t.tag === 'Var')
-        return `'${t.index}`;
-    if (t.tag === 'Global')
-        return `${t.name}`;
-    if (t.tag === 'Abs')
-        return `\\${exports.show(t.body)}`;
-    if (t.tag === 'App') {
-        const [fn, args] = exports.flattenApp(t);
-        return `${showS(fn)} ${args.map(showS).join(' ')}`;
-    }
-    return t;
-};
-exports.show = show;
-const shift = (d, c, t) => {
-    if (t.tag === 'Var')
-        return t.index < c ? t : exports.Var(t.index + d);
-    if (t.tag === 'App')
-        return exports.App(exports.shift(d, c, t.fn), exports.shift(d, c, t.arg));
-    if (t.tag === 'Abs')
-        return exports.Abs(exports.shift(d, c + 1, t.body));
-    return t;
-};
-exports.shift = shift;
-const substVar = (j, s, t) => {
-    if (t.tag === 'Var')
-        return t.index === j ? s : t;
-    if (t.tag === 'App')
-        return exports.App(exports.substVar(j, s, t.fn), exports.substVar(j, s, t.arg));
-    if (t.tag === 'Abs')
-        return exports.Abs(exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
-    return t;
-};
-exports.substVar = substVar;
-const subst = (t, u) => exports.shift(-1, 0, exports.substVar(0, exports.shift(1, 0, u), t));
-exports.subst = subst;
-const erase = (t) => {
-    if (t.tag === 'Abs')
-        return t.erased ? exports.shift(-1, 0, exports.erase(t.body)) : exports.Abs(exports.erase(t.body));
-    if (t.tag === 'App')
-        return t.erased ? exports.erase(t.fn) : exports.App(exports.erase(t.fn), exports.erase(t.arg));
-    if (t.tag === 'Axiom')
-        return axioms_1.eraseAxiom(t.name);
-    if (t.tag === 'Global')
-        return exports.Global(t.name);
-    if (t.tag === 'Let')
-        return t.erased ? exports.shift(-1, 0, exports.erase(t.body)) : exports.App(exports.Abs(exports.erase(t.body)), exports.erase(t.val));
-    if (t.tag === 'Var')
-        return exports.Var(t.index);
-    return utils_1.impossible(`cannot erase ${t.tag}`);
-};
-exports.erase = erase;
-const VRigid = (head, spine) => ({ tag: 'VRigid', head, spine });
-exports.VRigid = VRigid;
-;
-const VGlobal = (name, spine, val) => ({ tag: 'VGlobal', name, spine, val });
-exports.VGlobal = VGlobal;
-const VAbs = (clos) => ({ tag: 'VAbs', clos });
-exports.VAbs = VAbs;
-const vinst = (val, arg) => val.clos(arg);
-exports.vinst = vinst;
-const VVar = (level, spine = List_1.nil) => exports.VRigid(level, spine);
-exports.VVar = VVar;
-const force = (v) => {
-    if (v.tag === 'VGlobal')
-        return exports.force(v.val.get());
-    return v;
-};
-exports.force = force;
-const vappSpine = (t, sp) => sp.foldr((x, y) => exports.vapp(y, x), t);
-exports.vappSpine = vappSpine;
-const vapp = (left, right) => {
-    if (left.tag === 'VAbs')
-        return exports.vinst(left, right);
-    if (left.tag === 'VRigid')
-        return exports.VRigid(left.head, List_1.cons(right, left.spine));
-    if (left.tag === 'VGlobal')
-        return exports.VGlobal(left.name, List_1.cons(right, left.spine), left.val.map(v => exports.vapp(v, right)));
-    return left;
-};
-exports.vapp = vapp;
-const evaluate = (t, vs) => {
-    if (t.tag === 'Abs')
-        return exports.VAbs(v => exports.evaluate(t.body, List_1.cons(v, vs)));
-    if (t.tag === 'Var')
-        return vs.index(t.index) || utils_1.impossible(`evaluate: var ${t.index} has no value`);
-    if (t.tag === 'App')
-        return exports.vapp(exports.evaluate(t.fn, vs), exports.evaluate(t.arg, vs));
-    if (t.tag === 'Global') {
-        const entry = globals_1.getGlobal(t.name);
-        if (!entry || !entry.erasedTerm)
-            return utils_1.impossible(`tried to load undefined global ${t.name}`);
-        const val = entry.erasedTerm[1];
-        return exports.VGlobal(t.name, List_1.nil, Lazy_1.Lazy.of(val));
-    }
-    return t;
-};
-exports.evaluate = evaluate;
-const quoteElim = (t, e, k, full) => exports.App(t, exports.quote(e, k, full));
-const quote = (v, k, full = false) => {
-    if (v.tag === 'VRigid')
-        return v.spine.foldr((x, y) => quoteElim(y, x, k, full), exports.Var(k - (v.head + 1)));
-    if (v.tag === 'VGlobal') {
-        if (full)
-            return exports.quote(v.val.get(), k, full);
-        return v.spine.foldr((x, y) => quoteElim(y, x, k, full), exports.Global(v.name));
-    }
-    if (v.tag === 'VAbs')
-        return exports.Abs(exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
-    return v;
-};
-exports.quote = quote;
-const normalize = (t, k = 0, vs = List_1.nil, full = false) => exports.quote(exports.evaluate(t, vs), k, full);
-exports.normalize = normalize;
-
-},{"./axioms":1,"./globals":6,"./utils/Lazy":15,"./utils/List":16,"./utils/utils":17}],6:[function(require,module,exports){
+},{"./config":1,"./core":2,"./globals":4,"./local":5,"./metas":6,"./surface":10,"./unification":12,"./utils/List":14,"./utils/utils":15,"./values":16}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteGlobal = exports.setGlobal = exports.getGlobals = exports.getGlobal = exports.resetGlobals = void 0;
@@ -610,8 +386,8 @@ const getGlobal = (name) => {
 exports.getGlobal = getGlobal;
 const getGlobals = () => globals;
 exports.getGlobals = getGlobals;
-const setGlobal = (name, type, value, etype, term, erasedTerm) => {
-    globals[name] = { type, value, etype, term, erasedTerm };
+const setGlobal = (name, type, value, etype, term, erased) => {
+    globals[name] = { type, value, etype, term, erased };
 };
 exports.setGlobal = setGlobal;
 const deleteGlobal = (name) => {
@@ -619,7 +395,7 @@ const deleteGlobal = (name) => {
 };
 exports.deleteGlobal = deleteGlobal;
 
-},{"./utils/utils":17}],7:[function(require,module,exports){
+},{"./utils/utils":15}],5:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Local = exports.indexEnvT = exports.EntryT = void 0;
@@ -682,7 +458,7 @@ class Local {
 }
 exports.Local = Local;
 
-},{"./utils/List":16,"./values":18}],8:[function(require,module,exports){
+},{"./utils/List":14,"./values":16}],6:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.allMetasSolved = exports.setMeta = exports.getMeta = exports.freshMeta = exports.resetMetas = exports.Solved = exports.Unsolved = void 0;
@@ -718,7 +494,7 @@ exports.setMeta = setMeta;
 const allMetasSolved = () => metas.every(x => x.tag === 'Solved');
 exports.allMetasSolved = allMetasSolved;
 
-},{"./utils/utils":17}],9:[function(require,module,exports){
+},{"./utils/utils":15}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chooseName = exports.nextName = void 0;
@@ -734,13 +510,12 @@ exports.nextName = nextName;
 const chooseName = (x, ns) => x === '_' ? x : ns.contains(x) ? exports.chooseName(exports.nextName(x), ns) : x;
 exports.chooseName = chooseName;
 
-},{}],10:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseDefs = exports.parseDef = exports.parse = void 0;
 const utils_1 = require("./utils/utils");
 const surface_1 = require("./surface");
-const axioms_1 = require("./axioms");
 const config_1 = require("./config");
 const matchingBracket = (c) => {
     if (c === '(')
@@ -784,7 +559,7 @@ const tokenize = (sc) => {
                 r.push(TName('.'));
             else if (c + next === '--')
                 i++, state = COMMENT;
-            else if (/[\-\.\?\@\#\%\_a-z]/i.test(c))
+            else if (/[\-\.\?\#\%\_a-z]/i.test(c))
                 t += c, state = NAME;
             else if (/[0-9]/.test(c))
                 t += c, state = NUMBER;
@@ -949,13 +724,7 @@ const expr = (t) => {
             const rest = x.slice(1);
             return [surface_1.Hole(rest.length > 0 ? rest : null), false];
         }
-        if (x[0] === '%') {
-            const rest = x.slice(1);
-            if (axioms_1.isAxiomName(rest))
-                return [surface_1.Axiom(rest), false];
-            return utils_1.serr(`invalid axiom: ${x}`);
-        }
-        if (/[a-z\@]/i.test(x[0]))
+        if (/[a-z]/i.test(x[0]))
             return [surface_1.Var(x), false];
         return utils_1.serr(`invalid name: ${x}`);
     }
@@ -1207,7 +976,7 @@ const parseDefs = async (s, importMap) => {
 };
 exports.parseDefs = parseDefs;
 
-},{"./axioms":1,"./config":2,"./surface":12,"./utils/utils":17}],11:[function(require,module,exports){
+},{"./config":1,"./surface":10,"./utils/utils":15}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runREPL = exports.initREPL = void 0;
@@ -1219,8 +988,8 @@ const typecheck_1 = require("./typecheck");
 const globals_1 = require("./globals");
 const utils_1 = require("./utils/utils");
 const elaboration_1 = require("./elaboration");
-const E = require("./erased");
 const List_1 = require("./utils/List");
+const values_1 = require("./values");
 const help = `
 COMMANDS
 [:help or :h] this help message
@@ -1237,16 +1006,15 @@ COMMANDS
 [:view files] view a file
 [:def definitions] define names
 [:import files] import a file
-[:addunfold x y z] always unfold globals
-[:postponeInvalidSolution] postpone more invalid meta solutions
-[:useBase] use the base library
-[:writeToBase] write definitions to base
 [:showStackTrace] show stack trace of error
+[:showFullNorm] show full normalization
 `.trim();
 let showStackTrace = false;
+let showFullNorm = false;
 let importMap = {};
 const initREPL = () => {
     showStackTrace = false;
+    showFullNorm = false;
     importMap = {};
 };
 exports.initREPL = initREPL;
@@ -1263,6 +1031,10 @@ const runREPL = (s_, cb) => {
         if (s === ':showStackTrace') {
             showStackTrace = !showStackTrace;
             return cb(`showStackTrace: ${showStackTrace}`);
+        }
+        if (s === ':showFullNorm') {
+            showFullNorm = !showFullNorm;
+            return cb(`showFullNorm: ${showFullNorm}`);
         }
         if (s === ':defs') {
             const gs = globals_1.getGlobals();
@@ -1344,11 +1116,11 @@ const runREPL = (s_, cb) => {
         config_1.log(() => C.show(ttype));
         config_1.log(() => surface_1.showCore(ttype));
         config_1.log(() => 'NORMALIZE');
-        const eras = E.erase(eterm);
-        config_1.log(() => E.show(eras));
-        const neras = E.normalize(eras, 0, List_1.nil, true);
-        config_1.log(() => E.show(neras));
-        return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\nnorm: ${E.show(neras)}`);
+        const norm = values_1.normalize(eterm);
+        config_1.log(() => surface_1.showCore(norm));
+        const fnorm = values_1.normalize(eterm, 0, List_1.nil, true);
+        config_1.log(() => surface_1.showCore(fnorm));
+        return cb(`term: ${surface_1.show(term)}\ntype: ${surface_1.showCore(etype)}\netrm: ${surface_1.showCore(eterm)}\nnorm: ${surface_1.showCore(norm)}${showFullNorm ? `\nnorf: ${surface_1.showCore(fnorm)}` : ''}`);
     }
     catch (err) {
         if (showStackTrace)
@@ -1358,22 +1130,19 @@ const runREPL = (s_, cb) => {
 };
 exports.runREPL = runREPL;
 
-},{"./config":2,"./core":3,"./elaboration":4,"./erased":5,"./globals":6,"./parser":10,"./surface":12,"./typecheck":13,"./utils/List":16,"./utils/utils":17}],12:[function(require,module,exports){
+},{"./config":1,"./core":2,"./elaboration":3,"./globals":4,"./parser":8,"./surface":10,"./typecheck":11,"./utils/List":14,"./utils/utils":15,"./values":16}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Box = exports.Type = exports.Hole = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Axiom = exports.Global = exports.Sort = exports.Var = void 0;
+exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
 const names_1 = require("./names");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
 const Var = (name) => ({ tag: 'Var', name });
 exports.Var = Var;
-const Sort = (sort) => ({ tag: 'Sort', sort });
-exports.Sort = Sort;
+exports.Type = { tag: 'Type' };
 const Global = (name) => ({ tag: 'Global', name });
 exports.Global = Global;
-const Axiom = (name) => ({ tag: 'Axiom', name });
-exports.Axiom = Axiom;
 const Let = (erased, name, type, val, body) => ({ tag: 'Let', erased, name, type, val, body });
 exports.Let = Let;
 const Pi = (erased, name, type, body) => ({ tag: 'Pi', erased, name, type, body });
@@ -1386,8 +1155,6 @@ const Meta = (id) => ({ tag: 'Meta', id });
 exports.Meta = Meta;
 const Hole = (name) => ({ tag: 'Hole', name });
 exports.Hole = Hole;
-exports.Type = exports.Sort('*');
-exports.Box = exports.Sort('**');
 const flattenPi = (t) => {
     const params = [];
     let c = t;
@@ -1419,15 +1186,13 @@ const flattenApp = (t) => {
 };
 exports.flattenApp = flattenApp;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Var' || t.tag === 'Axiom' || t.tag === 'Sort' || t.tag === 'Meta';
+const isSimple = (t) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type';
 const showS = (t) => showP(!isSimple(t), t);
 const show = (t) => {
     if (t.tag === 'Var')
         return `${t.name}`;
-    if (t.tag === 'Axiom')
-        return `%${t.name}`;
-    if (t.tag === 'Sort')
-        return `${t.sort}`;
+    if (t.tag === 'Type')
+        return `*`;
     if (t.tag === 'Meta')
         return `?${t.id}`;
     if (t.tag === 'Hole')
@@ -1452,10 +1217,8 @@ exports.show = show;
 const toSurface = (t, ns = List_1.nil) => {
     if (t.tag === 'Global')
         return exports.Var(t.name);
-    if (t.tag === 'Sort')
-        return exports.Sort(t.sort);
-    if (t.tag === 'Axiom')
-        return exports.Axiom(t.name);
+    if (t.tag === 'Type')
+        return exports.Type;
     if (t.tag === 'Meta' || t.tag === 'InsertedMeta')
         return exports.Meta(t.id);
     if (t.tag === 'Var')
@@ -1492,7 +1255,7 @@ exports.showDef = showDef;
 const showDefs = (ds) => ds.map(exports.showDef).join('\n');
 exports.showDefs = showDefs;
 
-},{"./names":9,"./utils/List":16,"./utils/utils":17,"./values":18}],13:[function(require,module,exports){
+},{"./names":7,"./utils/List":14,"./utils/utils":15,"./values":16}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.typecheck = void 0;
@@ -1500,7 +1263,6 @@ const config_1 = require("./config");
 const core_1 = require("./core");
 const globals_1 = require("./globals");
 const local_1 = require("./local");
-const axioms_1 = require("./axioms");
 const utils_1 = require("./utils/utils");
 const values_1 = require("./values");
 const V = require("./values");
@@ -1515,27 +1277,13 @@ const check = (local, tm, ty) => {
         return;
     }, e => utils_1.terr(`check failed (${core_1.show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}: ${e}`));
 };
-const synthSort = (local, s1, s2) => {
-    const s1f = values_1.force(s1);
-    const s2f = values_1.force(s2);
-    if (s1f.tag === 'VSort' && s2f.tag === 'VSort' && !(s1f.sort === '*' && s2f.sort === '**'))
-        return s2;
-    return utils_1.terr(`sort check failed: ${showV(local, s1)} and ${showV(local, s2)}`);
-};
-const checkSort = (local, s) => {
-    const ss = values_1.force(s);
-    if (ss.tag !== 'VSort')
-        return utils_1.terr(`expected sort but got ${showV(local, s)}`);
-};
 const synth = (local, tm) => {
     config_1.log(() => `synth ${core_1.show(tm)}`);
-    if (tm.tag === 'Sort') {
+    if (tm.tag === 'Type') {
         if (!local.erased)
-            return utils_1.terr(`sort type in non-type context: ${core_1.show(tm)}`);
-        return tm.sort === '*' ? V.VBox : utils_1.impossible(`${tm.sort} (**) in typecheck`);
+            return utils_1.terr(`type in non-type context: ${core_1.show(tm)}`);
+        return values_1.VType;
     }
-    if (tm.tag === 'Axiom')
-        return axioms_1.synthAxiom(tm.name);
     if (tm.tag === 'Var') {
         const [entry] = local_1.indexEnvT(local.ts, tm.index) || utils_1.terr(`var out of scope ${core_1.show(tm)}`);
         if (entry.erased && !local.erased)
@@ -1546,7 +1294,7 @@ const synth = (local, tm) => {
         const e = globals_1.getGlobal(tm.name);
         if (!e)
             return utils_1.terr(`undefined global ${core_1.show(tm)}`);
-        if (!e.erasedTerm && !local.erased)
+        if (e.erased && !local.erased)
             return utils_1.terr(`erased global used: ${core_1.show(tm)}`);
         return e.type;
     }
@@ -1556,26 +1304,23 @@ const synth = (local, tm) => {
         return rty;
     }
     if (tm.tag === 'Abs') {
-        const s1 = synth(local.inType(), tm.type);
-        checkSort(local, s1);
+        check(local.inType(), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
         const rty = synth(local.bind(tm.erased, tm.name, ty), tm.body);
         const qpi = core_1.Pi(tm.erased, tm.name, tm.type, values_1.quote(rty, local.level + 1));
-        synth(local.inType(), qpi); // TODO: improve sort check
         const pi = values_1.evaluate(qpi, local.vs);
         return pi;
     }
     if (tm.tag === 'Pi') {
         if (!local.erased)
             return utils_1.terr(`pi type in non-type context: ${core_1.show(tm)}`);
-        const s1 = synth(local.inType(), tm.type);
+        check(local.inType(), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const s2 = synth(local.inType().bind(tm.erased, tm.name, ty), tm.body);
-        return synthSort(local, s1, s2);
+        check(local.inType().bind(tm.erased, tm.name, ty), tm.body, values_1.VType);
+        return values_1.VType;
     }
     if (tm.tag === 'Let') {
-        const s1 = synth(local.inType(), tm.type);
-        checkSort(local, s1);
+        check(local.inType(), tm.type, values_1.VType);
         const ty = values_1.evaluate(tm.type, local.vs);
         check(tm.erased ? local.inType() : local, tm.val, ty);
         const v = values_1.evaluate(tm.val, local.vs);
@@ -1604,10 +1349,10 @@ const typecheck = (t, local = local_1.Local.empty()) => {
 };
 exports.typecheck = typecheck;
 
-},{"./axioms":1,"./config":2,"./core":3,"./globals":6,"./local":7,"./unification":14,"./utils/utils":17,"./values":18}],14:[function(require,module,exports){
+},{"./config":1,"./core":2,"./globals":4,"./local":5,"./unification":12,"./utils/utils":15,"./values":16}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.unify = exports.eqHead = void 0;
+exports.unify = void 0;
 const config_1 = require("./config");
 const core_1 = require("./core");
 const metas_1 = require("./metas");
@@ -1622,7 +1367,7 @@ const invertSpine = (sp) => sp.foldr((app, [dom, ren]) => {
     const v = values_1.force(app.arg);
     if (!values_1.isVVar(v))
         return utils_1.terr(`not a variable in the spine`);
-    const x = v.head.level;
+    const x = v.head;
     if (typeof ren[x] === 'number')
         return utils_1.terr(`non-linear spine`);
     return [dom + 1, insert(ren, x, dom)];
@@ -1640,19 +1385,17 @@ const rename = (id, pren, v_) => {
         return renameSpine(id, pren, core_1.Meta(v.head), v.spine);
     }
     if (v.tag === 'VRigid') {
-        if (v.head.tag === 'HAxiom')
-            return renameSpine(id, pren, core_1.Axiom(v.head.name), v.spine);
-        const x = pren.ren[v.head.level];
+        const x = pren.ren[v.head];
         if (typeof x !== 'number')
-            return utils_1.terr(`escaping variable ${v.head.level}`);
+            return utils_1.terr(`escaping variable ${v.head}`);
         return renameSpine(id, pren, core_1.Var(pren.dom - x - 1), v.spine);
     }
     if (v.tag === 'VAbs')
         return core_1.Abs(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), values_1.vinst(v, values_1.VVar(pren.cod))));
     if (v.tag === 'VPi')
         return core_1.Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), values_1.vinst(v, values_1.VVar(pren.cod))));
-    if (v.tag === 'VSort')
-        return core_1.Sort(v.sort);
+    if (v.tag === 'VType')
+        return core_1.Type;
     if (v.tag === 'VGlobal')
         return renameSpine(id, pren, core_1.Global(v.name), v.spine); // TODO: should global be forced?
     return v;
@@ -1668,23 +1411,13 @@ const solve = (gamma, m, sp, rhs_) => {
     metas_1.setMeta(m, solution);
 };
 const unifySpines = (l, a, b) => a.zipWithR_(b, (x, y) => exports.unify(l, x.arg, y.arg));
-const eqHead = (a, b) => {
-    if (a === b)
-        return true;
-    if (a.tag === 'HVar')
-        return b.tag === 'HVar' && a.level === b.level;
-    if (a.tag === 'HAxiom')
-        return b.tag === 'HAxiom' && a.name === b.name;
-    return false;
-};
-exports.eqHead = eqHead;
 const unify = (l, a_, b_) => {
     const a = values_1.force(a_, false);
     const b = values_1.force(b_, false);
     config_1.log(() => `unify ${values_1.show(a, l)} ~ ${values_1.show(b, l)}`);
     if (a === b)
         return;
-    if (a.tag === 'VSort' && b.tag === 'VSort' && a.sort === b.sort)
+    if (a.tag === 'VType' && b.tag === 'VType')
         return;
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
         const v = values_1.VVar(l);
@@ -1703,7 +1436,7 @@ const unify = (l, a_, b_) => {
         const v = values_1.VVar(l);
         return exports.unify(l + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
-    if (a.tag === 'VRigid' && b.tag === 'VRigid' && exports.eqHead(a.head, b.head))
+    if (a.tag === 'VRigid' && b.tag === 'VRigid' && a.head === b.head)
         return unifySpines(l, a.spine, b.spine);
     if (a.tag === 'VFlex' && b.tag === 'VFlex' && a.head === b.head)
         return unifySpines(l, a.spine, b.spine);
@@ -1721,7 +1454,7 @@ const unify = (l, a_, b_) => {
 };
 exports.unify = unify;
 
-},{"./config":2,"./core":3,"./metas":8,"./utils/List":16,"./utils/utils":17,"./values":18}],15:[function(require,module,exports){
+},{"./config":1,"./core":2,"./metas":6,"./utils/List":14,"./utils/utils":15,"./values":16}],13:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Lazy = void 0;
@@ -1756,7 +1489,7 @@ class Lazy {
 }
 exports.Lazy = Lazy;
 
-},{}],16:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cons = exports.nil = exports.Cons = exports.Nil = exports.List = void 0;
@@ -1963,7 +1696,7 @@ exports.nil = new Nil();
 const cons = (head, tail) => new Cons(head, tail);
 exports.cons = cons;
 
-},{"./utils":17}],17:[function(require,module,exports){
+},{"./utils":15}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.removeAll = exports.remove = exports.pushUniq = exports.eqArr = exports.mapObj = exports.tryTE = exports.tryT = exports.hasDuplicates = exports.range = exports.loadFileSync = exports.loadFile = exports.serr = exports.terr = exports.impossible = void 0;
@@ -2072,24 +1805,19 @@ const removeAll = (a, xs) => {
 };
 exports.removeAll = removeAll;
 
-},{"fs":20}],18:[function(require,module,exports){
+},{"fs":18}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.VBox = exports.VType = exports.isVVar = exports.VMeta = exports.VAxiom = exports.VVar = exports.vinst = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VSort = exports.EApp = exports.HAxiom = exports.HVar = void 0;
+exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.isVVar = exports.VMeta = exports.VVar = exports.vinst = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VType = exports.EApp = void 0;
 const core_1 = require("./core");
 const metas_1 = require("./metas");
 const Lazy_1 = require("./utils/Lazy");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
 const globals_1 = require("./globals");
-const HVar = (level) => ({ tag: 'HVar', level });
-exports.HVar = HVar;
-const HAxiom = (name) => ({ tag: 'HAxiom', name });
-exports.HAxiom = HAxiom;
 const EApp = (erased, arg) => ({ tag: 'EApp', erased, arg });
 exports.EApp = EApp;
-const VSort = (sort) => ({ tag: 'VSort', sort });
-exports.VSort = VSort;
+exports.VType = { tag: 'VType' };
 const VRigid = (head, spine) => ({ tag: 'VRigid', head, spine });
 exports.VRigid = VRigid;
 const VFlex = (head, spine) => ({ tag: 'VFlex', head, spine });
@@ -2103,16 +1831,12 @@ const VPi = (erased, name, type, clos) => ({ tag: 'VPi', erased, name, type, clo
 exports.VPi = VPi;
 const vinst = (val, arg) => val.clos(arg);
 exports.vinst = vinst;
-const VVar = (level, spine = List_1.nil) => exports.VRigid(exports.HVar(level), spine);
+const VVar = (level, spine = List_1.nil) => exports.VRigid(level, spine);
 exports.VVar = VVar;
-const VAxiom = (name, spine = List_1.nil) => exports.VRigid(exports.HAxiom(name), spine);
-exports.VAxiom = VAxiom;
 const VMeta = (meta, spine = List_1.nil) => exports.VFlex(meta, spine);
 exports.VMeta = VMeta;
-const isVVar = (v) => v.tag === 'VRigid' && v.head.tag === 'HVar' && v.spine.isNil();
+const isVVar = (v) => v.tag === 'VRigid' && v.spine.isNil();
 exports.isVVar = isVVar;
-exports.VType = exports.VSort('*');
-exports.VBox = exports.VSort('**');
 const force = (v, forceGlobal = true) => {
     if (v.tag === 'VGlobal' && forceGlobal)
         return exports.force(v.val.get(), forceGlobal);
@@ -2152,10 +1876,8 @@ const velimBD = (env, v, s) => {
 };
 exports.velimBD = velimBD;
 const evaluate = (t, vs) => {
-    if (t.tag === 'Sort')
-        return exports.VSort(t.sort);
-    if (t.tag === 'Axiom')
-        return exports.VAxiom(t.name);
+    if (t.tag === 'Type')
+        return exports.VType;
     if (t.tag === 'Abs')
         return exports.VAbs(t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, List_1.cons(v, vs)));
     if (t.tag === 'Pi')
@@ -2180,13 +1902,6 @@ const evaluate = (t, vs) => {
     return t;
 };
 exports.evaluate = evaluate;
-const quoteHead = (h, k) => {
-    if (h.tag === 'HVar')
-        return core_1.Var(k - (h.level + 1));
-    if (h.tag === 'HAxiom')
-        return core_1.Axiom(h.name);
-    return h;
-};
 const quoteElim = (t, e, k, full) => {
     if (e.tag === 'EApp')
         return core_1.App(t, e.erased, exports.quote(e.arg, k, full));
@@ -2194,10 +1909,10 @@ const quoteElim = (t, e, k, full) => {
 };
 const quote = (v_, k, full = false) => {
     const v = exports.force(v_, false);
-    if (v.tag === 'VSort')
-        return core_1.Sort(v.sort);
+    if (v.tag === 'VType')
+        return core_1.Type;
     if (v.tag === 'VRigid')
-        return v.spine.foldr((x, y) => quoteElim(y, x, k, full), quoteHead(v.head, k));
+        return v.spine.foldr((x, y) => quoteElim(y, x, k, full), core_1.Var(k - (v.head + 1)));
     if (v.tag === 'VFlex')
         return v.spine.foldr((x, y) => quoteElim(y, x, k, full), core_1.Meta(v.head));
     if (v.tag === 'VGlobal') {
@@ -2265,7 +1980,7 @@ const zonk = (tm, vs = List_1.nil, k = 0, full = false) => {
 };
 exports.zonk = zonk;
 
-},{"./core":3,"./globals":6,"./metas":8,"./utils/Lazy":15,"./utils/List":16,"./utils/utils":17}],19:[function(require,module,exports){
+},{"./core":2,"./globals":4,"./metas":6,"./utils/Lazy":13,"./utils/List":14,"./utils/utils":15}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const repl_1 = require("./repl");
@@ -2321,6 +2036,6 @@ function addResult(msg, err) {
     return divout;
 }
 
-},{"./repl":11}],20:[function(require,module,exports){
+},{"./repl":9}],18:[function(require,module,exports){
 
-},{}]},{},[19]);
+},{}]},{},[17]);

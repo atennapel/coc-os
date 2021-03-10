@@ -1,18 +1,10 @@
-import { App, Core, Axiom, SortType, Var, show as showCore, Abs, Pi, Sort, Global, Meta, Let } from './core';
+import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type } from './core';
 import { getMeta, MetaVar } from './metas';
 import { Lvl, Name } from './names';
-import { AxiomName } from './axioms';
 import { Lazy } from './utils/Lazy';
 import { cons, List, Nil, nil } from './utils/List';
 import { impossible } from './utils/utils';
 import { getGlobal } from './globals';
-
-export type Head = HVar | HAxiom;
-
-export interface HVar { readonly tag: 'HVar'; readonly level: Lvl }
-export const HVar = (level: Lvl): HVar => ({ tag: 'HVar', level });
-export interface HAxiom { readonly tag: 'HAxiom'; readonly name: AxiomName }
-export const HAxiom = (name: AxiomName): HAxiom => ({ tag: 'HAxiom', name });
 
 export type Elim = EApp;
 
@@ -23,12 +15,12 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VSort | VRigid | VFlex | VGlobal | VAbs | VPi;
+export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi;
 
-export interface VSort { readonly tag: 'VSort'; readonly sort: SortType }
-export const VSort = (sort: SortType): VSort => ({ tag: 'VSort', sort });
-export interface VRigid { readonly tag: 'VRigid'; readonly head: Head; readonly spine: Spine }
-export const VRigid = (head: Head, spine: Spine): VRigid => ({ tag: 'VRigid', head, spine });
+export interface VType { readonly tag: 'VType' }
+export const VType: VType = { tag: 'VType' };
+export interface VRigid { readonly tag: 'VRigid'; readonly head: Lvl; readonly spine: Spine }
+export const VRigid = (head: Lvl, spine: Spine): VRigid => ({ tag: 'VRigid', head, spine });
 export interface VFlex { readonly tag: 'VFlex'; readonly head: MetaVar; readonly spine: Spine }
 export const VFlex = (head: MetaVar, spine: Spine): VFlex => ({ tag: 'VFlex', head, spine });
 export interface VGlobal { readonly tag: 'VGlobal'; readonly name: Name; readonly spine: Spine; readonly val: Lazy<Val> };
@@ -41,15 +33,11 @@ export const VPi = (erased: boolean, name: Name, type: Val, clos: Clos): VPi => 
 export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' };
 export const vinst = (val: ValWithClosure, arg: Val): Val => val.clos(arg);
 
-export const VVar = (level: Lvl, spine: Spine = nil): Val => VRigid(HVar(level), spine);
-export const VAxiom = (name: AxiomName, spine: Spine = nil): Val => VRigid(HAxiom(name), spine);
+export const VVar = (level: Lvl, spine: Spine = nil): Val => VRigid(level, spine);
 export const VMeta = (meta: MetaVar, spine: Spine = nil): Val => VFlex(meta, spine);
 
-export const isVVar = (v: Val): v is VRigid & { head: HVar, spine: Nil } =>
-  v.tag === 'VRigid' && v.head.tag === 'HVar' && v.spine.isNil();
-
-export const VType = VSort('*');
-export const VBox = VSort('**');
+export const isVVar = (v: Val): v is VRigid & { spine: Nil } =>
+  v.tag === 'VRigid' && v.spine.isNil();
 
 export const force = (v: Val, forceGlobal: boolean = true): Val => {
   if (v.tag === 'VGlobal' && forceGlobal) return force(v.val.get(), forceGlobal);
@@ -83,8 +71,7 @@ export const velimBD = (env: EnvV, v: Val, s: List<boolean>): Val => {
 };
 
 export const evaluate = (t: Core, vs: EnvV): Val => {
-  if (t.tag === 'Sort') return VSort(t.sort);
-  if (t.tag === 'Axiom') return VAxiom(t.name);
+  if (t.tag === 'Type') return VType;
   if (t.tag === 'Abs') return VAbs(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Pi') return VPi(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Var') return vs.index(t.index) || impossible(`evaluate: var ${t.index} has no value`);
@@ -101,22 +88,17 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
   return t;
 };
 
-const quoteHead = (h: Head, k: Lvl): Core => {
-  if (h.tag === 'HVar') return Var(k - (h.level + 1));
-  if (h.tag === 'HAxiom') return Axiom(h.name);
-  return h;
-};
 const quoteElim = (t: Core, e: Elim, k: Lvl, full: boolean): Core => {
   if (e.tag === 'EApp') return App(t, e.erased, quote(e.arg, k, full));
   return e.tag;
 };
 export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
   const v = force(v_, false);
-  if (v.tag === 'VSort') return Sort(v.sort);
+  if (v.tag === 'VType') return Type;
   if (v.tag === 'VRigid')
     return v.spine.foldr(
       (x, y) => quoteElim(y, x, k, full),
-      quoteHead(v.head, k),
+      Var(k - (v.head + 1)) as Core,
     );
   if (v.tag === 'VFlex')
     return v.spine.foldr(
