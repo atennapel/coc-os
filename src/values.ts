@@ -1,4 +1,4 @@
-import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType } from './core';
+import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum } from './core';
 import { getMeta, MetaVar } from './metas';
 import { Ix, Lvl, Name } from './names';
 import { Lazy } from './utils/Lazy';
@@ -6,16 +6,18 @@ import { cons, List, Nil, nil } from './utils/List';
 import { impossible } from './utils/utils';
 import { getGlobal } from './globals';
 
-export type Elim = EApp;
+export type Elim = EApp | EElimEnum;
 
 export interface EApp { readonly tag: 'EApp'; readonly erased: boolean; readonly arg: Val }
 export const EApp = (erased: boolean, arg: Val): EApp => ({ tag: 'EApp', erased, arg });
+export interface EElimEnum { readonly tag: 'EElimEnum'; readonly num: Ix; readonly lift: Ix; readonly motive: Val; readonly cases: Val[] }
+export const EElimEnum = (num: Ix, lift: Ix, motive: Val, cases: Val[]): EElimEnum => ({ tag: 'EElimEnum', num, lift, motive, cases });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi;
+export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi | VEnum | VEnumLit;
 
 export interface VType { readonly tag: 'VType'; readonly index: Ix }
 export const VType = (index: Ix): VType => ({ tag: 'VType', index });
@@ -29,6 +31,10 @@ export interface VAbs { readonly tag: 'VAbs'; readonly erased: boolean; readonly
 export const VAbs = (erased: boolean, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', erased, name, type, clos });
 export interface VPi { readonly tag: 'VPi'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
 export const VPi = (erased: boolean, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', erased, name, type, clos });
+export interface VEnum { readonly tag: 'VEnum'; readonly num: Ix; readonly lift: Ix }
+export const VEnum = (num: Ix, lift: Ix): VEnum => ({ tag: 'VEnum', num, lift });
+export interface VEnumLit { readonly tag: 'VEnumLit'; readonly val: Ix; readonly num: Ix; readonly lift: Ix }
+export const VEnumLit = (val: Ix, num: Ix, lift: Ix): VEnumLit => ({ tag: 'VEnumLit', val, num, lift });
 
 export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' };
 export const vinst = (val: ValWithClosure, arg: Val): Val => val.clos(arg);
@@ -50,17 +56,25 @@ export const force = (v: Val, forceGlobal: boolean = true): Val => {
 
 export const velim = (e: Elim, t: Val): Val => {
   if (e.tag === 'EApp') return vapp(t, e.erased, e.arg);
-  return e.tag;
+  if (e.tag === 'EElimEnum') return velimenum(e.num, e.lift, e.motive, t, e.cases);
+  return e;
 };
 
 export const velimSpine = (t: Val, sp: Spine): Val => sp.foldr(velim, t);
 
 export const vapp = (left: Val, erased: boolean, right: Val): Val => {
-  if (left.tag === 'VAbs') return vinst(left, right);
+  if (left.tag === 'VAbs') return vinst(left, right); // TODO: erasure check?
   if (left.tag === 'VRigid') return VRigid(left.head, cons(EApp(erased, right), left.spine));
   if (left.tag === 'VFlex') return VFlex(left.head, cons(EApp(erased, right), left.spine));
   if (left.tag === 'VGlobal') return VGlobal(left.name, left.lift, cons(EApp(erased, right), left.spine), left.val.map(v => vapp(v, erased, right)));
   return impossible(`vapp: ${left.tag}`);
+};
+export const velimenum = (num: Ix, lift: Ix, motive: Val, scrut: Val, cases: Val[]): Val => {
+  if (scrut.tag === 'VEnumLit') return cases[scrut.val];
+  if (scrut.tag === 'VRigid') return VRigid(scrut.head, cons(EElimEnum(num, lift, motive, cases), scrut.spine));
+  if (scrut.tag === 'VFlex') return VFlex(scrut.head, cons(EElimEnum(num, lift, motive, cases), scrut.spine));
+  if (scrut.tag === 'VGlobal') return VGlobal(scrut.name, scrut.lift, cons(EElimEnum(num, lift, motive, cases), scrut.spine), scrut.val.map(v => velimenum(num, lift, motive, v, cases)));
+  return impossible(`velimenum: ${scrut.tag}`);
 };
 
 export const velimBD = (env: EnvV, v: Val, s: List<boolean>): Val => {
@@ -72,6 +86,9 @@ export const velimBD = (env: EnvV, v: Val, s: List<boolean>): Val => {
 
 export const evaluate = (t: Core, vs: EnvV): Val => {
   if (t.tag === 'Type') return VType(t.index);
+  if (t.tag === 'Enum') return VEnum(t.num, t.lift);
+  if (t.tag === 'EnumLit') return VEnumLit(t.val, t.num, t.lift);
+  if (t.tag === 'ElimEnum') return velimenum(t.num, t.lift, evaluate(t.motive, vs), evaluate(t.scrut, vs), t.cases.map(x => evaluate(x, vs)));
   if (t.tag === 'Abs') return VAbs(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Pi') return VPi(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Var') return vs.index(t.index) || impossible(`evaluate: var ${t.index} has no value`);
@@ -90,11 +107,14 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
 
 const quoteElim = (t: Core, e: Elim, k: Lvl, full: boolean): Core => {
   if (e.tag === 'EApp') return App(t, e.erased, quote(e.arg, k, full));
-  return e.tag;
+  if (e.tag === 'EElimEnum') return ElimEnum(e.num, e.lift, quote(e.motive, k, full), t, e.cases.map(x => quote(x, k, full)));
+  return e;
 };
 export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
   const v = force(v_, false);
   if (v.tag === 'VType') return Type(v.index);
+  if (v.tag === 'VEnum') return Enum(v.num, v.lift);
+  if (v.tag === 'VEnumLit') return EnumLit(v.val, v.num, v.lift);
   if (v.tag === 'VRigid')
     return v.spine.foldr(
       (x, y) => quoteElim(y, x, k, full),
@@ -138,13 +158,14 @@ const zonkSpine = (tm: Core, vs: EnvV, k: Lvl, full: boolean): S => {
 const vzonkBD = (env: EnvV, v: Val, s: List<boolean>): Val => {
   if (env.isNil() && s.isNil()) return v;
   if (env.isCons() && s.isCons())
-    return s.head ? vapp(velimBD(env.tail, v, s.tail), false, env.head) : velimBD(env.tail, v, s.tail); // TODO: erasure?
+    return s.head ? vapp(vzonkBD(env.tail, v, s.tail), false, env.head) : vzonkBD(env.tail, v, s.tail); // TODO: erasure?
   return impossible('vzonkBD');
 };
 export const zonk = (tm: Core, vs: EnvV = nil, k: Lvl = 0, full: boolean = false): Core => {
   if (tm.tag === 'Meta') {
     const s = getMeta(tm.id);
-    return s.tag === 'Solved' ? quote(s.solution, k, full) : tm;
+    if (s.tag === 'Unsolved') return tm;
+    return quote(s.solution, k, full);
   }
   if (tm.tag === 'InsertedMeta') {
     const s = getMeta(tm.id);
@@ -163,5 +184,7 @@ export const zonk = (tm: Core, vs: EnvV = nil, k: Lvl = 0, full: boolean = false
       App(spine[1], tm.erased, zonk(tm.arg, vs, k, full)) :
       quote(vapp(spine[1], tm.erased, evaluate(tm.arg, vs)), k, full);
   }
+  if (tm.tag === 'ElimEnum')
+    return ElimEnum(tm.num, tm.lift, zonk(tm.motive, vs, k, full), zonk(tm.scrut, vs, k, full), tm.cases.map(x => zonk(x, vs, k, full)));
   return tm;
 };

@@ -6,6 +6,7 @@ import { impossible } from './utils/utils';
 export type Core =
   Var | Global | Type | Let |
   Pi | Abs | App |
+  Enum | EnumLit | ElimEnum |
   Meta | InsertedMeta;
 
 export interface Var { readonly tag: 'Var'; readonly index: Ix }
@@ -22,6 +23,12 @@ export interface Abs { readonly tag: 'Abs'; readonly erased: boolean; readonly n
 export const Abs = (erased: boolean, name: Name, type: Core, body: Core): Abs => ({ tag: 'Abs', erased, name, type, body });
 export interface App { readonly tag: 'App'; readonly fn: Core; readonly erased: boolean; readonly arg: Core }
 export const App = (fn: Core, erased: boolean, arg: Core): App => ({ tag: 'App', fn, erased, arg });
+export interface Enum { readonly tag: 'Enum'; readonly num: Ix; readonly lift: Ix }
+export const Enum = (num: Ix, lift: Ix): Enum => ({ tag: 'Enum', num, lift });
+export interface EnumLit { readonly tag: 'EnumLit'; readonly val: Ix; readonly num: Ix; readonly lift: Ix }
+export const EnumLit = (val: Ix, num: Ix, lift: Ix): EnumLit => ({ tag: 'EnumLit', val, num, lift });
+export interface ElimEnum { readonly tag: 'ElimEnum'; readonly num: Ix; readonly lift: Ix; readonly motive: Core; readonly scrut: Core; readonly cases: Core[] }
+export const ElimEnum = (num: Ix, lift: Ix, motive: Core, scrut: Core, cases: Core[]): ElimEnum => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
 export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
 export const Meta = (id: MetaVar): Meta => ({ tag: 'Meta', id });
 export interface InsertedMeta { readonly tag: 'InsertedMeta'; readonly id: MetaVar; readonly spine: List<boolean> }
@@ -56,7 +63,7 @@ export const flattenApp = (t: Core): [Core, [boolean, Core][]] => {
 };
 
 const showP = (b: boolean, t: Core) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta';
+const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta' || t.tag === 'Enum' || t.tag === 'EnumLit';
 const showS = (t: Core) => showP(!isSimple(t), t);
 export const show = (t: Core): string => {
   if (t.tag === 'Var') return `'${t.index}`;
@@ -64,6 +71,9 @@ export const show = (t: Core): string => {
   if (t.tag === 'Type') return `*${t.index > 0 ? t.index : ''}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'InsertedMeta') return `?*${t.id}`;
+  if (t.tag === 'Enum') return `#${t.num}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
+  if (t.tag === 'ElimEnum') return `?${t.num}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} {${show(t.motive)}} ${showS(t.scrut)}${t.cases.length > 0 ? ' ' : ''}${t.cases.map(showS).join(' ')}`;
+  if (t.tag === 'EnumLit') return `@${t.val}/${t.num}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
   if (t.tag === 'Pi') {
     const [params, ret] = flattenPi(t);
     return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${show(t)}${e ? '}' : ')'}`).join(' -> ')} -> ${show(ret)}`;
@@ -87,6 +97,7 @@ export const shift = (d: Ix, c: Ix, t: Core): Core => {
   if (t.tag === 'Abs') return Abs(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Let') return Let(t.erased, t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
   if (t.tag === 'Pi') return Pi(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, shift(d, c, t.motive), shift(d, c, t.scrut), t.cases.map(x => shift(d, c, x)));
   return t;
 };
 
@@ -96,6 +107,7 @@ export const substVar = (j: Ix, s: Core, t: Core): Core => {
   if (t.tag === 'Abs') return Abs(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Let') return Let(t.erased, t.name, substVar(j, s, t.type), substVar(j, s, t.val), substVar(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Pi') return Pi(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, substVar(j, s, t.motive), substVar(j, s, t.scrut), t.cases.map(x => substVar(j, s, x)));
   return t;
 };
 
@@ -103,12 +115,14 @@ export const subst = (t: Core, u: Core): Core => shift(-1, 0, substVar(0, shift(
 
 export const liftType = (l: Ix, t: Core): Core => {
   if (t.tag === 'Type') return Type(t.index + l);
-  if (t.tag === 'Var') return t;
   if (t.tag === 'Abs') return Abs(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
   if (t.tag === 'Pi') return Pi(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
   if (t.tag === 'App') return App(liftType(l, t.fn), t.erased, liftType(l, t.arg));
   if (t.tag === 'Let') return Let(t.erased, t.name, liftType(l, t.type), liftType(l, t.val), liftType(l, t.body));
   if (t.tag === 'Global') return Global(t.name, t.lift + l);
+  if (t.tag === 'Enum') return Enum(t.num, t.lift + l);
+  if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift + l, liftType(l, t.motive), liftType(l, t.scrut), t.cases.map(x => liftType(l, x)));
+  if (t.tag === 'EnumLit') return EnumLit(t.val, t.num, t.lift + l);
   if (t.tag === 'Meta') return impossible(`meta in liftType: ${show(t)}`);
   if (t.tag === 'InsertedMeta') return impossible(`meta in liftType: ${show(t)}`);
   return t;

@@ -20,7 +20,7 @@ exports.log = log;
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liftType = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
+exports.liftType = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.ElimEnum = exports.EnumLit = exports.Enum = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
 const utils_1 = require("./utils/utils");
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
@@ -36,6 +36,12 @@ const Abs = (erased, name, type, body) => ({ tag: 'Abs', erased, name, type, bod
 exports.Abs = Abs;
 const App = (fn, erased, arg) => ({ tag: 'App', fn, erased, arg });
 exports.App = App;
+const Enum = (num, lift) => ({ tag: 'Enum', num, lift });
+exports.Enum = Enum;
+const EnumLit = (val, num, lift) => ({ tag: 'EnumLit', val, num, lift });
+exports.EnumLit = EnumLit;
+const ElimEnum = (num, lift, motive, scrut, cases) => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
+exports.ElimEnum = ElimEnum;
 const Meta = (id) => ({ tag: 'Meta', id });
 exports.Meta = Meta;
 const InsertedMeta = (id, spine) => ({ tag: 'InsertedMeta', id, spine });
@@ -71,7 +77,7 @@ const flattenApp = (t) => {
 };
 exports.flattenApp = flattenApp;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta';
+const isSimple = (t) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta' || t.tag === 'Enum' || t.tag === 'EnumLit';
 const showS = (t) => showP(!isSimple(t), t);
 const show = (t) => {
     if (t.tag === 'Var')
@@ -84,6 +90,12 @@ const show = (t) => {
         return `?${t.id}`;
     if (t.tag === 'InsertedMeta')
         return `?*${t.id}`;
+    if (t.tag === 'Enum')
+        return `#${t.num}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
+    if (t.tag === 'ElimEnum')
+        return `?${t.num}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} {${exports.show(t.motive)}} ${showS(t.scrut)}${t.cases.length > 0 ? ' ' : ''}${t.cases.map(showS).join(' ')}`;
+    if (t.tag === 'EnumLit')
+        return `@${t.val}/${t.num}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
     if (t.tag === 'Pi') {
         const [params, ret] = exports.flattenPi(t);
         return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${exports.show(t)}${e ? '}' : ')'}`).join(' -> ')} -> ${exports.show(ret)}`;
@@ -112,6 +124,8 @@ const shift = (d, c, t) => {
         return exports.Let(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Pi')
         return exports.Pi(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'ElimEnum')
+        return exports.ElimEnum(t.num, t.lift, exports.shift(d, c, t.motive), exports.shift(d, c, t.scrut), t.cases.map(x => exports.shift(d, c, x)));
     return t;
 };
 exports.shift = shift;
@@ -126,6 +140,8 @@ const substVar = (j, s, t) => {
         return exports.Let(t.erased, t.name, exports.substVar(j, s, t.type), exports.substVar(j, s, t.val), exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
     if (t.tag === 'Pi')
         return exports.Pi(t.erased, t.name, exports.substVar(j, s, t.type), exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
+    if (t.tag === 'ElimEnum')
+        return exports.ElimEnum(t.num, t.lift, exports.substVar(j, s, t.motive), exports.substVar(j, s, t.scrut), t.cases.map(x => exports.substVar(j, s, x)));
     return t;
 };
 exports.substVar = substVar;
@@ -134,8 +150,6 @@ exports.subst = subst;
 const liftType = (l, t) => {
     if (t.tag === 'Type')
         return exports.Type(t.index + l);
-    if (t.tag === 'Var')
-        return t;
     if (t.tag === 'Abs')
         return exports.Abs(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.body));
     if (t.tag === 'Pi')
@@ -146,6 +160,12 @@ const liftType = (l, t) => {
         return exports.Let(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.val), exports.liftType(l, t.body));
     if (t.tag === 'Global')
         return exports.Global(t.name, t.lift + l);
+    if (t.tag === 'Enum')
+        return exports.Enum(t.num, t.lift + l);
+    if (t.tag === 'ElimEnum')
+        return exports.ElimEnum(t.num, t.lift + l, exports.liftType(l, t.motive), exports.liftType(l, t.scrut), t.cases.map(x => exports.liftType(l, x)));
+    if (t.tag === 'EnumLit')
+        return exports.EnumLit(t.val, t.num, t.lift + l);
     if (t.tag === 'Meta')
         return utils_1.impossible(`meta in liftType: ${exports.show(t)}`);
     if (t.tag === 'InsertedMeta')
@@ -197,6 +217,7 @@ const check = (local, tm, ty) => {
         return x;
     }
     const fty = values_1.force(ty);
+    config_1.log(() => `check(full) ${surface_1.show(tm)} : ${showV(local, fty)}`);
     if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.erased === fty.erased) {
         const v = values_1.VVar(local.level);
         const x = tm.name;
@@ -207,6 +228,20 @@ const check = (local, tm, ty) => {
         const v = values_1.VVar(local.level);
         const term = check(local.insert(true, fty.name, fty.type), tm, values_1.vinst(fty, v));
         return core_1.Abs(fty.erased, fty.name, values_1.quote(fty.type, local.level), term);
+    }
+    if (tm.tag === 'Enum' && fty.tag === 'VType' && (tm.lift === null || tm.lift <= fty.index))
+        return core_1.Enum(tm.num, fty.index);
+    if (tm.tag === 'EnumLit' && fty.tag === 'VEnum' && (tm.num === null || tm.num === fty.num) && (tm.lift === null || tm.lift <= fty.lift))
+        return core_1.EnumLit(tm.val, fty.num, fty.lift);
+    if (tm.tag === 'ElimEnum' && !tm.motive) {
+        if (tm.cases.length !== tm.num)
+            return utils_1.terr(`cases amount mismatch, expected ${tm.num} but got ${tm.cases.length}: ${surface_1.show(tm)}`);
+        const lift = tm.lift || 0;
+        const vmotive = values_1.VAbs(false, '_', values_1.VEnum(tm.num, lift), _ => ty);
+        const motive = values_1.quote(vmotive, local.level);
+        const scrut = check(local, tm.scrut, values_1.VEnum(tm.num, lift));
+        const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num, lift))));
+        return core_1.ElimEnum(tm.num, lift, motive, scrut, cases);
     }
     if (tm.tag === 'Let') {
         let vtype;
@@ -334,6 +369,31 @@ const synth = (local, tm) => {
             holes[tm.name] = [values_1.evaluate(t, local.vs), vt, local];
         }
         return [t, vt];
+    }
+    if (tm.tag === 'Enum')
+        return [core_1.Enum(tm.num, tm.lift || 0), values_1.VType(tm.lift || 0)];
+    if (tm.tag === 'EnumLit' && tm.num !== null) {
+        if (tm.val >= tm.num)
+            return utils_1.terr(`invalid enum literal: ${surface_1.show(tm)}`);
+        return [core_1.EnumLit(tm.val, tm.num, tm.lift || 0), values_1.VEnum(tm.num, tm.lift || 0)];
+    }
+    if (tm.tag === 'ElimEnum') {
+        if (tm.cases.length !== tm.num)
+            return utils_1.terr(`cases amount mismatch, expected ${tm.num} but got ${tm.cases.length}: ${surface_1.show(tm)}`);
+        const lift = tm.lift || 0;
+        let premotive;
+        if (!tm.motive) {
+            premotive = S.App(S.Abs(false, 't', S.Type(0), S.Abs(false, '_', S.Enum(tm.num, lift), S.Var('t', 0))), false, S.Hole(null));
+            // TODO: universe variable
+        }
+        else
+            premotive = tm.motive;
+        const motive = check(local.inType(), premotive, values_1.VPi(false, '_', values_1.VEnum(tm.num, lift), _ => values_1.VType(lift)));
+        const vmotive = values_1.evaluate(motive, local.vs);
+        const scrut = check(local, tm.scrut, values_1.VEnum(tm.num, lift));
+        const vscrut = values_1.evaluate(scrut, local.vs);
+        const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num, lift))));
+        return [core_1.ElimEnum(tm.num, lift, motive, scrut, cases), values_1.vapp(vmotive, false, vscrut)];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
@@ -571,7 +631,7 @@ const TName = (name) => ({ tag: 'Name', name });
 const TNum = (num) => ({ tag: 'Num', num });
 const TList = (list, bracket) => ({ tag: 'List', list, bracket });
 const TStr = (str) => ({ tag: 'Str', str });
-const SYM1 = ['\\', ':', '=', ';'];
+const SYM1 = ['\\', ':', '=', ';', ','];
 const SYM2 = ['->'];
 const START = 0;
 const NAME = 1;
@@ -598,7 +658,7 @@ const tokenize = (sc) => {
                 r.push(TName('.'));
             else if (c + next === '--')
                 i++, state = COMMENT;
-            else if (/[\*\-\.\?\#\%\_a-z]/i.test(c))
+            else if (/[\*\-\.\/\?\@\#\%\_a-z]/i.test(c))
                 t += c, state = NAME;
             else if (/[0-9]/.test(c))
                 t += c, state = NUMBER;
@@ -769,16 +829,91 @@ const expr = (t) => {
             const rest = x.slice(1);
             return [surface_1.Hole(rest.length > 0 ? rest : null), false];
         }
+        if (x.startsWith('#')) {
+            const full = x.slice(1);
+            if (full.includes('^')) {
+                const spl = full.split('^');
+                if (spl.length !== 2)
+                    return utils_1.serr(`invalid enum: ${x}`);
+                const m = +spl[0];
+                if (isNaN(m) || Math.floor(m) !== m || m < 0)
+                    return utils_1.serr(`invalid enum: ${x}`);
+                if (spl[1] === '')
+                    return [surface_1.Enum(m, 1), false];
+                const n = +spl[1];
+                if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                    return utils_1.serr(`invalid enum: ${x}`);
+                return [surface_1.Enum(m, n), false];
+            }
+            const n = +full;
+            if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                return utils_1.serr(`invalid enum: ${x}`);
+            return [surface_1.Enum(n, null), false];
+        }
+        if (x.startsWith('@')) {
+            const full = x.slice(1);
+            if (full.includes('/')) {
+                const spl = full.split('/');
+                if (spl.length !== 2)
+                    return utils_1.serr(`invalid enum literal: ${x}`);
+                const m = +spl[0];
+                if (isNaN(m) || Math.floor(m) !== m || m < 0)
+                    return utils_1.serr(`invalid enum literal: ${x}`);
+                if (spl[1] === '')
+                    return utils_1.serr(`invalid enum literal: ${x}`);
+                const rest = spl[1];
+                if (rest.includes('^')) {
+                    const spl2 = rest.split('^');
+                    if (spl2.length !== 2)
+                        return utils_1.serr(`invalid enum literal: ${x}`);
+                    const n = +spl2[0];
+                    if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                        return utils_1.serr(`invalid enum literal: ${x}`);
+                    if (spl2[1] === '')
+                        return [surface_1.EnumLit(m, n, 1), false];
+                    const l = +spl2[1];
+                    if (isNaN(l) || Math.floor(l) !== l || l < 0)
+                        return utils_1.serr(`invalid enum literal: ${x}`);
+                    return [surface_1.EnumLit(m, n, l), false];
+                }
+                else {
+                    const n = +spl[1];
+                    if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                        return utils_1.serr(`invalid enum literal: ${x}`);
+                    return [surface_1.EnumLit(m, n, null), false];
+                }
+            }
+            else if (full.includes('^')) {
+                const spl = full.split('^');
+                if (spl.length !== 2)
+                    return utils_1.serr(`invalid enum literal: ${x}`);
+                const m = +spl[0];
+                if (isNaN(m) || Math.floor(m) !== m || m < 0)
+                    return utils_1.serr(`invalid enum literal: ${x}`);
+                if (spl[1] === '')
+                    return [surface_1.EnumLit(m, null, 1), false];
+                const n = +spl[1];
+                if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                    return utils_1.serr(`invalid enum literal: ${x}`);
+                return [surface_1.EnumLit(m, null, n), false];
+            }
+            else {
+                const n = +full;
+                if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                    return utils_1.serr(`invalid enum literal: ${x}`);
+                return [surface_1.EnumLit(n, null, null), false];
+            }
+        }
         if (/[a-z]/i.test(x[0])) {
             if (x.includes('^')) {
                 const spl = x.split('^');
                 if (spl.length !== 2)
-                    return utils_1.serr(`invalid var ${x}`);
+                    return utils_1.serr(`invalid var: ${x}`);
                 if (spl[1] === '')
                     return [surface_1.Var(spl[0], 1), false];
                 const n = +spl[1];
                 if (isNaN(n) || Math.floor(n) !== n || n < 0)
-                    return utils_1.serr(`invalid var ${x}`);
+                    return utils_1.serr(`invalid var: ${x}`);
                 return [surface_1.Var(spl[0], n), false];
             }
             return [surface_1.Var(x, 0), false];
@@ -824,6 +959,59 @@ const exprs = (ts, br) => {
         return unit;
     if (ts.length === 1)
         return expr(ts[0])[0];
+    if (ts[0].tag === 'Name' && ts[0].name.startsWith('?')) {
+        const prefix = ts[0].name;
+        const full = prefix.slice(1);
+        let num = -1;
+        let lvl = null;
+        if (full.includes('^')) {
+            const spl = full.split('^');
+            if (spl.length !== 2)
+                return utils_1.serr(`invalid enum elim: ${prefix}`);
+            const m = +spl[0];
+            if (isNaN(m) || Math.floor(m) !== m || m < 0)
+                return utils_1.serr(`invalid enum elim: ${prefix}`);
+            if (spl[1] === '') {
+                num = m;
+                lvl = 1;
+            }
+            else {
+                const n = +spl[1];
+                if (isNaN(n) || Math.floor(n) !== n || n < 0)
+                    return utils_1.serr(`invalid enum elim: ${prefix}`);
+                num = m;
+                lvl = n;
+            }
+        }
+        else {
+            num = +full;
+        }
+        if (isNaN(num) || Math.floor(num) !== num || num < 0)
+            return utils_1.serr(`invalid enum elim: ${prefix}`);
+        if (!ts[1])
+            return utils_1.serr(`enum elim is missing scrut: ${prefix}`);
+        let scrut;
+        let motive = null;
+        const [e1, impl] = expr(ts[1]);
+        if (impl) {
+            motive = e1;
+            if (!ts[2])
+                return utils_1.serr(`enum elim is missing scrut: ${prefix}`);
+            const [e2, impl] = expr(ts[2]);
+            if (impl)
+                return utils_1.serr(`enum elim scrutinee cannot be implicit: ${prefix}`);
+            scrut = e2;
+        }
+        else
+            scrut = e1;
+        const cases = ts.slice(motive === null ? 2 : 3).map(x => {
+            const [e, impl] = expr(x);
+            if (impl)
+                return utils_1.serr(`enum elim case cannot be implicit: ${prefix}`);
+            return e;
+        });
+        return surface_1.ElimEnum(num, lvl, motive, scrut, cases);
+    }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
         let name = 'ERROR';
@@ -1206,7 +1394,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":2,"./elaboration":3,"./globals":4,"./local":5,"./parser":8,"./surface":10,"./typecheck":11,"./utils/List":14,"./utils/utils":15,"./values":16}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.Meta = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Type = exports.Var = void 0;
+exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenPi = exports.Hole = exports.Meta = exports.EnumLit = exports.ElimEnum = exports.Enum = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Type = exports.Var = void 0;
 const names_1 = require("./names");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
@@ -1223,6 +1411,12 @@ const Abs = (erased, name, type, body) => ({ tag: 'Abs', erased, name, type, bod
 exports.Abs = Abs;
 const App = (fn, erased, arg) => ({ tag: 'App', fn, erased, arg });
 exports.App = App;
+const Enum = (num, lift) => ({ tag: 'Enum', num, lift });
+exports.Enum = Enum;
+const ElimEnum = (num, lift, motive, scrut, cases) => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
+exports.ElimEnum = ElimEnum;
+const EnumLit = (val, num, lift) => ({ tag: 'EnumLit', val, num, lift });
+exports.EnumLit = EnumLit;
 const Meta = (id) => ({ tag: 'Meta', id });
 exports.Meta = Meta;
 const Hole = (name) => ({ tag: 'Hole', name });
@@ -1258,7 +1452,7 @@ const flattenApp = (t) => {
 };
 exports.flattenApp = flattenApp;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
-const isSimple = (t) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type';
+const isSimple = (t) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type' || t.tag === 'Enum' || t.tag === 'EnumLit' || t.tag === 'Hole';
 const showS = (t) => showP(!isSimple(t), t);
 const show = (t) => {
     if (t.tag === 'Var')
@@ -1269,6 +1463,12 @@ const show = (t) => {
         return `?${t.id}`;
     if (t.tag === 'Hole')
         return `_${t.name || ''}`;
+    if (t.tag === 'Enum')
+        return `#${t.num}${t.lift === null ? '' : t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
+    if (t.tag === 'ElimEnum')
+        return `?${t.num}${t.lift === null ? '' : t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}${t.motive ? ` {${exports.show(t.motive)}}` : ''} ${showS(t.scrut)}${t.cases.length > 0 ? ' ' : ''}${t.cases.map(showS).join(' ')}`;
+    if (t.tag === 'EnumLit')
+        return `@${t.val}${t.num === null ? '' : `/${t.num}`}${t.lift === null ? '' : t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
     if (t.tag === 'Pi') {
         const [params, ret] = exports.flattenPi(t);
         return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${exports.show(t)}${e ? '}' : ')'}`).join(' -> ')} -> ${exports.show(ret)}`;
@@ -1291,6 +1491,12 @@ const toSurface = (t, ns = List_1.nil) => {
         return exports.Var(t.name, t.lift);
     if (t.tag === 'Type')
         return exports.Type(t.index);
+    if (t.tag === 'Enum')
+        return exports.Enum(t.num, t.lift);
+    if (t.tag === 'ElimEnum')
+        return exports.ElimEnum(t.num, t.lift, exports.toSurface(t.motive, ns), exports.toSurface(t.scrut, ns), t.cases.map(x => exports.toSurface(x, ns)));
+    if (t.tag === 'EnumLit')
+        return exports.EnumLit(t.val, t.num, t.lift);
     if (t.tag === 'Meta' || t.tag === 'InsertedMeta')
         return exports.Meta(t.id);
     if (t.tag === 'Var')
@@ -1411,6 +1617,30 @@ const synth = (local, tm) => {
         const rty = synth(local.define(tm.erased, tm.name, ty, v), tm.body);
         return rty;
     }
+    if (tm.tag === 'Enum')
+        return values_1.VType(tm.lift);
+    if (tm.tag === 'EnumLit') {
+        if (tm.val >= tm.num)
+            return utils_1.terr(`invalid enum literal: ${core_1.show(tm)}`);
+        return V.VEnum(tm.num, tm.lift);
+    }
+    if (tm.tag === 'ElimEnum') {
+        if (tm.cases.length !== tm.num)
+            return utils_1.terr(`cases amount mismatch, expected ${tm.num} but got ${tm.cases.length}: ${core_1.show(tm)}`);
+        /*
+        P : #n^l -> *l
+        x : #n^l
+        ci : P (@i/n^l)
+        ----------------------
+        ?n^l P x c1 ... cn : P x
+        */
+        check(local.inType(), tm.motive, V.VPi(false, '_', V.VEnum(tm.num, tm.lift), _ => values_1.VType(tm.lift)));
+        const motive = values_1.evaluate(tm.motive, local.vs);
+        check(local, tm.scrut, V.VEnum(tm.num, tm.lift));
+        const scrut = values_1.evaluate(tm.scrut, local.vs);
+        tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num, tm.lift))));
+        return V.vapp(motive, false, scrut);
+    }
     if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta')
         return utils_1.impossible(`${tm.tag} in typecheck`);
     return tm;
@@ -1448,6 +1678,8 @@ const insert = (map, key, value) => ({ ...map, [key]: value });
 const PRen = (dom, cod, ren) => ({ dom, cod, ren });
 const lift = (pren) => PRen(pren.dom + 1, pren.cod + 1, insert(pren.ren, pren.cod, pren.dom));
 const invertSpine = (sp) => sp.foldr((app, [dom, ren]) => {
+    if (app.tag !== 'EApp')
+        return utils_1.terr(`not a variable in the spine: ${app.tag}`);
     const v = values_1.force(app.arg);
     if (!values_1.isVVar(v))
         return utils_1.terr(`not a variable in the spine`);
@@ -1460,7 +1692,14 @@ const invert = (gamma, sp) => {
     const [dom, ren] = invertSpine(sp);
     return PRen(dom, gamma, ren);
 };
-const renameSpine = (id, pren, t, sp) => sp.foldr((app, fn) => core_1.App(fn, app.erased, rename(id, pren, app.arg)), t);
+const renameElim = (id, pren, t, e) => {
+    if (e.tag === 'EApp')
+        return core_1.App(t, e.erased, rename(id, pren, e.arg));
+    if (e.tag === 'EElimEnum')
+        return core_1.ElimEnum(e.num, e.lift, rename(id, pren, e.motive), t, e.cases.map(x => rename(id, pren, x)));
+    return e;
+};
+const renameSpine = (id, pren, t, sp) => sp.foldr((app, fn) => renameElim(id, pren, fn, app), t);
 const rename = (id, pren, v_) => {
     const v = values_1.force(v_, false);
     if (v.tag === 'VFlex') {
@@ -1482,11 +1721,15 @@ const rename = (id, pren, v_) => {
         return core_1.Type(v.index);
     if (v.tag === 'VGlobal')
         return renameSpine(id, pren, core_1.Global(v.name, v.lift), v.spine); // TODO: should global be forced?
+    if (v.tag === 'VEnum')
+        return C.Enum(v.num, v.lift);
+    if (v.tag === 'VEnumLit')
+        return C.EnumLit(v.val, v.num, v.lift);
     return v;
 };
 const lams = (is, t, n = 0) => is.case(() => t, (i, rest) => core_1.Abs(i, `x${n}`, core_1.Type(0), lams(rest, t, n + 1))); // TODO: lambda type
 const solve = (gamma, m, sp, rhs_) => {
-    config_1.log(() => `solve ?${m}${sp.reverse().toString(v => `${v.erased ? '{' : ''}${values_1.show(v.arg, gamma)}${v.erased ? '}' : ''}`)} := ${values_1.show(rhs_, gamma)}`);
+    config_1.log(() => `solve ?${m}${sp.reverse().toString(v => v.tag === 'EApp' ? `${v.erased ? '{' : ''}${values_1.show(v.arg, gamma)}${v.erased ? '}' : ''}` : v.tag)} := ${values_1.show(rhs_, gamma)}`);
     const pren = invert(gamma, sp);
     const rhs = rename(m, pren, rhs_);
     const solutionq = lams(sp.reverse().map(app => app.erased), rhs);
@@ -1494,7 +1737,17 @@ const solve = (gamma, m, sp, rhs_) => {
     const solution = values_1.evaluate(solutionq, List_1.nil);
     metas_1.setMeta(m, solution);
 };
-const unifySpines = (l, a, b) => a.zipWithR_(b, (x, y) => exports.unify(l, x.arg, y.arg));
+const unifyElim = (l, a, b) => {
+    if (a.tag === 'EApp' && b.tag === 'EApp')
+        return exports.unify(l, a.arg, b.arg);
+    if (a.tag === 'EElimEnum' && b.tag === 'EElimEnum' && a.num === b.num && a.cases.length === b.cases.length) {
+        exports.unify(l, a.motive, b.motive);
+        a.cases.forEach((ca, i) => exports.unify(l, ca, b.cases[i]));
+        return;
+    }
+    return utils_1.terr(`cannot unify elims`);
+};
+const unifySpines = (l, a, b) => a.zipWithR_(b, (x, y) => unifyElim(l, x, y));
 const unify = (l, a_, b_) => {
     const a = values_1.force(a_, false);
     const b = values_1.force(b_, false);
@@ -1502,6 +1755,14 @@ const unify = (l, a_, b_) => {
     if (a === b)
         return;
     if (a.tag === 'VType' && b.tag === 'VType' && a.index === b.index)
+        return;
+    if (a.tag === 'VEnum' && b.tag === 'VEnum' && a.num === b.num)
+        return;
+    if (a.tag === 'VEnumLit' && b.tag === 'VEnumLit' && a.val === b.val && a.num === b.num)
+        return;
+    if (a.tag === 'VEnumLit' && a.num === 1)
+        return;
+    if (b.tag === 'VEnumLit' && b.num === 1)
         return;
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
         const v = values_1.VVar(l);
@@ -1521,9 +1782,9 @@ const unify = (l, a_, b_) => {
         return exports.unify(l + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
     if (a.tag === 'VRigid' && b.tag === 'VRigid' && a.head === b.head)
-        return unifySpines(l, a.spine, b.spine);
+        return utils_1.tryT(() => unifySpines(l, a.spine, b.spine), e => utils_1.terr(`failed to unify: ${values_1.show(a, l)} ~ ${values_1.show(b, l)}: ${e}`));
     if (a.tag === 'VFlex' && b.tag === 'VFlex' && a.head === b.head)
-        return unifySpines(l, a.spine, b.spine);
+        return utils_1.tryT(() => unifySpines(l, a.spine, b.spine), e => utils_1.terr(`failed to unify: ${values_1.show(a, l)} ~ ${values_1.show(b, l)}: ${e}`));
     if (a.tag === 'VFlex')
         return solve(l, a.head, a.spine, b);
     if (b.tag === 'VFlex')
@@ -1893,7 +2154,7 @@ exports.removeAll = removeAll;
 },{"fs":18}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.isVVar = exports.VMeta = exports.VVar = exports.vinst = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VType = exports.EApp = void 0;
+exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.velimenum = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.isVVar = exports.VMeta = exports.VVar = exports.vinst = exports.VEnumLit = exports.VEnum = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VType = exports.EElimEnum = exports.EApp = void 0;
 const core_1 = require("./core");
 const metas_1 = require("./metas");
 const Lazy_1 = require("./utils/Lazy");
@@ -1902,6 +2163,8 @@ const utils_1 = require("./utils/utils");
 const globals_1 = require("./globals");
 const EApp = (erased, arg) => ({ tag: 'EApp', erased, arg });
 exports.EApp = EApp;
+const EElimEnum = (num, lift, motive, cases) => ({ tag: 'EElimEnum', num, lift, motive, cases });
+exports.EElimEnum = EElimEnum;
 const VType = (index) => ({ tag: 'VType', index });
 exports.VType = VType;
 const VRigid = (head, spine) => ({ tag: 'VRigid', head, spine });
@@ -1915,6 +2178,10 @@ const VAbs = (erased, name, type, clos) => ({ tag: 'VAbs', erased, name, type, c
 exports.VAbs = VAbs;
 const VPi = (erased, name, type, clos) => ({ tag: 'VPi', erased, name, type, clos });
 exports.VPi = VPi;
+const VEnum = (num, lift) => ({ tag: 'VEnum', num, lift });
+exports.VEnum = VEnum;
+const VEnumLit = (val, num, lift) => ({ tag: 'VEnumLit', val, num, lift });
+exports.VEnumLit = VEnumLit;
 const vinst = (val, arg) => val.clos(arg);
 exports.vinst = vinst;
 const VVar = (level, spine = List_1.nil) => exports.VRigid(level, spine);
@@ -1936,14 +2203,16 @@ exports.force = force;
 const velim = (e, t) => {
     if (e.tag === 'EApp')
         return exports.vapp(t, e.erased, e.arg);
-    return e.tag;
+    if (e.tag === 'EElimEnum')
+        return exports.velimenum(e.num, e.lift, e.motive, t, e.cases);
+    return e;
 };
 exports.velim = velim;
 const velimSpine = (t, sp) => sp.foldr(exports.velim, t);
 exports.velimSpine = velimSpine;
 const vapp = (left, erased, right) => {
     if (left.tag === 'VAbs')
-        return exports.vinst(left, right);
+        return exports.vinst(left, right); // TODO: erasure check?
     if (left.tag === 'VRigid')
         return exports.VRigid(left.head, List_1.cons(exports.EApp(erased, right), left.spine));
     if (left.tag === 'VFlex')
@@ -1953,6 +2222,18 @@ const vapp = (left, erased, right) => {
     return utils_1.impossible(`vapp: ${left.tag}`);
 };
 exports.vapp = vapp;
+const velimenum = (num, lift, motive, scrut, cases) => {
+    if (scrut.tag === 'VEnumLit')
+        return cases[scrut.val];
+    if (scrut.tag === 'VRigid')
+        return exports.VRigid(scrut.head, List_1.cons(exports.EElimEnum(num, lift, motive, cases), scrut.spine));
+    if (scrut.tag === 'VFlex')
+        return exports.VFlex(scrut.head, List_1.cons(exports.EElimEnum(num, lift, motive, cases), scrut.spine));
+    if (scrut.tag === 'VGlobal')
+        return exports.VGlobal(scrut.name, scrut.lift, List_1.cons(exports.EElimEnum(num, lift, motive, cases), scrut.spine), scrut.val.map(v => exports.velimenum(num, lift, motive, v, cases)));
+    return utils_1.impossible(`velimenum: ${scrut.tag}`);
+};
+exports.velimenum = velimenum;
 const velimBD = (env, v, s) => {
     if (env.isNil() && s.isNil())
         return v;
@@ -1964,6 +2245,12 @@ exports.velimBD = velimBD;
 const evaluate = (t, vs) => {
     if (t.tag === 'Type')
         return exports.VType(t.index);
+    if (t.tag === 'Enum')
+        return exports.VEnum(t.num, t.lift);
+    if (t.tag === 'EnumLit')
+        return exports.VEnumLit(t.val, t.num, t.lift);
+    if (t.tag === 'ElimEnum')
+        return exports.velimenum(t.num, t.lift, exports.evaluate(t.motive, vs), exports.evaluate(t.scrut, vs), t.cases.map(x => exports.evaluate(x, vs)));
     if (t.tag === 'Abs')
         return exports.VAbs(t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, List_1.cons(v, vs)));
     if (t.tag === 'Pi')
@@ -1991,12 +2278,18 @@ exports.evaluate = evaluate;
 const quoteElim = (t, e, k, full) => {
     if (e.tag === 'EApp')
         return core_1.App(t, e.erased, exports.quote(e.arg, k, full));
-    return e.tag;
+    if (e.tag === 'EElimEnum')
+        return core_1.ElimEnum(e.num, e.lift, exports.quote(e.motive, k, full), t, e.cases.map(x => exports.quote(x, k, full)));
+    return e;
 };
 const quote = (v_, k, full = false) => {
     const v = exports.force(v_, false);
     if (v.tag === 'VType')
         return core_1.Type(v.index);
+    if (v.tag === 'VEnum')
+        return core_1.Enum(v.num, v.lift);
+    if (v.tag === 'VEnumLit')
+        return core_1.EnumLit(v.val, v.num, v.lift);
     if (v.tag === 'VRigid')
         return v.spine.foldr((x, y) => quoteElim(y, x, k, full), core_1.Var(k - (v.head + 1)));
     if (v.tag === 'VFlex')
@@ -2036,13 +2329,15 @@ const vzonkBD = (env, v, s) => {
     if (env.isNil() && s.isNil())
         return v;
     if (env.isCons() && s.isCons())
-        return s.head ? exports.vapp(exports.velimBD(env.tail, v, s.tail), false, env.head) : exports.velimBD(env.tail, v, s.tail); // TODO: erasure?
+        return s.head ? exports.vapp(vzonkBD(env.tail, v, s.tail), false, env.head) : vzonkBD(env.tail, v, s.tail); // TODO: erasure?
     return utils_1.impossible('vzonkBD');
 };
 const zonk = (tm, vs = List_1.nil, k = 0, full = false) => {
     if (tm.tag === 'Meta') {
         const s = metas_1.getMeta(tm.id);
-        return s.tag === 'Solved' ? exports.quote(s.solution, k, full) : tm;
+        if (s.tag === 'Unsolved')
+            return tm;
+        return exports.quote(s.solution, k, full);
     }
     if (tm.tag === 'InsertedMeta') {
         const s = metas_1.getMeta(tm.id);
@@ -2062,6 +2357,8 @@ const zonk = (tm, vs = List_1.nil, k = 0, full = false) => {
             core_1.App(spine[1], tm.erased, exports.zonk(tm.arg, vs, k, full)) :
             exports.quote(exports.vapp(spine[1], tm.erased, exports.evaluate(tm.arg, vs)), k, full);
     }
+    if (tm.tag === 'ElimEnum')
+        return core_1.ElimEnum(tm.num, tm.lift, exports.zonk(tm.motive, vs, k, full), exports.zonk(tm.scrut, vs, k, full), tm.cases.map(x => exports.zonk(x, vs, k, full)));
     return tm;
 };
 exports.zonk = zonk;

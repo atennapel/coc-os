@@ -76,7 +76,28 @@ const synth = (local: Local, tm: Core): Val => {
     const rty = synth(local.define(tm.erased, tm.name, ty, v), tm.body);
     return rty;
   }
-  if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta') return impossible(`${tm.tag} in typecheck`)
+  if (tm.tag === 'Enum') return VType(tm.lift);
+  if (tm.tag === 'EnumLit') {
+    if (tm.val >= tm.num) return terr(`invalid enum literal: ${show(tm)}`);
+    return V.VEnum(tm.num, tm.lift);
+  }
+  if (tm.tag === 'ElimEnum') {
+    if (tm.cases.length !== tm.num) return terr(`cases amount mismatch, expected ${tm.num} but got ${tm.cases.length}: ${show(tm)}`);
+    /*
+    P : #n^l -> *l
+    x : #n^l
+    ci : P (@i/n^l)
+    ----------------------
+    ?n^l P x c1 ... cn : P x
+    */
+    check(local.inType(), tm.motive, V.VPi(false, '_', V.VEnum(tm.num, tm.lift), _ => VType(tm.lift)));
+    const motive = evaluate(tm.motive, local.vs);
+    check(local, tm.scrut, V.VEnum(tm.num, tm.lift));
+    const scrut = evaluate(tm.scrut, local.vs);
+    tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num, tm.lift))));
+    return V.vapp(motive, false, scrut);
+  }
+  if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta') return impossible(`${tm.tag} in typecheck`);
   return tm;
 };
 

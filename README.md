@@ -1,6 +1,6 @@
 Try it out at https://atennapel.github.io/coc-os
 
-Elaboration for a dependently typed language with simple universe.
+Elaboration for a dependently typed language with simple universes.
 
 Run CLI REPL:
 ```
@@ -16,5 +16,8 @@ yarn start filename
 
 ```
 TODO:
+- sigmas
+- equality type
+- fixpoints
 - universe elaboration
 ```
