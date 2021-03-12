@@ -8,7 +8,7 @@ import { quote, Val } from './values';
 export type Surface =
   Var | Type | Let |
   Pi | Abs | App |
-  Sigma |
+  Sigma | Pair |
   Enum | EnumLit | ElimEnum |
   Meta | Hole;
 
@@ -26,6 +26,8 @@ export interface App { readonly tag: 'App'; readonly fn: Surface; readonly erase
 export const App = (fn: Surface, erased: boolean, arg: Surface): App => ({ tag: 'App', fn, erased, arg });
 export interface Sigma { readonly tag: 'Sigma'; readonly erased: boolean; readonly name: Name; readonly type: Surface; readonly body: Surface }
 export const Sigma = (erased: boolean, name: Name, type: Surface, body: Surface): Sigma => ({ tag: 'Sigma', erased, name, type, body });
+export interface Pair { readonly tag: 'Pair'; readonly erased: boolean; readonly fst: Surface; readonly snd: Surface }
+export const Pair = (erased: boolean, fst: Surface, snd: Surface): Pair => ({ tag: 'Pair', erased, fst, snd });
 export interface Enum { readonly tag: 'Enum'; readonly num: Ix; readonly lift: Ix | null }
 export const Enum = (num: Ix, lift: Ix | null): Enum => ({ tag: 'Enum', num, lift });
 export interface ElimEnum { readonly tag: 'ElimEnum'; readonly num: Ix; readonly lift: Ix | null; readonly motive: Surface | null; readonly scrut: Surface; readonly cases: Surface[] }
@@ -73,6 +75,15 @@ export const flattenApp = (t: Surface): [Surface, [boolean, Surface][]] => {
   }
   return [c, args.reverse()];
 };
+export const flattenPair = (t: Surface): [[boolean, Surface][], Surface] => {
+  const ps: [boolean, Surface][] = [];
+  let c = t;
+  while (c.tag === 'Pair') {
+    ps.push([c.erased, c.fst]);
+    c = c.snd;
+  }
+  return [ps, c];
+};
 
 const showP = (b: boolean, t: Surface) => b ? `(${show(t)})` : show(t);
 const isSimple = (t: Surface) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type' || t.tag === 'Enum' || t.tag === 'EnumLit' || t.tag === 'Hole';
@@ -101,6 +112,10 @@ export const show = (t: Surface): string => {
     const [params, ret] = flattenSigma(t);
     return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Sigma' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${show(t)}${e ? '}' : ')'}`).join(' ** ')} ** ${show(ret)}`;
   }
+  if (t.tag === 'Pair') {
+    const [ps, ret] = flattenPair(t);
+    return `(${ps.map(([e, x]) => e ? `{${show(x)}}` : `${show(x)}`).join(', ')}, ${show(ret)})`;
+  }
   if (t.tag === 'Let')
     return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''}${!t.type ? '' : ` : ${showP(t.type.tag === 'Let', t.type)}`} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   return t;
@@ -127,6 +142,7 @@ export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
     const x = chooseName(t.name, ns);
     return Sigma(t.erased, x, toSurface(t.type, ns), toSurface(t.body, cons(x, ns)));
   }
+  if (t.tag === 'Pair') return Pair(t.erased, toSurface(t.fst, ns), toSurface(t.snd, ns));
   if (t.tag === 'Let') {
     const x = chooseName(t.name, ns);
     return Let(t.erased, x, toSurface(t.type, ns), toSurface(t.val, ns), toSurface(t.body, cons(x, ns)));

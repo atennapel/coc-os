@@ -19,7 +19,6 @@ yarn start filename
 
 ```
 TODO:
-- pairs
 - projection
 - equality type
 - fixpoints

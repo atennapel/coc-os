@@ -1,4 +1,4 @@
-import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, liftType, Pi, Sigma, Type, Var } from './core';
+import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, liftType, Pair, Pi, Sigma, Type, Var } from './core';
 import { indexEnvT, Local } from './local';
 import { allMetasSolved, freshMeta, resetMetas } from './metas';
 import { show, Surface } from './surface';
@@ -67,6 +67,13 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
     const scrut = check(local, tm.scrut, VEnum(tm.num, lift));
     const cases = tm.cases.map((c, i) => check(local, c, vapp(vmotive, false, VEnumLit(i, tm.num, lift))));
     return ElimEnum(tm.num, lift, motive, scrut, cases);
+  }
+  if (tm.tag === 'Pair') {
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in pair (${show(tm)}): ${showV(local, ty)}`);
+    if (tm.erased !== fty.erased) return terr(`erasure mismatch in pair (${show(tm)}): ${showV(local, ty)}`);
+    const fst = check(tm.erased ? local.inType() : local, tm.fst, fty.type);
+    const snd = check(local, tm.snd, vinst(fty, evaluate(fst, local.vs)));
+    return Pair(tm.erased, fst, snd, quote(ty, local.level));
   }
   if (tm.tag === 'Let') {
     let vtype: Core;
@@ -191,6 +198,12 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
       holes[tm.name] = [evaluate(t, local.vs), vt, local];
     }
     return [t, vt];
+  }
+  if (tm.tag === 'Pair') {
+    const [fst, fstty] = synth(tm.erased ? local.inType() : local, tm.fst);
+    const [snd, sndty] = synth(local, tm.snd);
+    const ty = Sigma(false, '_', quote(fstty, local.level), quote(sndty, local.level + 1));
+    return [Pair(tm.erased, fst, snd, ty), evaluate(ty, local.vs)];
   }
   if (tm.tag === 'Enum') return [Enum(tm.num, tm.lift || 0), VType(tm.lift || 0)];
   if (tm.tag === 'EnumLit' && tm.num !== null) {

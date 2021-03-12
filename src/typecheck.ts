@@ -61,6 +61,16 @@ const synth = (local: Local, tm: Core): Val => {
     const pi = evaluate(qpi, local.vs);
     return pi;
   }
+  if (tm.tag === 'Pair') {
+    synthType(local.inType(), tm.type);
+    const ty = evaluate(tm.type, local.vs);
+    const fty = force(ty);
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in pair (${show(tm)}): ${showV(local, ty)}`);
+    if (tm.erased !== fty.erased) return terr(`erasure mismatch in pair (${show(tm)}): ${showV(local, ty)}`);
+    check(tm.erased ? local.inType() : local, tm.fst, fty.type);
+    check(local, tm.snd, vinst(fty, evaluate(tm.fst, local.vs)));
+    return ty;
+  }
   if (tm.tag === 'Pi') {
     if (!local.erased) return terr(`pi type in non-type context: ${show(tm)}`);
     const s1 = synthType(local.inType(), tm.type);

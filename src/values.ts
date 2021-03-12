@@ -1,4 +1,4 @@
-import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum, Sigma } from './core';
+import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum, Sigma, Pair } from './core';
 import { getMeta, MetaVar } from './metas';
 import { Ix, Lvl, Name } from './names';
 import { Lazy } from './utils/Lazy';
@@ -17,7 +17,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi | VSigma | VEnum | VEnumLit;
+export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi | VSigma | VPair | VEnum | VEnumLit;
 
 export interface VType { readonly tag: 'VType'; readonly index: Ix }
 export const VType = (index: Ix): VType => ({ tag: 'VType', index });
@@ -33,6 +33,8 @@ export interface VPi { readonly tag: 'VPi'; readonly erased: boolean; readonly n
 export const VPi = (erased: boolean, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', erased, name, type, clos });
 export interface VSigma { readonly tag: 'VSigma'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
 export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', erased, name, type, clos });
+export interface VPair { readonly tag: 'VPair'; readonly erased: boolean; readonly fst: Val; readonly snd: Val; readonly type: Val }
+export const VPair = (erased: boolean, fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', erased, fst, snd, type });
 export interface VEnum { readonly tag: 'VEnum'; readonly num: Ix; readonly lift: Ix }
 export const VEnum = (num: Ix, lift: Ix): VEnum => ({ tag: 'VEnum', num, lift });
 export interface VEnumLit { readonly tag: 'VEnumLit'; readonly val: Ix; readonly num: Ix; readonly lift: Ix }
@@ -98,6 +100,7 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
   if (t.tag === 'Meta') return VMeta(t.id);
   if (t.tag === 'InsertedMeta') return velimBD(vs, VMeta(t.id), t.spine);
   if (t.tag === 'App') return vapp(evaluate(t.fn, vs), t.erased, evaluate(t.arg, vs));
+  if (t.tag === 'Pair') return VPair(t.erased, evaluate(t.fst, vs), evaluate(t.snd, vs), evaluate(t.type, vs));
   if (t.tag === 'Let') return evaluate(t.body, cons(evaluate(t.val, vs), vs));
   if (t.tag === 'Global') {
     const entry = getGlobal(t.name);
@@ -138,6 +141,7 @@ export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
   if (v.tag === 'VAbs') return Abs(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VPi') return Pi(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VSigma') return Sigma(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
+  if (v.tag === 'VPair') return Pair(v.erased, quote(v.fst, k, full), quote(v.snd, k, full), quote(v.type, k, full));
   return v;
 };
 
@@ -190,6 +194,7 @@ export const zonk = (tm: Core, vs: EnvV = nil, k: Lvl = 0, full: boolean = false
       App(spine[1], tm.erased, zonk(tm.arg, vs, k, full)) :
       quote(vapp(spine[1], tm.erased, evaluate(tm.arg, vs)), k, full);
   }
+  if (tm.tag === 'Pair') return Pair(tm.erased, zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full), zonk(tm.type, vs, k, full));
   if (tm.tag === 'ElimEnum')
     return ElimEnum(tm.num, tm.lift, zonk(tm.motive, vs, k, full), zonk(tm.scrut, vs, k, full), tm.cases.map(x => zonk(x, vs, k, full)));
   return tm;

@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Core, Meta, Pi, Type, Var, Global, ElimEnum, Sigma } from './core';
+import { Abs, App, Core, Meta, Pi, Type, Var, Global, ElimEnum, Sigma, Pair, Enum, EnumLit } from './core';
 import { MetaVar, setMeta } from './metas';
 import { Lvl } from './names';
 import { List, nil } from './utils/List';
@@ -66,8 +66,9 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
     return Sigma(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VType') return Type(v.index);
   if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name, v.lift), v.spine); // TODO: should global be forced?
-  if (v.tag === 'VEnum') return C.Enum(v.num, v.lift);
-  if (v.tag === 'VEnumLit') return C.EnumLit(v.val, v.num, v.lift);
+  if (v.tag === 'VEnum') return Enum(v.num, v.lift);
+  if (v.tag === 'VEnumLit') return EnumLit(v.val, v.num, v.lift);
+  if (v.tag === 'VPair') return Pair(v.erased, rename(id, pren, v.fst), rename(id, pren, v.snd), rename(id, pren, v.type));
   return v;
 };
 
@@ -127,6 +128,12 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
     const v = VVar(l);
     return unify(l + 1, vinst(a, v), vinst(b, v));
   }
+  if (a.tag === 'VPair' && b.tag === 'VPair' && a.erased === b.erased) {
+    unify(l, a.fst, b.fst);
+    unify(l, a.snd, b.snd);
+    return;
+  }
+  // TODO: pair eta rule
   if (a.tag === 'VRigid' && b.tag === 'VRigid' && a.head === b.head)
     return tryT(() => unifySpines(l, a.spine, b.spine), e => terr(`failed to unify: ${show(a, l)} ~ ${show(b, l)}: ${e}`));
   if (a.tag === 'VFlex' && b.tag === 'VFlex' && a.head === b.head)

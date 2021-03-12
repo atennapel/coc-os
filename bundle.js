@@ -20,7 +20,7 @@ exports.log = log;
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liftType = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.ElimEnum = exports.EnumLit = exports.Enum = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
+exports.liftType = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenPair = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.ElimEnum = exports.EnumLit = exports.Enum = exports.Pair = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
 const utils_1 = require("./utils/utils");
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
@@ -38,6 +38,8 @@ const App = (fn, erased, arg) => ({ tag: 'App', fn, erased, arg });
 exports.App = App;
 const Sigma = (erased, name, type, body) => ({ tag: 'Sigma', erased, name, type, body });
 exports.Sigma = Sigma;
+const Pair = (erased, fst, snd, type) => ({ tag: 'Pair', erased, fst, snd, type });
+exports.Pair = Pair;
 const Enum = (num, lift) => ({ tag: 'Enum', num, lift });
 exports.Enum = Enum;
 const EnumLit = (val, num, lift) => ({ tag: 'EnumLit', val, num, lift });
@@ -88,6 +90,16 @@ const flattenApp = (t) => {
     return [c, args.reverse()];
 };
 exports.flattenApp = flattenApp;
+const flattenPair = (t) => {
+    const ps = [];
+    let c = t;
+    while (c.tag === 'Pair') {
+        ps.push([c.erased, c.fst]);
+        c = c.snd;
+    }
+    return [ps, c];
+};
+exports.flattenPair = flattenPair;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
 const isSimple = (t) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta' || t.tag === 'Enum' || t.tag === 'EnumLit';
 const showS = (t) => showP(!isSimple(t), t);
@@ -124,6 +136,10 @@ const show = (t) => {
         const [params, ret] = exports.flattenSigma(t);
         return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Sigma' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${exports.show(t)}${e ? '}' : ')'}`).join(' ** ')} ** ${exports.show(ret)}`;
     }
+    if (t.tag === 'Pair') {
+        const [ps, ret] = exports.flattenPair(t);
+        return `(${ps.map(([e, x]) => e ? `{${exports.show(x)}}` : `${exports.show(x)}`).join(', ')}, ${exports.show(ret)}) : ${exports.show(t.type)}`;
+    }
     if (t.tag === 'Let')
         return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
     return t;
@@ -142,6 +158,8 @@ const shift = (d, c, t) => {
         return exports.Pi(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Sigma')
         return exports.Sigma(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+    if (t.tag === 'Pair')
+        return exports.Pair(t.erased, exports.shift(d, c, t.fst), exports.shift(d, c, t.snd), exports.shift(d, c, t.type));
     if (t.tag === 'ElimEnum')
         return exports.ElimEnum(t.num, t.lift, exports.shift(d, c, t.motive), exports.shift(d, c, t.scrut), t.cases.map(x => exports.shift(d, c, x)));
     return t;
@@ -160,6 +178,8 @@ const substVar = (j, s, t) => {
         return exports.Pi(t.erased, t.name, exports.substVar(j, s, t.type), exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
     if (t.tag === 'Sigma')
         return exports.Sigma(t.erased, t.name, exports.substVar(j, s, t.type), exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
+    if (t.tag === 'Pair')
+        return exports.Pair(t.erased, exports.substVar(j, s, t.fst), exports.substVar(j, s, t.snd), exports.substVar(j, s, t.type));
     if (t.tag === 'ElimEnum')
         return exports.ElimEnum(t.num, t.lift, exports.substVar(j, s, t.motive), exports.substVar(j, s, t.scrut), t.cases.map(x => exports.substVar(j, s, x)));
     return t;
@@ -188,6 +208,8 @@ const liftType = (l, t) => {
         return exports.ElimEnum(t.num, t.lift + l, exports.liftType(l, t.motive), exports.liftType(l, t.scrut), t.cases.map(x => exports.liftType(l, x)));
     if (t.tag === 'EnumLit')
         return exports.EnumLit(t.val, t.num, t.lift + l);
+    if (t.tag === 'Pair')
+        return exports.Pair(t.erased, exports.liftType(l, t.fst), exports.liftType(l, t.snd), exports.liftType(l, t.type));
     if (t.tag === 'Meta')
         return utils_1.impossible(`meta in liftType: ${exports.show(t)}`);
     if (t.tag === 'InsertedMeta')
@@ -264,6 +286,15 @@ const check = (local, tm, ty) => {
         const scrut = check(local, tm.scrut, values_1.VEnum(tm.num, lift));
         const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num, lift))));
         return core_1.ElimEnum(tm.num, lift, motive, scrut, cases);
+    }
+    if (tm.tag === 'Pair') {
+        if (fty.tag !== 'VSigma')
+            return utils_1.terr(`not a sigma type in pair (${surface_1.show(tm)}): ${showV(local, ty)}`);
+        if (tm.erased !== fty.erased)
+            return utils_1.terr(`erasure mismatch in pair (${surface_1.show(tm)}): ${showV(local, ty)}`);
+        const fst = check(tm.erased ? local.inType() : local, tm.fst, fty.type);
+        const snd = check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(fst, local.vs)));
+        return core_1.Pair(tm.erased, fst, snd, values_1.quote(ty, local.level));
     }
     if (tm.tag === 'Let') {
         let vtype;
@@ -399,6 +430,12 @@ const synth = (local, tm) => {
             holes[tm.name] = [values_1.evaluate(t, local.vs), vt, local];
         }
         return [t, vt];
+    }
+    if (tm.tag === 'Pair') {
+        const [fst, fstty] = synth(tm.erased ? local.inType() : local, tm.fst);
+        const [snd, sndty] = synth(local, tm.snd);
+        const ty = core_1.Sigma(false, '_', values_1.quote(fstty, local.level), values_1.quote(sndty, local.level + 1));
+        return [core_1.Pair(tm.erased, fst, snd, ty), values_1.evaluate(ty, local.vs)];
     }
     if (tm.tag === 'Enum')
         return [core_1.Enum(tm.num, tm.lift || 0), values_1.VType(tm.lift || 0)];
@@ -752,8 +789,6 @@ const tokenize = (sc) => {
 };
 const tunit = surface_1.Var('UnitType', 0);
 const unit = surface_1.Var('Unit', 0);
-const Pair = surface_1.Var('MkPair', 0);
-const pair = (a, b) => surface_1.App(surface_1.App(Pair, false, a), false, b);
 const isName = (t, x) => t.tag === 'Name' && t.name === x;
 const isNames = (t) => t.map(x => {
     if (x.tag !== 'Name')
@@ -1147,12 +1182,15 @@ const exprs = (ts, br) => {
         });
         if (args.length === 0)
             return unit;
-        if (args.length === 1)
-            return args[0][0];
+        if (args.length === 1) {
+            args.push([unit, false]);
+        }
         const last1 = args[args.length - 1];
+        if (last1[1])
+            return utils_1.serr(`second component of pair cannot be erased`);
         const last2 = args[args.length - 2];
-        const lastitem = pair(last2[0], last1[0]);
-        return args.slice(0, -2).reduceRight((x, [y, _p]) => pair(y, x), lastitem);
+        const lastitem = surface_1.Pair(false, last2[0], last1[0]);
+        return args.slice(0, -2).reduceRight((x, [y, p]) => surface_1.Pair(p, y, x), lastitem);
     }
     const js = ts.findIndex(x => isName(x, '**'));
     if (js >= 0) {
@@ -1447,7 +1485,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":2,"./elaboration":3,"./globals":4,"./local":5,"./parser":8,"./surface":10,"./typecheck":11,"./utils/List":14,"./utils/utils":15,"./values":16}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.Hole = exports.Meta = exports.EnumLit = exports.ElimEnum = exports.Enum = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Type = exports.Var = void 0;
+exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.Hole = exports.Meta = exports.EnumLit = exports.ElimEnum = exports.Enum = exports.Pair = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Type = exports.Var = void 0;
 const names_1 = require("./names");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
@@ -1466,6 +1504,8 @@ const App = (fn, erased, arg) => ({ tag: 'App', fn, erased, arg });
 exports.App = App;
 const Sigma = (erased, name, type, body) => ({ tag: 'Sigma', erased, name, type, body });
 exports.Sigma = Sigma;
+const Pair = (erased, fst, snd) => ({ tag: 'Pair', erased, fst, snd });
+exports.Pair = Pair;
 const Enum = (num, lift) => ({ tag: 'Enum', num, lift });
 exports.Enum = Enum;
 const ElimEnum = (num, lift, motive, scrut, cases) => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
@@ -1516,6 +1556,16 @@ const flattenApp = (t) => {
     return [c, args.reverse()];
 };
 exports.flattenApp = flattenApp;
+const flattenPair = (t) => {
+    const ps = [];
+    let c = t;
+    while (c.tag === 'Pair') {
+        ps.push([c.erased, c.fst]);
+        c = c.snd;
+    }
+    return [ps, c];
+};
+exports.flattenPair = flattenPair;
 const showP = (b, t) => b ? `(${exports.show(t)})` : exports.show(t);
 const isSimple = (t) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type' || t.tag === 'Enum' || t.tag === 'EnumLit' || t.tag === 'Hole';
 const showS = (t) => showP(!isSimple(t), t);
@@ -1549,6 +1599,10 @@ const show = (t) => {
     if (t.tag === 'Sigma') {
         const [params, ret] = exports.flattenSigma(t);
         return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Sigma' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${exports.show(t)}${e ? '}' : ')'}`).join(' ** ')} ** ${exports.show(ret)}`;
+    }
+    if (t.tag === 'Pair') {
+        const [ps, ret] = exports.flattenPair(t);
+        return `(${ps.map(([e, x]) => e ? `{${exports.show(x)}}` : `${exports.show(x)}`).join(', ')}, ${exports.show(ret)})`;
     }
     if (t.tag === 'Let')
         return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''}${!t.type ? '' : ` : ${showP(t.type.tag === 'Let', t.type)}`} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
@@ -1584,6 +1638,8 @@ const toSurface = (t, ns = List_1.nil) => {
         const x = names_1.chooseName(t.name, ns);
         return exports.Sigma(t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.body, List_1.cons(x, ns)));
     }
+    if (t.tag === 'Pair')
+        return exports.Pair(t.erased, exports.toSurface(t.fst, ns), exports.toSurface(t.snd, ns));
     if (t.tag === 'Let') {
         const x = names_1.chooseName(t.name, ns);
         return exports.Let(t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.val, ns), exports.toSurface(t.body, List_1.cons(x, ns)));
@@ -1673,6 +1729,18 @@ const synth = (local, tm) => {
         const qpi = core_1.Pi(tm.erased, tm.name, tm.type, values_1.quote(rty, local.level + 1));
         const pi = values_1.evaluate(qpi, local.vs);
         return pi;
+    }
+    if (tm.tag === 'Pair') {
+        synthType(local.inType(), tm.type);
+        const ty = values_1.evaluate(tm.type, local.vs);
+        const fty = values_1.force(ty);
+        if (fty.tag !== 'VSigma')
+            return utils_1.terr(`not a sigma type in pair (${core_1.show(tm)}): ${showV(local, ty)}`);
+        if (tm.erased !== fty.erased)
+            return utils_1.terr(`erasure mismatch in pair (${core_1.show(tm)}): ${showV(local, ty)}`);
+        check(tm.erased ? local.inType() : local, tm.fst, fty.type);
+        check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(tm.fst, local.vs)));
+        return ty;
     }
     if (tm.tag === 'Pi') {
         if (!local.erased)
@@ -1805,9 +1873,11 @@ const rename = (id, pren, v_) => {
     if (v.tag === 'VGlobal')
         return renameSpine(id, pren, core_1.Global(v.name, v.lift), v.spine); // TODO: should global be forced?
     if (v.tag === 'VEnum')
-        return C.Enum(v.num, v.lift);
+        return core_1.Enum(v.num, v.lift);
     if (v.tag === 'VEnumLit')
-        return C.EnumLit(v.val, v.num, v.lift);
+        return core_1.EnumLit(v.val, v.num, v.lift);
+    if (v.tag === 'VPair')
+        return core_1.Pair(v.erased, rename(id, pren, v.fst), rename(id, pren, v.snd), rename(id, pren, v.type));
     return v;
 };
 const lams = (is, t, n = 0) => is.case(() => t, (i, rest) => core_1.Abs(i, `x${n}`, core_1.Type(0), lams(rest, t, n + 1))); // TODO: lambda type
@@ -1869,6 +1939,12 @@ const unify = (l, a_, b_) => {
         const v = values_1.VVar(l);
         return exports.unify(l + 1, values_1.vinst(a, v), values_1.vinst(b, v));
     }
+    if (a.tag === 'VPair' && b.tag === 'VPair' && a.erased === b.erased) {
+        exports.unify(l, a.fst, b.fst);
+        exports.unify(l, a.snd, b.snd);
+        return;
+    }
+    // TODO: pair eta rule
     if (a.tag === 'VRigid' && b.tag === 'VRigid' && a.head === b.head)
         return utils_1.tryT(() => unifySpines(l, a.spine, b.spine), e => utils_1.terr(`failed to unify: ${values_1.show(a, l)} ~ ${values_1.show(b, l)}: ${e}`));
     if (a.tag === 'VFlex' && b.tag === 'VFlex' && a.head === b.head)
@@ -2242,7 +2318,7 @@ exports.removeAll = removeAll;
 },{"fs":18}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.velimenum = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.isVVar = exports.VMeta = exports.VVar = exports.vinst = exports.VEnumLit = exports.VEnum = exports.VSigma = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VType = exports.EElimEnum = exports.EApp = void 0;
+exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.velimenum = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.isVVar = exports.VMeta = exports.VVar = exports.vinst = exports.VEnumLit = exports.VEnum = exports.VPair = exports.VSigma = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VType = exports.EElimEnum = exports.EApp = void 0;
 const core_1 = require("./core");
 const metas_1 = require("./metas");
 const Lazy_1 = require("./utils/Lazy");
@@ -2268,6 +2344,8 @@ const VPi = (erased, name, type, clos) => ({ tag: 'VPi', erased, name, type, clo
 exports.VPi = VPi;
 const VSigma = (erased, name, type, clos) => ({ tag: 'VSigma', erased, name, type, clos });
 exports.VSigma = VSigma;
+const VPair = (erased, fst, snd, type) => ({ tag: 'VPair', erased, fst, snd, type });
+exports.VPair = VPair;
 const VEnum = (num, lift) => ({ tag: 'VEnum', num, lift });
 exports.VEnum = VEnum;
 const VEnumLit = (val, num, lift) => ({ tag: 'VEnumLit', val, num, lift });
@@ -2355,6 +2433,8 @@ const evaluate = (t, vs) => {
         return exports.velimBD(vs, exports.VMeta(t.id), t.spine);
     if (t.tag === 'App')
         return exports.vapp(exports.evaluate(t.fn, vs), t.erased, exports.evaluate(t.arg, vs));
+    if (t.tag === 'Pair')
+        return exports.VPair(t.erased, exports.evaluate(t.fst, vs), exports.evaluate(t.snd, vs), exports.evaluate(t.type, vs));
     if (t.tag === 'Let')
         return exports.evaluate(t.body, List_1.cons(exports.evaluate(t.val, vs), vs));
     if (t.tag === 'Global') {
@@ -2397,6 +2477,8 @@ const quote = (v_, k, full = false) => {
         return core_1.Pi(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VSigma')
         return core_1.Sigma(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
+    if (v.tag === 'VPair')
+        return core_1.Pair(v.erased, exports.quote(v.fst, k, full), exports.quote(v.snd, k, full), exports.quote(v.type, k, full));
     return v;
 };
 exports.quote = quote;
@@ -2453,6 +2535,8 @@ const zonk = (tm, vs = List_1.nil, k = 0, full = false) => {
             core_1.App(spine[1], tm.erased, exports.zonk(tm.arg, vs, k, full)) :
             exports.quote(exports.vapp(spine[1], tm.erased, exports.evaluate(tm.arg, vs)), k, full);
     }
+    if (tm.tag === 'Pair')
+        return core_1.Pair(tm.erased, exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full), exports.zonk(tm.type, vs, k, full));
     if (tm.tag === 'ElimEnum')
         return core_1.ElimEnum(tm.num, tm.lift, exports.zonk(tm.motive, vs, k, full), exports.zonk(tm.scrut, vs, k, full), tm.cases.map(x => exports.zonk(x, vs, k, full)));
     return tm;

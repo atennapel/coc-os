@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma } from './surface';
+import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma, Pair } from './surface';
 import { Name } from './names';
 import { log } from './config';
 
@@ -89,8 +89,6 @@ const tokenize = (sc: string): Token[] => {
 
 const tunit = Var('UnitType', 0);
 const unit = Var('Unit', 0);
-const Pair = Var('MkPair', 0);
-const pair = (a: Surface, b: Surface): Surface => App(App(Pair, false, a), false, b);
 
 const isName = (t: Token, x: Name): boolean =>
   t.tag === 'Name' && t.name === x;
@@ -421,11 +419,12 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
       return [exprs(x, '('), false];
     });
     if (args.length === 0) return unit;
-    if (args.length === 1) return args[0][0];
+    if (args.length === 1) { args.push([unit, false]) }
     const last1 = args[args.length - 1];
+    if (last1[1]) return serr(`second component of pair cannot be erased`);
     const last2 = args[args.length - 2];
-    const lastitem = pair(last2[0], last1[0]);
-    return args.slice(0, -2).reduceRight((x, [y, _p]) => pair(y, x), lastitem);
+    const lastitem = Pair(false, last2[0], last1[0]);
+    return args.slice(0, -2).reduceRight((x, [y, p]) => Pair(p, y, x), lastitem);
   }
   const js = ts.findIndex(x => isName(x, '**'));
   if (js >= 0) {
