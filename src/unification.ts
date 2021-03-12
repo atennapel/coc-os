@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Core, Meta, Pi, Type, Var, Global, ElimEnum } from './core';
+import { Abs, App, Core, Meta, Pi, Type, Var, Global, ElimEnum, Sigma } from './core';
 import { MetaVar, setMeta } from './metas';
 import { Lvl } from './names';
 import { List, nil } from './utils/List';
@@ -62,6 +62,8 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
     return Abs(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VPi')
     return Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
+  if (v.tag === 'VSigma')
+    return Sigma(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VType') return Type(v.index);
   if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name, v.lift), v.spine); // TODO: should global be forced?
   if (v.tag === 'VEnum') return C.Enum(v.num, v.lift);
@@ -116,6 +118,11 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
     return unify(l + 1, vapp(a, b.erased, v), vinst(b, v));
   }
   if (a.tag === 'VPi' && b.tag === 'VPi' && a.erased === b.erased) {
+    unify(l, a.type, b.type);
+    const v = VVar(l);
+    return unify(l + 1, vinst(a, v), vinst(b, v));
+  }
+  if (a.tag === 'VSigma' && b.tag === 'VSigma' && a.erased === b.erased) {
     unify(l, a.type, b.type);
     const v = VVar(l);
     return unify(l + 1, vinst(a, v), vinst(b, v));

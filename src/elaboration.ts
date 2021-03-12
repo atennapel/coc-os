@@ -1,4 +1,4 @@
-import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, liftType, Pi, Type, Var } from './core';
+import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, liftType, Pi, Sigma, Type, Var } from './core';
 import { indexEnvT, Local } from './local';
 import { allMetasSolved, freshMeta, resetMetas } from './metas';
 import { show, Surface } from './surface';
@@ -159,6 +159,13 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     const ty = evaluate(type, local.vs);
     const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
     return [Pi(tm.erased, tm.name, type, body), VType(Math.max(s1, s2))];
+  }
+  if (tm.tag === 'Sigma') {
+    if (!local.erased) return terr(`sigma type in non-type context: ${show(tm)}`);
+    const [type, s1] = synthType(local.inType(), tm.type);
+    const ty = evaluate(type, local.vs);
+    const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
+    return [Sigma(tm.erased, tm.name, type, body), VType(Math.max(s1, s2))];
   }
   if (tm.tag === 'Let') {
     let type: Core;

@@ -2,22 +2,28 @@ Try it out at https://atennapel.github.io/coc-os
 
 Elaboration for a dependently typed language with simple universes.
 
-Run CLI REPL:
+Install:
 ```
 yarn install
+```
+
+Run CLI REPL:
+```
 yarn start
 ```
 
 Typecheck file:
 ```
-yarn install
 yarn start filename
 ```
 
 ```
 TODO:
-- sigmas
+- pairs
+- projection
 - equality type
 - fixpoints
 - universe elaboration
+INVESTIGATE:
+- (b : Bool) ** (if^ b () Bool) -- should this typecheck? shouldn't b be lifted?
 ```

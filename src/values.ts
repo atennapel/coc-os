@@ -1,4 +1,4 @@
-import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum } from './core';
+import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum, Sigma } from './core';
 import { getMeta, MetaVar } from './metas';
 import { Ix, Lvl, Name } from './names';
 import { Lazy } from './utils/Lazy';
@@ -17,7 +17,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi | VEnum | VEnumLit;
+export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi | VSigma | VEnum | VEnumLit;
 
 export interface VType { readonly tag: 'VType'; readonly index: Ix }
 export const VType = (index: Ix): VType => ({ tag: 'VType', index });
@@ -31,12 +31,14 @@ export interface VAbs { readonly tag: 'VAbs'; readonly erased: boolean; readonly
 export const VAbs = (erased: boolean, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', erased, name, type, clos });
 export interface VPi { readonly tag: 'VPi'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
 export const VPi = (erased: boolean, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', erased, name, type, clos });
+export interface VSigma { readonly tag: 'VSigma'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
+export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', erased, name, type, clos });
 export interface VEnum { readonly tag: 'VEnum'; readonly num: Ix; readonly lift: Ix }
 export const VEnum = (num: Ix, lift: Ix): VEnum => ({ tag: 'VEnum', num, lift });
 export interface VEnumLit { readonly tag: 'VEnumLit'; readonly val: Ix; readonly num: Ix; readonly lift: Ix }
 export const VEnumLit = (val: Ix, num: Ix, lift: Ix): VEnumLit => ({ tag: 'VEnumLit', val, num, lift });
 
-export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' };
+export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' | 'VSigma' };
 export const vinst = (val: ValWithClosure, arg: Val): Val => val.clos(arg);
 
 export const VVar = (level: Lvl, spine: Spine = nil): Val => VRigid(level, spine);
@@ -91,6 +93,7 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
   if (t.tag === 'ElimEnum') return velimenum(t.num, t.lift, evaluate(t.motive, vs), evaluate(t.scrut, vs), t.cases.map(x => evaluate(x, vs)));
   if (t.tag === 'Abs') return VAbs(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Pi') return VPi(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
+  if (t.tag === 'Sigma') return VSigma(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
   if (t.tag === 'Var') return vs.index(t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'Meta') return VMeta(t.id);
   if (t.tag === 'InsertedMeta') return velimBD(vs, VMeta(t.id), t.spine);
@@ -134,6 +137,7 @@ export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
   }
   if (v.tag === 'VAbs') return Abs(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VPi') return Pi(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
+  if (v.tag === 'VSigma') return Sigma(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   return v;
 };
 
@@ -174,6 +178,8 @@ export const zonk = (tm: Core, vs: EnvV = nil, k: Lvl = 0, full: boolean = false
   }
   if (tm.tag === 'Pi')
     return Pi(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, cons(VVar(k), vs), k + 1, full));
+  if (tm.tag === 'Sigma')
+    return Sigma(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Let')
     return Let(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Abs')

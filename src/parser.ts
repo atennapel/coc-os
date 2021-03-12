@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum } from './surface';
+import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma } from './surface';
 import { Name } from './names';
 import { log } from './config';
 
@@ -24,7 +24,7 @@ const TList = (list: Token[], bracket: BracketO): Token => ({ tag: 'List', list,
 const TStr = (str: string): Token => ({ tag: 'Str', str });
 
 const SYM1: string[] = ['\\', ':', '=', ';', ','];
-const SYM2: string[] = ['->'];
+const SYM2: string[] = ['->', '**'];
 
 const START = 0;
 const NAME = 1;
@@ -87,8 +87,8 @@ const tokenize = (sc: string): Token[] => {
   return r;
 };
 
-const tunit = Var('Unit', 0);
-const unit = Var('UnitValue', 0);
+const tunit = Var('UnitType', 0);
+const unit = Var('Unit', 0);
 const Pair = Var('MkPair', 0);
 const pair = (a: Surface, b: Surface): Surface => App(App(Pair, false, a), false, b);
 
@@ -286,7 +286,7 @@ const expr = (t: Token): [Surface, boolean] => {
 
 const exprs = (ts: Token[], br: BracketO): Surface => {
   if (br === '{') return serr(`{} cannot be used here`);
-  if (ts.length === 0) return unit;
+  if (ts.length === 0) return tunit;
   if (ts.length === 1) return expr(ts[0])[0];
   if (ts[0].tag === 'Name' && ts[0].name.startsWith('?')) {
     const prefix = ts[0].name;
@@ -426,6 +426,25 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
     const last2 = args[args.length - 2];
     const lastitem = pair(last2[0], last1[0]);
     return args.slice(0, -2).reduceRight((x, [y, _p]) => pair(y, x), lastitem);
+  }
+  const js = ts.findIndex(x => isName(x, '**'));
+  if (js >= 0) {
+    const s = splitTokens(ts, x => isName(x, '**'));
+    if (s.length < 2) return serr(`parsing failed with **`);
+    const args: [Name, boolean, Surface][] = s.slice(0, -1)
+      .map(p => p.length === 1 ? piParams(p[0]) : [['_', false, exprs(p, '(')] as [Name, boolean, Surface]])
+      .reduce((x, y) => x.concat(y), []);
+    const rest = s[s.length - 1];
+    let body: [Surface, boolean];
+    if (rest.length === 1) {
+      const h = rest[0];
+      if (h.tag === 'List' && h.bracket === '{')
+        body = expr(h)
+      else body = [exprs(s[s.length - 1], '('), false];
+    } else body = [exprs(s[s.length - 1], '('), false];
+    const last = args[args.length - 1];
+    const lastitem = Sigma(last[1], last[0], last[2], body[0]);
+    return args.slice(0, -1).reduceRight((x, [name, impl, ty]) => Sigma(impl, name, ty, x), lastitem);
   }
   const l = ts.findIndex(x => isName(x, '\\'));
   let all = [];

@@ -1,9 +1,9 @@
-def {Unit} = #1
-def UnitValue : Unit = @0
+def {UnitType} = #1
+def Unit : UnitType = @0
 
 def indUnit
-  : {P : Unit -> *} ->
-    P UnitValue ->
-    (x : Unit) ->
+  : {P : UnitType -> *} ->
+    P Unit ->
+    (x : UnitType) ->
     P x
   = \{P} u x. ?1 {P} x u

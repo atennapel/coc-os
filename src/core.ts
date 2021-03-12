@@ -6,6 +6,7 @@ import { impossible } from './utils/utils';
 export type Core =
   Var | Global | Type | Let |
   Pi | Abs | App |
+  Sigma |
   Enum | EnumLit | ElimEnum |
   Meta | InsertedMeta;
 
@@ -23,6 +24,8 @@ export interface Abs { readonly tag: 'Abs'; readonly erased: boolean; readonly n
 export const Abs = (erased: boolean, name: Name, type: Core, body: Core): Abs => ({ tag: 'Abs', erased, name, type, body });
 export interface App { readonly tag: 'App'; readonly fn: Core; readonly erased: boolean; readonly arg: Core }
 export const App = (fn: Core, erased: boolean, arg: Core): App => ({ tag: 'App', fn, erased, arg });
+export interface Sigma { readonly tag: 'Sigma'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
+export const Sigma = (erased: boolean, name: Name, type: Core, body: Core): Sigma => ({ tag: 'Sigma', erased, name, type, body });
 export interface Enum { readonly tag: 'Enum'; readonly num: Ix; readonly lift: Ix }
 export const Enum = (num: Ix, lift: Ix): Enum => ({ tag: 'Enum', num, lift });
 export interface EnumLit { readonly tag: 'EnumLit'; readonly val: Ix; readonly num: Ix; readonly lift: Ix }
@@ -38,6 +41,15 @@ export const flattenPi = (t: Core): [[boolean, Name, Core][], Core] => {
   const params: [boolean, Name, Core][] = [];
   let c = t;  
   while (c.tag === 'Pi') {
+    params.push([c.erased, c.name, c.type]);
+    c = c.body;
+  }
+  return [params, c];
+};
+export const flattenSigma = (t: Core): [[boolean, Name, Core][], Core] => {
+  const params: [boolean, Name, Core][] = [];
+  let c = t;  
+  while (c.tag === 'Sigma') {
     params.push([c.erased, c.name, c.type]);
     c = c.body;
   }
@@ -86,6 +98,10 @@ export const show = (t: Core): string => {
     const [fn, args] = flattenApp(t);
     return `${showS(fn)} ${args.map(([e, a]) => e ? `{${show(a)}}` : showS(a)).join(' ')}`;
   }
+  if (t.tag === 'Sigma') {
+    const [params, ret] = flattenSigma(t);
+    return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Sigma' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${show(t)}${e ? '}' : ')'}`).join(' ** ')} ** ${show(ret)}`;
+  }
   if (t.tag === 'Let')
     return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   return t;
@@ -97,6 +113,7 @@ export const shift = (d: Ix, c: Ix, t: Core): Core => {
   if (t.tag === 'Abs') return Abs(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Let') return Let(t.erased, t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
   if (t.tag === 'Pi') return Pi(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, shift(d, c, t.motive), shift(d, c, t.scrut), t.cases.map(x => shift(d, c, x)));
   return t;
 };
@@ -107,6 +124,7 @@ export const substVar = (j: Ix, s: Core, t: Core): Core => {
   if (t.tag === 'Abs') return Abs(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Let') return Let(t.erased, t.name, substVar(j, s, t.type), substVar(j, s, t.val), substVar(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Pi') return Pi(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, substVar(j, s, t.motive), substVar(j, s, t.scrut), t.cases.map(x => substVar(j, s, x)));
   return t;
 };
@@ -117,6 +135,7 @@ export const liftType = (l: Ix, t: Core): Core => {
   if (t.tag === 'Type') return Type(t.index + l);
   if (t.tag === 'Abs') return Abs(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
   if (t.tag === 'Pi') return Pi(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
   if (t.tag === 'App') return App(liftType(l, t.fn), t.erased, liftType(l, t.arg));
   if (t.tag === 'Let') return Let(t.erased, t.name, liftType(l, t.type), liftType(l, t.val), liftType(l, t.body));
   if (t.tag === 'Global') return Global(t.name, t.lift + l);

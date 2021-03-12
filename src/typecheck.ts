@@ -68,6 +68,13 @@ const synth = (local: Local, tm: Core): Val => {
     const s2 = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
     return VType(Math.max(s1, s2));
   }
+  if (tm.tag === 'Sigma') {
+    if (!local.erased) return terr(`sigma type in non-type context: ${show(tm)}`);
+    const s1 = synthType(local.inType(), tm.type);
+    const ty = evaluate(tm.type, local.vs);
+    const s2 = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
+    return VType(Math.max(s1, s2));
+  }
   if (tm.tag === 'Let') {
     synthType(local.inType(), tm.type);
     const ty = evaluate(tm.type, local.vs);
