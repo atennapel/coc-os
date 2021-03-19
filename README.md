@@ -19,10 +19,12 @@ yarn start filename
 
 ```
 TODO:
+- type lifting operator: Lift, lift, lower
 - projection
 - equality type
 - fixpoints
 - universe elaboration
-INVESTIGATE:
-- (b : Bool) ** (if^ b () Bool) -- should this typecheck? shouldn't b be lifted?
+ISSUES:
+- elaboration of `\(a b : *). (c : Bool) ** if c a b` succeeds, but it should fail
+- (\{A : *} (x : A). x) *
 ```

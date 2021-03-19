@@ -1,10 +1,12 @@
 import lib/functor.p
+import lib/unit.p
+import lib/bool.p
 
-def {Maybe} = \(t : *). {r : *} -> r -> (t -> r) -> r
-def Nothing : {t : *} -> Maybe t = \{t} {r} n j. n
-def Just : {t : *} -> t -> Maybe t = \{t} x {r} n j. j x
+def {Maybe} = \(t : *). (b : Bool) ** if b t ()
+def Nothing : {t : *} -> Maybe t = (False, Unit)
+def Just : {t : *} -> t -> Maybe t = \x. (True, x)
 
-def maybe : {t r : *} -> r -> (t -> r) -> Maybe t -> r = \{t} {r} n j m. m {r} n j
+def maybe : {t r : *} -> r -> (t -> r) -> Maybe t -> r = \{t} {r} n j m. _x
 
 def caseMaybe
   : {t r : *} -> Maybe t -> r -> (t -> r) -> r

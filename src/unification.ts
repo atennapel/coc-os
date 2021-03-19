@@ -102,8 +102,8 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
   log(() => `unify ${show(a, l)} ~ ${show(b, l)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType' && a.index === b.index) return;
-  if (a.tag === 'VEnum' && b.tag === 'VEnum' && a.num === b.num) return;
-  if (a.tag === 'VEnumLit' && b.tag === 'VEnumLit' && a.val === b.val && a.num === b.num) return;
+  if (a.tag === 'VEnum' && b.tag === 'VEnum' && a.num === b.num && a.lift === b.lift) return;
+  if (a.tag === 'VEnumLit' && b.tag === 'VEnumLit' && a.val === b.val && a.num === b.num && a.lift === b.lift) return;
   if (a.tag === 'VEnumLit' && a.num === 1) return;
   if (b.tag === 'VEnumLit' && b.num === 1) return;
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
@@ -134,6 +134,7 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
     return;
   }
   // TODO: pair eta rule
+
   if (a.tag === 'VRigid' && b.tag === 'VRigid' && a.head === b.head)
     return tryT(() => unifySpines(l, a.spine, b.spine), e => terr(`failed to unify: ${show(a, l)} ~ ${show(b, l)}: ${e}`));
   if (a.tag === 'VFlex' && b.tag === 'VFlex' && a.head === b.head)
@@ -141,8 +142,7 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
   if (a.tag === 'VFlex') return solve(l, a.head, a.spine, b);
   if (b.tag === 'VFlex') return solve(l, b.head, b.spine, a);
 
-  // TODO: does global lifting affect this?
-  if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.name === b.name)
+  if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.name === b.name && a.lift === b.lift)
     return tryT(() => unifySpines(l, a.spine, b.spine), () => unify(l, a.val.get(), b.val.get()));
   if (a.tag === 'VGlobal') return unify(l, a.val.get(), b);
   if (b.tag === 'VGlobal') return unify(l, a, b.val.get());

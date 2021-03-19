@@ -146,7 +146,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => showCore(etype));
 
     log(() => 'TYPECHECK');
-    const ttype = inType ? typecheck(eterm, Local.empty().inType()) : typecheck(eterm);
+    const ttype = typecheck(eterm, inType ? Local.empty().inType() : Local.empty());
     log(() => C.show(ttype));
     log(() => showCore(ttype));
 

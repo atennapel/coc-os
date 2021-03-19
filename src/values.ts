@@ -105,8 +105,7 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
   if (t.tag === 'Global') {
     const entry = getGlobal(t.name);
     if (!entry) return impossible(`tried to load undefined global ${t.name}`);
-    const val = t.lift === 0 ? entry.value : evaluate(liftType(t.lift, entry.term), vs);
-    return VGlobal(t.name, t.lift, nil, Lazy.of(val));
+    return VGlobal(t.name, t.lift, nil, Lazy.from(() => t.lift === 0 ? entry.value : evaluate(liftType(t.lift, entry.term), vs)));
   }
   return t;
 };

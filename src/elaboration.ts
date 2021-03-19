@@ -10,6 +10,7 @@ import { terr, tryT } from './utils/utils';
 import { unify } from './unification';
 import { Ix, Name } from './names';
 import { getGlobal, setGlobal } from './globals';
+import { typecheck } from './typecheck';
 
 export type HoleInfo = [Val, Val, Local, boolean];
 
@@ -291,6 +292,8 @@ export const elaborateDef = (d: S.Def): void => {
   if (d.tag === 'DDef') {
     tryT(() => {
       const [term, type] = elaborate(d.value, d.erased);
+      // verify elaboration
+      typecheck(term, d.erased ? Local.empty().inType() : Local.empty());
       setGlobal(d.name, evaluate(type, nil), evaluate(term, nil), type, term, d.erased);
     }, err => {
       terr(`while elaborating definition ${d.name}: ${err}`);

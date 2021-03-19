@@ -6,6 +6,7 @@ import lib/void.p
 import lib/unit.p
 import lib/bool.p
 
+import lib/either.p
 import lib/maybe.p
 
 import lib/data.p

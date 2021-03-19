@@ -233,6 +233,7 @@ const config_1 = require("./config");
 const utils_1 = require("./utils/utils");
 const unification_1 = require("./unification");
 const globals_1 = require("./globals");
+const typecheck_1 = require("./typecheck");
 const showV = (local, val) => S.showVal(val, local.level, false, local.ns);
 const newMeta = (local) => {
     const id = metas_1.freshMeta();
@@ -520,6 +521,8 @@ const elaborateDef = (d) => {
     if (d.tag === 'DDef') {
         utils_1.tryT(() => {
             const [term, type] = exports.elaborate(d.value, d.erased);
+            // verify elaboration
+            typecheck_1.typecheck(term, d.erased ? local_1.Local.empty().inType() : local_1.Local.empty());
             globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), type, term, d.erased);
         }, err => {
             utils_1.terr(`while elaborating definition ${d.name}: ${err}`);
@@ -535,7 +538,7 @@ const elaborateDefs = (ds) => {
 };
 exports.elaborateDefs = elaborateDefs;
 
-},{"./config":1,"./core":2,"./globals":4,"./local":5,"./metas":6,"./surface":10,"./unification":12,"./utils/List":14,"./utils/utils":15,"./values":16}],4:[function(require,module,exports){
+},{"./config":1,"./core":2,"./globals":4,"./local":5,"./metas":6,"./surface":10,"./typecheck":11,"./unification":12,"./utils/List":14,"./utils/utils":15,"./values":16}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteGlobal = exports.setGlobal = exports.getGlobals = exports.getGlobal = exports.resetGlobals = void 0;
@@ -1464,7 +1467,7 @@ const runREPL = (s_, cb) => {
         config_1.log(() => C.show(etype));
         config_1.log(() => surface_1.showCore(etype));
         config_1.log(() => 'TYPECHECK');
-        const ttype = inType ? typecheck_1.typecheck(eterm, local_1.Local.empty().inType()) : typecheck_1.typecheck(eterm);
+        const ttype = typecheck_1.typecheck(eterm, inType ? local_1.Local.empty().inType() : local_1.Local.empty());
         config_1.log(() => C.show(ttype));
         config_1.log(() => surface_1.showCore(ttype));
         config_1.log(() => 'NORMALIZE');
@@ -1909,9 +1912,9 @@ const unify = (l, a_, b_) => {
         return;
     if (a.tag === 'VType' && b.tag === 'VType' && a.index === b.index)
         return;
-    if (a.tag === 'VEnum' && b.tag === 'VEnum' && a.num === b.num)
+    if (a.tag === 'VEnum' && b.tag === 'VEnum' && a.num === b.num && a.lift === b.lift)
         return;
-    if (a.tag === 'VEnumLit' && b.tag === 'VEnumLit' && a.val === b.val && a.num === b.num)
+    if (a.tag === 'VEnumLit' && b.tag === 'VEnumLit' && a.val === b.val && a.num === b.num && a.lift === b.lift)
         return;
     if (a.tag === 'VEnumLit' && a.num === 1)
         return;
@@ -1953,8 +1956,7 @@ const unify = (l, a_, b_) => {
         return solve(l, a.head, a.spine, b);
     if (b.tag === 'VFlex')
         return solve(l, b.head, b.spine, a);
-    // TODO: does global lifting affect this?
-    if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.name === b.name)
+    if (a.tag === 'VGlobal' && b.tag === 'VGlobal' && a.name === b.name && a.lift === b.lift)
         return utils_1.tryT(() => unifySpines(l, a.spine, b.spine), () => exports.unify(l, a.val.get(), b.val.get()));
     if (a.tag === 'VGlobal')
         return exports.unify(l, a.val.get(), b);
@@ -2441,8 +2443,7 @@ const evaluate = (t, vs) => {
         const entry = globals_1.getGlobal(t.name);
         if (!entry)
             return utils_1.impossible(`tried to load undefined global ${t.name}`);
-        const val = t.lift === 0 ? entry.value : exports.evaluate(core_1.liftType(t.lift, entry.term), vs);
-        return exports.VGlobal(t.name, t.lift, List_1.nil, Lazy_1.Lazy.of(val));
+        return exports.VGlobal(t.name, t.lift, List_1.nil, Lazy_1.Lazy.from(() => t.lift === 0 ? entry.value : exports.evaluate(core_1.liftType(t.lift, entry.term), vs)));
     }
     return t;
 };
