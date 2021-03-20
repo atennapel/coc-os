@@ -10,7 +10,7 @@ export type Surface =
   Pi | Abs | App |
   Sigma | Pair |
   Enum | EnumLit | ElimEnum |
-  Lift |
+  Lift | LiftTerm |
   Meta | Hole;
 
 export interface Var { readonly tag: 'Var'; readonly name: Name; readonly lift: Ix }
@@ -37,6 +37,8 @@ export interface EnumLit { readonly tag: 'EnumLit'; readonly val: Ix; readonly n
 export const EnumLit = (val: Ix, num: Ix | null, lift: Ix | null): EnumLit => ({ tag: 'EnumLit', val, num, lift });
 export interface Lift { readonly tag: 'Lift'; readonly lift: Ix; readonly type: Surface }
 export const Lift = (lift: Ix, type: Surface): Lift => ({ tag: 'Lift', lift, type });
+export interface LiftTerm { readonly tag: 'LiftTerm'; readonly lift: Ix; readonly term: Surface }
+export const LiftTerm = (lift: Ix, term: Surface): LiftTerm => ({ tag: 'LiftTerm', lift, term });
 export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
 export const Meta = (id: MetaVar): Meta => ({ tag: 'Meta', id });
 export interface Hole { readonly tag: 'Hole'; readonly name: Name | null }
@@ -122,6 +124,7 @@ export const show = (t: Surface): string => {
   if (t.tag === 'Let')
     return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''}${!t.type ? '' : ` : ${showP(t.type.tag === 'Let', t.type)}`} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   if (t.tag === 'Lift') return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
+  if (t.tag === 'LiftTerm') return `lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.term)}`;
   return t;
 };
 
@@ -152,6 +155,7 @@ export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
     return Let(t.erased, x, toSurface(t.type, ns), toSurface(t.val, ns), toSurface(t.body, cons(x, ns)));
   }
   if (t.tag === 'Lift') return Lift(t.lift, toSurface(t.type, ns));
+  if (t.tag === 'LiftTerm') return LiftTerm(t.lift, toSurface(t.term, ns));
   return t;
 };
 

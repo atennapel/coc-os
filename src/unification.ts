@@ -1,5 +1,5 @@
 import { log } from './config';
-import { Abs, App, Core, Meta, Pi, Type, Var, Global, ElimEnum, Sigma, Pair, Enum, EnumLit, Lift } from './core';
+import { Abs, App, Core, Meta, Pi, Type, Var, Global, ElimEnum, Sigma, Pair, Enum, EnumLit, Lift, LiftTerm } from './core';
 import { MetaVar, setMeta } from './metas';
 import { Lvl } from './names';
 import { List, nil } from './utils/List';
@@ -70,6 +70,7 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
   if (v.tag === 'VEnumLit') return EnumLit(v.val, v.num, v.lift);
   if (v.tag === 'VPair') return Pair(v.erased, rename(id, pren, v.fst), rename(id, pren, v.snd), rename(id, pren, v.type));
   if (v.tag === 'VLift') return Lift(v.lift, rename(id, pren, v.type));
+  if (v.tag === 'VLiftTerm') return LiftTerm(v.lift, rename(id, pren, v.term));
   return v;
 };
 
@@ -108,6 +109,7 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
   if (a.tag === 'VEnumLit' && a.num === 1) return;
   if (b.tag === 'VEnumLit' && b.num === 1) return;
   if (a.tag === 'VLift' && b.tag === 'VLift' && a.lift === b.lift) return unify(l, a.type, b.type);
+  if (a.tag === 'VLiftTerm' && b.tag === 'VLiftTerm' && a.lift === b.lift) return unify(l, a.term, b.term);
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const v = VVar(l);
     return unify(l + 1, vinst(a, v), vinst(b, v));

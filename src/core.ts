@@ -8,7 +8,7 @@ export type Core =
   Pi | Abs | App |
   Sigma | Pair |
   Enum | EnumLit | ElimEnum |
-  Lift |
+  Lift | LiftTerm |
   Meta | InsertedMeta;
 
 export interface Var { readonly tag: 'Var'; readonly index: Ix }
@@ -37,6 +37,8 @@ export interface ElimEnum { readonly tag: 'ElimEnum'; readonly num: Ix; readonly
 export const ElimEnum = (num: Ix, lift: Ix, motive: Core, scrut: Core, cases: Core[]): ElimEnum => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
 export interface Lift { readonly tag: 'Lift'; readonly lift: Ix; readonly type: Core }
 export const Lift = (lift: Ix, type: Core): Lift => ({ tag: 'Lift', lift, type });
+export interface LiftTerm { readonly tag: 'LiftTerm'; readonly lift: Ix; readonly term: Core }
+export const LiftTerm = (lift: Ix, term: Core): LiftTerm => ({ tag: 'LiftTerm', lift, term });
 export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
 export const Meta = (id: MetaVar): Meta => ({ tag: 'Meta', id });
 export interface InsertedMeta { readonly tag: 'InsertedMeta'; readonly id: MetaVar; readonly spine: List<boolean> }
@@ -123,6 +125,7 @@ export const show = (t: Core): string => {
   if (t.tag === 'Let')
     return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   if (t.tag === 'Lift') return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
+  if (t.tag === 'LiftTerm') return `lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.term)}`;
   return t;
 };
 
@@ -136,6 +139,7 @@ export const shift = (d: Ix, c: Ix, t: Core): Core => {
   if (t.tag === 'Pair') return Pair(t.erased, shift(d, c, t.fst), shift(d, c, t.snd), shift(d, c, t.type))
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, shift(d, c, t.motive), shift(d, c, t.scrut), t.cases.map(x => shift(d, c, x)));
   if (t.tag === 'Lift') return Lift(t.lift, shift(d, c, t.type));
+  if (t.tag === 'LiftTerm') return LiftTerm(t.lift, shift(d, c, t.term));
   return t;
 };
 
@@ -149,6 +153,7 @@ export const substVar = (j: Ix, s: Core, t: Core): Core => {
   if (t.tag === 'Pair') return Pair(t.erased, substVar(j, s, t.fst), substVar(j, s, t.snd), substVar(j, s, t.type));
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, substVar(j, s, t.motive), substVar(j, s, t.scrut), t.cases.map(x => substVar(j, s, x)));
   if (t.tag === 'Lift') return Lift(t.lift, substVar(j, s, t.type));
+  if (t.tag === 'LiftTerm') return LiftTerm(t.lift, substVar(j, s, t.term));
   return t;
 };
 
@@ -168,6 +173,7 @@ export const liftType = (l: Ix, t: Core): Core => {
   if (t.tag === 'Pair') return Pair(t.erased, liftType(l, t.fst), liftType(l, t.snd), liftType(l, t.type));
   if (t.tag === 'Meta') return impossible(`meta in liftType: ${show(t)}`);
   if (t.tag === 'InsertedMeta') return impossible(`meta in liftType: ${show(t)}`);
-  if (t.tag === 'Lift') return Lift(t.lift, liftType(l, t.type));
+  if (t.tag === 'Lift') return Lift(t.lift + 1, t.type);
+  if (t.tag === 'LiftTerm') return LiftTerm(t.lift + 1, t.term);
   return t;
 };

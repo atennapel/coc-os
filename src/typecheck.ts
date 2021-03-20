@@ -129,6 +129,15 @@ const synth = (local: Local, tm: Core): Val => {
     if (vty.tag !== 'VType') return terr(`not a type in ${show(tm)}: ${showV(local, ty)}`);
     return VType(tm.lift + vty.index + 1);
   }
+  if (tm.tag === 'LiftTerm') {
+    /*
+    t : A
+    -------------------
+    lift^l t : Lift^l A
+    */
+    const ty = synth(local, tm.term);
+    return V.VLift(tm.lift, ty);
+  }
   if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta') return impossible(`${tm.tag} in typecheck`);
   return tm;
 };

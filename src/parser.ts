@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift } from './surface';
+import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift, LiftTerm } from './surface';
 import { Name } from './names';
 import { log } from './config';
 
@@ -339,6 +339,19 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
     }
     const type = exprs(ts.slice(1), '(');
     return Lift(lift, type);
+  }
+  if (ts[0].tag === 'Name' && ts[0].name.startsWith('lift')) {
+    const x = ts[0].name.slice(4);
+    let lift = 0;
+    if (x === '') lift = 0;
+    else if (x === '^') lift = 1;
+    else {
+      const m = +x.slice(1);
+      if (isNaN(m) || Math.floor(m) !== m || m < 0) return serr(`invalid lift: ${ts[0].name}`);
+      lift = m;
+    }
+    const term = exprs(ts.slice(1), '(');
+    return LiftTerm(lift, term);
   }
   if (isName(ts[0], 'let')) {
     const x = ts[1];

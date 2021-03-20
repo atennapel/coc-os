@@ -1,9 +1,9 @@
-import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, Lift, liftType, Pair, Pi, Sigma, Type, Var } from './core';
+import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, Lift, LiftTerm, liftType, Pair, Pi, Sigma, Type, Var } from './core';
 import { indexEnvT, Local } from './local';
 import { allMetasSolved, freshMeta, resetMetas } from './metas';
 import { show, Surface } from './surface';
 import { cons, List, nil } from './utils/List';
-import { evaluate, force, quote, VAbs, Val, vapp, VEnum, VEnumLit, VFlex, vinst, VPi, VType, VVar, zonk } from './values';
+import { evaluate, force, quote, VAbs, Val, vapp, VEnum, VEnumLit, VFlex, vinst, VLift, VPi, VType, VVar, zonk } from './values';
 import * as S from './surface';
 import { log } from './config';
 import { terr, tryT } from './utils/utils';
@@ -75,6 +75,15 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
     if (!local.erased) return terr(`Lift type in non-type context: ${show(tm)}`);
     const type = check(local, tm.type, VType(fty.index - tm.lift - 1));
     return Lift(tm.lift, type);
+  }
+  if (tm.tag === 'LiftTerm' && fty.tag === 'VLift') {
+    /*
+    t : A
+    -------------------
+    lift^l t : Lift^l A
+    */
+    const term = check(local, tm.term, fty.type);
+    return LiftTerm(tm.lift, term);
   }
   if (tm.tag === 'Pair') {
     if (fty.tag !== 'VSigma') return terr(`not a sigma type in pair (${show(tm)}): ${showV(local, ty)}`);
@@ -247,6 +256,15 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     const vty = force(ty);
     if (vty.tag !== 'VType') return terr(`not a type in ${show(tm)}: ${showV(local, ty)}`);
     return [Lift(tm.lift, type), VType(tm.lift + vty.index + 1)];
+  }
+  if (tm.tag === 'LiftTerm') {
+    /*
+    t : A
+    -------------------
+    lift^l t : Lift^l A
+    */
+    const [term, ty] = synth(local, tm.term);
+    return [LiftTerm(tm.lift, term), VLift(tm.lift, ty)];
   }
   return terr(`unable to synth ${show(tm)}`);
 };
