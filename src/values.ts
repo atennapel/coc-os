@@ -1,4 +1,4 @@
-import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum, Sigma, Pair } from './core';
+import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift } from './core';
 import { getMeta, MetaVar } from './metas';
 import { Ix, Lvl, Name } from './names';
 import { Lazy } from './utils/Lazy';
@@ -17,7 +17,7 @@ export type Spine = List<Elim>;
 export type EnvV = List<Val>;
 export type Clos = (val: Val) => Val;
 
-export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi | VSigma | VPair | VEnum | VEnumLit;
+export type Val = VType | VRigid | VFlex | VGlobal | VAbs | VPi | VSigma | VPair | VEnum | VEnumLit | VLift;
 
 export interface VType { readonly tag: 'VType'; readonly index: Ix }
 export const VType = (index: Ix): VType => ({ tag: 'VType', index });
@@ -39,6 +39,8 @@ export interface VEnum { readonly tag: 'VEnum'; readonly num: Ix; readonly lift:
 export const VEnum = (num: Ix, lift: Ix): VEnum => ({ tag: 'VEnum', num, lift });
 export interface VEnumLit { readonly tag: 'VEnumLit'; readonly val: Ix; readonly num: Ix; readonly lift: Ix }
 export const VEnumLit = (val: Ix, num: Ix, lift: Ix): VEnumLit => ({ tag: 'VEnumLit', val, num, lift });
+export interface VLift { readonly tag: 'VLift'; readonly lift: Ix; readonly type: Val }
+export const VLift = (lift: Ix, type: Val): VLift => ({ tag: 'VLift', lift, type });
 
 export type ValWithClosure = Val & { tag: 'VAbs' | 'VPi' | 'VSigma' };
 export const vinst = (val: ValWithClosure, arg: Val): Val => val.clos(arg);
@@ -107,6 +109,7 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
     if (!entry) return impossible(`tried to load undefined global ${t.name}`);
     return VGlobal(t.name, t.lift, nil, Lazy.from(() => t.lift === 0 ? entry.value : evaluate(liftType(t.lift, entry.term), vs)));
   }
+  if (t.tag === 'Lift') return VLift(t.lift, evaluate(t.type, vs));
   return t;
 };
 
@@ -141,6 +144,7 @@ export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
   if (v.tag === 'VPi') return Pi(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VSigma') return Sigma(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
   if (v.tag === 'VPair') return Pair(v.erased, quote(v.fst, k, full), quote(v.snd, k, full), quote(v.type, k, full));
+  if (v.tag === 'VLift') return Lift(v.lift, quote(v.type, k, full));
   return v;
 };
 
@@ -196,5 +200,6 @@ export const zonk = (tm: Core, vs: EnvV = nil, k: Lvl = 0, full: boolean = false
   if (tm.tag === 'Pair') return Pair(tm.erased, zonk(tm.fst, vs, k, full), zonk(tm.snd, vs, k, full), zonk(tm.type, vs, k, full));
   if (tm.tag === 'ElimEnum')
     return ElimEnum(tm.num, tm.lift, zonk(tm.motive, vs, k, full), zonk(tm.scrut, vs, k, full), tm.cases.map(x => zonk(x, vs, k, full)));
+  if (tm.tag === 'Lift') return Lift(tm.lift, zonk(tm.type, vs, k, full));
   return tm;
 };

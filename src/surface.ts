@@ -10,6 +10,7 @@ export type Surface =
   Pi | Abs | App |
   Sigma | Pair |
   Enum | EnumLit | ElimEnum |
+  Lift |
   Meta | Hole;
 
 export interface Var { readonly tag: 'Var'; readonly name: Name; readonly lift: Ix }
@@ -34,6 +35,8 @@ export interface ElimEnum { readonly tag: 'ElimEnum'; readonly num: Ix; readonly
 export const ElimEnum = (num: Ix, lift: Ix | null, motive: Surface | null, scrut: Surface, cases: Surface[]): ElimEnum => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
 export interface EnumLit { readonly tag: 'EnumLit'; readonly val: Ix; readonly num: Ix | null; readonly lift: Ix | null }
 export const EnumLit = (val: Ix, num: Ix | null, lift: Ix | null): EnumLit => ({ tag: 'EnumLit', val, num, lift });
+export interface Lift { readonly tag: 'Lift'; readonly lift: Ix; readonly type: Surface }
+export const Lift = (lift: Ix, type: Surface): Lift => ({ tag: 'Lift', lift, type });
 export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
 export const Meta = (id: MetaVar): Meta => ({ tag: 'Meta', id });
 export interface Hole { readonly tag: 'Hole'; readonly name: Name | null }
@@ -118,6 +121,7 @@ export const show = (t: Surface): string => {
   }
   if (t.tag === 'Let')
     return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''}${!t.type ? '' : ` : ${showP(t.type.tag === 'Let', t.type)}`} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
+  if (t.tag === 'Lift') return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
   return t;
 };
 
@@ -147,6 +151,7 @@ export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
     const x = chooseName(t.name, ns);
     return Let(t.erased, x, toSurface(t.type, ns), toSurface(t.val, ns), toSurface(t.body, cons(x, ns)));
   }
+  if (t.tag === 'Lift') return Lift(t.lift, toSurface(t.type, ns));
   return t;
 };
 

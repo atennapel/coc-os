@@ -1,4 +1,4 @@
-import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, liftType, Pair, Pi, Sigma, Type, Var } from './core';
+import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, Lift, liftType, Pair, Pi, Sigma, Type, Var } from './core';
 import { indexEnvT, Local } from './local';
 import { allMetasSolved, freshMeta, resetMetas } from './metas';
 import { show, Surface } from './surface';
@@ -56,8 +56,10 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
     const term = check(local.insert(true, fty.name, fty.type), tm, vinst(fty, v));
     return Abs(fty.erased, fty.name, quote(fty.type, local.level), term);
   }
-  if (tm.tag === 'Enum' && fty.tag === 'VType' && (tm.lift === null || tm.lift <= fty.index))
+  if (tm.tag === 'Enum' && fty.tag === 'VType' && (tm.lift === null || tm.lift <= fty.index)) {
+    if (!local.erased) return terr(`enum type in non-type context: ${show(tm)}`);
     return Enum(tm.num, fty.index);
+  }
   if (tm.tag === 'EnumLit' && fty.tag === 'VEnum' && (tm.num === null || tm.num === fty.num) && (tm.lift === null || tm.lift <= fty.lift))
     return EnumLit(tm.val, fty.num, fty.lift);
   if (tm.tag === 'ElimEnum' && !tm.motive) {
@@ -68,6 +70,11 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
     const scrut = check(local, tm.scrut, VEnum(tm.num, lift));
     const cases = tm.cases.map((c, i) => check(local, c, vapp(vmotive, false, VEnumLit(i, tm.num, lift))));
     return ElimEnum(tm.num, lift, motive, scrut, cases);
+  }
+  if (tm.tag === 'Lift' && fty.tag === 'VType') {
+    if (!local.erased) return terr(`Lift type in non-type context: ${show(tm)}`);
+    const type = check(local, tm.type, VType(fty.index - tm.lift - 1));
+    return Lift(tm.lift, type);
   }
   if (tm.tag === 'Pair') {
     if (fty.tag !== 'VSigma') return terr(`not a sigma type in pair (${show(tm)}): ${showV(local, ty)}`);
@@ -206,7 +213,10 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     const ty = Sigma(false, '_', quote(fstty, local.level), quote(sndty, local.level + 1));
     return [Pair(tm.erased, fst, snd, ty), evaluate(ty, local.vs)];
   }
-  if (tm.tag === 'Enum') return [Enum(tm.num, tm.lift || 0), VType(tm.lift || 0)];
+  if (tm.tag === 'Enum') {
+    if (!local.erased) return terr(`enum type in non-type context: ${show(tm)}`);
+    return [Enum(tm.num, tm.lift || 0), VType(tm.lift || 0)];
+  }
   if (tm.tag === 'EnumLit' && tm.num !== null) {
     if (tm.val >= tm.num) return terr(`invalid enum literal: ${show(tm)}`);
     return [EnumLit(tm.val, tm.num, tm.lift || 0), VEnum(tm.num, tm.lift || 0)];
@@ -225,6 +235,18 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     const vscrut = evaluate(scrut, local.vs);
     const cases = tm.cases.map((c, i) => check(local, c, vapp(vmotive, false, VEnumLit(i, tm.num, lift))));
     return [ElimEnum(tm.num, lift, motive, scrut, cases), vapp(vmotive, false, vscrut)];
+  }
+  if (tm.tag === 'Lift') {
+    if (!local.erased) return terr(`Lift type in non-type context: ${show(tm)}`);
+    /*
+    t : *k
+    -------------------
+    Lift^l t : *(l + k)
+    */
+    const [type, ty] = synth(local, tm.type);
+    const vty = force(ty);
+    if (vty.tag !== 'VType') return terr(`not a type in ${show(tm)}: ${showV(local, ty)}`);
+    return [Lift(tm.lift, type), VType(tm.lift + vty.index + 1)];
   }
   return terr(`unable to synth ${show(tm)}`);
 };
@@ -292,8 +314,10 @@ export const elaborateDef = (d: S.Def): void => {
   if (d.tag === 'DDef') {
     tryT(() => {
       const [term, type] = elaborate(d.value, d.erased);
+      log(() => `elaborated def ${d.name}: ${S.showCore(term)} : ${S.showCore(type)}`);
       // verify elaboration
-      typecheck(term, d.erased ? Local.empty().inType() : Local.empty());
+      const vty = typecheck(term, d.erased ? Local.empty().inType() : Local.empty());
+      log(() => `verified def ${d.name}: ${S.showCore(vty)}`);
       setGlobal(d.name, evaluate(type, nil), evaluate(term, nil), type, term, d.erased);
     }, err => {
       terr(`while elaborating definition ${d.name}: ${err}`);

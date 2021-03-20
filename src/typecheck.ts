@@ -93,7 +93,10 @@ const synth = (local: Local, tm: Core): Val => {
     const rty = synth(local.define(tm.erased, tm.name, ty, v), tm.body);
     return rty;
   }
-  if (tm.tag === 'Enum') return VType(tm.lift);
+  if (tm.tag === 'Enum') {
+    if (!local.erased) return terr(`enum type in non-type context: ${show(tm)}`);
+    return VType(tm.lift);
+  }
   if (tm.tag === 'EnumLit') {
     if (tm.val >= tm.num) return terr(`invalid enum literal: ${show(tm)}`);
     return V.VEnum(tm.num, tm.lift);
@@ -113,6 +116,18 @@ const synth = (local: Local, tm: Core): Val => {
     const scrut = evaluate(tm.scrut, local.vs);
     tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num, tm.lift))));
     return V.vapp(motive, false, scrut);
+  }
+  if (tm.tag === 'Lift') {
+    if (!local.erased) return terr(`Lift type in non-type context: ${show(tm)}`);
+    /*
+    t : *k
+    -------------------
+    Lift^l t : *(l + k)
+    */
+    const ty = synth(local, tm.type);
+    const vty = force(ty);
+    if (vty.tag !== 'VType') return terr(`not a type in ${show(tm)}: ${showV(local, ty)}`);
+    return VType(tm.lift + vty.index + 1);
   }
   if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta') return impossible(`${tm.tag} in typecheck`);
   return tm;

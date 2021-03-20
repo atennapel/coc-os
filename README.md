@@ -19,7 +19,7 @@ yarn start filename
 
 ```
 TODO:
-- type lifting operator: Lift, lift, lower
+- type lifting operator: lift, lower
 - projection
 - equality type
 - fixpoints

@@ -20,7 +20,7 @@ exports.log = log;
 },{}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.liftType = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenPair = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.ElimEnum = exports.EnumLit = exports.Enum = exports.Pair = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
+exports.liftType = exports.subst = exports.substVar = exports.shift = exports.show = exports.flattenPair = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.InsertedMeta = exports.Meta = exports.Lift = exports.ElimEnum = exports.EnumLit = exports.Enum = exports.Pair = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Global = exports.Type = exports.Var = void 0;
 const utils_1 = require("./utils/utils");
 const Var = (index) => ({ tag: 'Var', index });
 exports.Var = Var;
@@ -46,6 +46,8 @@ const EnumLit = (val, num, lift) => ({ tag: 'EnumLit', val, num, lift });
 exports.EnumLit = EnumLit;
 const ElimEnum = (num, lift, motive, scrut, cases) => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
 exports.ElimEnum = ElimEnum;
+const Lift = (lift, type) => ({ tag: 'Lift', lift, type });
+exports.Lift = Lift;
 const Meta = (id) => ({ tag: 'Meta', id });
 exports.Meta = Meta;
 const InsertedMeta = (id, spine) => ({ tag: 'InsertedMeta', id, spine });
@@ -142,6 +144,8 @@ const show = (t) => {
     }
     if (t.tag === 'Let')
         return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
+    if (t.tag === 'Lift')
+        return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
     return t;
 };
 exports.show = show;
@@ -162,6 +166,8 @@ const shift = (d, c, t) => {
         return exports.Pair(t.erased, exports.shift(d, c, t.fst), exports.shift(d, c, t.snd), exports.shift(d, c, t.type));
     if (t.tag === 'ElimEnum')
         return exports.ElimEnum(t.num, t.lift, exports.shift(d, c, t.motive), exports.shift(d, c, t.scrut), t.cases.map(x => exports.shift(d, c, x)));
+    if (t.tag === 'Lift')
+        return exports.Lift(t.lift, exports.shift(d, c, t.type));
     return t;
 };
 exports.shift = shift;
@@ -182,6 +188,8 @@ const substVar = (j, s, t) => {
         return exports.Pair(t.erased, exports.substVar(j, s, t.fst), exports.substVar(j, s, t.snd), exports.substVar(j, s, t.type));
     if (t.tag === 'ElimEnum')
         return exports.ElimEnum(t.num, t.lift, exports.substVar(j, s, t.motive), exports.substVar(j, s, t.scrut), t.cases.map(x => exports.substVar(j, s, x)));
+    if (t.tag === 'Lift')
+        return exports.Lift(t.lift, exports.substVar(j, s, t.type));
     return t;
 };
 exports.substVar = substVar;
@@ -214,6 +222,8 @@ const liftType = (l, t) => {
         return utils_1.impossible(`meta in liftType: ${exports.show(t)}`);
     if (t.tag === 'InsertedMeta')
         return utils_1.impossible(`meta in liftType: ${exports.show(t)}`);
+    if (t.tag === 'Lift')
+        return exports.Lift(t.lift, exports.liftType(l, t.type));
     return t;
 };
 exports.liftType = liftType;
@@ -274,8 +284,11 @@ const check = (local, tm, ty) => {
         const term = check(local.insert(true, fty.name, fty.type), tm, values_1.vinst(fty, v));
         return core_1.Abs(fty.erased, fty.name, values_1.quote(fty.type, local.level), term);
     }
-    if (tm.tag === 'Enum' && fty.tag === 'VType' && (tm.lift === null || tm.lift <= fty.index))
+    if (tm.tag === 'Enum' && fty.tag === 'VType' && (tm.lift === null || tm.lift <= fty.index)) {
+        if (!local.erased)
+            return utils_1.terr(`enum type in non-type context: ${surface_1.show(tm)}`);
         return core_1.Enum(tm.num, fty.index);
+    }
     if (tm.tag === 'EnumLit' && fty.tag === 'VEnum' && (tm.num === null || tm.num === fty.num) && (tm.lift === null || tm.lift <= fty.lift))
         return core_1.EnumLit(tm.val, fty.num, fty.lift);
     if (tm.tag === 'ElimEnum' && !tm.motive) {
@@ -287,6 +300,12 @@ const check = (local, tm, ty) => {
         const scrut = check(local, tm.scrut, values_1.VEnum(tm.num, lift));
         const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num, lift))));
         return core_1.ElimEnum(tm.num, lift, motive, scrut, cases);
+    }
+    if (tm.tag === 'Lift' && fty.tag === 'VType') {
+        if (!local.erased)
+            return utils_1.terr(`Lift type in non-type context: ${surface_1.show(tm)}`);
+        const type = check(local, tm.type, values_1.VType(fty.index - tm.lift - 1));
+        return core_1.Lift(tm.lift, type);
     }
     if (tm.tag === 'Pair') {
         if (fty.tag !== 'VSigma')
@@ -438,8 +457,11 @@ const synth = (local, tm) => {
         const ty = core_1.Sigma(false, '_', values_1.quote(fstty, local.level), values_1.quote(sndty, local.level + 1));
         return [core_1.Pair(tm.erased, fst, snd, ty), values_1.evaluate(ty, local.vs)];
     }
-    if (tm.tag === 'Enum')
+    if (tm.tag === 'Enum') {
+        if (!local.erased)
+            return utils_1.terr(`enum type in non-type context: ${surface_1.show(tm)}`);
         return [core_1.Enum(tm.num, tm.lift || 0), values_1.VType(tm.lift || 0)];
+    }
     if (tm.tag === 'EnumLit' && tm.num !== null) {
         if (tm.val >= tm.num)
             return utils_1.terr(`invalid enum literal: ${surface_1.show(tm)}`);
@@ -462,6 +484,20 @@ const synth = (local, tm) => {
         const vscrut = values_1.evaluate(scrut, local.vs);
         const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num, lift))));
         return [core_1.ElimEnum(tm.num, lift, motive, scrut, cases), values_1.vapp(vmotive, false, vscrut)];
+    }
+    if (tm.tag === 'Lift') {
+        if (!local.erased)
+            return utils_1.terr(`Lift type in non-type context: ${surface_1.show(tm)}`);
+        /*
+        t : *k
+        -------------------
+        Lift^l t : *(l + k)
+        */
+        const [type, ty] = synth(local, tm.type);
+        const vty = values_1.force(ty);
+        if (vty.tag !== 'VType')
+            return utils_1.terr(`not a type in ${surface_1.show(tm)}: ${showV(local, ty)}`);
+        return [core_1.Lift(tm.lift, type), values_1.VType(tm.lift + vty.index + 1)];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
@@ -521,8 +557,10 @@ const elaborateDef = (d) => {
     if (d.tag === 'DDef') {
         utils_1.tryT(() => {
             const [term, type] = exports.elaborate(d.value, d.erased);
+            config_1.log(() => `elaborated def ${d.name}: ${S.showCore(term)} : ${S.showCore(type)}`);
             // verify elaboration
-            typecheck_1.typecheck(term, d.erased ? local_1.Local.empty().inType() : local_1.Local.empty());
+            const vty = typecheck_1.typecheck(term, d.erased ? local_1.Local.empty().inType() : local_1.Local.empty());
+            config_1.log(() => `verified def ${d.name}: ${S.showCore(vty)}`);
             globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), type, term, d.erased);
         }, err => {
             utils_1.terr(`while elaborating definition ${d.name}: ${err}`);
@@ -1080,6 +1118,22 @@ const exprs = (ts, br) => {
         });
         return surface_1.ElimEnum(num, lvl, motive, scrut, cases);
     }
+    if (ts[0].tag === 'Name' && ts[0].name.startsWith('Lift')) {
+        const x = ts[0].name.slice(4);
+        let lift = 0;
+        if (x === '')
+            lift = 0;
+        else if (x === '^')
+            lift = 1;
+        else {
+            const m = +x.slice(1);
+            if (isNaN(m) || Math.floor(m) !== m || m < 0)
+                return utils_1.serr(`invalid Lift: ${ts[0].name}`);
+            lift = m;
+        }
+        const type = exprs(ts.slice(1), '(');
+        return surface_1.Lift(lift, type);
+    }
     if (isName(ts[0], 'let')) {
         const x = ts[1];
         let name = 'ERROR';
@@ -1488,7 +1542,7 @@ exports.runREPL = runREPL;
 },{"./config":1,"./core":2,"./elaboration":3,"./globals":4,"./local":5,"./parser":8,"./surface":10,"./typecheck":11,"./utils/List":14,"./utils/utils":15,"./values":16}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.Hole = exports.Meta = exports.EnumLit = exports.ElimEnum = exports.Enum = exports.Pair = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Type = exports.Var = void 0;
+exports.showDefs = exports.showDef = exports.DDef = exports.showVal = exports.showCore = exports.toSurface = exports.show = exports.flattenPair = exports.flattenApp = exports.flattenAbs = exports.flattenSigma = exports.flattenPi = exports.Hole = exports.Meta = exports.Lift = exports.EnumLit = exports.ElimEnum = exports.Enum = exports.Pair = exports.Sigma = exports.App = exports.Abs = exports.Pi = exports.Let = exports.Type = exports.Var = void 0;
 const names_1 = require("./names");
 const List_1 = require("./utils/List");
 const utils_1 = require("./utils/utils");
@@ -1515,6 +1569,8 @@ const ElimEnum = (num, lift, motive, scrut, cases) => ({ tag: 'ElimEnum', num, l
 exports.ElimEnum = ElimEnum;
 const EnumLit = (val, num, lift) => ({ tag: 'EnumLit', val, num, lift });
 exports.EnumLit = EnumLit;
+const Lift = (lift, type) => ({ tag: 'Lift', lift, type });
+exports.Lift = Lift;
 const Meta = (id) => ({ tag: 'Meta', id });
 exports.Meta = Meta;
 const Hole = (name) => ({ tag: 'Hole', name });
@@ -1609,6 +1665,8 @@ const show = (t) => {
     }
     if (t.tag === 'Let')
         return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''}${!t.type ? '' : ` : ${showP(t.type.tag === 'Let', t.type)}`} = ${showP(t.val.tag === 'Let', t.val)}; ${exports.show(t.body)}`;
+    if (t.tag === 'Lift')
+        return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
     return t;
 };
 exports.show = show;
@@ -1647,6 +1705,8 @@ const toSurface = (t, ns = List_1.nil) => {
         const x = names_1.chooseName(t.name, ns);
         return exports.Let(t.erased, x, exports.toSurface(t.type, ns), exports.toSurface(t.val, ns), exports.toSurface(t.body, List_1.cons(x, ns)));
     }
+    if (t.tag === 'Lift')
+        return exports.Lift(t.lift, exports.toSurface(t.type, ns));
     return t;
 };
 exports.toSurface = toSurface;
@@ -1769,8 +1829,11 @@ const synth = (local, tm) => {
         const rty = synth(local.define(tm.erased, tm.name, ty, v), tm.body);
         return rty;
     }
-    if (tm.tag === 'Enum')
+    if (tm.tag === 'Enum') {
+        if (!local.erased)
+            return utils_1.terr(`enum type in non-type context: ${core_1.show(tm)}`);
         return values_1.VType(tm.lift);
+    }
     if (tm.tag === 'EnumLit') {
         if (tm.val >= tm.num)
             return utils_1.terr(`invalid enum literal: ${core_1.show(tm)}`);
@@ -1792,6 +1855,20 @@ const synth = (local, tm) => {
         const scrut = values_1.evaluate(tm.scrut, local.vs);
         tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num, tm.lift))));
         return V.vapp(motive, false, scrut);
+    }
+    if (tm.tag === 'Lift') {
+        if (!local.erased)
+            return utils_1.terr(`Lift type in non-type context: ${core_1.show(tm)}`);
+        /*
+        t : *k
+        -------------------
+        Lift^l t : *(l + k)
+        */
+        const ty = synth(local, tm.type);
+        const vty = values_1.force(ty);
+        if (vty.tag !== 'VType')
+            return utils_1.terr(`not a type in ${core_1.show(tm)}: ${showV(local, ty)}`);
+        return values_1.VType(tm.lift + vty.index + 1);
     }
     if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta')
         return utils_1.impossible(`${tm.tag} in typecheck`);
@@ -1881,6 +1958,8 @@ const rename = (id, pren, v_) => {
         return core_1.EnumLit(v.val, v.num, v.lift);
     if (v.tag === 'VPair')
         return core_1.Pair(v.erased, rename(id, pren, v.fst), rename(id, pren, v.snd), rename(id, pren, v.type));
+    if (v.tag === 'VLift')
+        return core_1.Lift(v.lift, rename(id, pren, v.type));
     return v;
 };
 const lams = (is, t, n = 0) => is.case(() => t, (i, rest) => core_1.Abs(i, `x${n}`, core_1.Type(0), lams(rest, t, n + 1))); // TODO: lambda type
@@ -1920,6 +1999,8 @@ const unify = (l, a_, b_) => {
         return;
     if (b.tag === 'VEnumLit' && b.num === 1)
         return;
+    if (a.tag === 'VLift' && b.tag === 'VLift' && a.lift === b.lift)
+        return exports.unify(l, a.type, b.type);
     if (a.tag === 'VAbs' && b.tag === 'VAbs') {
         const v = values_1.VVar(l);
         return exports.unify(l + 1, values_1.vinst(a, v), values_1.vinst(b, v));
@@ -2320,7 +2401,7 @@ exports.removeAll = removeAll;
 },{"fs":18}],16:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.velimenum = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.isVVar = exports.VMeta = exports.VVar = exports.vinst = exports.VEnumLit = exports.VEnum = exports.VPair = exports.VSigma = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VType = exports.EElimEnum = exports.EApp = void 0;
+exports.zonk = exports.show = exports.normalize = exports.quote = exports.evaluate = exports.velimBD = exports.velimenum = exports.vapp = exports.velimSpine = exports.velim = exports.force = exports.isVVar = exports.VMeta = exports.VVar = exports.vinst = exports.VLift = exports.VEnumLit = exports.VEnum = exports.VPair = exports.VSigma = exports.VPi = exports.VAbs = exports.VGlobal = exports.VFlex = exports.VRigid = exports.VType = exports.EElimEnum = exports.EApp = void 0;
 const core_1 = require("./core");
 const metas_1 = require("./metas");
 const Lazy_1 = require("./utils/Lazy");
@@ -2352,6 +2433,8 @@ const VEnum = (num, lift) => ({ tag: 'VEnum', num, lift });
 exports.VEnum = VEnum;
 const VEnumLit = (val, num, lift) => ({ tag: 'VEnumLit', val, num, lift });
 exports.VEnumLit = VEnumLit;
+const VLift = (lift, type) => ({ tag: 'VLift', lift, type });
+exports.VLift = VLift;
 const vinst = (val, arg) => val.clos(arg);
 exports.vinst = vinst;
 const VVar = (level, spine = List_1.nil) => exports.VRigid(level, spine);
@@ -2445,6 +2528,8 @@ const evaluate = (t, vs) => {
             return utils_1.impossible(`tried to load undefined global ${t.name}`);
         return exports.VGlobal(t.name, t.lift, List_1.nil, Lazy_1.Lazy.from(() => t.lift === 0 ? entry.value : exports.evaluate(core_1.liftType(t.lift, entry.term), vs)));
     }
+    if (t.tag === 'Lift')
+        return exports.VLift(t.lift, exports.evaluate(t.type, vs));
     return t;
 };
 exports.evaluate = evaluate;
@@ -2480,6 +2565,8 @@ const quote = (v_, k, full = false) => {
         return core_1.Sigma(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VPair')
         return core_1.Pair(v.erased, exports.quote(v.fst, k, full), exports.quote(v.snd, k, full), exports.quote(v.type, k, full));
+    if (v.tag === 'VLift')
+        return core_1.Lift(v.lift, exports.quote(v.type, k, full));
     return v;
 };
 exports.quote = quote;
@@ -2540,6 +2627,8 @@ const zonk = (tm, vs = List_1.nil, k = 0, full = false) => {
         return core_1.Pair(tm.erased, exports.zonk(tm.fst, vs, k, full), exports.zonk(tm.snd, vs, k, full), exports.zonk(tm.type, vs, k, full));
     if (tm.tag === 'ElimEnum')
         return core_1.ElimEnum(tm.num, tm.lift, exports.zonk(tm.motive, vs, k, full), exports.zonk(tm.scrut, vs, k, full), tm.cases.map(x => exports.zonk(x, vs, k, full)));
+    if (tm.tag === 'Lift')
+        return core_1.Lift(tm.lift, exports.zonk(tm.type, vs, k, full));
     return tm;
 };
 exports.zonk = zonk;
