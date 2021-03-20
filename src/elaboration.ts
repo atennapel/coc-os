@@ -1,9 +1,9 @@
-import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, Lift, LiftTerm, liftType, Lower, Pair, Pi, Sigma, Type, Var } from './core';
+import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, Lift, LiftTerm, liftType, Lower, Pair, Pi, Sigma, Type, Var, Proj } from './core';
 import { indexEnvT, Local } from './local';
 import { allMetasSolved, freshMeta, resetMetas } from './metas';
 import { show, Surface } from './surface';
 import { cons, List, nil } from './utils/List';
-import { evaluate, force, quote, VAbs, Val, vapp, VEnum, VEnumLit, VFlex, vinst, VLift, VPi, VType, VVar, zonk } from './values';
+import { evaluate, force, quote, VAbs, Val, vapp, VEnum, VEnumLit, VFlex, vinst, VLift, VPi, vproj, VType, VVar, zonk } from './values';
 import * as S from './surface';
 import { log } from './config';
 import { terr, tryT } from './utils/utils';
@@ -190,6 +190,12 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     const ty = evaluate(type, local.vs);
     const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
     return [Sigma(tm.erased, tm.name, type, body), VType(Math.max(s1, s2))];
+  }
+  if (tm.tag === 'Proj') {
+    const [term, ty] = synth(local, tm.term);
+    const fty = force(ty);
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in proj (${show(tm)}): ${showV(local, ty)}`);
+    return [Proj(tm.proj, term), tm.proj === 'fst' ? fty.type : vinst(fty, vproj('fst', evaluate(term, local.vs)))];
   }
   if (tm.tag === 'Let') {
     let type: Core;

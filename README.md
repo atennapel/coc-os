@@ -19,7 +19,6 @@ yarn start filename
 
 ```
 TODO:
-- projection
 - equality type
 - fixpoints
 - universe elaboration

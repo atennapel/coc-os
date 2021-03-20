@@ -4,7 +4,7 @@ import { MetaVar, setMeta } from './metas';
 import { Lvl } from './names';
 import { List, nil } from './utils/List';
 import { terr, tryT } from './utils/utils';
-import { force, isVVar, Spine, vinst, VVar, Val, evaluate, vapp, show, Elim, EApp } from './values';
+import { force, isVVar, Spine, vinst, VVar, Val, evaluate, vapp, show, Elim, EApp, vproj } from './values';
 import * as C from './core';
 
 // following: https://github.com/AndrasKovacs/elaboration-zoo
@@ -43,6 +43,7 @@ const renameElim = (id: MetaVar, pren: PartialRenaming, t: Core, e: Elim): Core 
   if (e.tag === 'EApp') return App(t, e.erased, rename(id, pren, e.arg));
   if (e.tag === 'EElimEnum') return ElimEnum(e.num, e.lift, rename(id, pren, e.motive), t, e.cases.map(x => rename(id, pren, x)));
   if (e.tag === 'ELower') return C.Lower(t);
+  if (e.tag === 'EProj') return C.Proj(e.proj, t);
   return e;
 };
 const renameSpine = (id: MetaVar, pren: PartialRenaming, t: Core, sp: Spine): Core =>
@@ -91,6 +92,7 @@ const solve = (gamma: Lvl, m: MetaVar, sp: Spine, rhs_: Val): void => {
 const unifyElim = (l: Lvl, a: Elim, b: Elim): void => {
   if (a === b) return;
   if (a.tag === 'ELower' && b.tag === 'ELower') return;
+  if (a.tag === 'EProj' && b.tag === 'EProj' && a.proj === b.proj) return;
   if (a.tag === 'EApp' && b.tag === 'EApp') return unify(l, a.arg, b.arg);
   if (a.tag === 'EElimEnum' && b.tag === 'EElimEnum' && a.num === b.num && a.cases.length === b.cases.length) {
     unify(l, a.motive, b.motive);
@@ -140,7 +142,16 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
     unify(l, a.snd, b.snd);
     return;
   }
-  // TODO: pair eta rule
+  if (a.tag === 'VPair') {
+    unify(l, a.fst, vproj('fst', b));
+    unify(l, a.snd, vproj('snd', b));
+    return;
+  }
+  if (b.tag === 'VPair') {
+    unify(l, vproj('fst', a), b.fst);
+    unify(l, vproj('snd', a), b.snd);
+    return;
+  }
 
   if (a.tag === 'VRigid' && b.tag === 'VRigid' && a.head === b.head)
     return tryT(() => unifySpines(l, a.spine, b.spine), e => terr(`failed to unify: ${show(a, l)} ~ ${show(b, l)}: ${e}`));

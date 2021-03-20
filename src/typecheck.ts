@@ -71,6 +71,12 @@ const synth = (local: Local, tm: Core): Val => {
     check(local, tm.snd, vinst(fty, evaluate(tm.fst, local.vs)));
     return ty;
   }
+  if (tm.tag === 'Proj') {
+    const ty = synth(local, tm.term);
+    const fty = force(ty);
+    if (fty.tag !== 'VSigma') return terr(`not a sigma type in proj (${show(tm)}): ${showV(local, ty)}`);
+    return tm.proj === 'fst' ? fty.type : vinst(fty, V.vproj('fst', evaluate(tm, local.vs)));
+  }
   if (tm.tag === 'Pi') {
     if (!local.erased) return terr(`pi type in non-type context: ${show(tm)}`);
     const s1 = synthType(local.inType(), tm.type);

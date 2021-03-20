@@ -8,7 +8,7 @@ import { quote, Val } from './values';
 export type Surface =
   Var | Type | Let |
   Pi | Abs | App |
-  Sigma | Pair |
+  Sigma | Pair | Proj |
   Enum | EnumLit | ElimEnum |
   Lift | LiftTerm | Lower |
   Meta | Hole;
@@ -29,6 +29,8 @@ export interface Sigma { readonly tag: 'Sigma'; readonly erased: boolean; readon
 export const Sigma = (erased: boolean, name: Name, type: Surface, body: Surface): Sigma => ({ tag: 'Sigma', erased, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly erased: boolean; readonly fst: Surface; readonly snd: Surface }
 export const Pair = (erased: boolean, fst: Surface, snd: Surface): Pair => ({ tag: 'Pair', erased, fst, snd });
+export interface Proj { readonly tag: 'Proj'; readonly proj: 'fst' | 'snd'; readonly term: Surface }
+export const Proj = (proj: 'fst' | 'snd', term: Surface): Proj => ({ tag: 'Proj', proj, term });
 export interface Enum { readonly tag: 'Enum'; readonly num: Ix; readonly lift: Ix | null }
 export const Enum = (num: Ix, lift: Ix | null): Enum => ({ tag: 'Enum', num, lift });
 export interface ElimEnum { readonly tag: 'ElimEnum'; readonly num: Ix; readonly lift: Ix | null; readonly motive: Surface | null; readonly scrut: Surface; readonly cases: Surface[] }
@@ -93,7 +95,7 @@ export const flattenPair = (t: Surface): [[boolean, Surface][], Surface] => {
 };
 
 const showP = (b: boolean, t: Surface) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Surface) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type' || t.tag === 'Enum' || t.tag === 'EnumLit' || t.tag === 'Hole';
+const isSimple = (t: Surface) => t.tag === 'Var' || t.tag === 'Meta' || t.tag === 'Type' || t.tag === 'Enum' || t.tag === 'EnumLit' || t.tag === 'Hole' || t.tag === 'Pair';
 const showS = (t: Surface) => showP(!isSimple(t), t);
 export const show = (t: Surface): string => {
   if (t.tag === 'Var') return `${t.name}${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
@@ -128,6 +130,7 @@ export const show = (t: Surface): string => {
   if (t.tag === 'Lift') return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
   if (t.tag === 'LiftTerm') return `lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.term)}`;
   if (t.tag === 'Lower') return `lower ${showS(t.term)}`;
+  if (t.tag === 'Proj') return `${t.proj} ${showS(t.term)}`;
   return t;
 };
 
@@ -160,6 +163,7 @@ export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
   if (t.tag === 'Lift') return Lift(t.lift, toSurface(t.type, ns));
   if (t.tag === 'LiftTerm') return LiftTerm(t.lift, toSurface(t.term, ns));
   if (t.tag === 'Lower') return Lower(toSurface(t.term, ns));
+  if (t.tag === 'Proj') return Proj(t.proj, toSurface(t.term, ns));
   return t;
 };
 

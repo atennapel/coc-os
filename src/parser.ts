@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift, LiftTerm, Lower } from './surface';
+import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift, LiftTerm, Lower, Proj } from './surface';
 import { Name } from './names';
 import { log } from './config';
 
@@ -409,6 +409,10 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
   if (isName(ts[0], 'lower')) {
     const term = exprs(ts.slice(1), '(');
     return Lower(term);
+  }
+  if (isName(ts[0], 'fst') || isName(ts[0], 'snd')) {
+    const term = exprs(ts.slice(1), '(');
+    return Proj((ts[0] as any).name, term);
   }
   if (isName(ts[0], '\\')) {
     const args: [Name, boolean, Surface | null][] = [];

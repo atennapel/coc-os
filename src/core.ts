@@ -6,7 +6,7 @@ import { impossible } from './utils/utils';
 export type Core =
   Var | Global | Type | Let |
   Pi | Abs | App |
-  Sigma | Pair |
+  Sigma | Pair | Proj |
   Enum | EnumLit | ElimEnum |
   Lift | LiftTerm | Lower |
   Meta | InsertedMeta;
@@ -29,6 +29,8 @@ export interface Sigma { readonly tag: 'Sigma'; readonly erased: boolean; readon
 export const Sigma = (erased: boolean, name: Name, type: Core, body: Core): Sigma => ({ tag: 'Sigma', erased, name, type, body });
 export interface Pair { readonly tag: 'Pair'; readonly erased: boolean; readonly fst: Core; readonly snd: Core; readonly type: Core }
 export const Pair = (erased: boolean, fst: Core, snd: Core, type: Core): Pair => ({ tag: 'Pair', erased, fst, snd, type });
+export interface Proj { readonly tag: 'Proj'; readonly proj: 'fst' | 'snd'; readonly term: Core }
+export const Proj = (proj: 'fst' | 'snd', term: Core): Proj => ({ tag: 'Proj', proj, term });
 export interface Enum { readonly tag: 'Enum'; readonly num: Ix; readonly lift: Ix }
 export const Enum = (num: Ix, lift: Ix): Enum => ({ tag: 'Enum', num, lift });
 export interface EnumLit { readonly tag: 'EnumLit'; readonly val: Ix; readonly num: Ix; readonly lift: Ix }
@@ -93,7 +95,7 @@ export const flattenPair = (t: Core): [[boolean, Core][], Core] => {
 };
 
 const showP = (b: boolean, t: Core) => b ? `(${show(t)})` : show(t);
-const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta' || t.tag === 'Enum' || t.tag === 'EnumLit';
+const isSimple = (t: Core) => t.tag === 'Var' || t.tag === 'Global' || t.tag === 'Type' || t.tag === 'Meta' || t.tag === 'InsertedMeta' || t.tag === 'Enum' || t.tag === 'EnumLit' || t.tag === 'Pair';
 const showS = (t: Core) => showP(!isSimple(t), t);
 export const show = (t: Core): string => {
   if (t.tag === 'Var') return `'${t.index}`;
@@ -129,6 +131,7 @@ export const show = (t: Core): string => {
   if (t.tag === 'Lift') return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
   if (t.tag === 'LiftTerm') return `lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.term)}`;
   if (t.tag === 'Lower') return `lower ${showS(t.term)}`;
+  if (t.tag === 'Proj') return `${t.proj} ${showS(t.term)}`;
   return t;
 };
 
@@ -144,6 +147,7 @@ export const shift = (d: Ix, c: Ix, t: Core): Core => {
   if (t.tag === 'Lift') return Lift(t.lift, shift(d, c, t.type));
   if (t.tag === 'LiftTerm') return LiftTerm(t.lift, shift(d, c, t.term));
   if (t.tag === 'Lower') return Lower(shift(d, c, t.term));
+  if (t.tag === 'Proj') return Proj(t.proj, shift(d, c, t.term));
   return t;
 };
 
@@ -159,6 +163,7 @@ export const substVar = (j: Ix, s: Core, t: Core): Core => {
   if (t.tag === 'Lift') return Lift(t.lift, substVar(j, s, t.type));
   if (t.tag === 'LiftTerm') return LiftTerm(t.lift, substVar(j, s, t.term));
   if (t.tag === 'Lower') return Lower(substVar(j, s, t.term));
+  if (t.tag === 'Proj') return Proj(t.proj, substVar(j, s, t.term));
   return t;
 };
 
@@ -181,5 +186,6 @@ export const liftType = (l: Ix, t: Core): Core => {
   if (t.tag === 'Lift') return Lift(t.lift + 1, t.type);
   if (t.tag === 'LiftTerm') return LiftTerm(t.lift + 1, t.term);
   if (t.tag === 'Lower') return t.term;
+  if (t.tag === 'Proj') return Proj(t.proj, liftType(l, t.term));
   return t;
 };

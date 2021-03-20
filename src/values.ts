@@ -1,4 +1,4 @@
-import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift, LiftTerm, Lower } from './core';
+import { App, Core, Var, show as showCore, Abs, Pi, Global, Meta, Let, Type, liftType, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift, LiftTerm, Lower, Proj } from './core';
 import { getMeta, MetaVar } from './metas';
 import { Ix, Lvl, Name } from './names';
 import { Lazy } from './utils/Lazy';
@@ -6,7 +6,7 @@ import { cons, List, Nil, nil } from './utils/List';
 import { impossible } from './utils/utils';
 import { getGlobal } from './globals';
 
-export type Elim = EApp | EElimEnum | ELower;
+export type Elim = EApp | EElimEnum | ELower | EProj;
 
 export interface EApp { readonly tag: 'EApp'; readonly erased: boolean; readonly arg: Val }
 export const EApp = (erased: boolean, arg: Val): EApp => ({ tag: 'EApp', erased, arg });
@@ -14,6 +14,8 @@ export interface EElimEnum { readonly tag: 'EElimEnum'; readonly num: Ix; readon
 export const EElimEnum = (num: Ix, lift: Ix, motive: Val, cases: Val[]): EElimEnum => ({ tag: 'EElimEnum', num, lift, motive, cases });
 export interface ELower { readonly tag: 'ELower' }
 export const ELower: ELower = { tag: 'ELower' };
+export interface EProj { readonly tag: 'EProj'; readonly proj: 'fst' | 'snd' }
+export const EProj = (proj: 'fst' | 'snd'): EProj => ({ tag: 'EProj', proj });
 
 export type Spine = List<Elim>;
 export type EnvV = List<Val>;
@@ -68,6 +70,7 @@ export const velim = (e: Elim, t: Val): Val => {
   if (e.tag === 'EApp') return vapp(t, e.erased, e.arg);
   if (e.tag === 'EElimEnum') return velimenum(e.num, e.lift, e.motive, t, e.cases);
   if (e.tag === 'ELower') return vlower(t);
+  if (e.tag === 'EProj') return vproj(e.proj, t);
   return e;
 };
 
@@ -93,6 +96,13 @@ export const vlower = (scrut: Val): Val => {
   if (scrut.tag === 'VFlex') return VFlex(scrut.head, cons(ELower, scrut.spine));
   if (scrut.tag === 'VGlobal') return VGlobal(scrut.name, scrut.lift, cons(ELower, scrut.spine), scrut.val.map(vlower));
   return impossible(`vlower: ${scrut.tag}`);
+};
+export const vproj = (proj: 'fst' | 'snd', scrut: Val): Val => {
+  if (scrut.tag === 'VPair') return proj === 'fst' ? scrut.fst : scrut.snd;
+  if (scrut.tag === 'VRigid') return VRigid(scrut.head, cons(EProj(proj), scrut.spine));
+  if (scrut.tag === 'VFlex') return VFlex(scrut.head, cons(EProj(proj), scrut.spine));
+  if (scrut.tag === 'VGlobal') return VGlobal(scrut.name, scrut.lift, cons(EProj(proj), scrut.spine), scrut.val.map(v => vproj(proj, v)));
+  return impossible(`vproj: ${scrut.tag}`);
 };
 
 export const velimBD = (env: EnvV, v: Val, s: List<boolean>): Val => {
@@ -124,6 +134,7 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
   if (t.tag === 'Lift') return VLift(t.lift, evaluate(t.type, vs));
   if (t.tag === 'LiftTerm') return VLiftTerm(t.lift, evaluate(t.term, vs));
   if (t.tag === 'Lower') return vlower(evaluate(t.term, vs));
+  if (t.tag === 'Proj') return vproj(t.proj, evaluate(t.term, vs));
   return t;
 };
 
@@ -131,6 +142,7 @@ const quoteElim = (t: Core, e: Elim, k: Lvl, full: boolean): Core => {
   if (e.tag === 'EApp') return App(t, e.erased, quote(e.arg, k, full));
   if (e.tag === 'EElimEnum') return ElimEnum(e.num, e.lift, quote(e.motive, k, full), t, e.cases.map(x => quote(x, k, full)));
   if (e.tag === 'ELower') return Lower(t);
+  if (e.tag === 'EProj') return Proj(e.proj, t);
   return e;
 };
 export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
@@ -219,5 +231,6 @@ export const zonk = (tm: Core, vs: EnvV = nil, k: Lvl = 0, full: boolean = false
   if (tm.tag === 'Lift') return Lift(tm.lift, zonk(tm.type, vs, k, full));
   if (tm.tag === 'LiftTerm') return LiftTerm(tm.lift, zonk(tm.term, vs, k, full));
   if (tm.tag === 'Lower') return Lower(zonk(tm.term, vs, k, full));
+  if (tm.tag === 'Proj') return Proj(tm.proj, zonk(tm.term, vs, k, full));
   return tm;
 };
