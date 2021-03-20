@@ -19,7 +19,6 @@ yarn start filename
 
 ```
 TODO:
-- type lifting operator: lift, lower
 - projection
 - equality type
 - fixpoints
@@ -27,4 +26,5 @@ TODO:
 ISSUES:
 - elaboration of `\(a b : *). (c : Bool) ** if c a b` succeeds, but it should fail
 - (\{A : *} (x : A). x) *
+- how to handle Lift Bool != #2^
 ```

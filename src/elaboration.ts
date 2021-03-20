@@ -1,4 +1,4 @@
-import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, Lift, LiftTerm, liftType, Pair, Pi, Sigma, Type, Var } from './core';
+import { Abs, App, Core, ElimEnum, Enum, EnumLit, Global, InsertedMeta, Let, Lift, LiftTerm, liftType, Lower, Pair, Pi, Sigma, Type, Var } from './core';
 import { indexEnvT, Local } from './local';
 import { allMetasSolved, freshMeta, resetMetas } from './metas';
 import { show, Surface } from './surface';
@@ -265,6 +265,17 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     */
     const [term, ty] = synth(local, tm.term);
     return [LiftTerm(tm.lift, term), VLift(tm.lift, ty)];
+  }
+  if (tm.tag === 'Lower') {
+    /*
+    t : Lift^l A
+    -------------------
+    lower t : A
+    */
+    const [term, ty] = synth(local, tm.term);
+    const vty = force(ty);
+    if (vty.tag !== 'VLift') return terr(`not a Lift type in ${show(tm)}: ${showV(local, ty)}`);
+    return [Lower(term), vty.type];
   }
   return terr(`unable to synth ${show(tm)}`);
 };

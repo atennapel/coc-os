@@ -138,6 +138,17 @@ const synth = (local: Local, tm: Core): Val => {
     const ty = synth(local, tm.term);
     return V.VLift(tm.lift, ty);
   }
+  if (tm.tag === 'Lower') {
+    /*
+    t : Lift^l A
+    -------------------
+    lower t : A
+    */
+    const ty = synth(local, tm.term);
+    const vty = force(ty);
+    if (vty.tag !== 'VLift') return terr(`not a Lift type in ${show(tm)}: ${showV(local, ty)}`);
+    return vty.type;
+  }
   if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta') return impossible(`${tm.tag} in typecheck`);
   return tm;
 };

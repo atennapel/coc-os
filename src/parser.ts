@@ -1,5 +1,5 @@
 import { loadFile, serr } from './utils/utils';
-import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift, LiftTerm } from './surface';
+import { Surface, Var, App, Abs, Pi, Let, Hole, Type, Def, DDef, Enum, EnumLit, ElimEnum, Sigma, Pair, Lift, LiftTerm, Lower } from './surface';
 import { Name } from './names';
 import { log } from './config';
 
@@ -286,6 +286,59 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
   if (br === '{') return serr(`{} cannot be used here`);
   if (ts.length === 0) return tunit;
   if (ts.length === 1) return expr(ts[0])[0];
+  if (isName(ts[0], 'let')) {
+    const x = ts[1];
+    let name = 'ERROR';
+    let erased = false;
+    if (x.tag === 'Name') {
+      name = x.name;
+    } else if (x.tag === 'List' && x.bracket === '{') {
+      const a = x.list;
+      if (a.length !== 1) return serr(`invalid name for let`);
+      const h = a[0];
+      if (h.tag !== 'Name') return serr(`invalid name for let`);
+      name = h.name;
+      erased = true;
+    } else return serr(`invalid name for let`);
+    let ty: Surface | null = null;
+    let j = 2;
+    if (isName(ts[j], ':')) {
+      const tyts: Token[] = [];
+      j++;
+      for (; j < ts.length; j++) {
+        const v = ts[j];
+        if (v.tag === 'Name' && v.name === '=')
+          break;
+        else tyts.push(v);
+      }
+      ty = exprs(tyts, '(');
+    }
+    if (!isName(ts[j], '=')) return serr(`no = after name in let`);
+    const vals: Token[] = [];
+    let found = false;
+    let i = j + 1;
+    for (; i < ts.length; i++) {
+      const c = ts[i];
+      if (c.tag === 'Name' && c.name === ';') {
+        found = true;
+        break;
+      }
+      vals.push(c);
+    }
+    if (!found) return serr(`no ; after let`);
+    if (vals.length === 0) return serr(`empty val in let`);
+    const val = exprs(vals, '(');
+    const body = exprs(ts.slice(i + 1), '(');
+    if (ty)
+      return Let(erased, name, ty, val, body);
+    return Let(erased, name, null, val, body);
+  }
+  const i = ts.findIndex(x => isName(x, ':'));
+  if (i >= 0) {
+    const a = ts.slice(0, i);
+    const b = ts.slice(i + 1);
+    return Let(false, 'x', exprs(b, '('), exprs(a, '('), Var('x', 0));
+  }
   if (ts[0].tag === 'Name' && ts[0].name.startsWith('?')) {
     const prefix = ts[0].name;
     const full = prefix.slice(1);
@@ -353,58 +406,9 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
     const term = exprs(ts.slice(1), '(');
     return LiftTerm(lift, term);
   }
-  if (isName(ts[0], 'let')) {
-    const x = ts[1];
-    let name = 'ERROR';
-    let erased = false;
-    if (x.tag === 'Name') {
-      name = x.name;
-    } else if (x.tag === 'List' && x.bracket === '{') {
-      const a = x.list;
-      if (a.length !== 1) return serr(`invalid name for let`);
-      const h = a[0];
-      if (h.tag !== 'Name') return serr(`invalid name for let`);
-      name = h.name;
-      erased = true;
-    } else return serr(`invalid name for let`);
-    let ty: Surface | null = null;
-    let j = 2;
-    if (isName(ts[j], ':')) {
-      const tyts: Token[] = [];
-      j++;
-      for (; j < ts.length; j++) {
-        const v = ts[j];
-        if (v.tag === 'Name' && v.name === '=')
-          break;
-        else tyts.push(v);
-      }
-      ty = exprs(tyts, '(');
-    }
-    if (!isName(ts[j], '=')) return serr(`no = after name in let`);
-    const vals: Token[] = [];
-    let found = false;
-    let i = j + 1;
-    for (; i < ts.length; i++) {
-      const c = ts[i];
-      if (c.tag === 'Name' && c.name === ';') {
-        found = true;
-        break;
-      }
-      vals.push(c);
-    }
-    if (!found) return serr(`no ; after let`);
-    if (vals.length === 0) return serr(`empty val in let`);
-    const val = exprs(vals, '(');
-    const body = exprs(ts.slice(i + 1), '(');
-    if (ty)
-      return Let(erased, name, ty, val, body);
-    return Let(erased, name, null, val, body);
-  }
-  const i = ts.findIndex(x => isName(x, ':'));
-  if (i >= 0) {
-    const a = ts.slice(0, i);
-    const b = ts.slice(i + 1);
-    return Let(false, 'x', exprs(b, '('), exprs(a, '('), Var('x', 0));
+  if (isName(ts[0], 'lower')) {
+    const term = exprs(ts.slice(1), '(');
+    return Lower(term);
   }
   if (isName(ts[0], '\\')) {
     const args: [Name, boolean, Surface | null][] = [];

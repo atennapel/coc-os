@@ -8,7 +8,7 @@ export type Core =
   Pi | Abs | App |
   Sigma | Pair |
   Enum | EnumLit | ElimEnum |
-  Lift | LiftTerm |
+  Lift | LiftTerm | Lower |
   Meta | InsertedMeta;
 
 export interface Var { readonly tag: 'Var'; readonly index: Ix }
@@ -39,6 +39,8 @@ export interface Lift { readonly tag: 'Lift'; readonly lift: Ix; readonly type: 
 export const Lift = (lift: Ix, type: Core): Lift => ({ tag: 'Lift', lift, type });
 export interface LiftTerm { readonly tag: 'LiftTerm'; readonly lift: Ix; readonly term: Core }
 export const LiftTerm = (lift: Ix, term: Core): LiftTerm => ({ tag: 'LiftTerm', lift, term });
+export interface Lower { readonly tag: 'Lower'; readonly term: Core }
+export const Lower = (term: Core): Lower => ({ tag: 'Lower', term });
 export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
 export const Meta = (id: MetaVar): Meta => ({ tag: 'Meta', id });
 export interface InsertedMeta { readonly tag: 'InsertedMeta'; readonly id: MetaVar; readonly spine: List<boolean> }
@@ -126,6 +128,7 @@ export const show = (t: Core): string => {
     return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''} : ${showP(t.type.tag === 'Let', t.type)} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
   if (t.tag === 'Lift') return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
   if (t.tag === 'LiftTerm') return `lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.term)}`;
+  if (t.tag === 'Lower') return `lower ${showS(t.term)}`;
   return t;
 };
 
@@ -140,6 +143,7 @@ export const shift = (d: Ix, c: Ix, t: Core): Core => {
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, shift(d, c, t.motive), shift(d, c, t.scrut), t.cases.map(x => shift(d, c, x)));
   if (t.tag === 'Lift') return Lift(t.lift, shift(d, c, t.type));
   if (t.tag === 'LiftTerm') return LiftTerm(t.lift, shift(d, c, t.term));
+  if (t.tag === 'Lower') return Lower(shift(d, c, t.term));
   return t;
 };
 
@@ -154,6 +158,7 @@ export const substVar = (j: Ix, s: Core, t: Core): Core => {
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, substVar(j, s, t.motive), substVar(j, s, t.scrut), t.cases.map(x => substVar(j, s, x)));
   if (t.tag === 'Lift') return Lift(t.lift, substVar(j, s, t.type));
   if (t.tag === 'LiftTerm') return LiftTerm(t.lift, substVar(j, s, t.term));
+  if (t.tag === 'Lower') return Lower(substVar(j, s, t.term));
   return t;
 };
 
@@ -175,5 +180,6 @@ export const liftType = (l: Ix, t: Core): Core => {
   if (t.tag === 'InsertedMeta') return impossible(`meta in liftType: ${show(t)}`);
   if (t.tag === 'Lift') return Lift(t.lift + 1, t.type);
   if (t.tag === 'LiftTerm') return LiftTerm(t.lift + 1, t.term);
+  if (t.tag === 'Lower') return t.term;
   return t;
 };

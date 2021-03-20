@@ -42,6 +42,7 @@ const invert = (gamma: Lvl, sp: Spine): PartialRenaming => {
 const renameElim = (id: MetaVar, pren: PartialRenaming, t: Core, e: Elim): Core => {
   if (e.tag === 'EApp') return App(t, e.erased, rename(id, pren, e.arg));
   if (e.tag === 'EElimEnum') return ElimEnum(e.num, e.lift, rename(id, pren, e.motive), t, e.cases.map(x => rename(id, pren, x)));
+  if (e.tag === 'ELower') return C.Lower(t);
   return e;
 };
 const renameSpine = (id: MetaVar, pren: PartialRenaming, t: Core, sp: Spine): Core =>
@@ -88,6 +89,8 @@ const solve = (gamma: Lvl, m: MetaVar, sp: Spine, rhs_: Val): void => {
 };
 
 const unifyElim = (l: Lvl, a: Elim, b: Elim): void => {
+  if (a === b) return;
+  if (a.tag === 'ELower' && b.tag === 'ELower') return;
   if (a.tag === 'EApp' && b.tag === 'EApp') return unify(l, a.arg, b.arg);
   if (a.tag === 'EElimEnum' && b.tag === 'EElimEnum' && a.num === b.num && a.cases.length === b.cases.length) {
     unify(l, a.motive, b.motive);
