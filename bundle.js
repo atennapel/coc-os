@@ -280,15 +280,15 @@ const newMeta = (local, universe) => {
     const bds = local.ts.map(e => e.bound);
     return core_1.InsertedMeta(id, bds);
 };
-const inst = (local, ty_) => {
+const inst = (local, ty_, u) => {
     const ty = values_1.force(ty_);
     if (ty.tag === 'VPi' && ty.erased) {
         const m = newMeta(local, ty.u1);
         const vm = values_1.evaluate(m, local.vs);
-        const [res, args] = inst(local, values_1.vinst(ty, vm));
-        return [res, List_1.cons(m, args)];
+        const [res, args, u2] = inst(local, values_1.vinst(ty, vm), ty.u2);
+        return [res, List_1.cons(m, args), u2];
     }
-    return [ty_, List_1.nil];
+    return [ty_, List_1.nil, u];
 };
 const check = (local, tm, ty, u) => {
     config_1.log(() => `check(*${u}) ${surface_1.show(tm)} : ${showV(local, ty)}`);
@@ -311,7 +311,7 @@ const check = (local, tm, ty, u) => {
     }
     if (fty.tag === 'VPi' && fty.erased) {
         const v = values_1.VVar(local.level);
-        const term = check(local.insert(true, fty.name, fty.type, fty.u1), tm, values_1.vinst(fty, v), u);
+        const term = check(local.insert(true, fty.name, fty.type, fty.u1), tm, values_1.vinst(fty, v), fty.u2);
         return core_1.Abs(fty.erased, fty.name, values_1.quote(fty.type, local.level), term);
     }
     if (fty.tag === 'VLift' && tm.tag === 'EnumLit') {
@@ -373,9 +373,9 @@ const check = (local, tm, ty, u) => {
         return core_1.Let(tm.erased, tm.name, vtype, val, body);
     }
     const [term, ty2, u2] = synth(local, tm);
-    if (u2 !== u)
-        return utils_1.terr(`check failed (${surface_1.show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}, universe mismatch: *${u2} ~ *${u}`);
-    const [ty2inst, ms] = inst(local, ty2);
+    const [ty2inst, ms, u3] = inst(local, ty2, u2);
+    if (u3 !== u)
+        return utils_1.terr(`check failed (${surface_1.show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}, universe mismatch: *${u3} ~ *${u}`);
     return utils_1.tryT(() => {
         config_1.log(() => `unify ${showV(local, ty2inst)} ~ ${showV(local, ty)}`);
         config_1.log(() => `for check ${surface_1.show(tm)} : ${showV(local, ty)}`);
@@ -440,7 +440,7 @@ const synth = (local, tm) => {
             const ty = values_1.evaluate(type, local.vs);
             const [body, rty, u2] = synth(local.bind(tm.erased, tm.name, ty, u1), tm.body);
             const u = Math.max(u1, u2);
-            const qpi = core_1.Pi(tm.erased, tm.name, type, u1, values_1.quote(rty, local.level + 1), u);
+            const qpi = core_1.Pi(tm.erased, tm.name, type, u1, values_1.quote(rty, local.level + 1), u2);
             const pi = values_1.evaluate(qpi, local.vs);
             return [core_1.Abs(tm.erased, tm.name, type, body), pi, u];
         }
@@ -457,7 +457,7 @@ const synth = (local, tm) => {
         const ty = values_1.evaluate(type, local.vs);
         const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty, s1), tm.body);
         const u = Math.max(s1, s2);
-        const pi = core_1.Pi(tm.erased, tm.name, type, s1, body, u);
+        const pi = core_1.Pi(tm.erased, tm.name, type, s1, body, s2);
         config_1.log(() => `Pi synth done (${u} : ${u + 1}): ${S.showCore(pi, local.ns)}`);
         return [pi, values_1.VType(u), u + 1];
     }
@@ -468,7 +468,7 @@ const synth = (local, tm) => {
         const ty = values_1.evaluate(type, local.vs);
         const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty, s1), tm.body);
         const u = Math.max(s1, s2);
-        return [core_1.Sigma(tm.erased, tm.name, type, s1, body, u), values_1.VType(u), u + 1];
+        return [core_1.Sigma(tm.erased, tm.name, type, s1, body, s2), values_1.VType(u), u + 1];
     }
     if (tm.tag === 'Proj') {
         const [term, ty, u] = synth(local, tm.term);
@@ -1548,15 +1548,17 @@ const runREPL = (s_, cb) => {
         const term = parser_1.parse(s);
         config_1.log(() => surface_1.show(term));
         config_1.log(() => 'ELABORATE');
-        const [eterm, etype] = elaboration_1.elaborate(term, inType);
+        const [eterm, etype, uni] = elaboration_1.elaborate(term, inType);
         config_1.log(() => C.show(eterm));
         config_1.log(() => surface_1.showCore(eterm));
         config_1.log(() => C.show(etype));
         config_1.log(() => surface_1.showCore(etype));
+        config_1.log(() => `universe: *${uni}`);
         config_1.log(() => 'TYPECHECK');
-        const [ttype] = typecheck_1.typecheck(eterm, inType ? local_1.Local.empty().inType() : local_1.Local.empty());
+        const [ttype, uni2] = typecheck_1.typecheck(eterm, inType ? local_1.Local.empty().inType() : local_1.Local.empty());
         config_1.log(() => C.show(ttype));
         config_1.log(() => surface_1.showCore(ttype));
+        config_1.log(() => `universe: *${uni2}`);
         config_1.log(() => 'NORMALIZE');
         const norm = values_1.normalize(eterm);
         config_1.log(() => surface_1.showCore(norm));

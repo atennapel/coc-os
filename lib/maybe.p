@@ -1,19 +1,14 @@
-import lib/functor.p
 import lib/unit.p
-import lib/bool.p
+import lib/either.p
 
-def {Maybe} = \(t : *). (b : Bool) ** if b t ()
-def Nothing : {t : *} -> Maybe t = (False, Unit)
-def Just : {t : *} -> t -> Maybe t = \x. (True, x)
+def {Maybe} = \(t : *). Either () t
+def Nothing : {t : *} -> Maybe t = \{t}. Left {()} {t} Unit
+def Just : {t : *} -> t -> Maybe t = \{t} x. Right {()} {t} x
 
-def maybe : {t r : *} -> r -> (t -> r) -> Maybe t -> r = \{t} {r} n j m. _x
+def indMaybe
+  : {t : *} -> {P : Maybe t -> *} -> P Nothing -> ((x : t) -> P (Just x)) -> (x : Maybe t) -> P x
+  = \{t} {P} nothing just x. indEither {()} {t} {P} (\_. nothing) just x
 
 def caseMaybe
   : {t r : *} -> Maybe t -> r -> (t -> r) -> r
-  = \{t} {r} m n j. m {r} n j
-
-def mapMaybe
-  : {a b : *} -> (a -> b) -> Maybe a -> Maybe b
-  = \{a} {b} f m. m {Maybe b} Nothing (\x. Just (f x))
-
-def functorMaybe : Functor Maybe = mapMaybe
+  = \{t} {r} x nothing just. caseEither {()} {t} {r} x (\_. nothing) just

@@ -139,16 +139,18 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => show(term));
 
     log(() => 'ELABORATE');
-    const [eterm, etype] = elaborate(term, inType);
+    const [eterm, etype, uni] = elaborate(term, inType);
     log(() => C.show(eterm));
     log(() => showCore(eterm));
     log(() => C.show(etype));
     log(() => showCore(etype));
+    log(() => `universe: *${uni}`);
 
     log(() => 'TYPECHECK');
-    const [ttype] = typecheck(eterm, inType ? Local.empty().inType() : Local.empty());
+    const [ttype, uni2] = typecheck(eterm, inType ? Local.empty().inType() : Local.empty());
     log(() => C.show(ttype));
     log(() => showCore(ttype));
+    log(() => `universe: *${uni2}`);
 
     log(() => 'NORMALIZE');
     const norm = normalize(eterm);
