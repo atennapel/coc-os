@@ -191,19 +191,9 @@ const expr = (t: Token): [Surface, boolean] => {
     }
     if (x.startsWith('#')) {
       const full = x.slice(1);
-      if (full.includes('^')) {
-        const spl = full.split('^');
-        if (spl.length !== 2) return serr(`invalid enum: ${x}`);
-        const m = +spl[0];
-        if (isNaN(m) || Math.floor(m) !== m || m < 0) return serr(`invalid enum: ${x}`);
-        if (spl[1] === '') return [Enum(m, 1), false]
-        const n = +spl[1];
-        if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid enum: ${x}`);
-        return [Enum(m, n), false];
-      }
       const n = +full;
       if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid enum: ${x}`);
-      return [Enum(n, null), false];
+      return [Enum(n), false];
     }
     if (x.startsWith('@')) {
       const full = x.slice(1);
@@ -213,34 +203,13 @@ const expr = (t: Token): [Surface, boolean] => {
         const m = +spl[0];
         if (isNaN(m) || Math.floor(m) !== m || m < 0) return serr(`invalid enum literal: ${x}`);
         if (spl[1] === '') return serr(`invalid enum literal: ${x}`);
-        const rest = spl[1];
-        if (rest.includes('^')) {
-          const spl2 = rest.split('^');
-          if (spl2.length !== 2) return serr(`invalid enum literal: ${x}`);
-          const n = +spl2[0];
-          if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid enum literal: ${x}`);
-          if (spl2[1] === '') return [EnumLit(m, n, 1), false];
-          const l = +spl2[1];
-          if (isNaN(l) || Math.floor(l) !== l || l < 0) return serr(`invalid enum literal: ${x}`);
-          return [EnumLit(m, n, l), false];
-        } else {
-          const n = +spl[1];
-          if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid enum literal: ${x}`);
-          return [EnumLit(m, n, null), false]
-        }
-      } else if (full.includes('^')) {
-        const spl = full.split('^');
-        if (spl.length !== 2) return serr(`invalid enum literal: ${x}`);
-        const m = +spl[0];
-        if (isNaN(m) || Math.floor(m) !== m || m < 0) return serr(`invalid enum literal: ${x}`);
-        if (spl[1] === '') return [EnumLit(m, null, 1), false]
         const n = +spl[1];
         if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid enum literal: ${x}`);
-        return [EnumLit(m, null, n), false]
+        return [EnumLit(m, n), false]
       } else {
         const n = +full;
         if (isNaN(n) || Math.floor(n) !== n || n < 0) return serr(`invalid enum literal: ${x}`);
-        return [EnumLit(n, null, null), false];
+        return [EnumLit(n, null), false];
       }
     }
     if (/[a-z]/i.test(x[0])) {
@@ -380,31 +349,13 @@ const exprs = (ts: Token[], br: BracketO): Surface => {
     });
     return ElimEnum(num, lvl, motive, scrut, cases);
   }
-  if (ts[0].tag === 'Name' && ts[0].name.startsWith('Lift')) {
-    const x = ts[0].name.slice(4);
-    let lift = 0;
-    if (x === '') lift = 0;
-    else if (x === '^') lift = 1;
-    else {
-      const m = +x.slice(1);
-      if (isNaN(m) || Math.floor(m) !== m || m < 0) return serr(`invalid Lift: ${ts[0].name}`);
-      lift = m;
-    }
+  if (isName(ts[0], 'Lift')) {
     const type = exprs(ts.slice(1), '(');
-    return Lift(lift, type);
+    return Lift(type);
   }
-  if (ts[0].tag === 'Name' && ts[0].name.startsWith('lift')) {
-    const x = ts[0].name.slice(4);
-    let lift = 0;
-    if (x === '') lift = 0;
-    else if (x === '^') lift = 1;
-    else {
-      const m = +x.slice(1);
-      if (isNaN(m) || Math.floor(m) !== m || m < 0) return serr(`invalid lift: ${ts[0].name}`);
-      lift = m;
-    }
+  if (isName(ts[0], 'lift')) {
     const term = exprs(ts.slice(1), '(');
-    return LiftTerm(lift, term);
+    return LiftTerm(term);
   }
   if (isName(ts[0], 'lower')) {
     const term = exprs(ts.slice(1), '(');

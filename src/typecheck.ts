@@ -101,11 +101,11 @@ const synth = (local: Local, tm: Core): Val => {
   }
   if (tm.tag === 'Enum') {
     if (!local.erased) return terr(`enum type in non-type context: ${show(tm)}`);
-    return VType(tm.lift);
+    return VType(0);
   }
   if (tm.tag === 'EnumLit') {
     if (tm.val >= tm.num) return terr(`invalid enum literal: ${show(tm)}`);
-    return V.VEnum(tm.num, tm.lift);
+    return V.VEnum(tm.num);
   }
   if (tm.tag === 'ElimEnum') {
     if (tm.cases.length !== tm.num) return terr(`cases amount mismatch, expected ${tm.num} but got ${tm.cases.length}: ${show(tm)}`);
@@ -116,11 +116,11 @@ const synth = (local: Local, tm: Core): Val => {
     ----------------------
     ?n^l P x c1 ... cn : P x
     */
-    check(local.inType(), tm.motive, V.VPi(false, '_', V.VEnum(tm.num, tm.lift), _ => VType(tm.lift)));
+    check(local.inType(), tm.motive, V.VPi(false, '_', V.VEnum(tm.num), _ => VType(tm.lift)));
     const motive = evaluate(tm.motive, local.vs);
-    check(local, tm.scrut, V.VEnum(tm.num, tm.lift));
+    check(local, tm.scrut, V.VEnum(tm.num));
     const scrut = evaluate(tm.scrut, local.vs);
-    tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num, tm.lift))));
+    tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num))));
     return V.vapp(motive, false, scrut);
   }
   if (tm.tag === 'Lift') {
@@ -128,25 +128,25 @@ const synth = (local: Local, tm: Core): Val => {
     /*
     t : *k
     -------------------
-    Lift^l t : *(l + k)
+    Lift t : *(k + 1)
     */
     const ty = synth(local, tm.type);
     const vty = force(ty);
     if (vty.tag !== 'VType') return terr(`not a type in ${show(tm)}: ${showV(local, ty)}`);
-    return VType(tm.lift + vty.index + 1);
+    return VType(vty.index + 1);
   }
   if (tm.tag === 'LiftTerm') {
     /*
     t : A
     -------------------
-    lift^l t : Lift^l A
+    lift t : Lift A
     */
     const ty = synth(local, tm.term);
-    return V.VLift(tm.lift, ty);
+    return V.VLift(ty);
   }
   if (tm.tag === 'Lower') {
     /*
-    t : Lift^l A
+    t : Lift A
     -------------------
     lower t : A
     */

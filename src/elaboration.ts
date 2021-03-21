@@ -6,7 +6,7 @@ import { cons, List, nil } from './utils/List';
 import { evaluate, force, quote, VAbs, Val, vapp, VEnum, VEnumLit, VFlex, vinst, VLift, VPi, vproj, VType, VVar, zonk } from './values';
 import * as S from './surface';
 import { log } from './config';
-import { terr, tryT } from './utils/utils';
+import { iterate, terr, tryT } from './utils/utils';
 import { unify } from './unification';
 import { Ix, Name } from './names';
 import { getGlobal, setGlobal } from './globals';
@@ -56,34 +56,33 @@ const check = (local: Local, tm: Surface, ty: Val): Core => {
     const term = check(local.insert(true, fty.name, fty.type), tm, vinst(fty, v));
     return Abs(fty.erased, fty.name, quote(fty.type, local.level), term);
   }
-  if (tm.tag === 'Enum' && fty.tag === 'VType' && (tm.lift === null || tm.lift <= fty.index)) {
-    if (!local.erased) return terr(`enum type in non-type context: ${show(tm)}`);
-    return Enum(tm.num, fty.index);
+  if (fty.tag === 'VLift' && tm.tag === 'EnumLit') {
+    const term = check(local, tm, fty.type);
+    return LiftTerm(term);
   }
-  if (tm.tag === 'EnumLit' && fty.tag === 'VEnum' && (tm.num === null || tm.num === fty.num) && (tm.lift === null || tm.lift <= fty.lift))
-    return EnumLit(tm.val, fty.num, fty.lift);
+  if (tm.tag === 'Enum' && fty.tag === 'VType') {
+    if (!local.erased) return terr(`enum type in non-type context: ${show(tm)}`);
+    return iterate(fty.index, Enum(tm.num) as Core, x => Lift(x) as Core);
+  }
+  if (tm.tag === 'EnumLit' && fty.tag === 'VEnum' && (tm.num === null || tm.num === fty.num))
+    return EnumLit(tm.val, fty.num);
   if (tm.tag === 'ElimEnum' && !tm.motive) {
     if (tm.cases.length !== tm.num) return terr(`cases amount mismatch, expected ${tm.num} but got ${tm.cases.length}: ${show(tm)}`);
     const lift = tm.lift || 0;
-    const vmotive = VAbs(false, '_', VEnum(tm.num, lift), _ => ty);
+    const vmotive = VAbs(false, '_', VEnum(tm.num), _ => ty);
     const motive = quote(vmotive, local.level);
-    const scrut = check(local, tm.scrut, VEnum(tm.num, lift));
-    const cases = tm.cases.map((c, i) => check(local, c, vapp(vmotive, false, VEnumLit(i, tm.num, lift))));
+    const scrut = check(local, tm.scrut, VEnum(tm.num));
+    const cases = tm.cases.map((c, i) => check(local, c, vapp(vmotive, false, VEnumLit(i, tm.num))));
     return ElimEnum(tm.num, lift, motive, scrut, cases);
   }
-  if (tm.tag === 'Lift' && fty.tag === 'VType') {
+  if (tm.tag === 'Lift' && fty.tag === 'VType' && fty.index > 0) {
     if (!local.erased) return terr(`Lift type in non-type context: ${show(tm)}`);
-    const type = check(local, tm.type, VType(fty.index - tm.lift - 1));
-    return Lift(tm.lift, type);
+    const type = check(local, tm.type, VType(fty.index - 1));
+    return Lift(type);
   }
   if (tm.tag === 'LiftTerm' && fty.tag === 'VLift') {
-    /*
-    t : A
-    -------------------
-    lift^l t : Lift^l A
-    */
     const term = check(local, tm.term, fty.type);
-    return LiftTerm(tm.lift, term);
+    return LiftTerm(term);
   }
   if (tm.tag === 'Pair') {
     if (fty.tag !== 'VSigma') return terr(`not a sigma type in pair (${show(tm)}): ${showV(local, ty)}`);
@@ -230,25 +229,25 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
   }
   if (tm.tag === 'Enum') {
     if (!local.erased) return terr(`enum type in non-type context: ${show(tm)}`);
-    return [Enum(tm.num, tm.lift || 0), VType(tm.lift || 0)];
+    return [Enum(tm.num), VType(0)];
   }
   if (tm.tag === 'EnumLit' && tm.num !== null) {
     if (tm.val >= tm.num) return terr(`invalid enum literal: ${show(tm)}`);
-    return [EnumLit(tm.val, tm.num, tm.lift || 0), VEnum(tm.num, tm.lift || 0)];
+    return [EnumLit(tm.val, tm.num), VEnum(tm.num)];
   }
   if (tm.tag === 'ElimEnum') {
     if (tm.cases.length !== tm.num) return terr(`cases amount mismatch, expected ${tm.num} but got ${tm.cases.length}: ${show(tm)}`);
     const lift = tm.lift || 0;
     let premotive: Surface;
     if (!tm.motive) {
-      premotive = S.App(S.Abs(false, 't', S.Type(0), S.Abs(false, '_', S.Enum(tm.num, lift), S.Var('t', 0))), false, S.Hole(null));
+      premotive = S.App(S.Abs(false, 't', S.Type(lift), S.Abs(false, '_', S.Enum(tm.num), S.Var('t', 0))), false, S.Hole(null));
       // TODO: universe variable
     } else premotive = tm.motive;
-    const motive = check(local.inType(), premotive, VPi(false, '_', VEnum(tm.num, lift), _ => VType(lift)));
+    const motive = check(local.inType(), premotive, VPi(false, '_', VEnum(tm.num), _ => VType(lift)));
     const vmotive = evaluate(motive, local.vs);
-    const scrut = check(local, tm.scrut, VEnum(tm.num, lift));
+    const scrut = check(local, tm.scrut, VEnum(tm.num));
     const vscrut = evaluate(scrut, local.vs);
-    const cases = tm.cases.map((c, i) => check(local, c, vapp(vmotive, false, VEnumLit(i, tm.num, lift))));
+    const cases = tm.cases.map((c, i) => check(local, c, vapp(vmotive, false, VEnumLit(i, tm.num))));
     return [ElimEnum(tm.num, lift, motive, scrut, cases), vapp(vmotive, false, vscrut)];
   }
   if (tm.tag === 'Lift') {
@@ -256,21 +255,21 @@ const synth = (local: Local, tm: Surface): [Core, Val] => {
     /*
     t : *k
     -------------------
-    Lift^l t : *(l + k)
+    Lift t : *(k + 1)
     */
     const [type, ty] = synth(local, tm.type);
     const vty = force(ty);
     if (vty.tag !== 'VType') return terr(`not a type in ${show(tm)}: ${showV(local, ty)}`);
-    return [Lift(tm.lift, type), VType(tm.lift + vty.index + 1)];
+    return [Lift(type), VType(vty.index + 1)];
   }
   if (tm.tag === 'LiftTerm') {
     /*
     t : A
     -------------------
-    lift^l t : Lift^l A
+    lift t : Lift A
     */
     const [term, ty] = synth(local, tm.term);
-    return [LiftTerm(tm.lift, term), VLift(tm.lift, ty)];
+    return [LiftTerm(term), VLift(ty)];
   }
   if (tm.tag === 'Lower') {
     /*

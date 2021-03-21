@@ -31,16 +31,16 @@ export interface Pair { readonly tag: 'Pair'; readonly erased: boolean; readonly
 export const Pair = (erased: boolean, fst: Surface, snd: Surface): Pair => ({ tag: 'Pair', erased, fst, snd });
 export interface Proj { readonly tag: 'Proj'; readonly proj: 'fst' | 'snd'; readonly term: Surface }
 export const Proj = (proj: 'fst' | 'snd', term: Surface): Proj => ({ tag: 'Proj', proj, term });
-export interface Enum { readonly tag: 'Enum'; readonly num: Ix; readonly lift: Ix | null }
-export const Enum = (num: Ix, lift: Ix | null): Enum => ({ tag: 'Enum', num, lift });
+export interface Enum { readonly tag: 'Enum'; readonly num: Ix }
+export const Enum = (num: Ix): Enum => ({ tag: 'Enum', num });
 export interface ElimEnum { readonly tag: 'ElimEnum'; readonly num: Ix; readonly lift: Ix | null; readonly motive: Surface | null; readonly scrut: Surface; readonly cases: Surface[] }
 export const ElimEnum = (num: Ix, lift: Ix | null, motive: Surface | null, scrut: Surface, cases: Surface[]): ElimEnum => ({ tag: 'ElimEnum', num, lift, motive, scrut, cases });
-export interface EnumLit { readonly tag: 'EnumLit'; readonly val: Ix; readonly num: Ix | null; readonly lift: Ix | null }
-export const EnumLit = (val: Ix, num: Ix | null, lift: Ix | null): EnumLit => ({ tag: 'EnumLit', val, num, lift });
-export interface Lift { readonly tag: 'Lift'; readonly lift: Ix; readonly type: Surface }
-export const Lift = (lift: Ix, type: Surface): Lift => ({ tag: 'Lift', lift, type });
-export interface LiftTerm { readonly tag: 'LiftTerm'; readonly lift: Ix; readonly term: Surface }
-export const LiftTerm = (lift: Ix, term: Surface): LiftTerm => ({ tag: 'LiftTerm', lift, term });
+export interface EnumLit { readonly tag: 'EnumLit'; readonly val: Ix; readonly num: Ix | null }
+export const EnumLit = (val: Ix, num: Ix | null): EnumLit => ({ tag: 'EnumLit', val, num });
+export interface Lift { readonly tag: 'Lift'; readonly type: Surface }
+export const Lift = (type: Surface): Lift => ({ tag: 'Lift', type });
+export interface LiftTerm { readonly tag: 'LiftTerm'; readonly term: Surface }
+export const LiftTerm = (term: Surface): LiftTerm => ({ tag: 'LiftTerm', term });
 export interface Lower { readonly tag: 'Lower'; readonly term: Surface }
 export const Lower = (term: Surface): Lower => ({ tag: 'Lower', term });
 export interface Meta { readonly tag: 'Meta'; readonly id: MetaVar }
@@ -102,9 +102,9 @@ export const show = (t: Surface): string => {
   if (t.tag === 'Type') return `*${t.index > 0 ? t.index : ''}`;
   if (t.tag === 'Meta') return `?${t.id}`;
   if (t.tag === 'Hole') return `_${t.name || ''}`;
-  if (t.tag === 'Enum') return `#${t.num}${t.lift === null ? '' : t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
+  if (t.tag === 'Enum') return `#${t.num}`;
   if (t.tag === 'ElimEnum') return `?${t.num}${t.lift === null ? '' : t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}${t.motive ? ` {${show(t.motive)}}`: ''} ${showS(t.scrut)}${t.cases.length > 0 ? ' ' : ''}${t.cases.map(showS).join(' ')}`;
-  if (t.tag === 'EnumLit') return `@${t.val}${t.num === null ? '' : `/${t.num}`}${t.lift === null ? '' : t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`}`;
+  if (t.tag === 'EnumLit') return `@${t.val}${t.num === null ? '' : `/${t.num}`}`;
   if (t.tag === 'Pi') {
     const [params, ret] = flattenPi(t);
     return `${params.map(([e, x, t]) => !e && x === '_' ? showP(t.tag === 'Pi' || t.tag === 'Let', t) : `${e ? '{' : '('}${x} : ${show(t)}${e ? '}' : ')'}`).join(' -> ')} -> ${show(ret)}`;
@@ -127,8 +127,8 @@ export const show = (t: Surface): string => {
   }
   if (t.tag === 'Let')
     return `let ${t.erased ? '{' : ''}${t.name}${t.erased ? '}' : ''}${!t.type ? '' : ` : ${showP(t.type.tag === 'Let', t.type)}`} = ${showP(t.val.tag === 'Let', t.val)}; ${show(t.body)}`;
-  if (t.tag === 'Lift') return `Lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.type)}`;
-  if (t.tag === 'LiftTerm') return `lift${t.lift === 0 ? '' : t.lift === 1 ? '^' : `^${t.lift}`} ${showS(t.term)}`;
+  if (t.tag === 'Lift') return `Lift ${showS(t.type)}`;
+  if (t.tag === 'LiftTerm') return `lift ${showS(t.term)}`;
   if (t.tag === 'Lower') return `lower ${showS(t.term)}`;
   if (t.tag === 'Proj') return `${t.proj} ${showS(t.term)}`;
   return t;
@@ -137,9 +137,9 @@ export const show = (t: Surface): string => {
 export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
   if (t.tag === 'Global') return Var(t.name, t.lift);
   if (t.tag === 'Type') return Type(t.index);
-  if (t.tag === 'Enum') return Enum(t.num, t.lift);
+  if (t.tag === 'Enum') return Enum(t.num);
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, toSurface(t.motive, ns), toSurface(t.scrut, ns), t.cases.map(x => toSurface(x, ns)));
-  if (t.tag === 'EnumLit') return EnumLit(t.val, t.num, t.lift);
+  if (t.tag === 'EnumLit') return EnumLit(t.val, t.num);
   if (t.tag === 'Meta' || t.tag === 'InsertedMeta') return Meta(t.id);
   if (t.tag === 'Var') return Var(ns.index(t.index) || impossible(`var out of range in toSurface: ${t.index}`), 0);
   if (t.tag === 'App') return App(toSurface(t.fn, ns), t.erased, toSurface(t.arg, ns));
@@ -160,8 +160,8 @@ export const toSurface = (t: Core, ns: List<Name> = nil): Surface => {
     const x = chooseName(t.name, ns);
     return Let(t.erased, x, toSurface(t.type, ns), toSurface(t.val, ns), toSurface(t.body, cons(x, ns)));
   }
-  if (t.tag === 'Lift') return Lift(t.lift, toSurface(t.type, ns));
-  if (t.tag === 'LiftTerm') return LiftTerm(t.lift, toSurface(t.term, ns));
+  if (t.tag === 'Lift') return Lift(toSurface(t.type, ns));
+  if (t.tag === 'LiftTerm') return LiftTerm(toSurface(t.term, ns));
   if (t.tag === 'Lower') return Lower(toSurface(t.term, ns));
   if (t.tag === 'Proj') return Proj(t.proj, toSurface(t.term, ns));
   return t;

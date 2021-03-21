@@ -86,3 +86,8 @@ export const removeAll = <T>(a: T[], xs: T[]): T[] => {
   xs.forEach(x => remove(a, x));
   return a;
 };
+
+export const iterate = <T>(n: number, x: T, f: (val: T) => T): T => {
+  for (let i = 0; i < n; i++) x = f(x);
+  return x;
+};

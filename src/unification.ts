@@ -68,11 +68,11 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
     return Sigma(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VType') return Type(v.index);
   if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name, v.lift), v.spine); // TODO: should global be forced?
-  if (v.tag === 'VEnum') return Enum(v.num, v.lift);
-  if (v.tag === 'VEnumLit') return EnumLit(v.val, v.num, v.lift);
+  if (v.tag === 'VEnum') return Enum(v.num);
+  if (v.tag === 'VEnumLit') return EnumLit(v.val, v.num);
   if (v.tag === 'VPair') return Pair(v.erased, rename(id, pren, v.fst), rename(id, pren, v.snd), rename(id, pren, v.type));
-  if (v.tag === 'VLift') return Lift(v.lift, rename(id, pren, v.type));
-  if (v.tag === 'VLiftTerm') return LiftTerm(v.lift, rename(id, pren, v.term));
+  if (v.tag === 'VLift') return Lift(rename(id, pren, v.type));
+  if (v.tag === 'VLiftTerm') return LiftTerm(rename(id, pren, v.term));
   return v;
 };
 
@@ -109,12 +109,12 @@ export const unify = (l: Lvl, a_: Val, b_: Val): void => {
   log(() => `unify ${show(a, l)} ~ ${show(b, l)}`);
   if (a === b) return;
   if (a.tag === 'VType' && b.tag === 'VType' && a.index === b.index) return;
-  if (a.tag === 'VEnum' && b.tag === 'VEnum' && a.num === b.num && a.lift === b.lift) return;
-  if (a.tag === 'VEnumLit' && b.tag === 'VEnumLit' && a.val === b.val && a.num === b.num && a.lift === b.lift) return;
+  if (a.tag === 'VEnum' && b.tag === 'VEnum' && a.num === b.num) return;
+  if (a.tag === 'VEnumLit' && b.tag === 'VEnumLit' && a.val === b.val && a.num === b.num) return;
   if (a.tag === 'VEnumLit' && a.num === 1) return;
   if (b.tag === 'VEnumLit' && b.num === 1) return;
-  if (a.tag === 'VLift' && b.tag === 'VLift' && a.lift === b.lift) return unify(l, a.type, b.type);
-  if (a.tag === 'VLiftTerm' && b.tag === 'VLiftTerm' && a.lift === b.lift) return unify(l, a.term, b.term);
+  if (a.tag === 'VLift' && b.tag === 'VLift') return unify(l, a.type, b.type);
+  if (a.tag === 'VLiftTerm' && b.tag === 'VLiftTerm') return unify(l, a.term, b.term);
   if (a.tag === 'VAbs' && b.tag === 'VAbs') {
     const v = VVar(l);
     return unify(l + 1, vinst(a, v), vinst(b, v));

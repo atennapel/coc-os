@@ -25,5 +25,5 @@ TODO:
 ISSUES:
 - elaboration of `\(a b : *). (c : Bool) ** if c a b` succeeds, but it should fail
 - (\{A : *} (x : A). x) *
-- how to handle Lift Bool != #2^
+- if^ (lift b) ... ... Error: impossible: velimenum: VLiftTerm
 ```
