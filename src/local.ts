@@ -4,12 +4,13 @@ import { EnvV, Val, VVar } from './values';
 
 export interface EntryT {
   readonly type: Val;
+  readonly universe: Ix;
   readonly erased: boolean;
   readonly bound: boolean;
   readonly inserted: boolean;
 }
-export const EntryT = (type: Val, erased: boolean, bound: boolean, inserted: boolean): EntryT =>
-  ({ type, erased, bound, inserted });
+export const EntryT = (type: Val, universe: Ix, erased: boolean, bound: boolean, inserted: boolean): EntryT =>
+  ({ type, universe, erased, bound, inserted });
 
 export type EnvT = List<EntryT>;
 
@@ -63,33 +64,33 @@ export class Local {
     return Local._empty;  
   }
 
-  bind(erased: boolean, name: Name, ty: Val): Local {
+  bind(erased: boolean, name: Name, ty: Val, u: Ix): Local {
     return new Local(
       this.erased,
       this.level + 1,
       cons(name, this.ns),
       cons(name, this.nsSurface),
-      cons(EntryT(ty, erased, true, false), this.ts),
+      cons(EntryT(ty, u, erased, true, false), this.ts),
       cons(VVar(this.level), this.vs),
     );
   }
-  insert(erased: boolean, name: Name, ty: Val): Local {
+  insert(erased: boolean, name: Name, ty: Val, u: Ix): Local {
     return new Local(
       this.erased,
       this.level + 1,
       cons(name, this.ns),
       this.nsSurface,
-      cons(EntryT(ty, erased, true, true), this.ts),
+      cons(EntryT(ty, u, erased, true, true), this.ts),
       cons(VVar(this.level), this.vs),
     );
   }
-  define(erased: boolean, name: Name, ty: Val, val: Val): Local {
+  define(erased: boolean, name: Name, ty: Val, val: Val, u: Ix): Local {
     return new Local(
       this.erased,
       this.level + 1,
       cons(name, this.ns),
       cons(name, this.nsSurface),
-      cons(EntryT(ty, erased, false, false), this.ts),
+      cons(EntryT(ty, u, erased, false, false), this.ts),
       cons(val, this.vs),
     );
   }

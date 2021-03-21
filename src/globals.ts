@@ -1,10 +1,11 @@
 import { Core } from './core';
-import { Name } from './names';
+import { Ix, Name } from './names';
 import { impossible } from './utils/utils';
 import { Val } from './values';
 
 export interface GlobalEntry {
   readonly type: Val;
+  readonly universe: Ix;
   readonly value: Val;
   readonly etype: Core;
   readonly term: Core;
@@ -25,8 +26,8 @@ export const getGlobal = (name: Name): GlobalEntry => {
 
 export const getGlobals = (): Globals => globals;
 
-export const setGlobal = (name: Name, type: Val, value: Val, etype: Core, term: Core, erased: boolean): void => {
-  globals[name] = { type, value, etype, term, erased };
+export const setGlobal = (name: Name, type: Val, universe: Ix, value: Val, etype: Core, term: Core, erased: boolean): void => {
+  globals[name] = { type, universe, value, etype, term, erased };
 };
 
 export const deleteGlobal = (name: Name): void => {

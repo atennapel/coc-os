@@ -33,10 +33,10 @@ export interface VGlobal { readonly tag: 'VGlobal'; readonly name: Name; readonl
 export const VGlobal = (name: Name, lift: Ix, spine: Spine, val: Lazy<Val>): VGlobal => ({ tag: 'VGlobal', name, lift, spine, val });
 export interface VAbs { readonly tag: 'VAbs'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
 export const VAbs = (erased: boolean, name: Name, type: Val, clos: Clos): VAbs => ({ tag: 'VAbs', erased, name, type, clos });
-export interface VPi { readonly tag: 'VPi'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
-export const VPi = (erased: boolean, name: Name, type: Val, clos: Clos): VPi => ({ tag: 'VPi', erased, name, type, clos });
-export interface VSigma { readonly tag: 'VSigma'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly clos: Clos }
-export const VSigma = (erased: boolean, name: Name, type: Val, clos: Clos): VSigma => ({ tag: 'VSigma', erased, name, type, clos });
+export interface VPi { readonly tag: 'VPi'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly u1: Ix; readonly clos: Clos; readonly u2: Ix }
+export const VPi = (erased: boolean, name: Name, type: Val, u1: Ix, clos: Clos, u2: Ix): VPi => ({ tag: 'VPi', erased, name, type, u1, clos, u2 });
+export interface VSigma { readonly tag: 'VSigma'; readonly erased: boolean; readonly name: Name; readonly type: Val; readonly u1: Ix; readonly clos: Clos; readonly u2: Ix }
+export const VSigma = (erased: boolean, name: Name, type: Val, u1: Ix, clos: Clos, u2: Ix): VSigma => ({ tag: 'VSigma', erased, name, type, u1, clos, u2 });
 export interface VPair { readonly tag: 'VPair'; readonly erased: boolean; readonly fst: Val; readonly snd: Val; readonly type: Val }
 export const VPair = (erased: boolean, fst: Val, snd: Val, type: Val): VPair => ({ tag: 'VPair', erased, fst, snd, type });
 export interface VEnum { readonly tag: 'VEnum'; readonly num: Ix }
@@ -85,6 +85,7 @@ export const vapp = (left: Val, erased: boolean, right: Val): Val => {
 };
 export const velimenum = (num: Ix, lift: Ix, motive: Val, scrut: Val, cases: Val[]): Val => {
   if (scrut.tag === 'VEnumLit') return cases[scrut.val];
+  if (scrut.tag === 'VLiftTerm') return velimenum(num, lift, motive, scrut.term, cases);
   if (scrut.tag === 'VRigid') return VRigid(scrut.head, cons(EElimEnum(num, lift, motive, cases), scrut.spine));
   if (scrut.tag === 'VFlex') return VFlex(scrut.head, cons(EElimEnum(num, lift, motive, cases), scrut.spine));
   if (scrut.tag === 'VGlobal') return VGlobal(scrut.name, scrut.lift, cons(EElimEnum(num, lift, motive, cases), scrut.spine), scrut.val.map(v => velimenum(num, lift, motive, v, cases)));
@@ -118,8 +119,8 @@ export const evaluate = (t: Core, vs: EnvV): Val => {
   if (t.tag === 'EnumLit') return VEnumLit(t.val, t.num);
   if (t.tag === 'ElimEnum') return velimenum(t.num, t.lift, evaluate(t.motive, vs), evaluate(t.scrut, vs), t.cases.map(x => evaluate(x, vs)));
   if (t.tag === 'Abs') return VAbs(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
-  if (t.tag === 'Pi') return VPi(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
-  if (t.tag === 'Sigma') return VSigma(t.erased, t.name, evaluate(t.type, vs), v => evaluate(t.body, cons(v, vs)));
+  if (t.tag === 'Pi') return VPi(t.erased, t.name, evaluate(t.type, vs), t.u1, v => evaluate(t.body, cons(v, vs)), t.u2);
+  if (t.tag === 'Sigma') return VSigma(t.erased, t.name, evaluate(t.type, vs), t.u1, v => evaluate(t.body, cons(v, vs)), t.u2);
   if (t.tag === 'Var') return vs.index(t.index) || impossible(`evaluate: var ${t.index} has no value`);
   if (t.tag === 'Meta') return VMeta(t.id);
   if (t.tag === 'InsertedMeta') return velimBD(vs, VMeta(t.id), t.spine);
@@ -168,8 +169,8 @@ export const quote = (v_: Val, k: Lvl, full: boolean = false): Core => {
     );
   }
   if (v.tag === 'VAbs') return Abs(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
-  if (v.tag === 'VPi') return Pi(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
-  if (v.tag === 'VSigma') return Sigma(v.erased, v.name, quote(v.type, k, full), quote(vinst(v, VVar(k)), k + 1, full));
+  if (v.tag === 'VPi') return Pi(v.erased, v.name, quote(v.type, k, full), v.u1, quote(vinst(v, VVar(k)), k + 1, full), v.u2);
+  if (v.tag === 'VSigma') return Sigma(v.erased, v.name, quote(v.type, k, full), v.u1, quote(vinst(v, VVar(k)), k + 1, full), v.u2);
   if (v.tag === 'VPair') return Pair(v.erased, quote(v.fst, k, full), quote(v.snd, k, full), quote(v.type, k, full));
   if (v.tag === 'VLift') return Lift(quote(v.type, k, full));
   if (v.tag === 'VLiftTerm') return LiftTerm(quote(v.term, k, full));
@@ -212,9 +213,9 @@ export const zonk = (tm: Core, vs: EnvV = nil, k: Lvl = 0, full: boolean = false
     return quote(vzonkBD(vs, s.solution, tm.spine), k, full);
   }
   if (tm.tag === 'Pi')
-    return Pi(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, cons(VVar(k), vs), k + 1, full));
+    return Pi(tm.erased, tm.name, zonk(tm.type, vs, k, full), tm.u1, zonk(tm.body, cons(VVar(k), vs), k + 1, full), tm.u2);
   if (tm.tag === 'Sigma')
-    return Sigma(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.body, cons(VVar(k), vs), k + 1, full));
+    return Sigma(tm.erased, tm.name, zonk(tm.type, vs, k, full), tm.u1, zonk(tm.body, cons(VVar(k), vs), k + 1, full), tm.u2);
   if (tm.tag === 'Let')
     return Let(tm.erased, tm.name, zonk(tm.type, vs, k, full), zonk(tm.val, vs, k, full), zonk(tm.body, cons(VVar(k), vs), k + 1, full));
   if (tm.tag === 'Abs')

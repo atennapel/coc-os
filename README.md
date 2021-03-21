@@ -19,11 +19,7 @@ yarn start filename
 
 ```
 TODO:
+- unification with universes
 - equality type
 - fixpoints
-- universe elaboration
-ISSUES:
-- elaboration of `\(a b : *). (c : Bool) ** if c a b` succeeds, but it should fail
-- (\{A : *} (x : A). x) *
-- if^ (lift b) ... ... Error: impossible: velimenum: VLiftTerm
 ```

@@ -30,13 +30,13 @@ const Global = (name, lift) => ({ tag: 'Global', name, lift });
 exports.Global = Global;
 const Let = (erased, name, type, val, body) => ({ tag: 'Let', erased, name, type, val, body });
 exports.Let = Let;
-const Pi = (erased, name, type, body) => ({ tag: 'Pi', erased, name, type, body });
+const Pi = (erased, name, type, u1, body, u2) => ({ tag: 'Pi', erased, name, type, u1, body, u2 });
 exports.Pi = Pi;
 const Abs = (erased, name, type, body) => ({ tag: 'Abs', erased, name, type, body });
 exports.Abs = Abs;
 const App = (fn, erased, arg) => ({ tag: 'App', fn, erased, arg });
 exports.App = App;
-const Sigma = (erased, name, type, body) => ({ tag: 'Sigma', erased, name, type, body });
+const Sigma = (erased, name, type, u1, body, u2) => ({ tag: 'Sigma', erased, name, type, u1, body, u2 });
 exports.Sigma = Sigma;
 const Pair = (erased, fst, snd, type) => ({ tag: 'Pair', erased, fst, snd, type });
 exports.Pair = Pair;
@@ -171,9 +171,9 @@ const shift = (d, c, t) => {
     if (t.tag === 'Let')
         return exports.Let(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c, t.val), exports.shift(d, c + 1, t.body));
     if (t.tag === 'Pi')
-        return exports.Pi(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+        return exports.Pi(t.erased, t.name, exports.shift(d, c, t.type), t.u1, exports.shift(d, c + 1, t.body), t.u2);
     if (t.tag === 'Sigma')
-        return exports.Sigma(t.erased, t.name, exports.shift(d, c, t.type), exports.shift(d, c + 1, t.body));
+        return exports.Sigma(t.erased, t.name, exports.shift(d, c, t.type), t.u1, exports.shift(d, c + 1, t.body), t.u2);
     if (t.tag === 'Pair')
         return exports.Pair(t.erased, exports.shift(d, c, t.fst), exports.shift(d, c, t.snd), exports.shift(d, c, t.type));
     if (t.tag === 'ElimEnum')
@@ -199,9 +199,9 @@ const substVar = (j, s, t) => {
     if (t.tag === 'Let')
         return exports.Let(t.erased, t.name, exports.substVar(j, s, t.type), exports.substVar(j, s, t.val), exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
     if (t.tag === 'Pi')
-        return exports.Pi(t.erased, t.name, exports.substVar(j, s, t.type), exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
+        return exports.Pi(t.erased, t.name, exports.substVar(j, s, t.type), t.u1, exports.substVar(j + 1, exports.shift(1, 0, s), t.body), t.u2);
     if (t.tag === 'Sigma')
-        return exports.Sigma(t.erased, t.name, exports.substVar(j, s, t.type), exports.substVar(j + 1, exports.shift(1, 0, s), t.body));
+        return exports.Sigma(t.erased, t.name, exports.substVar(j, s, t.type), t.u1, exports.substVar(j + 1, exports.shift(1, 0, s), t.body), t.u2);
     if (t.tag === 'Pair')
         return exports.Pair(t.erased, exports.substVar(j, s, t.fst), exports.substVar(j, s, t.snd), exports.substVar(j, s, t.type));
     if (t.tag === 'ElimEnum')
@@ -225,9 +225,9 @@ const liftType = (l, t) => {
     if (t.tag === 'Abs')
         return exports.Abs(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.body));
     if (t.tag === 'Pi')
-        return exports.Pi(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.body));
+        return exports.Pi(t.erased, t.name, exports.liftType(l, t.type), t.u1 + 1, exports.liftType(l, t.body), t.u2 + 1);
     if (t.tag === 'Sigma')
-        return exports.Sigma(t.erased, t.name, exports.liftType(l, t.type), exports.liftType(l, t.body));
+        return exports.Sigma(t.erased, t.name, exports.liftType(l, t.type), t.u1 + 1, exports.liftType(l, t.body), t.u2 + 1);
     if (t.tag === 'App')
         return exports.App(exports.liftType(l, t.fn), t.erased, exports.liftType(l, t.arg));
     if (t.tag === 'Let')
@@ -275,25 +275,25 @@ const unification_1 = require("./unification");
 const globals_1 = require("./globals");
 const typecheck_1 = require("./typecheck");
 const showV = (local, val) => S.showVal(val, local.level, false, local.ns);
-const newMeta = (local) => {
-    const id = metas_1.freshMeta();
+const newMeta = (local, universe) => {
+    const id = metas_1.freshMeta(universe);
     const bds = local.ts.map(e => e.bound);
     return core_1.InsertedMeta(id, bds);
 };
 const inst = (local, ty_) => {
     const ty = values_1.force(ty_);
     if (ty.tag === 'VPi' && ty.erased) {
-        const m = newMeta(local);
+        const m = newMeta(local, ty.u1);
         const vm = values_1.evaluate(m, local.vs);
         const [res, args] = inst(local, values_1.vinst(ty, vm));
         return [res, List_1.cons(m, args)];
     }
     return [ty_, List_1.nil];
 };
-const check = (local, tm, ty) => {
-    config_1.log(() => `check ${surface_1.show(tm)} : ${showV(local, ty)}`);
+const check = (local, tm, ty, u) => {
+    config_1.log(() => `check(*${u}) ${surface_1.show(tm)} : ${showV(local, ty)}`);
     if (tm.tag === 'Hole') {
-        const x = newMeta(local);
+        const x = newMeta(local, 0); // TODO: is 0 fine here?
         if (tm.name) {
             if (holes[tm.name])
                 return utils_1.terr(`duplicate hole ${tm.name}`);
@@ -306,16 +306,16 @@ const check = (local, tm, ty) => {
     if (tm.tag === 'Abs' && !tm.type && fty.tag === 'VPi' && tm.erased === fty.erased) {
         const v = values_1.VVar(local.level);
         const x = tm.name;
-        const body = check(local.bind(fty.erased, x, fty.type), tm.body, values_1.vinst(fty, v));
+        const body = check(local.bind(fty.erased, x, fty.type, fty.u1), tm.body, values_1.vinst(fty, v), fty.u2);
         return core_1.Abs(fty.erased, x, values_1.quote(fty.type, local.level), body);
     }
     if (fty.tag === 'VPi' && fty.erased) {
         const v = values_1.VVar(local.level);
-        const term = check(local.insert(true, fty.name, fty.type), tm, values_1.vinst(fty, v));
+        const term = check(local.insert(true, fty.name, fty.type, fty.u1), tm, values_1.vinst(fty, v), u);
         return core_1.Abs(fty.erased, fty.name, values_1.quote(fty.type, local.level), term);
     }
     if (fty.tag === 'VLift' && tm.tag === 'EnumLit') {
-        const term = check(local, tm, fty.type);
+        const term = check(local, tm, fty.type, u - 1);
         return core_1.LiftTerm(term);
     }
     if (tm.tag === 'Enum' && fty.tag === 'VType') {
@@ -331,18 +331,18 @@ const check = (local, tm, ty) => {
         const lift = tm.lift || 0;
         const vmotive = values_1.VAbs(false, '_', values_1.VEnum(tm.num), _ => ty);
         const motive = values_1.quote(vmotive, local.level);
-        const scrut = check(local, tm.scrut, values_1.VEnum(tm.num));
-        const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num))));
+        const scrut = check(local, tm.scrut, values_1.VEnum(tm.num), 0);
+        const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num)), u));
         return core_1.ElimEnum(tm.num, lift, motive, scrut, cases);
     }
     if (tm.tag === 'Lift' && fty.tag === 'VType' && fty.index > 0) {
         if (!local.erased)
             return utils_1.terr(`Lift type in non-type context: ${surface_1.show(tm)}`);
-        const type = check(local, tm.type, values_1.VType(fty.index - 1));
+        const type = check(local, tm.type, values_1.VType(fty.index - 1), u - 1);
         return core_1.Lift(type);
     }
     if (tm.tag === 'LiftTerm' && fty.tag === 'VLift') {
-        const term = check(local, tm.term, fty.type);
+        const term = check(local, tm.term, fty.type, u - 1);
         return core_1.LiftTerm(term);
     }
     if (tm.tag === 'Pair') {
@@ -350,28 +350,31 @@ const check = (local, tm, ty) => {
             return utils_1.terr(`not a sigma type in pair (${surface_1.show(tm)}): ${showV(local, ty)}`);
         if (tm.erased !== fty.erased)
             return utils_1.terr(`erasure mismatch in pair (${surface_1.show(tm)}): ${showV(local, ty)}`);
-        const fst = check(tm.erased ? local.inType() : local, tm.fst, fty.type);
-        const snd = check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(fst, local.vs)));
+        const fst = check(tm.erased ? local.inType() : local, tm.fst, fty.type, u);
+        const snd = check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(fst, local.vs)), u);
         return core_1.Pair(tm.erased, fst, snd, values_1.quote(ty, local.level));
     }
     if (tm.tag === 'Let') {
         let vtype;
         let vty;
         let val;
+        let ul;
         if (tm.type) {
-            [vtype] = synthType(local.inType(), tm.type);
+            [vtype, ul] = synthType(local.inType(), tm.type);
             vty = values_1.evaluate(vtype, local.vs);
-            val = check(tm.erased ? local.inType() : local, tm.val, ty);
+            val = check(tm.erased ? local.inType() : local, tm.val, ty, ul);
         }
         else {
-            [val, vty] = synth(tm.erased ? local.inType() : local, tm.val);
+            [val, vty, ul] = synth(tm.erased ? local.inType() : local, tm.val);
             vtype = values_1.quote(vty, local.level);
         }
         const v = values_1.evaluate(val, local.vs);
-        const body = check(local.define(tm.erased, tm.name, vty, v), tm.body, ty);
+        const body = check(local.define(tm.erased, tm.name, vty, v, ul), tm.body, ty, u);
         return core_1.Let(tm.erased, tm.name, vtype, val, body);
     }
-    const [term, ty2] = synth(local, tm);
+    const [term, ty2, u2] = synth(local, tm);
+    if (u2 !== u)
+        return utils_1.terr(`check failed (${surface_1.show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}, universe mismatch: *${u2} ~ *${u}`);
     const [ty2inst, ms] = inst(local, ty2);
     return utils_1.tryT(() => {
         config_1.log(() => `unify ${showV(local, ty2inst)} ~ ${showV(local, ty)}`);
@@ -381,10 +384,10 @@ const check = (local, tm, ty) => {
     }, e => utils_1.terr(`check failed (${surface_1.show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}: ${e}`));
 };
 const freshPi = (local, erased, x) => {
-    const a = newMeta(local);
+    const a = newMeta(local, 0); // TODO: is 0 fine here?
     const va = values_1.evaluate(a, local.vs);
-    const b = newMeta(local.bind(erased, '_', va));
-    return values_1.evaluate(core_1.Pi(erased, x, a, b), local.vs);
+    const b = newMeta(local.bind(erased, '_', va, 0), 0);
+    return values_1.evaluate(core_1.Pi(erased, x, a, 0, b, 0), local.vs);
 };
 const synthType = (local, tm) => {
     const [type, ty] = synth(local, tm);
@@ -398,7 +401,7 @@ const synth = (local, tm) => {
     if (tm.tag === 'Type') {
         if (!local.erased)
             return utils_1.terr(`type in non-type context: ${surface_1.show(tm)}`);
-        return [core_1.Type(tm.index), values_1.VType(tm.index + 1)];
+        return [core_1.Type(tm.index), values_1.VType(tm.index + 1), 2];
     }
     if (tm.tag === 'Var') {
         const i = local.nsSurface.indexOf(tm.name);
@@ -415,7 +418,7 @@ const synth = (local, tm) => {
             else {
                 ty = values_1.evaluate(core_1.liftType(tm.lift, entry.etype), local.vs);
             }
-            return [core_1.Global(tm.name, tm.lift), ty];
+            return [core_1.Global(tm.name, tm.lift), ty, entry.universe];
         }
         else {
             if (tm.lift > 0)
@@ -423,27 +426,28 @@ const synth = (local, tm) => {
             const [entry, j] = local_1.indexEnvT(local.ts, i) || utils_1.terr(`var out of scope ${surface_1.show(tm)}`);
             if (entry.erased && !local.erased)
                 return utils_1.terr(`erased var used: ${surface_1.show(tm)}`);
-            return [core_1.Var(j), entry.type];
+            return [core_1.Var(j), entry.type, entry.universe];
         }
     }
     if (tm.tag === 'App') {
-        const [fn, fnty] = synth(local, tm.fn);
-        const [arg, rty, ms] = synthapp(local, fnty, tm.erased, tm.arg, tm);
-        return [core_1.App(ms.foldl((a, m) => core_1.App(a, true, m), fn), tm.erased, arg), rty];
+        const [fn, fnty, u1] = synth(local, tm.fn);
+        const [arg, rty, ms, u] = synthapp(local, fnty, u1, tm.erased, tm.arg, tm);
+        return [core_1.App(ms.foldl((a, m) => core_1.App(a, true, m), fn), tm.erased, arg), rty, u];
     }
     if (tm.tag === 'Abs') {
         if (tm.type) {
-            const [type] = synthType(local.inType(), tm.type);
+            const [type, u1] = synthType(local.inType(), tm.type);
             const ty = values_1.evaluate(type, local.vs);
-            const [body, rty] = synth(local.bind(tm.erased, tm.name, ty), tm.body);
-            const qpi = core_1.Pi(tm.erased, tm.name, type, values_1.quote(rty, local.level + 1));
+            const [body, rty, u2] = synth(local.bind(tm.erased, tm.name, ty, u1), tm.body);
+            const u = Math.max(u1, u2);
+            const qpi = core_1.Pi(tm.erased, tm.name, type, u1, values_1.quote(rty, local.level + 1), u);
             const pi = values_1.evaluate(qpi, local.vs);
-            return [core_1.Abs(tm.erased, tm.name, type, body), pi];
+            return [core_1.Abs(tm.erased, tm.name, type, body), pi, u];
         }
         else {
             const pi = freshPi(local, tm.erased, tm.name);
-            const term = check(local, tm, pi);
-            return [term, pi];
+            const term = check(local, tm, pi, 0);
+            return [term, pi, 0];
         }
     }
     if (tm.tag === 'Pi') {
@@ -451,66 +455,72 @@ const synth = (local, tm) => {
             return utils_1.terr(`pi type in non-type context: ${surface_1.show(tm)}`);
         const [type, s1] = synthType(local.inType(), tm.type);
         const ty = values_1.evaluate(type, local.vs);
-        const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
-        return [core_1.Pi(tm.erased, tm.name, type, body), values_1.VType(Math.max(s1, s2))];
+        const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty, s1), tm.body);
+        const u = Math.max(s1, s2);
+        const pi = core_1.Pi(tm.erased, tm.name, type, s1, body, u);
+        config_1.log(() => `Pi synth done (${u} : ${u + 1}): ${S.showCore(pi, local.ns)}`);
+        return [pi, values_1.VType(u), u + 1];
     }
     if (tm.tag === 'Sigma') {
         if (!local.erased)
             return utils_1.terr(`sigma type in non-type context: ${surface_1.show(tm)}`);
         const [type, s1] = synthType(local.inType(), tm.type);
         const ty = values_1.evaluate(type, local.vs);
-        const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
-        return [core_1.Sigma(tm.erased, tm.name, type, body), values_1.VType(Math.max(s1, s2))];
+        const [body, s2] = synthType(local.inType().bind(tm.erased, tm.name, ty, s1), tm.body);
+        const u = Math.max(s1, s2);
+        return [core_1.Sigma(tm.erased, tm.name, type, s1, body, u), values_1.VType(u), u + 1];
     }
     if (tm.tag === 'Proj') {
-        const [term, ty] = synth(local, tm.term);
+        const [term, ty, u] = synth(local, tm.term);
         const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
             return utils_1.terr(`not a sigma type in proj (${surface_1.show(tm)}): ${showV(local, ty)}`);
-        return [core_1.Proj(tm.proj, term), tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(term, local.vs)))];
+        return [core_1.Proj(tm.proj, term), tm.proj === 'fst' ? fty.type : values_1.vinst(fty, values_1.vproj('fst', values_1.evaluate(term, local.vs))), u];
     }
     if (tm.tag === 'Let') {
         let type;
         let ty;
         let val;
+        let uni;
         if (tm.type) {
-            [type] = synthType(local.inType(), tm.type);
+            [type, uni] = synthType(local.inType(), tm.type);
             ty = values_1.evaluate(type, local.vs);
-            val = check(tm.erased ? local.inType() : local, tm.val, ty);
+            val = check(tm.erased ? local.inType() : local, tm.val, ty, uni);
         }
         else {
-            [val, ty] = synth(tm.erased ? local.inType() : local, tm.val);
+            [val, ty, uni] = synth(tm.erased ? local.inType() : local, tm.val);
             type = values_1.quote(ty, local.level);
         }
         const v = values_1.evaluate(val, local.vs);
-        const [body, rty] = synth(local.define(tm.erased, tm.name, ty, v), tm.body);
-        return [core_1.Let(tm.erased, tm.name, type, val, body), rty];
+        const [body, rty, u] = synth(local.define(tm.erased, tm.name, ty, v, uni), tm.body);
+        return [core_1.Let(tm.erased, tm.name, type, val, body), rty, u];
     }
     if (tm.tag === 'Hole') {
-        const t = newMeta(local);
-        const vt = values_1.evaluate(newMeta(local), local.vs);
+        const t = newMeta(local, 0); // is 0 fine here?
+        const vt = values_1.evaluate(newMeta(local, 0), local.vs);
         if (tm.name) {
             if (holes[tm.name])
                 return utils_1.terr(`duplicate hole ${tm.name}`);
             holes[tm.name] = [values_1.evaluate(t, local.vs), vt, local];
         }
-        return [t, vt];
+        return [t, vt, 0];
     }
     if (tm.tag === 'Pair') {
-        const [fst, fstty] = synth(tm.erased ? local.inType() : local, tm.fst);
-        const [snd, sndty] = synth(local, tm.snd);
-        const ty = core_1.Sigma(false, '_', values_1.quote(fstty, local.level), values_1.quote(sndty, local.level + 1));
-        return [core_1.Pair(tm.erased, fst, snd, ty), values_1.evaluate(ty, local.vs)];
+        const [fst, fstty, u1] = synth(tm.erased ? local.inType() : local, tm.fst);
+        const [snd, sndty, u2] = synth(local, tm.snd);
+        const u = Math.max(u1, u2);
+        const ty = core_1.Sigma(false, '_', values_1.quote(fstty, local.level), u1, values_1.quote(sndty, local.level + 1), u);
+        return [core_1.Pair(tm.erased, fst, snd, ty), values_1.evaluate(ty, local.vs), u];
     }
     if (tm.tag === 'Enum') {
         if (!local.erased)
             return utils_1.terr(`enum type in non-type context: ${surface_1.show(tm)}`);
-        return [core_1.Enum(tm.num), values_1.VType(0)];
+        return [core_1.Enum(tm.num), values_1.VType(0), 1];
     }
     if (tm.tag === 'EnumLit' && tm.num !== null) {
         if (tm.val >= tm.num)
             return utils_1.terr(`invalid enum literal: ${surface_1.show(tm)}`);
-        return [core_1.EnumLit(tm.val, tm.num), values_1.VEnum(tm.num)];
+        return [core_1.EnumLit(tm.val, tm.num), values_1.VEnum(tm.num), 0];
     }
     if (tm.tag === 'ElimEnum') {
         if (tm.cases.length !== tm.num)
@@ -523,12 +533,13 @@ const synth = (local, tm) => {
         }
         else
             premotive = tm.motive;
-        const motive = check(local.inType(), premotive, values_1.VPi(false, '_', values_1.VEnum(tm.num), _ => values_1.VType(lift)));
+        const u = lift + 1;
+        const motive = check(local.inType(), premotive, values_1.VPi(false, '_', values_1.VEnum(tm.num), 0, _ => values_1.VType(lift), u), u);
         const vmotive = values_1.evaluate(motive, local.vs);
-        const scrut = check(local, tm.scrut, values_1.VEnum(tm.num));
+        const scrut = check(local, tm.scrut, values_1.VEnum(tm.num), 0);
         const vscrut = values_1.evaluate(scrut, local.vs);
-        const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num))));
-        return [core_1.ElimEnum(tm.num, lift, motive, scrut, cases), values_1.vapp(vmotive, false, vscrut)];
+        const cases = tm.cases.map((c, i) => check(local, c, values_1.vapp(vmotive, false, values_1.VEnumLit(i, tm.num)), lift));
+        return [core_1.ElimEnum(tm.num, lift, motive, scrut, cases), values_1.vapp(vmotive, false, vscrut), lift];
     }
     if (tm.tag === 'Lift') {
         if (!local.erased)
@@ -542,7 +553,7 @@ const synth = (local, tm) => {
         const vty = values_1.force(ty);
         if (vty.tag !== 'VType')
             return utils_1.terr(`not a type in ${surface_1.show(tm)}: ${showV(local, ty)}`);
-        return [core_1.Lift(type), values_1.VType(vty.index + 1)];
+        return [core_1.Lift(type), values_1.VType(vty.index + 1), vty.index + 2];
     }
     if (tm.tag === 'LiftTerm') {
         /*
@@ -550,8 +561,8 @@ const synth = (local, tm) => {
         -------------------
         lift t : Lift A
         */
-        const [term, ty] = synth(local, tm.term);
-        return [core_1.LiftTerm(term), values_1.VLift(ty)];
+        const [term, ty, u] = synth(local, tm.term);
+        return [core_1.LiftTerm(term), values_1.VLift(ty), u + 1];
     }
     if (tm.tag === 'Lower') {
         /*
@@ -559,34 +570,34 @@ const synth = (local, tm) => {
         -------------------
         lower t : A
         */
-        const [term, ty] = synth(local, tm.term);
+        const [term, ty, u] = synth(local, tm.term);
         const vty = values_1.force(ty);
         if (vty.tag !== 'VLift')
             return utils_1.terr(`not a Lift type in ${surface_1.show(tm)}: ${showV(local, ty)}`);
-        return [core_1.Lower(term), vty.type];
+        return [core_1.Lower(term), vty.type, u - 1];
     }
     return utils_1.terr(`unable to synth ${surface_1.show(tm)}`);
 };
-const synthapp = (local, ty_, erased, tm, tmall) => {
+const synthapp = (local, ty_, ul, erased, tm, tmall) => {
     config_1.log(() => `synthapp ${showV(local, ty_)} ${erased ? '-' : ''}@ ${surface_1.show(tm)}`);
     const ty = values_1.force(ty_);
     if (ty.tag === 'VPi' && ty.erased && !erased) {
-        const m = newMeta(local);
+        const m = newMeta(local, ty.u1);
         const vm = values_1.evaluate(m, local.vs);
-        const [rest, rt, l] = synthapp(local, values_1.vinst(ty, vm), erased, tm, tmall);
-        return [rest, rt, List_1.cons(m, l)];
+        const [rest, rt, l, u] = synthapp(local, values_1.vinst(ty, vm), ul, erased, tm, tmall);
+        return [rest, rt, List_1.cons(m, l), u];
     }
     if (ty.tag === 'VPi' && ty.erased === erased) {
-        const right = check(erased ? local.inType() : local, tm, ty.type);
+        const right = check(erased ? local.inType() : local, tm, ty.type, ty.u1);
         const rt = values_1.vinst(ty, values_1.evaluate(right, local.vs));
-        return [right, rt, List_1.nil];
+        return [right, rt, List_1.nil, ty.u2];
     }
     if (ty.tag === 'VFlex') {
-        const a = metas_1.freshMeta();
-        const b = metas_1.freshMeta();
-        const pi = values_1.VPi(erased, '_', values_1.VFlex(a, ty.spine), () => values_1.VFlex(b, ty.spine));
+        const a = metas_1.freshMeta(0); // TODO: is 0 fine here?
+        const b = metas_1.freshMeta(0);
+        const pi = values_1.VPi(erased, '_', values_1.VFlex(a, ty.spine), 0, () => values_1.VFlex(b, ty.spine), 0);
         unification_1.unify(local.level, ty, pi);
-        return synthapp(local, pi, erased, tm, tmall);
+        return synthapp(local, pi, ul, erased, tm, tmall);
     }
     return utils_1.terr(`invalid type or plicity mismatch in synthapp in ${surface_1.show(tmall)}: ${showV(local, ty)} ${erased ? '-' : ''}@ ${surface_1.show(tm)}`);
 };
@@ -609,25 +620,25 @@ const showHoles = (tm, ty) => {
 const elaborate = (t, erased = false) => {
     holes = {};
     metas_1.resetMetas();
-    const [tm, ty] = synth(erased ? local_1.Local.empty().inType() : local_1.Local.empty(), t);
+    const [tm, ty, u] = synth(erased ? local_1.Local.empty().inType() : local_1.Local.empty(), t);
     const ztm = values_1.zonk(tm);
     const zty = values_1.zonk(values_1.quote(ty, 0));
     showHoles(ztm, zty);
     if (!metas_1.allMetasSolved())
         return utils_1.terr(`not all metas are solved: ${S.showCore(ztm)} : ${S.showCore(zty)}`);
-    return [ztm, zty];
+    return [ztm, zty, u];
 };
 exports.elaborate = elaborate;
 const elaborateDef = (d) => {
     config_1.log(() => `elaborateDef ${S.showDef(d)}`);
     if (d.tag === 'DDef') {
         utils_1.tryT(() => {
-            const [term, type] = exports.elaborate(d.value, d.erased);
-            config_1.log(() => `elaborated def ${d.name}: ${S.showCore(term)} : ${S.showCore(type)}`);
+            const [term, type, u] = exports.elaborate(d.value, d.erased);
+            config_1.log(() => `elaborated def ${d.name}: ${S.showCore(term)} : ${S.showCore(type)} (*${u})`);
             // verify elaboration
-            const vty = typecheck_1.typecheck(term, d.erased ? local_1.Local.empty().inType() : local_1.Local.empty());
+            const [vty] = typecheck_1.typecheck(term, d.erased ? local_1.Local.empty().inType() : local_1.Local.empty());
             config_1.log(() => `verified def ${d.name}: ${S.showCore(vty)}`);
-            globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), values_1.evaluate(term, List_1.nil), type, term, d.erased);
+            globals_1.setGlobal(d.name, values_1.evaluate(type, List_1.nil), u, values_1.evaluate(term, List_1.nil), type, term, d.erased);
         }, err => {
             utils_1.terr(`while elaborating definition ${d.name}: ${err}`);
         });
@@ -659,8 +670,8 @@ const getGlobal = (name) => {
 exports.getGlobal = getGlobal;
 const getGlobals = () => globals;
 exports.getGlobals = getGlobals;
-const setGlobal = (name, type, value, etype, term, erased) => {
-    globals[name] = { type, value, etype, term, erased };
+const setGlobal = (name, type, universe, value, etype, term, erased) => {
+    globals[name] = { type, universe, value, etype, term, erased };
 };
 exports.setGlobal = setGlobal;
 const deleteGlobal = (name) => {
@@ -674,7 +685,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Local = exports.indexEnvT = exports.EntryT = void 0;
 const List_1 = require("./utils/List");
 const values_1 = require("./values");
-const EntryT = (type, erased, bound, inserted) => ({ type, erased, bound, inserted });
+const EntryT = (type, universe, erased, bound, inserted) => ({ type, universe, erased, bound, inserted });
 exports.EntryT = EntryT;
 const indexEnvT = (ts, ix) => {
     let l = ts;
@@ -711,14 +722,14 @@ class Local {
             Local._empty = new Local(false, 0, List_1.nil, List_1.nil, List_1.nil, List_1.nil);
         return Local._empty;
     }
-    bind(erased, name, ty) {
-        return new Local(this.erased, this.level + 1, List_1.cons(name, this.ns), List_1.cons(name, this.nsSurface), List_1.cons(exports.EntryT(ty, erased, true, false), this.ts), List_1.cons(values_1.VVar(this.level), this.vs));
+    bind(erased, name, ty, u) {
+        return new Local(this.erased, this.level + 1, List_1.cons(name, this.ns), List_1.cons(name, this.nsSurface), List_1.cons(exports.EntryT(ty, u, erased, true, false), this.ts), List_1.cons(values_1.VVar(this.level), this.vs));
     }
-    insert(erased, name, ty) {
-        return new Local(this.erased, this.level + 1, List_1.cons(name, this.ns), this.nsSurface, List_1.cons(exports.EntryT(ty, erased, true, true), this.ts), List_1.cons(values_1.VVar(this.level), this.vs));
+    insert(erased, name, ty, u) {
+        return new Local(this.erased, this.level + 1, List_1.cons(name, this.ns), this.nsSurface, List_1.cons(exports.EntryT(ty, u, erased, true, true), this.ts), List_1.cons(values_1.VVar(this.level), this.vs));
     }
-    define(erased, name, ty, val) {
-        return new Local(this.erased, this.level + 1, List_1.cons(name, this.ns), List_1.cons(name, this.nsSurface), List_1.cons(exports.EntryT(ty, erased, false, false), this.ts), List_1.cons(val, this.vs));
+    define(erased, name, ty, val, u) {
+        return new Local(this.erased, this.level + 1, List_1.cons(name, this.ns), List_1.cons(name, this.nsSurface), List_1.cons(exports.EntryT(ty, u, erased, false, false), this.ts), List_1.cons(val, this.vs));
     }
     undo() {
         if (this.level === 0)
@@ -736,15 +747,16 @@ exports.Local = Local;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.allMetasSolved = exports.setMeta = exports.getMeta = exports.freshMeta = exports.resetMetas = exports.Solved = exports.Unsolved = void 0;
 const utils_1 = require("./utils/utils");
-exports.Unsolved = { tag: 'Unsolved' };
+const Unsolved = (universe) => ({ tag: 'Unsolved', universe });
+exports.Unsolved = Unsolved;
 const Solved = (solution) => ({ tag: 'Solved', solution });
 exports.Solved = Solved;
 let metas = [];
 const resetMetas = () => { metas = []; };
 exports.resetMetas = resetMetas;
-const freshMeta = () => {
+const freshMeta = (universe) => {
     const id = metas.length;
-    metas.push(exports.Unsolved);
+    metas.push(exports.Unsolved(universe));
     return id;
 };
 exports.freshMeta = freshMeta;
@@ -1516,7 +1528,7 @@ const runREPL = (s_, cb) => {
             if (!res)
                 return cb(`undefined global: ${name}`, true);
             const eterm = C.liftType(1, res.term);
-            const type = typecheck_1.typecheck(eterm, local_1.Local.empty().inType());
+            const [type] = typecheck_1.typecheck(eterm, local_1.Local.empty().inType());
             return cb(`term: ${surface_1.showCore(eterm)}\ntype: ${surface_1.showCore(type)}`);
         }
         let inType = false;
@@ -1542,7 +1554,7 @@ const runREPL = (s_, cb) => {
         config_1.log(() => C.show(etype));
         config_1.log(() => surface_1.showCore(etype));
         config_1.log(() => 'TYPECHECK');
-        const ttype = typecheck_1.typecheck(eterm, inType ? local_1.Local.empty().inType() : local_1.Local.empty());
+        const [ttype] = typecheck_1.typecheck(eterm, inType ? local_1.Local.empty().inType() : local_1.Local.empty());
         config_1.log(() => C.show(ttype));
         config_1.log(() => surface_1.showCore(ttype));
         config_1.log(() => 'NORMALIZE');
@@ -1777,17 +1789,19 @@ const values_1 = require("./values");
 const V = require("./values");
 const unification_1 = require("./unification");
 const showV = (local, v) => V.show(v, local.level);
-const check = (local, tm, ty) => {
-    config_1.log(() => `check ${core_1.show(tm)} : ${showV(local, ty)}`);
-    const ty2 = synth(local, tm);
+const check = (local, tm, ty, u) => {
+    config_1.log(() => `check (*${u}) ${core_1.show(tm)} : ${showV(local, ty)}`);
+    const [ty2, u2] = synth(local, tm);
     return utils_1.tryT(() => {
+        if (u !== u2)
+            return utils_1.terr(`universe mismatch: *${u2} ~ *${u}`);
         config_1.log(() => `unify ${showV(local, ty2)} ~ ${showV(local, ty)}`);
         unification_1.unify(local.level, ty2, ty);
         return;
     }, e => utils_1.terr(`check failed (${core_1.show(tm)}): ${showV(local, ty2)} ~ ${showV(local, ty)}: ${e}`));
 };
 const synthType = (local, tm) => {
-    const ty = synth(local, tm);
+    const [ty] = synth(local, tm);
     const fty = values_1.force(ty);
     if (fty.tag !== 'VType')
         return utils_1.terr(`expected type but got ${showV(local, ty)}, while synthesizing ${core_1.show(tm)}`);
@@ -1798,13 +1812,13 @@ const synth = (local, tm) => {
     if (tm.tag === 'Type') {
         if (!local.erased)
             return utils_1.terr(`type in non-type context: ${core_1.show(tm)}`);
-        return values_1.VType(tm.index + 1);
+        return [values_1.VType(tm.index + 1), tm.index + 2];
     }
     if (tm.tag === 'Var') {
         const [entry] = local_1.indexEnvT(local.ts, tm.index) || utils_1.terr(`var out of scope ${core_1.show(tm)}`);
         if (entry.erased && !local.erased)
             return utils_1.terr(`erased var used ${core_1.show(tm)}`);
-        return entry.type;
+        return [entry.type, entry.universe];
     }
     if (tm.tag === 'Global') {
         const e = globals_1.getGlobal(tm.name);
@@ -1813,24 +1827,24 @@ const synth = (local, tm) => {
         if (e.erased && !local.erased)
             return utils_1.terr(`erased global used: ${core_1.show(tm)}`);
         if (tm.lift === 0) {
-            return e.type;
+            return [e.type, e.universe];
         }
         else {
-            return values_1.evaluate(core_1.liftType(tm.lift, e.etype), local.vs);
+            return [values_1.evaluate(core_1.liftType(tm.lift, e.etype), local.vs), e.universe + tm.lift];
         }
     }
     if (tm.tag === 'App') {
-        const fnty = synth(local, tm.fn);
+        const [fnty] = synth(local, tm.fn);
         const rty = synthapp(local, fnty, tm.erased, tm.arg);
         return rty;
     }
     if (tm.tag === 'Abs') {
-        synthType(local.inType(), tm.type);
+        const u1 = synthType(local.inType(), tm.type);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const rty = synth(local.bind(tm.erased, tm.name, ty), tm.body);
-        const qpi = core_1.Pi(tm.erased, tm.name, tm.type, values_1.quote(rty, local.level + 1));
+        const [rty, u2] = synth(local.bind(tm.erased, tm.name, ty, u1), tm.body);
+        const qpi = core_1.Pi(tm.erased, tm.name, tm.type, u1, values_1.quote(rty, local.level + 1), u2);
         const pi = values_1.evaluate(qpi, local.vs);
-        return pi;
+        return [pi, Math.max(u1, u2)];
     }
     if (tm.tag === 'Pair') {
         synthType(local.inType(), tm.type);
@@ -1840,50 +1854,52 @@ const synth = (local, tm) => {
             return utils_1.terr(`not a sigma type in pair (${core_1.show(tm)}): ${showV(local, ty)}`);
         if (tm.erased !== fty.erased)
             return utils_1.terr(`erasure mismatch in pair (${core_1.show(tm)}): ${showV(local, ty)}`);
-        check(tm.erased ? local.inType() : local, tm.fst, fty.type);
-        check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(tm.fst, local.vs)));
-        return ty;
+        check(tm.erased ? local.inType() : local, tm.fst, fty.type, fty.u1);
+        check(local, tm.snd, values_1.vinst(fty, values_1.evaluate(tm.fst, local.vs)), fty.u2);
+        return [ty, fty.u2];
     }
     if (tm.tag === 'Proj') {
-        const ty = synth(local, tm.term);
+        const [ty] = synth(local, tm.term);
         const fty = values_1.force(ty);
         if (fty.tag !== 'VSigma')
             return utils_1.terr(`not a sigma type in proj (${core_1.show(tm)}): ${showV(local, ty)}`);
-        return tm.proj === 'fst' ? fty.type : values_1.vinst(fty, V.vproj('fst', values_1.evaluate(tm, local.vs)));
+        return tm.proj === 'fst' ? [fty.type, fty.u1] : [values_1.vinst(fty, V.vproj('fst', values_1.evaluate(tm, local.vs))), fty.u2];
     }
     if (tm.tag === 'Pi') {
         if (!local.erased)
             return utils_1.terr(`pi type in non-type context: ${core_1.show(tm)}`);
         const s1 = synthType(local.inType(), tm.type);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const s2 = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
-        return values_1.VType(Math.max(s1, s2));
+        const s2 = synthType(local.inType().bind(tm.erased, tm.name, ty, s1), tm.body);
+        const u = Math.max(s1, s2);
+        return [values_1.VType(u), u + 1];
     }
     if (tm.tag === 'Sigma') {
         if (!local.erased)
             return utils_1.terr(`sigma type in non-type context: ${core_1.show(tm)}`);
         const s1 = synthType(local.inType(), tm.type);
         const ty = values_1.evaluate(tm.type, local.vs);
-        const s2 = synthType(local.inType().bind(tm.erased, tm.name, ty), tm.body);
-        return values_1.VType(Math.max(s1, s2));
+        const s2 = synthType(local.inType().bind(tm.erased, tm.name, ty, s1), tm.body);
+        const u = Math.max(s1, s2);
+        return [values_1.VType(u), u + 1];
     }
     if (tm.tag === 'Let') {
-        synthType(local.inType(), tm.type);
+        const u1 = synthType(local.inType(), tm.type);
         const ty = values_1.evaluate(tm.type, local.vs);
-        check(tm.erased ? local.inType() : local, tm.val, ty);
+        check(tm.erased ? local.inType() : local, tm.val, ty, u1);
         const v = values_1.evaluate(tm.val, local.vs);
-        const rty = synth(local.define(tm.erased, tm.name, ty, v), tm.body);
+        const rty = synth(local.define(tm.erased, tm.name, ty, v, u1), tm.body);
         return rty;
     }
     if (tm.tag === 'Enum') {
         if (!local.erased)
             return utils_1.terr(`enum type in non-type context: ${core_1.show(tm)}`);
-        return values_1.VType(0);
+        return [values_1.VType(0), 1];
     }
     if (tm.tag === 'EnumLit') {
         if (tm.val >= tm.num)
             return utils_1.terr(`invalid enum literal: ${core_1.show(tm)}`);
-        return V.VEnum(tm.num);
+        return [V.VEnum(tm.num), 0];
     }
     if (tm.tag === 'ElimEnum') {
         if (tm.cases.length !== tm.num)
@@ -1895,47 +1911,48 @@ const synth = (local, tm) => {
         ----------------------
         ?n^l P x c1 ... cn : P x
         */
-        check(local.inType(), tm.motive, V.VPi(false, '_', V.VEnum(tm.num), _ => values_1.VType(tm.lift)));
+        const u = tm.lift + 1;
+        check(local.inType(), tm.motive, V.VPi(false, '_', V.VEnum(tm.num), 0, _ => values_1.VType(tm.lift), u), u);
         const motive = values_1.evaluate(tm.motive, local.vs);
-        check(local, tm.scrut, V.VEnum(tm.num));
+        check(local, tm.scrut, V.VEnum(tm.num), 0);
         const scrut = values_1.evaluate(tm.scrut, local.vs);
-        tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num))));
-        return V.vapp(motive, false, scrut);
+        tm.cases.forEach((c, i) => check(local, c, V.vapp(motive, false, V.VEnumLit(i, tm.num)), tm.lift));
+        return [V.vapp(motive, false, scrut), tm.lift];
     }
     if (tm.tag === 'Lift') {
         if (!local.erased)
             return utils_1.terr(`Lift type in non-type context: ${core_1.show(tm)}`);
         /*
-        t : *k
+        t : *k : u
         -------------------
-        Lift t : *(k + 1)
+        Lift t : *(k + 1) : u + 1
         */
-        const ty = synth(local, tm.type);
+        const [ty, u] = synth(local, tm.type);
         const vty = values_1.force(ty);
         if (vty.tag !== 'VType')
             return utils_1.terr(`not a type in ${core_1.show(tm)}: ${showV(local, ty)}`);
-        return values_1.VType(vty.index + 1);
+        return [values_1.VType(vty.index + 1), u + 1];
     }
     if (tm.tag === 'LiftTerm') {
         /*
-        t : A
+        t : A : u
         -------------------
-        lift t : Lift A
+        lift t : Lift A : u + 1
         */
-        const ty = synth(local, tm.term);
-        return V.VLift(ty);
+        const [ty, u] = synth(local, tm.term);
+        return [V.VLift(ty), u + 1];
     }
     if (tm.tag === 'Lower') {
         /*
-        t : Lift A
+        t : Lift A : u
         -------------------
-        lower t : A
+        lower t : A : u - 1
         */
-        const ty = synth(local, tm.term);
+        const [ty, u] = synth(local, tm.term);
         const vty = values_1.force(ty);
         if (vty.tag !== 'VLift')
             return utils_1.terr(`not a Lift type in ${core_1.show(tm)}: ${showV(local, ty)}`);
-        return vty.type;
+        return [vty.type, u - 1];
     }
     if (tm.tag === 'Meta' || tm.tag === 'InsertedMeta')
         return utils_1.impossible(`${tm.tag} in typecheck`);
@@ -1945,17 +1962,16 @@ const synthapp = (local, ty_, erased, arg) => {
     config_1.log(() => `synthapp ${showV(local, ty_)} ${erased ? '-' : ''}@ ${core_1.show(arg)}`);
     const ty = values_1.force(ty_);
     if (ty.tag === 'VPi' && ty.erased === erased) {
-        const cty = ty.type;
-        check(erased ? local.inType() : local, arg, cty);
+        check(erased ? local.inType() : local, arg, ty.type, ty.u1);
         const v = values_1.evaluate(arg, local.vs);
-        return values_1.vinst(ty, v);
+        return [values_1.vinst(ty, v), ty.u2];
     }
     return utils_1.terr(`not a correct pi type in synthapp: ${showV(local, ty)} ${erased ? '-' : ''}@ ${core_1.show(arg)}`);
 };
 const typecheck = (t, local = local_1.Local.empty()) => {
-    const vty = synth(local, t);
+    const [vty, u] = synth(local, t);
     const ty = values_1.quote(vty, local.level);
-    return ty;
+    return [ty, u];
 };
 exports.typecheck = typecheck;
 
@@ -2016,9 +2032,9 @@ const rename = (id, pren, v_) => {
     if (v.tag === 'VAbs')
         return core_1.Abs(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), values_1.vinst(v, values_1.VVar(pren.cod))));
     if (v.tag === 'VPi')
-        return core_1.Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), values_1.vinst(v, values_1.VVar(pren.cod))));
+        return core_1.Pi(v.erased, v.name, rename(id, pren, v.type), v.u1, rename(id, lift(pren), values_1.vinst(v, values_1.VVar(pren.cod))), v.u2);
     if (v.tag === 'VSigma')
-        return core_1.Sigma(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), values_1.vinst(v, values_1.VVar(pren.cod))));
+        return core_1.Sigma(v.erased, v.name, rename(id, pren, v.type), v.u1, rename(id, lift(pren), values_1.vinst(v, values_1.VVar(pren.cod))), v.u2);
     if (v.tag === 'VType')
         return core_1.Type(v.index);
     if (v.tag === 'VGlobal')
@@ -2522,9 +2538,9 @@ const VGlobal = (name, lift, spine, val) => ({ tag: 'VGlobal', name, lift, spine
 exports.VGlobal = VGlobal;
 const VAbs = (erased, name, type, clos) => ({ tag: 'VAbs', erased, name, type, clos });
 exports.VAbs = VAbs;
-const VPi = (erased, name, type, clos) => ({ tag: 'VPi', erased, name, type, clos });
+const VPi = (erased, name, type, u1, clos, u2) => ({ tag: 'VPi', erased, name, type, u1, clos, u2 });
 exports.VPi = VPi;
-const VSigma = (erased, name, type, clos) => ({ tag: 'VSigma', erased, name, type, clos });
+const VSigma = (erased, name, type, u1, clos, u2) => ({ tag: 'VSigma', erased, name, type, u1, clos, u2 });
 exports.VSigma = VSigma;
 const VPair = (erased, fst, snd, type) => ({ tag: 'VPair', erased, fst, snd, type });
 exports.VPair = VPair;
@@ -2583,6 +2599,8 @@ exports.vapp = vapp;
 const velimenum = (num, lift, motive, scrut, cases) => {
     if (scrut.tag === 'VEnumLit')
         return cases[scrut.val];
+    if (scrut.tag === 'VLiftTerm')
+        return exports.velimenum(num, lift, motive, scrut.term, cases);
     if (scrut.tag === 'VRigid')
         return exports.VRigid(scrut.head, List_1.cons(exports.EElimEnum(num, lift, motive, cases), scrut.spine));
     if (scrut.tag === 'VFlex')
@@ -2636,9 +2654,9 @@ const evaluate = (t, vs) => {
     if (t.tag === 'Abs')
         return exports.VAbs(t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, List_1.cons(v, vs)));
     if (t.tag === 'Pi')
-        return exports.VPi(t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, List_1.cons(v, vs)));
+        return exports.VPi(t.erased, t.name, exports.evaluate(t.type, vs), t.u1, v => exports.evaluate(t.body, List_1.cons(v, vs)), t.u2);
     if (t.tag === 'Sigma')
-        return exports.VSigma(t.erased, t.name, exports.evaluate(t.type, vs), v => exports.evaluate(t.body, List_1.cons(v, vs)));
+        return exports.VSigma(t.erased, t.name, exports.evaluate(t.type, vs), t.u1, v => exports.evaluate(t.body, List_1.cons(v, vs)), t.u2);
     if (t.tag === 'Var')
         return vs.index(t.index) || utils_1.impossible(`evaluate: var ${t.index} has no value`);
     if (t.tag === 'Meta')
@@ -2699,9 +2717,9 @@ const quote = (v_, k, full = false) => {
     if (v.tag === 'VAbs')
         return core_1.Abs(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
     if (v.tag === 'VPi')
-        return core_1.Pi(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
+        return core_1.Pi(v.erased, v.name, exports.quote(v.type, k, full), v.u1, exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full), v.u2);
     if (v.tag === 'VSigma')
-        return core_1.Sigma(v.erased, v.name, exports.quote(v.type, k, full), exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full));
+        return core_1.Sigma(v.erased, v.name, exports.quote(v.type, k, full), v.u1, exports.quote(exports.vinst(v, exports.VVar(k)), k + 1, full), v.u2);
     if (v.tag === 'VPair')
         return core_1.Pair(v.erased, exports.quote(v.fst, k, full), exports.quote(v.snd, k, full), exports.quote(v.type, k, full));
     if (v.tag === 'VLift')
@@ -2751,9 +2769,9 @@ const zonk = (tm, vs = List_1.nil, k = 0, full = false) => {
         return exports.quote(vzonkBD(vs, s.solution, tm.spine), k, full);
     }
     if (tm.tag === 'Pi')
-        return core_1.Pi(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, List_1.cons(exports.VVar(k), vs), k + 1, full));
+        return core_1.Pi(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), tm.u1, exports.zonk(tm.body, List_1.cons(exports.VVar(k), vs), k + 1, full), tm.u2);
     if (tm.tag === 'Sigma')
-        return core_1.Sigma(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.body, List_1.cons(exports.VVar(k), vs), k + 1, full));
+        return core_1.Sigma(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), tm.u1, exports.zonk(tm.body, List_1.cons(exports.VVar(k), vs), k + 1, full), tm.u2);
     if (tm.tag === 'Let')
         return core_1.Let(tm.erased, tm.name, exports.zonk(tm.type, vs, k, full), exports.zonk(tm.val, vs, k, full), exports.zonk(tm.body, List_1.cons(exports.VVar(k), vs), k + 1, full));
     if (tm.tag === 'Abs')

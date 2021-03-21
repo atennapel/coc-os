@@ -19,14 +19,14 @@ export interface Global { readonly tag: 'Global'; readonly name: Name; readonly 
 export const Global = (name: Name, lift: Ix): Global => ({ tag: 'Global', name, lift });
 export interface Let { readonly tag: 'Let'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly val: Core; readonly body: Core }
 export const Let = (erased: boolean, name: Name, type: Core, val: Core, body: Core): Let => ({ tag: 'Let', erased, name, type, val, body });
-export interface Pi { readonly tag: 'Pi'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
-export const Pi = (erased: boolean, name: Name, type: Core, body: Core): Pi => ({ tag: 'Pi', erased, name, type, body });
+export interface Pi { readonly tag: 'Pi'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly u1: Ix; readonly body: Core; readonly u2: Ix }
+export const Pi = (erased: boolean, name: Name, type: Core, u1: Ix, body: Core, u2: Ix): Pi => ({ tag: 'Pi', erased, name, type, u1, body, u2 });
 export interface Abs { readonly tag: 'Abs'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
 export const Abs = (erased: boolean, name: Name, type: Core, body: Core): Abs => ({ tag: 'Abs', erased, name, type, body });
 export interface App { readonly tag: 'App'; readonly fn: Core; readonly erased: boolean; readonly arg: Core }
 export const App = (fn: Core, erased: boolean, arg: Core): App => ({ tag: 'App', fn, erased, arg });
-export interface Sigma { readonly tag: 'Sigma'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly body: Core }
-export const Sigma = (erased: boolean, name: Name, type: Core, body: Core): Sigma => ({ tag: 'Sigma', erased, name, type, body });
+export interface Sigma { readonly tag: 'Sigma'; readonly erased: boolean; readonly name: Name; readonly type: Core; readonly u1: Ix; readonly body: Core; readonly u2: Ix }
+export const Sigma = (erased: boolean, name: Name, type: Core, u1: Ix, body: Core, u2: Ix): Sigma => ({ tag: 'Sigma', erased, name, type, u1, body, u2 });
 export interface Pair { readonly tag: 'Pair'; readonly erased: boolean; readonly fst: Core; readonly snd: Core; readonly type: Core }
 export const Pair = (erased: boolean, fst: Core, snd: Core, type: Core): Pair => ({ tag: 'Pair', erased, fst, snd, type });
 export interface Proj { readonly tag: 'Proj'; readonly proj: 'fst' | 'snd'; readonly term: Core }
@@ -140,8 +140,8 @@ export const shift = (d: Ix, c: Ix, t: Core): Core => {
   if (t.tag === 'App') return App(shift(d, c, t.fn), t.erased, shift(d, c, t.arg));
   if (t.tag === 'Abs') return Abs(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
   if (t.tag === 'Let') return Let(t.erased, t.name, shift(d, c, t.type), shift(d, c, t.val), shift(d, c + 1, t.body));
-  if (t.tag === 'Pi') return Pi(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
-  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), shift(d, c + 1, t.body));
+  if (t.tag === 'Pi') return Pi(t.erased, t.name, shift(d, c, t.type), t.u1, shift(d, c + 1, t.body), t.u2);
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, shift(d, c, t.type), t.u1, shift(d, c + 1, t.body), t.u2);
   if (t.tag === 'Pair') return Pair(t.erased, shift(d, c, t.fst), shift(d, c, t.snd), shift(d, c, t.type))
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, shift(d, c, t.motive), shift(d, c, t.scrut), t.cases.map(x => shift(d, c, x)));
   if (t.tag === 'Lift') return Lift(shift(d, c, t.type));
@@ -156,8 +156,8 @@ export const substVar = (j: Ix, s: Core, t: Core): Core => {
   if (t.tag === 'App') return App(substVar(j, s, t.fn), t.erased, substVar(j, s, t.arg));
   if (t.tag === 'Abs') return Abs(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
   if (t.tag === 'Let') return Let(t.erased, t.name, substVar(j, s, t.type), substVar(j, s, t.val), substVar(j + 1, shift(1, 0, s), t.body));
-  if (t.tag === 'Pi') return Pi(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
-  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, substVar(j, s, t.type), substVar(j + 1, shift(1, 0, s), t.body));
+  if (t.tag === 'Pi') return Pi(t.erased, t.name, substVar(j, s, t.type), t.u1, substVar(j + 1, shift(1, 0, s), t.body), t.u2);
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, substVar(j, s, t.type), t.u1, substVar(j + 1, shift(1, 0, s), t.body), t.u2);
   if (t.tag === 'Pair') return Pair(t.erased, substVar(j, s, t.fst), substVar(j, s, t.snd), substVar(j, s, t.type));
   if (t.tag === 'ElimEnum') return ElimEnum(t.num, t.lift, substVar(j, s, t.motive), substVar(j, s, t.scrut), t.cases.map(x => substVar(j, s, x)));
   if (t.tag === 'Lift') return Lift(substVar(j, s, t.type));
@@ -172,8 +172,8 @@ export const subst = (t: Core, u: Core): Core => shift(-1, 0, substVar(0, shift(
 export const liftType = (l: Ix, t: Core): Core => {
   if (t.tag === 'Type') return Type(t.index + l);
   if (t.tag === 'Abs') return Abs(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
-  if (t.tag === 'Pi') return Pi(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
-  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, liftType(l, t.type), liftType(l, t.body));
+  if (t.tag === 'Pi') return Pi(t.erased, t.name, liftType(l, t.type), t.u1 + 1, liftType(l, t.body), t.u2 + 1);
+  if (t.tag === 'Sigma') return Sigma(t.erased, t.name, liftType(l, t.type), t.u1 + 1, liftType(l, t.body), t.u2 + 1);
   if (t.tag === 'App') return App(liftType(l, t.fn), t.erased, liftType(l, t.arg));
   if (t.tag === 'Let') return Let(t.erased, t.name, liftType(l, t.type), liftType(l, t.val), liftType(l, t.body));
   if (t.tag === 'Global') return Global(t.name, t.lift + l);

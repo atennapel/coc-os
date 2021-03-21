@@ -63,9 +63,9 @@ const rename = (id: MetaVar, pren: PartialRenaming, v_: Val): Core => {
   if (v.tag === 'VAbs')
     return Abs(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
   if (v.tag === 'VPi')
-    return Pi(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
+    return Pi(v.erased, v.name, rename(id, pren, v.type), v.u1, rename(id, lift(pren), vinst(v, VVar(pren.cod))), v.u2);
   if (v.tag === 'VSigma')
-    return Sigma(v.erased, v.name, rename(id, pren, v.type), rename(id, lift(pren), vinst(v, VVar(pren.cod))));
+    return Sigma(v.erased, v.name, rename(id, pren, v.type), v.u1, rename(id, lift(pren), vinst(v, VVar(pren.cod))), v.u2);
   if (v.tag === 'VType') return Type(v.index);
   if (v.tag === 'VGlobal') return renameSpine(id, pren, Global(v.name, v.lift), v.spine); // TODO: should global be forced?
   if (v.tag === 'VEnum') return Enum(v.num);

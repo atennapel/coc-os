@@ -1,11 +1,12 @@
+import { Ix } from './names';
 import { impossible } from './utils/utils';
 import { Val } from './values';
 
 export type MetaVar = number;
 
 export type Solution = Unsolved | Solved;
-export interface Unsolved { readonly tag: 'Unsolved' }
-export const Unsolved: Unsolved = { tag: 'Unsolved' };
+export interface Unsolved { readonly tag: 'Unsolved'; readonly universe: Ix }
+export const Unsolved = (universe: Ix): Unsolved => ({ tag: 'Unsolved', universe });
 export interface Solved { readonly tag: 'Solved'; readonly solution: Val }
 export const Solved = (solution: Val): Solved => ({ tag: 'Solved', solution });
 
@@ -15,9 +16,9 @@ let metas: Metas = [];
 
 export const resetMetas = (): void => { metas = [] };
 
-export const freshMeta = (): MetaVar => {
+export const freshMeta = (universe: Ix): MetaVar => {
   const id = metas.length;
-  metas.push(Unsolved);
+  metas.push(Unsolved(universe));
   return id;
 };
 

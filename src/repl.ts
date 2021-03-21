@@ -117,7 +117,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
       const res = getGlobal(name);
       if (!res) return cb(`undefined global: ${name}`, true);
       const eterm = C.liftType(1, res.term);
-      const type = typecheck(eterm, Local.empty().inType());
+      const [type] = typecheck(eterm, Local.empty().inType());
       return cb(`term: ${showCore(eterm)}\ntype: ${showCore(type)}`);
     }
     let inType = false;
@@ -146,7 +146,7 @@ export const runREPL = (s_: string, cb: (msg: string, err?: boolean) => void) =>
     log(() => showCore(etype));
 
     log(() => 'TYPECHECK');
-    const ttype = typecheck(eterm, inType ? Local.empty().inType() : Local.empty());
+    const [ttype] = typecheck(eterm, inType ? Local.empty().inType() : Local.empty());
     log(() => C.show(ttype));
     log(() => showCore(ttype));
 
